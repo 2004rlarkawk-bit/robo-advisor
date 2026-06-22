@@ -1,0 +1,954 @@
+import { useState, useEffect, useRef } from 'react';
+import { 
+  LayoutDashboard, 
+  FileText, 
+  FolderKanban, 
+  Layers, 
+  Ship, 
+  FileCheck2, 
+  BarChart3, 
+  Settings, 
+  PhoneCall, 
+  Bell, 
+  HelpCircle, 
+  RotateCcw, 
+  FileSignature, 
+  AlertTriangle, 
+  CheckCircle2, 
+  Terminal, 
+  Download, 
+  Eye, 
+  Edit3, 
+  ArrowLeft,
+  Smartphone
+} from 'lucide-react';
+import { TradeProfile, DocumentStatus, ValidationIssue } from './types';
+import { GeneratorAgent, AgentLog } from './harness/agents/generatorAgent';
+import { TestingAgent } from './harness/agents/testingAgent';
+
+
+export default function App() {
+  const [activeMenu, setActiveMenu] = useState('dashboard');
+  
+  // Trade profile state
+  const [profile, setProfile] = useState<TradeProfile>({
+    tradeType: 'export',
+    itemName: '',
+    hsCode: '',
+    loadPort: '',
+    dischargePort: '',
+    incoterms: '',
+    quantity: '',
+    weight: '',
+    departureDate: '',
+    arrivalDate: '',
+    companyName: '',
+    contact: ''
+  });
+
+  // Harness & Agent Pipeline State
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showConsole, setShowConsole] = useState(false);
+  const [consoleLogs, setConsoleLogs] = useState<AgentLog[]>([]);
+  const [hasGenerated, setHasGenerated] = useState(false);
+  
+  const [documents, setDocuments] = useState<DocumentStatus[]>([]);
+  const [issues, setIssues] = useState<ValidationIssue[]>([]);
+
+  // Mobile simulator inputs
+  const [mobileWeight, setMobileWeight] = useState('');
+  const [mobileHSCode, setMobileHSCode] = useState('');
+  const [mobileOrigin, setMobileOrigin] = useState('');
+
+  const consoleEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll console logs
+  useEffect(() => {
+    if (consoleEndRef.current) {
+      consoleEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [consoleLogs]);
+
+  // Synchronize mobile states when issues change
+  useEffect(() => {
+    const weightIssue = issues.find(i => i.field === 'weight');
+    if (!weightIssue) {
+      setMobileWeight('');
+    }
+    const hsIssue = issues.find(i => i.field === 'hsCode');
+    if (!hsIssue) {
+      setMobileHSCode('');
+    }
+  }, [issues]);
+
+  // Quick fill handlers
+  const handleQuickFill = (type: 'export_error' | 'import_valid') => {
+    if (type === 'export_error') {
+      setProfile({
+        tradeType: 'export',
+        itemName: '산업용 부품',
+        hsCode: 'ABC-12', // Invalid HS Code
+        loadPort: '부산항',
+        dischargePort: '상하이항',
+        incoterms: 'FOB',
+        quantity: 1500,
+        weight: '', // Omitted Weight
+        departureDate: '2026-07-01',
+        arrivalDate: '2026-07-05',
+        companyName: '인천테크',
+        contact: '010-1234-5678'
+      });
+    } else {
+      setProfile({
+        tradeType: 'import',
+        itemName: 'IT 원자재',
+        hsCode: '8517-62-0000', // Valid HS Code
+        loadPort: '로스앤젤레스항',
+        dischargePort: '인천항',
+        incoterms: 'CIF',
+        quantity: 800,
+        weight: 2400, // Valid Weight
+        departureDate: '2026-07-15',
+        arrivalDate: '2026-07-30',
+        companyName: '글로벌 물류지원',
+        contact: '02-123-4567'
+      });
+    }
+  };
+
+  const handleInputChange = (field: keyof TradeProfile, value: string | number) => {
+    setProfile(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleReset = () => {
+    setProfile({
+      tradeType: 'export',
+      itemName: '',
+      hsCode: '',
+      loadPort: '',
+      dischargePort: '',
+      incoterms: '',
+      quantity: '',
+      weight: '',
+      departureDate: '',
+      arrivalDate: '',
+      companyName: '',
+      contact: ''
+    });
+    setHasGenerated(false);
+    setDocuments([]);
+    setIssues([]);
+    setConsoleLogs([]);
+  };
+
+  // Run the multi-agent pipeline simulator
+  const handleGenerateDocuments = async () => {
+    setIsProcessing(true);
+    setShowConsole(true);
+    setConsoleLogs([]);
+
+    const genAgent = new GeneratorAgent();
+    const testAgent = new TestingAgent();
+
+    // 1. Trigger Generator Agent
+    const genResult = await genAgent.generateDocuments(profile);
+    
+    // Simulate terminal printing for generator logs
+    for (let i = 0; i < genResult.logs.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 150));
+      setConsoleLogs(prev => [...prev, genResult.logs[i]]);
+    }
+
+    // Small delay between agents
+    await new Promise(resolve => setTimeout(resolve, 300));
+    setConsoleLogs(prev => [...prev, {
+      timestamp: new Date().toLocaleTimeString(),
+      agentName: 'System Router',
+      message: '문서 생성이 완료되어 테스트 에이전트로 문서를 이관합니다.',
+      type: 'info'
+    }]);
+
+    // 2. Trigger Testing Agent
+    const testResult = await testAgent.testDocuments(profile);
+    
+    // Simulate terminal printing for testing logs
+    for (let i = 0; i < testResult.logs.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 150));
+      setConsoleLogs(prev => [...prev, testResult.logs[i]]);
+    }
+
+    setDocuments(genResult.documents);
+    setIssues(testResult.issues);
+    setIsProcessing(false);
+    setHasGenerated(true);
+  };
+
+  // Re-run validation helper (e.g. after fixing something in mobile view)
+  const rerunAgents = async (updatedProfile: TradeProfile) => {
+    const genAgent = new GeneratorAgent();
+    const testAgent = new TestingAgent();
+
+    const genResult = await genAgent.generateDocuments(updatedProfile);
+    const testResult = await testAgent.testDocuments(updatedProfile);
+
+    setDocuments(genResult.documents);
+    setIssues(testResult.issues);
+  };
+
+  // Mobile quick fix solvers
+  const handleSolveWeight = async () => {
+    if (!mobileWeight || isNaN(Number(mobileWeight))) return;
+    
+    const updatedProfile = {
+      ...profile,
+      weight: Number(mobileWeight)
+    };
+    setProfile(updatedProfile);
+    await rerunAgents(updatedProfile);
+  };
+
+  const handleSolveHSCode = async () => {
+    if (!mobileHSCode) return;
+
+    const updatedProfile = {
+      ...profile,
+      hsCode: mobileHSCode
+    };
+    setProfile(updatedProfile);
+    await rerunAgents(updatedProfile);
+  };
+
+  const handleSolveOrigin = async () => {
+    if (!mobileOrigin) return;
+    
+    // Virtual resolution of Origin, modifying company/item name or simulation flag
+    const updatedProfile = {
+      ...profile,
+      companyName: `${profile.companyName} (${mobileOrigin}산)`
+    };
+    setProfile(updatedProfile);
+    // Directly override Certificate of Origin document status to 'completed'
+    setDocuments(prev => prev.map(d => {
+      if (d.id === 'co') {
+        return {
+          ...d,
+          status: 'completed',
+          statusText: '생성 완료',
+          lastReviewed: new Date().toISOString().split('T')[0] + ' 15:30'
+        };
+      }
+      return d;
+    }));
+    // Remove the co issue
+    setIssues(prev => prev.filter(i => i.docType !== 'co'));
+  };
+
+  const handleMobileSubmit = () => {
+    alert('모든 통관 문서 정보 보완이 완료되었습니다. 관세청 통관 시스템으로 제출합니다.');
+  };
+
+  // Calculate statistics
+  const completedDocsCount = documents.filter(d => d.status === 'completed').length;
+  const reviewDocsCount = issues.length;
+
+  return (
+    <div className="app-container">
+      {/* 1. Left Navigation Sidebar */}
+      <aside className="sidebar">
+        <div className="logo-section">
+          <div className="logo-icon">🚢</div>
+          <div>
+            <div className="logo-text">PortAI</div>
+            <div className="logo-sub">스마트 물류 & 통관 자동화 플랫폼</div>
+          </div>
+        </div>
+
+        <ul className="menu-list">
+          <li>
+            <div 
+              className={`menu-item ${activeMenu === 'dashboard' ? 'active' : ''}`}
+              onClick={() => setActiveMenu('dashboard')}
+            >
+              <LayoutDashboard size={18} />
+              대시보드
+            </div>
+          </li>
+          <li>
+            <div 
+              className={`menu-item ${activeMenu === 'generation' ? 'active' : ''}`}
+              onClick={() => setActiveMenu('generation')}
+            >
+              <FileText size={18} />
+              문서 자동 생성
+            </div>
+          </li>
+          <li>
+            <div className="menu-item">
+              <FolderKanban size={18} />
+              문서 관리
+            </div>
+          </li>
+          <li>
+            <div className="menu-item">
+              <Layers size={18} />
+              거래 관리
+            </div>
+          </li>
+          <li>
+            <div className="menu-item">
+              <Ship size={18} />
+              선적 일정 관리
+            </div>
+          </li>
+          <li>
+            <div className="menu-item">
+              <FileCheck2 size={18} />
+              통관 내역
+            </div>
+          </li>
+          <li>
+            <div className="menu-item">
+              <BarChart3 size={18} />
+              데이터 분석
+            </div>
+          </li>
+          <li>
+            <div className="menu-item">
+              <Settings size={18} />
+              설정
+            </div>
+          </li>
+        </ul>
+
+        <div className="support-card">
+          <div className="support-title">
+            <PhoneCall size={14} />
+            고객지원센터
+          </div>
+          <div className="support-phone">02-1234-5678</div>
+          <div className="support-time">평일 09:00 - 18:00</div>
+        </div>
+      </aside>
+
+      {/* 2. Main Portal Contents */}
+      <div className="main-wrapper">
+        <header className="header">
+          <div className="header-title-sec">
+            <span className="platform-badge">Mentoring Project 2026</span>
+          </div>
+
+          <div className="header-actions">
+            <button className="icon-btn">
+              <Bell size={20} />
+              <span className="badge-dot"></span>
+            </button>
+            <button className="icon-btn">
+              <HelpCircle size={20} />
+            </button>
+            <div className="user-profile">
+              <div className="user-avatar">김</div>
+              <span>홍길동 님</span>
+            </div>
+          </div>
+        </header>
+
+        <main className="content-body">
+          <div className="workspace-area">
+            {/* Page Title & Subtitle */}
+            <div className="page-heading">
+              <h1 className="page-title">항만 수출입 문서 자동화 서비스</h1>
+              <p className="page-subtitle">AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.</p>
+            </div>
+
+            {/* Quick test scenario filler */}
+            {!hasGenerated && (
+              <div className="quick-fill-container">
+                <button className="btn-pill" onClick={() => handleQuickFill('export_error')}>
+                  ⚡ 테스트 시나리오 A 불러오기 (수출 - 중량 누락 & HS코드 오류)
+                </button>
+                <button className="btn-pill" onClick={() => handleQuickFill('import_valid')}>
+                  ⚡ 테스트 시나리오 B 불러오기 (수입 - 모든 규정 정상 통과)
+                </button>
+              </div>
+            )}
+
+            {!hasGenerated ? (
+              /* --- 거래 정보 입력 모드 --- */
+              <div className="dashboard-grid">
+                <div className="form-card">
+                  <div className="card-header-icon-title">
+                    <FileSignature size={20} className="text-primary" />
+                    <h2 className="card-title">거래 정보 입력</h2>
+                  </div>
+
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label className="form-label">수출입 구분</label>
+                      <select 
+                        className="form-input" 
+                        value={profile.tradeType}
+                        onChange={(e) => handleInputChange('tradeType', e.target.value as 'export' | 'import')}
+                      >
+                        <option value="export">수출</option>
+                        <option value="import">수입</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">품목명</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="품목명을 입력하세요" 
+                        value={profile.itemName}
+                        onChange={(e) => handleInputChange('itemName', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">HS CODE</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="HS CODE를 입력하세요" 
+                        value={profile.hsCode}
+                        onChange={(e) => handleInputChange('hsCode', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">선적항</label>
+                      <select 
+                        className="form-input"
+                        value={profile.loadPort}
+                        onChange={(e) => handleInputChange('loadPort', e.target.value)}
+                      >
+                        <option value="">선적항을 선택하세요</option>
+                        <option value="부산항">부산항</option>
+                        <option value="인천항">인천항</option>
+                        <option value="광양항">광양항</option>
+                        <option value="로스앤젤레스항">로스앤젤레스항 (미국)</option>
+                        <option value="상하이항">상하이항 (중국)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">도착항</label>
+                      <select 
+                        className="form-input"
+                        value={profile.dischargePort}
+                        onChange={(e) => handleInputChange('dischargePort', e.target.value)}
+                      >
+                        <option value="">도착항을 선택하세요</option>
+                        <option value="부산항">부산항</option>
+                        <option value="인천항">인천항</option>
+                        <option value="상하이항">상하이항 (중국)</option>
+                        <option value="로스앤젤레스항">로스앤젤레스항 (미국)</option>
+                        <option value="로테르담항">로테르담항 (네덜란드)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">거래조건 (Incoterms)</label>
+                      <select 
+                        className="form-input"
+                        value={profile.incoterms}
+                        onChange={(e) => handleInputChange('incoterms', e.target.value as any)}
+                      >
+                        <option value="">거래조건을 선택하세요</option>
+                        <option value="FOB">FOB</option>
+                        <option value="CIF">CIF</option>
+                        <option value="EXW">EXW</option>
+                        <option value="DDP">DDP</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">화물 수량</label>
+                      <div className="input-suffix">
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          placeholder="숫자만 입력하세요" 
+                          value={profile.quantity}
+                          onChange={(e) => handleInputChange('quantity', e.target.value ? Number(e.target.value) : '')}
+                        />
+                        <span className="suffix-text">개</span>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">중량(kg)</label>
+                      <div className="input-suffix">
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          placeholder="숫자만 입력하세요" 
+                          value={profile.weight}
+                          onChange={(e) => handleInputChange('weight', e.target.value ? Number(e.target.value) : '')}
+                        />
+                        <span className="suffix-text">kg</span>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">출발일</label>
+                      <input 
+                        type="date" 
+                        className="form-input" 
+                        value={profile.departureDate}
+                        onChange={(e) => handleInputChange('departureDate', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">도착예정일</label>
+                      <input 
+                        type="date" 
+                        className="form-input" 
+                        value={profile.arrivalDate}
+                        onChange={(e) => handleInputChange('arrivalDate', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">업체명</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="업체명을 입력하세요" 
+                        value={profile.companyName}
+                        onChange={(e) => handleInputChange('companyName', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">담당자 연락처</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="010-0000-0000" 
+                        value={profile.contact}
+                        onChange={(e) => handleInputChange('contact', e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-actions">
+                    <button className="btn btn-secondary" onClick={handleReset}>
+                      <RotateCcw size={16} />
+                      초기화
+                    </button>
+                    <button className="btn btn-primary" onClick={handleGenerateDocuments}>
+                      <FileText size={16} />
+                      필요 서류 자동 생성
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right Guide Card */}
+                <div className="info-card">
+                  <div className="info-visual">
+                    <span className="visual-ship">🚢</span>
+                    <div className="visual-dots">
+                      <span>•</span>
+                      <span>•</span>
+                      <span>✓</span>
+                    </div>
+                  </div>
+                  <div className="info-text-section">
+                    <h3 className="info-title">안내</h3>
+                    <p className="info-desc">입력된 정보를 바탕으로 통관 및 선적 관련 필수 문서를 자동으로 생성하고 검증 규칙을 돌려 오류를 잡아냅니다.</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* --- 결과 리포트 대시보드 모드 --- */
+              <div className="workspace-area">
+                <div className="result-header-summary">
+                  <div className="summary-badge-list">
+                    <div className="summary-badge">
+                      <span className="summary-badge-icon">🏷️</span>
+                      수출입 구분: {profile.tradeType === 'export' ? '수출' : '수입'}
+                    </div>
+                    {profile.itemName && (
+                      <div className="summary-badge">
+                        <span className="summary-badge-icon">📦</span>
+                        품목명: {profile.itemName}
+                      </div>
+                    )}
+                    {profile.loadPort && (
+                      <div className="summary-badge">
+                        <span className="summary-badge-icon">⚓</span>
+                        선적항: {profile.loadPort}
+                      </div>
+                    )}
+                    {profile.dischargePort && (
+                      <div className="summary-badge">
+                        <span className="summary-badge-icon">🏁</span>
+                        도착항: {profile.dischargePort}
+                      </div>
+                    )}
+                    {profile.incoterms && (
+                      <div className="summary-badge">
+                        <span className="summary-badge-icon">📄</span>
+                        거래조건: {profile.incoterms}
+                      </div>
+                    )}
+                  </div>
+
+                  <button className="btn btn-secondary btn-sm" onClick={() => setShowConsole(true)}>
+                    <Terminal size={14} />
+                    에이전트 실행 로그 확인
+                  </button>
+                </div>
+
+                <div className="result-columns-layout">
+                  {/* Column 1: 필요 서류 목록 */}
+                  <div className="result-column">
+                    <div className="col-header">
+                      <div className="col-number">1</div>
+                      <h3 className="col-title">필요 서류 목록</h3>
+                    </div>
+
+                    <div className="doc-item-list">
+                      {documents.map((doc) => {
+                        let badgeClass = 'status-not-started';
+                        if (doc.status === 'completed') badgeClass = 'status-completed';
+                        else if (doc.status === 'review_required') badgeClass = 'status-review-required';
+                        else if (doc.status === 'not_needed') badgeClass = 'status-not-needed';
+
+                        return (
+                          <div className="doc-item-card" key={doc.id}>
+                            <div className="doc-item-left">
+                              <FileText size={16} className="text-light" />
+                              {doc.name}
+                            </div>
+                            <span className={`status-badge ${badgeClass}`}>
+                              {doc.statusText}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Column 2: 문서 생성 결과 프리뷰 */}
+                  <div className="result-column">
+                    <div className="col-header">
+                      <div className="col-number">2</div>
+                      <h3 className="col-title">문서 생성 결과</h3>
+                    </div>
+
+                    <div className="doc-preview-list">
+                      {documents
+                        .filter(d => d.status !== 'not_needed' && d.status !== 'not_started')
+                        .map((doc) => (
+                          <div 
+                            className={`preview-card ${doc.status === 'completed' ? 'success-border' : 'warning-border'}`}
+                            key={doc.id}
+                          >
+                            <div className="preview-header">
+                              <div className="preview-title-sec">
+                                <div className={`doc-icon-box doc-icon-${doc.id}`}>
+                                  {doc.id === 'invoice' ? 'INV' : doc.id === 'packing_list' ? 'PKL' : doc.id === 'bl' ? 'B/L' : 'DOC'}
+                                </div>
+                                <div className="preview-details">
+                                  <span className="preview-name">{doc.name}</span>
+                                  {doc.lastReviewed && (
+                                    <span className="preview-time">마지막 검토: {doc.lastReviewed}</span>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="preview-actions">
+                                <button className="action-btn-circle" title="미리보기">
+                                  <Eye size={14} />
+                                </button>
+                                <button className="action-btn-circle" title="다운로드">
+                                  <Download size={14} />
+                                </button>
+                                <button className="action-btn-circle" title="편집">
+                                  <Edit3 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      
+                      {documents.filter(d => d.status !== 'not_needed' && d.status !== 'not_started').length === 0 && (
+                        <div className="mobile-empty-state">
+                          <span className="mobile-empty-icon">📁</span>
+                          <span className="mobile-empty-text">생성된 문서 없음</span>
+                          <span className="mobile-empty-sub">정보를 정상적으로 채우거나 모바일에서 보완해 주세요.</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Column 3: AI 검토 및 경고 안내 */}
+                  <div className="result-column">
+                    <div className="col-header">
+                      <div className="col-number">3</div>
+                      <h3 className="col-title">검토 및 누락 항목 안내</h3>
+                    </div>
+
+                    <div className="ai-report-box">
+                      <div className="ai-header">
+                        <CheckCircle2 size={16} className="text-success" />
+                        AI 분석 결과
+                      </div>
+                      
+                      <div className="ai-warning-list">
+                        {issues.map((issue) => (
+                          <div className={`warning-item ${issue.severity}`} key={issue.id}>
+                            <span className="warning-icon">
+                              {issue.severity === 'error' ? '❌' : issue.severity === 'warning' ? '⚠️' : 'ℹ️'}
+                            </span>
+                            <div className="warning-body">
+                              <span className="warning-title">{issue.message.split(' (')[0]}</span>
+                              <span className="warning-text">
+                                {issue.message.includes(' (') ? issue.message.split(' (')[1].replace(')', '') : ''}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+
+                        {issues.length === 0 && (
+                          <div className="warning-item info">
+                            <span className="warning-icon">✅</span>
+                            <div className="warning-body">
+                              <span className="warning-title">문서 검증 통과</span>
+                              <span className="warning-text">수출입 통관 및 해상 운송에 필요한 모든 서류 규격이 완벽히 충족되었습니다.</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <button 
+                        className="btn btn-primary"
+                        onClick={handleMobileSubmit}
+                        disabled={issues.length > 0}
+                        style={{ width: '100%', opacity: issues.length > 0 ? 0.6 : 1, cursor: issues.length > 0 ? 'not-allowed' : 'pointer' }}
+                      >
+                        전체 문서 전송
+                      </button>
+                      <button className="btn btn-secondary" onClick={() => setHasGenerated(false)} style={{ width: '100%' }}>
+                        뒤로 가기 (입력 수정)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. Interactive Right Mobile Simulator Panel */}
+          <div className="simulator-wrapper">
+            <div className="iphone-frame">
+              <div className="iphone-notch"></div>
+              
+              <div className="iphone-screen">
+                <div className="mobile-status-bar">
+                  <span>12:25</span>
+                  <div className="status-bar-icons">
+                    <span>📶</span>
+                    <span>🔋</span>
+                  </div>
+                </div>
+
+                <div className="mobile-header">
+                  <ArrowLeft size={16} className="mobile-back-icon" onClick={() => setHasGenerated(false)} />
+                  <span className="mobile-title">문서 검토 결과</span>
+                </div>
+
+                <div className="mobile-body">
+                  {!hasGenerated ? (
+                    /* Mobile Standby screen */
+                    <div className="mobile-empty-state">
+                      <Smartphone size={40} className="text-light" />
+                      <span className="mobile-empty-text">실시간 보완 대기 중</span>
+                      <span className="mobile-empty-sub">좌측 대시보드에서 [필요 서류 자동 생성]을 누르면 실시간 보완 및 피드백 기능이 활성화됩니다.</span>
+                    </div>
+                  ) : (
+                    /* Mobile active verification & fix workspace */
+                    <>
+                      <div className="mobile-summary-card">
+                        <div className="mobile-summary-row">
+                          <span className="mobile-summary-label">
+                            <CheckCircle2 size={14} className="text-success" />
+                            검토 완료 문서
+                          </span>
+                          <span className="mobile-summary-value success">{completedDocsCount}건</span>
+                        </div>
+                        <div className="mobile-summary-row">
+                          <span className="mobile-summary-label">
+                            <AlertTriangle size={14} className="text-warning" />
+                            보완 필요
+                          </span>
+                          <span className="mobile-summary-value warning">{reviewDocsCount}건</span>
+                        </div>
+                      </div>
+
+                      <div className="mobile-section-title">누락 및 수정이 필요한 서류</div>
+
+                      <div className="mobile-fix-list">
+                        {issues.map((issue) => (
+                          <div className="mobile-fix-card" key={issue.id}>
+                            <div className="mobile-fix-header">
+                              <div className="mobile-fix-info">
+                                <span className="mobile-fix-name">
+                                  {issue.docType === 'packing_list' ? '패킹리스트' : 
+                                   issue.docType === 'customs_dec' ? '통관신고서' : 
+                                   issue.docType === 'co' ? '원산지증명서' : '기타 서류'}
+                                </span>
+                                <span className="mobile-fix-msg">
+                                  {issue.field === 'weight' ? '중량 정보 확인 필요' : 
+                                   issue.field === 'hsCode' ? 'HS CODE 유효성 검사 오류' : 
+                                   '수출국 규제 서류 작성 필요'}
+                                </span>
+                              </div>
+                              <span className="mobile-fix-badge status-review-required">
+                                {issue.severity === 'error' ? '오류' : '보완 필요'}
+                              </span>
+                            </div>
+
+                            {/* Dynamic input form depending on error type */}
+                            {issue.field === 'weight' && (
+                              <div className="mobile-input-group">
+                                <label className="mobile-input-label">화물 중량 입력 (kg)</label>
+                                <input 
+                                  type="number" 
+                                  className="mobile-input" 
+                                  placeholder="예: 4500" 
+                                  value={mobileWeight}
+                                  onChange={(e) => setMobileWeight(e.target.value)}
+                                />
+                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveWeight}>
+                                  중량 입력 및 보완 완료
+                                </button>
+                              </div>
+                            )}
+
+                            {issue.field === 'hsCode' && (
+                              <div className="mobile-input-group">
+                                <label className="mobile-input-label">올바른 HS CODE 입력</label>
+                                <input 
+                                  type="text" 
+                                  className="mobile-input" 
+                                  placeholder="예: 8479899090" 
+                                  value={mobileHSCode}
+                                  onChange={(e) => setMobileHSCode(e.target.value)}
+                                />
+                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveHSCode}>
+                                  HS CODE 수정 반영
+                                </button>
+                              </div>
+                            )}
+
+                            {issue.docType === 'co' && (
+                              <div className="mobile-input-group">
+                                <label className="mobile-input-label">원산지 정보 선택</label>
+                                <select 
+                                  className="mobile-input" 
+                                  value={mobileOrigin}
+                                  onChange={(e) => setMobileOrigin(e.target.value)}
+                                >
+                                  <option value="">국가를 선택하세요</option>
+                                  <option value="대한민국">대한민국 (KR)</option>
+                                  <option value="미국">미국 (US)</option>
+                                  <option value="중국">중국 (CN)</option>
+                                </select>
+                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveOrigin}>
+                                  원산지증명서 발급 요청
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {issues.length === 0 && (
+                          <div className="mobile-empty-state">
+                            <span className="mobile-empty-icon">🎉</span>
+                            <span className="mobile-empty-text">보완할 사항 없음</span>
+                            <span className="mobile-empty-sub">모든 관세법 서류 제출 요건이 충족되었습니다. 아래 [수정 후 제출] 버튼을 눌러 발송을 완료하세요.</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <button 
+                        className="mobile-btn mobile-btn-primary" 
+                        onClick={handleMobileSubmit}
+                        style={{ marginTop: 'auto' }}
+                        disabled={issues.length > 0}
+                      >
+                        수정 후 제출
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+
+      {/* 4. Agent Execution Terminal Terminal Overlay */}
+      {showConsole && (
+        <div className="console-overlay">
+          <div className="console-modal">
+            <div className="console-header">
+              <div className="console-title-group">
+                <Terminal size={16} />
+                <span>PortAI Agent Pipeline Runner</span>
+              </div>
+              <div className="console-dots">
+                <span className="console-dot red"></span>
+                <span className="console-dot yellow"></span>
+                <span className="console-dot green"></span>
+              </div>
+            </div>
+
+            <div className="console-body">
+              {consoleLogs.map((log, index) => (
+                <div className="log-row" key={index}>
+                  <span className="log-time">[{log.timestamp}]</span>
+                  <span className="log-agent">{log.agentName}:</span>
+                  <span className={`log-text-content ${log.type}`}>
+                    {log.message}
+                  </span>
+                </div>
+              ))}
+              {isProcessing && (
+                <div className="log-row">
+                  <span className="log-time">⏳</span>
+                  <span className="log-agent" style={{ color: '#fb7185' }}>Pipeline:</span>
+                  <span className="log-text-content" style={{ color: '#fb7185', fontStyle: 'italic' }}>
+                    에이전트 연계 연산 처리 중...
+                  </span>
+                </div>
+              )}
+              <div ref={consoleEndRef} />
+            </div>
+
+            <div className="console-footer">
+              <button 
+                className="btn btn-secondary btn-sm" 
+                onClick={() => setShowConsole(false)}
+                disabled={isProcessing}
+                style={{ opacity: isProcessing ? 0.6 : 1, cursor: isProcessing ? 'not-allowed' : 'pointer' }}
+              >
+                콘솔 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
