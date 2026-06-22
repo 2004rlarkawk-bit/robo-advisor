@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Non-code documents
+*.docx
+*.pdf
+*.hwp
+*.txt
+desktop.ini
+수상작/
+hwp/
