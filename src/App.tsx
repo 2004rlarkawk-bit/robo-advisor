@@ -32,6 +32,64 @@ import jsPDF from 'jspdf';
 export default function App() {
   const [activeMenu, setActiveMenu] = useState('dashboard');
   
+  // Auth states
+  const [user, setUser] = useState<{ name: string; type: 'member' | 'guest' } | null>(null);
+  const [loginId, setLoginId] = useState('');
+  const [loginPw, setLoginPw] = useState('');
+
+  // Mount logic: restore session
+  useEffect(() => {
+    const storedUser = localStorage.getItem('portai_user_session');
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        setUser(parsed);
+        if (parsed.type === 'member') {
+          setProfile(prev => ({
+            ...prev,
+            companyName: prev.companyName || '인천테크',
+            contact: prev.contact || '010-1234-5678'
+          }));
+        }
+      } catch (e) {
+        localStorage.removeItem('portai_user_session');
+      }
+    }
+  }, []);
+
+  const handleMemberLogin = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!loginId || !loginPw) {
+      alert('아이디와 비밀번호를 입력해주세요.');
+      return;
+    }
+    const memberUser = { name: '인천테크', type: 'member' as const };
+    setUser(memberUser);
+    localStorage.setItem('portai_user_session', JSON.stringify(memberUser));
+    setProfile(prev => ({
+      ...prev,
+      companyName: '인천테크',
+      contact: '010-1234-5678'
+    }));
+  };
+
+  const handleGuestLogin = () => {
+    const guestUser = { name: '게스트', type: 'guest' as const };
+    setUser(guestUser);
+    localStorage.setItem('portai_user_session', JSON.stringify(guestUser));
+    setProfile(prev => ({
+      ...prev,
+      companyName: '',
+      contact: ''
+    }));
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('portai_user_session');
+    handleReset();
+  };
+  
   // Trade profile state
   const [profile, setProfile] = useState<TradeProfile>({
     tradeType: 'export',
@@ -297,6 +355,73 @@ export default function App() {
   const completedDocsCount = documents.filter(d => d.status === 'completed').length;
   const reviewDocsCount = issues.length;
 
+  if (!user) {
+    return (
+      <div className="login-wrapper">
+        <div className="login-bg-decoration login-bg-decor1"></div>
+        <div className="login-bg-decoration login-bg-decor2"></div>
+        
+        <div className="login-card">
+          <div className="login-header">
+            <div className="login-logo">🚢</div>
+            <div className="login-brand">PortAI</div>
+            <div className="login-subtitle">스마트 물류 & 통관 자동화 플랫폼</div>
+          </div>
+          
+          <form className="login-form" onSubmit={handleMemberLogin}>
+            <div className="login-input-group">
+              <label className="login-label">사용자 아이디 (이메일)</label>
+              <input 
+                type="text" 
+                className="login-input" 
+                placeholder="demo@portai.com" 
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
+              />
+            </div>
+            
+            <div className="login-input-group">
+              <label className="login-label">비밀번호</label>
+              <input 
+                type="password" 
+                className="login-input" 
+                placeholder="••••••••" 
+                value={loginPw}
+                onChange={(e) => setLoginPw(e.target.value)}
+              />
+            </div>
+            
+            <button type="submit" className="login-btn-primary" style={{ marginTop: '8px' }}>
+              로그인
+            </button>
+          </form>
+
+          <div className="login-demo-helper">
+            <span className="login-demo-helper-title">💡 데모 계정으로 자동완성</span>
+            <div className="login-demo-actions">
+              <button 
+                className="login-demo-pill" 
+                type="button"
+                onClick={() => {
+                  setLoginId('incheon_tech');
+                  setLoginPw('password123');
+                }}
+              >
+                인천테크 (회원)
+              </button>
+            </div>
+          </div>
+
+          <div className="login-divider">또는</div>
+          
+          <button type="button" className="login-btn-guest" onClick={handleGuestLogin}>
+            비회원으로 시작하기 (체험)
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       {/* 1. Left Navigation Sidebar */}
@@ -391,9 +516,17 @@ export default function App() {
             <button className="icon-btn">
               <HelpCircle size={20} />
             </button>
-            <div className="user-profile">
-              <div className="user-avatar">김</div>
-              <span>홍길동 님</span>
+            <div className="user-info-section">
+              <div className="user-profile">
+                <div className="user-avatar">{user.type === 'member' ? '회' : '비'}</div>
+                <span>{user.name} 님</span>
+                <span className={`auth-badge ${user.type}`}>
+                  {user.type === 'member' ? '회원' : '비회원'}
+                </span>
+              </div>
+              <button className="btn-logout" onClick={handleLogout}>
+                로그아웃
+              </button>
             </div>
           </div>
         </header>
