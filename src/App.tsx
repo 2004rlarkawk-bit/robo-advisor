@@ -23,8 +23,10 @@ import {
   Smartphone
 } from 'lucide-react';
 import { TradeProfile, DocumentStatus, ValidationIssue } from './types';
-import { GeneratorAgent, AgentLog } from './harness/agents/generatorAgent';
-import { TestingAgent } from './harness/agents/testingAgent';
+import { OrchestratorAgent } from './agents/OrchestratorAgent';
+import { AgentLog } from './agents/types';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 
 export default function App() {
@@ -43,7 +45,8 @@ export default function App() {
     departureDate: '',
     arrivalDate: '',
     companyName: '',
-    contact: ''
+    contact: '',
+    partnerName: ''
   });
 
   // Harness & Agent Pipeline State
@@ -54,11 +57,15 @@ export default function App() {
   
   const [documents, setDocuments] = useState<DocumentStatus[]>([]);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
+  const [aiFeedback, setAiFeedback] = useState<string>('');
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+  const [htmlTemplates, setHtmlTemplates] = useState<Record<string, string>>({});
 
   // Mobile simulator inputs
   const [mobileWeight, setMobileWeight] = useState('');
   const [mobileHSCode, setMobileHSCode] = useState('');
   const [mobileOrigin, setMobileOrigin] = useState('');
+  const [hsCandidates, setHsCandidates] = useState<{ code: string; description: string; confidence: string; reasoning: string; }[]>([]);
 
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
@@ -96,7 +103,8 @@ export default function App() {
         departureDate: '2026-07-01',
         arrivalDate: '2026-07-05',
         companyName: '인천테크',
-        contact: '010-1234-5678'
+        contact: '010-1234-5678',
+        partnerName: '상하이 수입상사 (Shanghai Import Co.)'
       });
     } else {
       setProfile({
@@ -111,7 +119,8 @@ export default function App() {
         departureDate: '2026-07-15',
         arrivalDate: '2026-07-30',
         companyName: '글로벌 물류지원',
-        contact: '02-123-4567'
+        contact: '02-123-4567',
+        partnerName: '캘리포니아 엑스포트 (California Export Co.)'
       });
     }
   };
@@ -136,12 +145,15 @@ export default function App() {
       departureDate: '',
       arrivalDate: '',
       companyName: '',
-      contact: ''
+      contact: '',
+      partnerName: ''
     });
     setHasGenerated(false);
     setDocuments([]);
     setIssues([]);
     setConsoleLogs([]);
+    setHtmlTemplates({});
+    setHsCandidates([]);
   };
 
   // Run the multi-agent pipeline simulator
@@ -150,52 +162,48 @@ export default function App() {
     setShowConsole(true);
     setConsoleLogs([]);
 
-    const genAgent = new GeneratorAgent();
-    const testAgent = new TestingAgent();
+    try {
+      const orchestrator = new OrchestratorAgent();
+      const result = await orchestrator.run({ profile, useLLM: true });
 
-    // 1. Trigger Generator Agent
-    const genResult = await genAgent.generateDocuments(profile);
-    
-    // Simulate terminal printing for generator logs
-    for (let i = 0; i < genResult.logs.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 150));
-      setConsoleLogs(prev => [...prev, genResult.logs[i]]);
+      // Simulate terminal printing for all logs chronologically
+      for (let i = 0; i < result.logs.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 120));
+        setConsoleLogs(prev => [...prev, result.logs[i]]);
+      }
+
+      setProfile(prev => ({
+        ...prev,
+        hsCode: prev.hsCode || result.hs.topCode
+      }));
+      setDocuments(result.documents.documents);
+      setHtmlTemplates(result.documents.htmlTemplates || {});
+      setIssues(result.issues.issues);
+      setAiFeedback(result.feedback.message);
+      setHsCandidates(result.hs.candidates || []);
+      setHasGenerated(true);
+    } catch (error) {
+      console.error(error);
+      alert('에이전트 파이프라인 처리 중 오류가 발생했습니다.');
+    } finally {
+      setIsProcessing(false);
     }
-
-    // Small delay between agents
-    await new Promise(resolve => setTimeout(resolve, 300));
-    setConsoleLogs(prev => [...prev, {
-      timestamp: new Date().toLocaleTimeString(),
-      agentName: 'System Router',
-      message: '문서 생성이 완료되어 테스트 에이전트로 문서를 이관합니다.',
-      type: 'info'
-    }]);
-
-    // 2. Trigger Testing Agent
-    const testResult = await testAgent.testDocuments(profile);
-    
-    // Simulate terminal printing for testing logs
-    for (let i = 0; i < testResult.logs.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 150));
-      setConsoleLogs(prev => [...prev, testResult.logs[i]]);
-    }
-
-    setDocuments(genResult.documents);
-    setIssues(testResult.issues);
-    setIsProcessing(false);
-    setHasGenerated(true);
   };
 
   // Re-run validation helper (e.g. after fixing something in mobile view)
   const rerunAgents = async (updatedProfile: TradeProfile) => {
-    const genAgent = new GeneratorAgent();
-    const testAgent = new TestingAgent();
-
-    const genResult = await genAgent.generateDocuments(updatedProfile);
-    const testResult = await testAgent.testDocuments(updatedProfile);
-
-    setDocuments(genResult.documents);
-    setIssues(testResult.issues);
+    try {
+      const orchestrator = new OrchestratorAgent();
+      const result = await orchestrator.run({ profile: updatedProfile, useLLM: true });
+      
+      setDocuments(result.documents.documents);
+      setHtmlTemplates(result.documents.htmlTemplates || {});
+      setIssues(result.issues.issues);
+      setAiFeedback(result.feedback.message);
+      setHsCandidates(result.hs.candidates || []);
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   // Mobile quick fix solvers
@@ -224,26 +232,61 @@ export default function App() {
   const handleSolveOrigin = async () => {
     if (!mobileOrigin) return;
     
-    // Virtual resolution of Origin, modifying company/item name or simulation flag
     const updatedProfile = {
       ...profile,
       companyName: `${profile.companyName} (${mobileOrigin}산)`
     };
     setProfile(updatedProfile);
-    // Directly override Certificate of Origin document status to 'completed'
-    setDocuments(prev => prev.map(d => {
-      if (d.id === 'co') {
-        return {
-          ...d,
-          status: 'completed',
-          statusText: '생성 완료',
-          lastReviewed: new Date().toISOString().split('T')[0] + ' 15:30'
-        };
-      }
-      return d;
-    }));
-    // Remove the co issue
-    setIssues(prev => prev.filter(i => i.docType !== 'co'));
+    await rerunAgents(updatedProfile);
+  };
+
+  const getDocFileName = (docId: string) => {
+    const docTypeLabel = docId === 'invoice' ? 'Invoice' : docId === 'packing_list' ? 'PackingList' : 'CO';
+    const company = profile.companyName || 'ExportCo';
+    const dateStr = (profile.departureDate || new Date().toISOString().split('T')[0]).replace(/[-]/g, '');
+    return `${docTypeLabel}_${company}_${dateStr}.pdf`;
+  };
+
+  const handleDownloadDoc = async (docId: string) => {
+    const htmlContent = htmlTemplates[docId];
+    if (!htmlContent) {
+      alert('문서 양식 템플릿이 생성되지 않았습니다.');
+      return;
+    }
+
+    setIsProcessing(true);
+    
+    const container = document.createElement('div');
+    container.style.position = 'absolute';
+    container.style.left = '-9999px';
+    container.style.top = '-9999px';
+    container.style.width = '800px';
+    container.style.backgroundColor = '#ffffff';
+    container.innerHTML = htmlContent;
+    document.body.appendChild(container);
+
+    try {
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true
+      });
+      const imgData = canvas.toDataURL('image/png');
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      
+      const fileName = getDocFileName(docId);
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('PDF Generation Error:', error);
+      alert('PDF 다운로드 처리 중 오류가 발생했습니다.');
+    } finally {
+      document.body.removeChild(container);
+      setIsProcessing(false);
+    }
   };
 
   const handleMobileSubmit = () => {
@@ -526,6 +569,17 @@ export default function App() {
                     </div>
 
                     <div className="form-group">
+                      <label className="form-label">거래처명 (Consignee)</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="상대방 업체명을 입력하세요" 
+                        value={profile.partnerName || ''}
+                        onChange={(e) => handleInputChange('partnerName', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
                       <label className="form-label">담당자 연락처</label>
                       <input 
                         type="text" 
@@ -665,10 +719,18 @@ export default function App() {
                               </div>
                               
                               <div className="preview-actions">
-                                <button className="action-btn-circle" title="미리보기">
+                                <button 
+                                  className="action-btn-circle" 
+                                  title="미리보기"
+                                  onClick={() => setPreviewDocId(doc.id)}
+                                >
                                   <Eye size={14} />
                                 </button>
-                                <button className="action-btn-circle" title="다운로드">
+                                <button 
+                                  className="action-btn-circle" 
+                                  title="다운로드"
+                                  onClick={() => handleDownloadDoc(doc.id)}
+                                >
                                   <Download size={14} />
                                 </button>
                                 <button className="action-btn-circle" title="편집">
@@ -702,6 +764,22 @@ export default function App() {
                         AI 분석 결과
                       </div>
                       
+                      {aiFeedback && (
+                        <div className="ai-feedback-narrative" style={{ 
+                          fontSize: '13px', 
+                          lineHeight: '1.6', 
+                          color: '#1e293b', 
+                          backgroundColor: '#f1f5f9', 
+                          padding: '12px', 
+                          borderRadius: '8px', 
+                          marginBottom: '16px',
+                          borderLeft: '4px solid #3b82f6',
+                          whiteSpace: 'pre-line'
+                        }}>
+                          {aiFeedback}
+                        </div>
+                      )}
+
                       <div className="ai-warning-list">
                         {issues.map((issue) => (
                           <div className={`warning-item ${issue.severity}`} key={issue.id}>
@@ -845,6 +923,48 @@ export default function App() {
                                   value={mobileHSCode}
                                   onChange={(e) => setMobileHSCode(e.target.value)}
                                 />
+                                
+                                {hsCandidates && hsCandidates.length > 0 && (
+                                  <div className="hs-candidates-container" style={{ marginTop: '8px', marginBottom: '8px' }}>
+                                    <div className="hs-candidates-title" style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-light)', marginBottom: '4px' }}>
+                                      추천 HS CODE 후보군 (클릭 시 자동 기입):
+                                    </div>
+                                    <div className="hs-candidates-list" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                      {hsCandidates.map((cand, idx) => (
+                                        <div 
+                                          key={idx} 
+                                          className="hs-candidate-card" 
+                                          onClick={() => setMobileHSCode(cand.code)}
+                                          style={{
+                                            border: '1px solid var(--border-color)',
+                                            borderRadius: '6px',
+                                            padding: '8px',
+                                            cursor: 'pointer',
+                                            backgroundColor: 'rgba(0, 0, 0, 0.02)',
+                                            transition: 'background-color 0.2s, border-color 0.2s',
+                                          }}
+                                        >
+                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                                            <span style={{ fontWeight: 'bold', fontSize: '12px', color: 'var(--primary-color)' }}>{cand.code}</span>
+                                            <span style={{ 
+                                              fontSize: '10px', 
+                                              padding: '2px 6px', 
+                                              borderRadius: '4px', 
+                                              backgroundColor: cand.confidence.includes('낮음') ? 'rgba(220, 53, 69, 0.1)' : cand.confidence.includes('보통') ? 'rgba(255, 193, 7, 0.1)' : 'rgba(40, 167, 69, 0.1)',
+                                              color: cand.confidence.includes('낮음') ? '#d32f2f' : cand.confidence.includes('보통') ? '#b78103' : '#2e7d32',
+                                              fontWeight: 'bold'
+                                            }}>
+                                              {cand.confidence}
+                                            </span>
+                                          </div>
+                                          <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-dark)', marginBottom: '2px' }}>{cand.description}</div>
+                                          <div style={{ fontSize: '10px', color: 'var(--text-light)', lineHeight: '1.3' }}>{cand.reasoning}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
                                 <button className="mobile-btn mobile-btn-primary" onClick={handleSolveHSCode}>
                                   HS CODE 수정 반영
                                 </button>
@@ -944,6 +1064,105 @@ export default function App() {
                 style={{ opacity: isProcessing ? 0.6 : 1, cursor: isProcessing ? 'not-allowed' : 'pointer' }}
               >
                 콘솔 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 5. Premium Document Preview Modal */}
+      {previewDocId && (
+        <div className="preview-modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div className="preview-modal-container" style={{
+            backgroundColor: '#f8fafc',
+            borderRadius: '16px',
+            boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)',
+            width: '100%',
+            maxWidth: '850px',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            border: '1px solid rgba(255, 255, 255, 0.2)'
+          }}>
+            {/* Modal Header */}
+            <div className="preview-modal-header" style={{
+              padding: '16px 24px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#ffffff'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>
+                {previewDocId === 'invoice' ? '상업송장(Commercial Invoice) 미리보기' : 
+                 previewDocId === 'packing_list' ? '패킹리스트(Packing List) 미리보기' : 
+                 '원산지증명서(Certificate of Origin) 미리보기'}
+              </h3>
+              <button 
+                onClick={() => setPreviewDocId(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  lineHeight: '1'
+                }}
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Content - HTML container */}
+            <div className="preview-modal-body" style={{
+              padding: '24px',
+              overflowY: 'auto',
+              flex: 1,
+              display: 'flex',
+              justifyContent: 'center',
+              backgroundColor: '#f1f5f9'
+            }}>
+              <div 
+                style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
+                dangerouslySetInnerHTML={{ __html: htmlTemplates[previewDocId] || '<p>문서 양식이 생성되지 않았습니다.</p>' }}
+              />
+            </div>
+
+            {/* Modal Footer */}
+            <div className="preview-modal-footer" style={{
+              padding: '16px 24px',
+              borderTop: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              backgroundColor: '#ffffff'
+            }}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setPreviewDocId(null)}
+              >
+                닫기
+              </button>
+              <button 
+                className="btn btn-primary"
+                onClick={() => handleDownloadDoc(previewDocId)}
+              >
+                <Download size={16} />
+                PDF 다운로드
               </button>
             </div>
           </div>

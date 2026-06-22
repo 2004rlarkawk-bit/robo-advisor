@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { determineRequiredDocuments } from './rulesEngine';
 import { validateTradeDocuments } from './validatorEngine';
-import { GeneratorAgent } from './agents/generatorAgent';
-import { TestingAgent } from './agents/testingAgent';
+import { OrchestratorAgent } from '../agents/OrchestratorAgent';
+import { HSCodeAgent } from '../agents/HSCodeAgent';
 import { TradeProfile } from '../types';
 
 describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테스트', () => {
@@ -60,17 +60,34 @@ describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테
     expect(weightIssue?.message).toContain('중량 정보 확인 필요');
   });
 
-  it('HS Code가 숫자가 아니거나 6자리 미만이면 통관신고서 검토 필요 경고가 발생한다', () => {
-    const invalidHSProfile: TradeProfile = {
-      ...mockValidProfile,
-      hsCode: 'ABC-12' // 잘못된 HS Code
-    };
+  it('HSCodeAgent가 잘못된 HS Code 형태(비숫자, 자릿수 불일치, 범위 외 Chapter) 및 올바른 형태를 올바르게 검증한다', async () => {
+    const hsAgent = new HSCodeAgent();
+    
+    // 1. 비숫자 검증
+    const resNonNumeric = await hsAgent.run({ itemName: '테스트', hsCode: 'ABC-12', logs: [] });
+    expect(resNonNumeric.status).toBe('invalid');
+    expect(resNonNumeric.validationMessage).toContain('숫자만');
 
-    const issues = validateTradeDocuments(invalidHSProfile);
-    const hsIssue = issues.find(i => i.id === 'hscode-invalid');
-    expect(hsIssue).toBeDefined();
-    expect(hsIssue?.severity).toBe('warning');
-    expect(hsIssue?.message).toContain('HS CODE 검토 필요');
+    // 2. 자릿수 오류 검증 (8자리)
+    const resWrongLength = await hsAgent.run({ itemName: '테스트', hsCode: '12345678', logs: [] });
+    expect(resWrongLength.status).toBe('invalid');
+    expect(resWrongLength.validationMessage).toContain('6자리');
+    expect(resWrongLength.validationMessage).toContain('10자리');
+
+    // 3. 특수 Chapter (범위 외 Chapter, e.g. 99)
+    const resSpecialChapter = await hsAgent.run({ itemName: '테스트', hsCode: '9912345678', logs: [] });
+    expect(resSpecialChapter.status).toBe('needs_review');
+    expect(resSpecialChapter.validationMessage).toContain('특수 범위');
+
+    // 4. 올바른 HSK 10자리 검증 및 포맷팅
+    const resValid10 = await hsAgent.run({ itemName: '테스트', hsCode: '8517620000', logs: [] });
+    expect(resValid10.status).toBe('valid');
+    expect(resValid10.formattedCode).toBe('8517.62-0000');
+
+    // 5. 올바른 HS6 6자리 검증 및 포맷팅
+    const resValid6 = await hsAgent.run({ itemName: '테스트', hsCode: '851762', logs: [] });
+    expect(resValid6.status).toBe('valid');
+    expect(resValid6.formattedCode).toBe('8517.62');
   });
 
   it('모든 필수 항목이 올바르게 채워지면 송장, 패킹리스트, B/L은 완료(생성 완료) 상태여야 한다', () => {
@@ -102,28 +119,94 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     contact: '010-9876-5432'
   };
 
-  it('문서 생성 및 테스트 에이전트가 에러 없이 작업 일지를 생성하고 결과를 연계한다', async () => {
-    const genAgent = new GeneratorAgent();
-    const testAgent = new TestingAgent();
+  it('OrchestratorAgent가 모든 하위 에이전트를 성공적으로 통합 조율하여 실행 결과를 도출한다', async () => {
+    const orchestrator = new OrchestratorAgent();
+    const result = await orchestrator.run({ profile: testProfile, useLLM: false });
 
-    // 1. Generator Agent 실행
-    const genResult = await genAgent.generateDocuments(testProfile);
-    expect(genResult.documents).toHaveLength(5);
-    expect(genResult.logs.length).toBeGreaterThan(0);
-    
-    // 생성 에이전트 로그 확인
-    const startLog = genResult.logs.find(l => l.message.includes('시작'));
+    // 1. HSCode 결과 검증
+    expect(result.hs.topCode).toBe('8517.62-0000');
+    expect(result.hs.candidates.length).toBeGreaterThan(0);
+
+    // 2. Documents 결과 검증 (CIF 조건이므로 보험증서 포함 총 6개)
+    expect(result.documents.documents).toHaveLength(6);
+    expect(result.documents.generatedDocs.invoice).toBeDefined();
+    expect(result.documents.generatedDocs.packingList).toBeDefined();
+
+    // 3. Issues 결과 검증 (중량 누락 경고 확인)
+    const weightIssue = result.issues.issues.find(i => i.id === 'weight-missing');
+    expect(weightIssue).toBeDefined();
+
+    // 4. Feedback 결과 검증
+    expect(result.feedback.message).toContain('IT 기기');
+    expect(result.feedback.message).toContain('중량');
+
+    // 5. 전체 실행 로그 확인
+    expect(result.logs.length).toBeGreaterThan(0);
+    const startLog = result.logs.find(l => l.message.includes('가동 시작'));
     expect(startLog).toBeDefined();
+  });
 
-    // 2. Testing Agent 실행
-    const testResult = await testAgent.testDocuments(testProfile);
-    expect(testResult.logs.length).toBeGreaterThan(0);
+  it('CIF 조건의 경우 적하보험증권 누락 에러 및 책임 안내 피드백이 발생한다', async () => {
+    const cifProfile: TradeProfile = {
+      tradeType: 'export',
+      itemName: '기계부품',
+      hsCode: '8479-89-9090',
+      loadPort: '부산항',
+      dischargePort: '상하이항',
+      incoterms: 'CIF',
+      quantity: 100,
+      weight: 500,
+      departureDate: '2026-07-01',
+      arrivalDate: '2026-07-05',
+      companyName: '수출상사',
+      contact: '010-1234-5678'
+    };
 
-    // 중량 누락 경고가 포함되어 있는지 검증
-    const weightWarning = testResult.issues.find(i => i.id === 'weight-missing');
-    expect(weightWarning).toBeDefined();
-    
-    const warningLog = testResult.logs.find(l => l.type === 'warning' && l.message.includes('검증 실패'));
-    expect(warningLog).toBeDefined();
+    const orchestrator = new OrchestratorAgent();
+    const result = await orchestrator.run({ profile: cifProfile, useLLM: false });
+
+    // 적하보험증권 포함 확인
+    const insuranceDoc = result.documents.documents.find(d => d.id === 'insurance');
+    expect(insuranceDoc).toBeDefined();
+
+    // 누락 에러 검증
+    const insuranceIssue = result.issues.issues.find(i => i.id === 'insurance-missing');
+    expect(insuranceIssue).toBeDefined();
+    expect(insuranceIssue?.severity).toBe('error');
+
+    // 피드백 검증
+    expect(result.feedback.message).toContain('적하보험증권을 준비하세요');
+  });
+
+  it('EXW 조건의 경우 B/L이 비필수(not_needed) 처리되고 정보성 안내가 발생한다', async () => {
+    const exwProfile: TradeProfile = {
+      tradeType: 'export',
+      itemName: '기계부품',
+      hsCode: '8479-89-9090',
+      loadPort: '부산항',
+      dischargePort: '상하이항',
+      incoterms: 'EXW',
+      quantity: 100,
+      weight: 500,
+      departureDate: '2026-07-01',
+      arrivalDate: '2026-07-05',
+      companyName: '수출상사',
+      contact: '010-1234-5678'
+    };
+
+    const orchestrator = new OrchestratorAgent();
+    const result = await orchestrator.run({ profile: exwProfile, useLLM: false });
+
+    // B/L 비필수 검증
+    const blDoc = result.documents.documents.find(d => d.id === 'bl');
+    expect(blDoc?.status).toBe('not_needed');
+
+    // 정보성 알림 검증
+    const exwIssue = result.issues.issues.find(i => i.id === 'exw-responsibility-info');
+    expect(exwIssue).toBeDefined();
+    expect(exwIssue?.severity).toBe('info');
+
+    // 피드백 검증
+    expect(result.feedback.message).toContain('공장 인도 조건입니다');
   });
 });
