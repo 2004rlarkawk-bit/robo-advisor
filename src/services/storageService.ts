@@ -4,7 +4,8 @@
  * 거래 프로필, 생성 문서, 이력 등을 localStorage에 저장합니다.
  * 추후 백엔드 DB 연동 시 이 인터페이스만 교체하면 됩니다.
  */
-
+/*수정했습니다
+*/
 import type { SavedTrade, TradeProfile, DocumentStatus, GeneratedDocuments, ValidationIssue } from '../types';
 
 const STORAGE_KEY = 'portai_saved_trades';
