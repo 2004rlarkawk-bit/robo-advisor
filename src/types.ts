@@ -5,7 +5,7 @@ export interface TradeProfile {
   hsCode: string;
   loadPort: string;
   dischargePort: string;
-  incoterms: 'FOB' | 'CIF' | 'EXW' | 'DDP' | '';
+  incoterms: 'FOB' | 'CIF' | 'EXW' | 'DDP' | 'DAP'| 'FCA' | '';
   quantity: number | '';
   weight: number | '';
   departureDate: string;
