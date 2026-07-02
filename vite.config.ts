@@ -13,6 +13,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/unipass-api/, ''),
       },
+      // 법제처 국가법령정보 — CORS 미허용 대비 프록시
+      '/law-api': {
+        target: 'https://www.law.go.kr',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/law-api/, ''),
+      },
     },
   },
   test: {

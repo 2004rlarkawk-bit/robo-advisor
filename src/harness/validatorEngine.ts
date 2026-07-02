@@ -2,6 +2,7 @@ import { TradeProfile, ValidationIssue } from '../types';
 import { getIncotermsRule } from '../agents/incotermsRules';
 import { calcDutiableValue, verifyBusinessRegistration } from '../services/customsApiService';
 import { estimateDuty } from '../services/unipassService';
+import { getRelatedLawForIssue } from '../services/lawService';
 
 /**
  * 거래정보 입력값 검증 (팀원 Python 스펙 "거래정보 입력값 검증 모듈" 포팅)
@@ -236,6 +237,14 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
       }
     } catch {
       // 조회 실패 시 이슈 미추가 (네트워크 등)
+    }
+  }
+
+  // 8. 근거 법령 표기 (법제처 매핑 — 해당 이슈 유형에만)
+  for (const issue of issues) {
+    const law = getRelatedLawForIssue(issue.id);
+    if (law && !issue.message.includes('근거:')) {
+      issue.message += ` [근거: ${law.lawName} ${law.article}]`;
     }
   }
 

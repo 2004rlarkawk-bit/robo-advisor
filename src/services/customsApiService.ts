@@ -323,6 +323,207 @@ function simulatedTradeStats(hsCode: string, startYymm: string, endYymm: string)
   return out;
 }
 
+// ===== 3-1. 국가별 수출입실적 (관세청 GW, data.go.kr 15101612) =====
+
+export interface CountryTradeStat {
+  period: string; // yyyy.mm
+  countryCode: string; // US, CN ...
+  countryName: string;
+  exportCount: number;
+  exportAmount: number; // USD
+  importCount: number;
+  importAmount: number;
+  balance: number;
+  source: DataSource;
+}
+
+/** 국가 코드(ISO2) 기준 기간별 수출입실적. cntyCd 생략 시 전체 국가. */
+export async function getCountryTradeStats(
+  startYymm: string,
+  endYymm: string,
+  countryCode?: string
+): Promise<CountryTradeStat[]> {
+  const key = getDataGoKrKey();
+
+  if (key) {
+    try {
+      let url =
+        `${BASE_1220000}/nationtrade/getNationtradeList` +
+        `?serviceKey=${encodeURIComponent(key)}&strtYymm=${startYymm}&endYymm=${endYymm}`;
+      if (countryCode) url += `&cntyCd=${countryCode.toUpperCase()}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`국가별 실적 API 오류 (${res.status})`);
+      const items = xmlItems(await res.text());
+      const stats = items
+        .filter((i) => i.year && i.year !== '총계')
+        .map((i) => ({
+          period: i.year,
+          countryCode: i.statCd || '',
+          countryName: i.statCdCntnKor1 || '',
+          exportCount: parseFloat(i.expCnt || '0'),
+          exportAmount: parseFloat(i.expDlr || '0'),
+          importCount: parseFloat(i.impCnt || '0'),
+          importAmount: parseFloat(i.impDlr || '0'),
+          balance: parseFloat(i.balPayments || '0'),
+          source: 'api' as DataSource,
+        }));
+      if (stats.length > 0) return stats;
+      throw new Error('실적 데이터 없음');
+    } catch (err) {
+      console.warn('국가별 수출입실적 API 실패, 시뮬레이션 폴백:', err);
+    }
+  }
+
+  // 시뮬레이션: 주요 3개국 고정 샘플
+  const samples = [
+    { countryCode: 'US', countryName: '미국' },
+    { countryCode: 'CN', countryName: '중국' },
+    { countryCode: 'JP', countryName: '일본' },
+  ].filter((s) => !countryCode || s.countryCode === countryCode.toUpperCase());
+  return samples.map((s, idx) => ({
+    period: `${startYymm.slice(0, 4)}.${startYymm.slice(4, 6)}`,
+    ...s,
+    exportCount: 100000 - idx * 20000,
+    exportAmount: 10_000_000_000 - idx * 2_000_000_000,
+    importCount: 120000 - idx * 25000,
+    importAmount: 8_000_000_000 - idx * 1_500_000_000,
+    balance: 2_000_000_000 - idx * 500_000_000,
+    source: 'simulation' as DataSource,
+  }));
+}
+
+// ===== 3-2. 수출입총괄 (관세청 GW, data.go.kr 15102108) =====
+
+export interface TotalTradeStat {
+  period: string; // yyyy.mm
+  exportCount: number;
+  exportAmount: number; // USD
+  importCount: number;
+  importAmount: number;
+  balance: number;
+  source: DataSource;
+}
+
+/** 국가 전체 수출입총괄 (월별). 대시보드 상단 요약 카드용. */
+export async function getTotalTradeStats(startYymm: string, endYymm: string): Promise<TotalTradeStat[]> {
+  const key = getDataGoKrKey();
+
+  if (key) {
+    try {
+      const url =
+        `${BASE_1220000}/Newtrade/getNewtradeList` +
+        `?serviceKey=${encodeURIComponent(key)}&strtYymm=${startYymm}&endYymm=${endYymm}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`수출입총괄 API 오류 (${res.status})`);
+      const items = xmlItems(await res.text());
+      const stats = items
+        .filter((i) => i.year && i.year !== '총계')
+        .map((i) => ({
+          period: i.year,
+          exportCount: parseFloat(i.expCnt || '0'),
+          exportAmount: parseFloat(i.expDlr || '0'),
+          importCount: parseFloat(i.impCnt || '0'),
+          importAmount: parseFloat(i.impDlr || '0'),
+          balance: parseFloat(i.balPayments || '0'),
+          source: 'api' as DataSource,
+        }))
+        .sort((a, b) => a.period.localeCompare(b.period));
+      if (stats.length > 0) return stats;
+      throw new Error('실적 데이터 없음');
+    } catch (err) {
+      console.warn('수출입총괄 API 실패, 시뮬레이션 폴백:', err);
+    }
+  }
+
+  return [
+    {
+      period: `${startYymm.slice(0, 4)}.${startYymm.slice(4, 6)}`,
+      exportCount: 1_000_000,
+      exportAmount: 65_000_000_000,
+      importCount: 4_900_000,
+      importAmount: 57_000_000_000,
+      balance: 8_000_000_000,
+      source: 'simulation',
+    },
+  ];
+}
+
+// ===== 3-3. 성질별 수출입실적 (관세청 GW, data.go.kr 15102109) =====
+// TODO: 필수 요청변수 미확인 (strtYymm/endYymm 외 추가 필수값 존재 — resultCode 99).
+// data.go.kr 마이페이지 → 활용신청 상세 → 상세기능정보에서 파라미터 확인 후 구현.
+// 엔드포인트: /1220000/Idfytempertrade/getIdfytempertradeList
+
+// ===== 2-1. 사업자등록 진위확인 (국세청 validate — 대표자명·개업일 대조) =====
+
+export interface BusinessValidity {
+  bizNo: string;
+  valid: boolean; // 등록정보 일치 여부 (01: 일치)
+  message: string;
+  status?: BusinessStatus; // 일치 시 상태조회 결과 동봉
+  source: DataSource;
+}
+
+/**
+ * 진위확인: 사업자번호 + 개업일(yyyyMMdd) + 대표자성명 3요소 대조.
+ * 상태조회(verifyBusinessRegistration)보다 강한 검증 — 거래처 실명 확인용.
+ */
+export async function validateBusinessRegistration(
+  bizNo: string,
+  startDate: string, // yyyyMMdd
+  representativeName: string
+): Promise<BusinessValidity> {
+  const key = getNtsBusinessKey();
+  const cleaned = bizNo.replace(/[^0-9]/g, '');
+
+  if (key && cleaned.length === 10) {
+    try {
+      const url = `https://api.odcloud.kr/api/nts-businessman/v1/validate?serviceKey=${encodeURIComponent(key)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businesses: [{ b_no: cleaned, start_dt: startDate.replace(/[^0-9]/g, ''), p_nm: representativeName.trim() }],
+        }),
+      });
+      if (!res.ok) throw new Error(`진위확인 API 오류 (${res.status})`);
+      const data = await res.json();
+      const item = data?.data?.[0];
+      if (item) {
+        const matched = item.valid === '01';
+        return {
+          bizNo: cleaned,
+          valid: matched,
+          message: matched
+            ? '국세청 등록정보와 일치합니다.'
+            : `등록정보 불일치 (${item.valid_msg || '확인 불가'}) — 사업자번호·개업일·대표자명을 재확인하세요.`,
+          status: matched
+            ? {
+                bizNo: cleaned,
+                valid: item.status?.b_stt === '계속사업자',
+                statusText: item.status?.b_stt || '',
+                taxType: item.status?.tax_type,
+                source: 'api',
+              }
+            : undefined,
+          source: 'api',
+        };
+      }
+      throw new Error('응답 데이터 없음');
+    } catch (err) {
+      console.warn('사업자 진위확인 API 실패, 시뮬레이션 폴백:', err);
+    }
+  }
+
+  // 시뮬레이션: 상태조회의 체크섬 검증 재사용
+  const statusResult = await verifyBusinessRegistration(cleaned);
+  return {
+    bizNo: cleaned,
+    valid: statusResult.valid,
+    message: `(시뮬레이션) ${statusResult.statusText}`,
+    source: 'simulation',
+  };
+}
+
 // ===== 4. 과세가격 환산 헬퍼 =====
 
 export interface DutiableValueResult {

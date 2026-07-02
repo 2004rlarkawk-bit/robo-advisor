@@ -21,6 +21,7 @@ import {
   setUnipassKey, hasUnipassKey, clearUnipassKey,
   getTariffRates, pickBasicRate, UnipassKeyId,
 } from '../services/unipassService';
+import { setLawOC, hasLawOC, clearLawOC, searchLaw } from '../services/lawService';
 
 interface KeyRowProps {
   title: string;
@@ -223,6 +224,29 @@ export default function SettingsPanel() {
           } : undefined}
         />
       ))}
+
+      <div className="page-heading" style={{ marginTop: 32 }}>
+        <h2 className="page-title" style={{ fontSize: 20 }}>법제처 국가법령정보</h2>
+        <p className="page-subtitle">
+          현행법령·판례 검색 및 검증 결과의 근거 법령 연결에 사용됩니다. 키가 아니라 <b>law.go.kr 가입 ID(OC)</b>를 입력하세요.
+          발급 시 등록한 도메인에서만 호출이 허용될 수 있습니다.
+        </p>
+      </div>
+
+      <KeyRow
+        title="법제처 OC (사용자 ID)"
+        description="open.law.go.kr에서 Open API 신청 시 사용한 가입 ID. 예: g4c 이메일이 abc@gmail.com이면 OC는 abc."
+        placeholder="law.go.kr 가입 ID"
+        saved={hasLawOC()}
+        onSave={setLawOC}
+        onClear={clearLawOC}
+        onTest={async () => {
+          const results = await searchLaw('관세법', 3);
+          const apiHit = results.find((r) => r.source === 'api');
+          if (!apiHit) throw new Error('API 응답 실패 — 시뮬레이션 폴백됨. OC와 도메인 등록(localhost 여부)을 확인하세요.');
+          return `법령 검색 성공 — ${apiHit.lawName} (${apiHit.lawType}, 시행 ${apiHit.effectiveDate})`;
+        }}
+      />
     </div>
   );
 }
