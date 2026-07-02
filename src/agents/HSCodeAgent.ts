@@ -1,5 +1,5 @@
 import { Agent, HSCodeResult, AgentLog, createLog } from './types';
-import { suggestHSCode } from '../services/claudeService';
+import { suggestHSCode, hasApiKey } from '../services/claudeService';
 import { findHSCodesByItemName } from './hsCodeDict';
 import { searchHSByKeyword, lookupHSByCode, loadHSData } from '../services/hsDataService';
 
@@ -38,7 +38,8 @@ export class HSCodeAgent implements Agent<{ itemName: string; hsCode?: string; u
     if (itemName) {
       logs.push(createLog(this.name, `추천 분석할 품목명: "${itemName}" (AI 활용 여부: ${useLLM ? '예' : '아니오'})`, 'info'));
       try {
-        if (useLLM) {
+        // 폴백 체인: Claude(키 있을 때만, 의미 검색) → 관세청 로컬 사전(정확 매칭) → 내장 dict
+        if (useLLM && hasApiKey()) {
           const suggestions = await suggestHSCode(itemName);
           candidates = suggestions.map(c => ({
             code: formatHSCode(c.code),
@@ -46,8 +47,11 @@ export class HSCodeAgent implements Agent<{ itemName: string; hsCode?: string; u
             confidence: c.confidence,
             reasoning: c.reasoning
           }));
-        } else {
-          // 1순위: 관세청 HS부호 로컬 사전(12,469행) 검색
+          logs.push(createLog(this.name, `Claude LLM 기반 후보 ${candidates.length}건 수신`, 'success'));
+        }
+
+        if (candidates.length === 0) {
+          // 관세청 HS부호 로컬 사전(12,469행) 검색
           const dbResults = await searchHSByKeyword(itemName);
           if (dbResults.length > 0) {
             candidates = dbResults.map(r => ({
@@ -57,16 +61,18 @@ export class HSCodeAgent implements Agent<{ itemName: string; hsCode?: string; u
               reasoning: `관세청 HS부호 사전 기준 · 영문명: ${r.en || '-'} · 단위: ${r.wtUnit || r.qtyUnit || '-'}`
             }));
             logs.push(createLog(this.name, `관세청 HS 사전에서 ${candidates.length}건 매칭`, 'success'));
-          } else {
-            // 2순위: 내장 시뮬레이션 dict 폴백 (사전 로드 실패/무매칭 시)
-            const localSuggestions = findHSCodesByItemName(itemName);
-            candidates = localSuggestions.map(c => ({
-              code: c.code, // hsCodeDict.ts에 이미 포맷팅되어 있음
-              description: c.description,
-              confidence: c.confidence,
-              reasoning: c.reasoning
-            }));
           }
+        }
+
+        if (candidates.length === 0) {
+          // 최종 폴백: 내장 시뮬레이션 dict (사전 로드 실패/무매칭 시)
+          const localSuggestions = findHSCodesByItemName(itemName);
+          candidates = localSuggestions.map(c => ({
+            code: c.code, // hsCodeDict.ts에 이미 포맷팅되어 있음
+            description: c.description,
+            confidence: c.confidence,
+            reasoning: c.reasoning
+          }));
         }
       } catch (error) {
         logs.push(createLog(this.name, `추천 중 오류 발생: ${error instanceof Error ? error.message : String(error)}`, 'error'));

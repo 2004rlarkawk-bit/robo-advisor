@@ -84,30 +84,52 @@ export interface HSSearchResult extends HSDataEntry {
 
 /**
  * 키워드로 HS 후보 검색.
- * 랭킹: 코드 접두 일치 > 카테고리 포함 > 한글명 포함 > 영문명 포함.
+ * 다단어 검색어는 공백 기준 토큰으로 분리하여 OR 매칭 + 매칭 토큰 수로 가점.
+ * 랭킹: 코드 접두 일치 > 전체 문구 일치 > 토큰별 (카테고리 > 한글명 > 영문명).
  * "기타"처럼 잎 항목명이 모호한 경우 category 필드가 실질 매칭을 담당합니다.
  */
 export async function searchHSByKeyword(keyword: string, limit = 8): Promise<HSSearchResult[]> {
   const data = await loadHSData();
-  const q = normalize(keyword);
-  if (!q || data.length === 0) return [];
+  const phrase = normalize(keyword);
+  if (!phrase || data.length === 0) return [];
 
-  const isDigits = /^\d+$/.test(q);
+  const isDigits = /^\d+$/.test(phrase);
+  // 1글자 토큰은 노이즈라 제외 (예: "및", "용")
+  const tokens = keyword
+    .toLowerCase()
+    .split(/\s+/)
+    .map((t) => normalize(t))
+    .filter((t) => t.length >= 2);
   const results: HSSearchResult[] = [];
 
   for (const e of data) {
     let score = 0;
     if (isDigits) {
-      if (e.code.startsWith(q)) score += 10;
+      if (e.code.startsWith(phrase)) score += 10;
     } else {
       const ko = normalize(e.ko);
       const en = normalize(e.en);
       const cat = normalize(e.category);
-      if (cat.includes(q)) score += 5;
-      if (ko.includes(q)) score += 3;
-      if (en.includes(q)) score += 1;
+
+      // 전체 문구 일치 (최고 신뢰)
+      if (cat.includes(phrase)) score += 6;
+      if (ko.includes(phrase)) score += 4;
+      if (en.includes(phrase)) score += 2;
+
+      // 토큰별 부분 일치 (다단어 품목명 대응)
+      if (score === 0 && tokens.length > 0) {
+        let matched = 0;
+        for (const t of tokens) {
+          if (cat.includes(t)) { score += 3; matched++; }
+          else if (ko.includes(t)) { score += 2; matched++; }
+          else if (en.includes(t)) { score += 1; matched++; }
+        }
+        // 모든 토큰 매칭 시 가점 (AND 우대)
+        if (matched === tokens.length && tokens.length > 1) score += 3;
+      }
+
       // 카테고리/한글명이 검색어로 시작하면 가점
-      if (cat.startsWith('(' + q) || ko.startsWith(q)) score += 2;
+      if (cat.startsWith('(' + phrase) || ko.startsWith(phrase)) score += 2;
     }
     if (score > 0) {
       results.push({ ...e, formattedCode: formatCode(e.code), score });

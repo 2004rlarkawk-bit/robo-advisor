@@ -23,6 +23,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { TradeProfile, DocumentStatus, ValidationIssue } from './types';
+import SettingsPanel from './components/SettingsPanel';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
 import html2canvas from 'html2canvas';
@@ -484,7 +485,10 @@ export default function App() {
             </div>
           </li>
           <li>
-            <div className="menu-item">
+            <div
+              className={`menu-item ${activeMenu === 'settings' ? 'active' : ''}`}
+              onClick={() => setActiveMenu('settings')}
+            >
               <Settings size={18} />
               설정
             </div>
@@ -533,6 +537,7 @@ export default function App() {
 
         <main className="content-body">
           <div className="workspace-area">
+            {activeMenu === 'settings' ? <SettingsPanel /> : <>
             {/* Page Title & Subtitle */}
             <div className="page-heading">
               <h1 className="page-title">항만 수출입 문서 자동화 서비스</h1>
@@ -957,6 +962,7 @@ export default function App() {
                 </div>
               </div>
             )}
+            </>}
           </div>
 
           {/* 3. Interactive Right Mobile Simulator Panel */}
