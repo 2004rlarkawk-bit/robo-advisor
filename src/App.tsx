@@ -105,7 +105,10 @@ export default function App() {
     arrivalDate: '',
     companyName: '',
     contact: '',
-    partnerName: ''
+    partnerName: '',
+    currency: 'KRW',
+    invoiceAmount: '',
+    businessRegistrationNo: ''
   });
 
   // Harness & Agent Pipeline State
@@ -163,7 +166,10 @@ export default function App() {
         arrivalDate: '2026-07-05',
         companyName: '인천테크',
         contact: '010-1234-5678',
-        partnerName: '상하이 수입상사 (Shanghai Import Co.)'
+        partnerName: '상하이 수입상사 (Shanghai Import Co.)',
+        currency: 'USD',
+        invoiceAmount: 85000,
+        businessRegistrationNo: '123-45-67890' // Invalid checksum
       });
     } else {
       setProfile({
@@ -179,7 +185,10 @@ export default function App() {
         arrivalDate: '2026-07-30',
         companyName: '글로벌 물류지원',
         contact: '02-123-4567',
-        partnerName: '캘리포니아 엑스포트 (California Export Co.)'
+        partnerName: '캘리포니아 엑스포트 (California Export Co.)',
+        currency: 'USD',
+        invoiceAmount: 120000,
+        businessRegistrationNo: '124-81-00998' // Valid (삼성전자)
       });
     }
   };
@@ -205,7 +214,10 @@ export default function App() {
       arrivalDate: '',
       companyName: '',
       contact: '',
-      partnerName: ''
+      partnerName: '',
+      currency: 'KRW',
+      invoiceAmount: '',
+      businessRegistrationNo: ''
     });
     setHasGenerated(false);
     setDocuments([]);
@@ -719,12 +731,52 @@ export default function App() {
 
                     <div className="form-group">
                       <label className="form-label">담당자 연락처</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        placeholder="010-0000-0000" 
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="010-0000-0000"
                         value={profile.contact}
                         onChange={(e) => handleInputChange('contact', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">결제 통화</label>
+                      <select
+                        className="form-input"
+                        value={profile.currency || 'KRW'}
+                        onChange={(e) => handleInputChange('currency', e.target.value)}
+                      >
+                        <option value="KRW">KRW (원화)</option>
+                        <option value="USD">USD (미국 달러)</option>
+                        <option value="EUR">EUR (유로)</option>
+                        <option value="JPY">JPY (일본 엔)</option>
+                        <option value="CNY">CNY (중국 위안)</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">인보이스 총액</label>
+                      <div className="input-suffix">
+                        <input
+                          type="number"
+                          className="form-input"
+                          placeholder="외화 입력 시 과세가격 자동 환산"
+                          value={profile.invoiceAmount ?? ''}
+                          onChange={(e) => handleInputChange('invoiceAmount', e.target.value ? Number(e.target.value) : '')}
+                        />
+                        <span className="suffix-text">{profile.currency || 'KRW'}</span>
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">사업자등록번호</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="000-00-00000 (입력 시 국세청 상태 검증)"
+                        value={profile.businessRegistrationNo || ''}
+                        onChange={(e) => handleInputChange('businessRegistrationNo', e.target.value)}
                       />
                     </div>
                   </div>

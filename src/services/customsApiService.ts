@@ -20,32 +20,38 @@
 const KEY_DATA_GO_KR = 'portai_data_go_kr_key'; // 관세청 GW 공통 (환율·통계)
 const KEY_NTS_BUSINESS = 'portai_nts_business_key'; // 국세청 사업자 진위확인
 
+/** 테스트(node) 환경에는 localStorage가 없음 → 키 없음으로 처리해 시뮬 폴백 유도 */
+const storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> =
+  typeof localStorage !== 'undefined'
+    ? localStorage
+    : { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+
 export function setDataGoKrKey(key: string): void {
-  localStorage.setItem(KEY_DATA_GO_KR, key);
+  storage.setItem(KEY_DATA_GO_KR, key);
 }
 export function getDataGoKrKey(): string | null {
-  return localStorage.getItem(KEY_DATA_GO_KR);
+  return storage.getItem(KEY_DATA_GO_KR);
 }
 export function hasDataGoKrKey(): boolean {
   const k = getDataGoKrKey();
   return !!k && k.length > 10;
 }
 export function clearDataGoKrKey(): void {
-  localStorage.removeItem(KEY_DATA_GO_KR);
+  storage.removeItem(KEY_DATA_GO_KR);
 }
 
 export function setNtsBusinessKey(key: string): void {
-  localStorage.setItem(KEY_NTS_BUSINESS, key);
+  storage.setItem(KEY_NTS_BUSINESS, key);
 }
 export function getNtsBusinessKey(): string | null {
-  return localStorage.getItem(KEY_NTS_BUSINESS);
+  return storage.getItem(KEY_NTS_BUSINESS);
 }
 export function hasNtsBusinessKey(): boolean {
   const k = getNtsBusinessKey();
   return !!k && k.length > 10;
 }
 export function clearNtsBusinessKey(): void {
-  localStorage.removeItem(KEY_NTS_BUSINESS);
+  storage.removeItem(KEY_NTS_BUSINESS);
 }
 
 // ===== 공통 =====

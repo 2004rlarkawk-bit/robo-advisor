@@ -1,6 +1,6 @@
 import { Agent, ComplianceResult, AgentLog, createLog, HSCodeResult } from './types';
 import { TradeProfile, DocumentStatus, ValidationIssue } from '../types';
-import { validateTradeDocuments } from '../harness/validatorEngine';
+import { validateTradeDocumentsAsync } from '../harness/validatorEngine';
 
 export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents: DocumentStatus[]; hsResult?: HSCodeResult; logs: AgentLog[] }, ComplianceResult> {
   readonly name = 'Compliance Agent';
@@ -10,8 +10,8 @@ export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents
 
     logs.push(createLog(this.name, '통관 서류 규정 및 필수 항목 검증 시작...', 'info'));
 
-    // 룰 기반 검증 엔진 실행 (공통 비즈니스 규칙 검증)
-    const issues: ValidationIssue[] = validateTradeDocuments(profile);
+    // 룰 기반 검증 엔진 실행 (공통 비즈니스 규칙 + 환율·사업자 공공 API 검증)
+    const issues: ValidationIssue[] = await validateTradeDocumentsAsync(profile);
 
     // HSCodeAgent의 검증 결과를 통합
     if (hsResult) {

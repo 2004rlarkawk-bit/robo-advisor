@@ -13,6 +13,12 @@ export interface TradeProfile {
   companyName: string;
   contact: string;
   partnerName?: string;
+  /** 인보이스 결제 통화 (기본 KRW — KRW 외 통화면 과세가격 환산 검증 수행) */
+  currency?: 'KRW' | 'USD' | 'EUR' | 'JPY' | 'CNY' | '';
+  /** 인보이스 총액 (currency 단위) */
+  invoiceAmount?: number | '';
+  /** 자사 사업자등록번호 (10자리 — 입력 시 국세청 상태조회 검증) */
+  businessRegistrationNo?: string;
 }
 
 // ========== 문서 상태 ==========

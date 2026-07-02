@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { determineRequiredDocuments } from './rulesEngine';
-import { validateTradeDocuments } from './validatorEngine';
+import { validateTradeDocuments, validateTradeDocumentsAsync, validateRequiredInputs } from './validatorEngine';
 import { OrchestratorAgent } from '../agents/OrchestratorAgent';
 import { HSCodeAgent } from '../agents/HSCodeAgent';
 import { TradeProfile } from '../types';
@@ -208,5 +208,110 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
 
     // 피드백 검증
     expect(result.feedback.message).toContain('공장 인도 조건입니다');
+  });
+
+  const baseAsyncProfile: TradeProfile = {
+    tradeType: 'export',
+    itemName: '산업용 부품',
+    hsCode: '8479-89-9090',
+    loadPort: '부산항',
+    dischargePort: '상하이항',
+    incoterms: 'FOB',
+    quantity: 1500,
+    weight: 4500,
+    departureDate: '2026-07-01',
+    arrivalDate: '2026-07-05',
+    companyName: '인천테크',
+    contact: '010-1234-5678'
+  };
+
+  it('외화(USD) 인보이스 입력 시 원화 과세가격 환산 info 이슈가 추가된다', async () => {
+    const usdProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      currency: 'USD',
+      invoiceAmount: 100000
+    };
+    const issues = await validateTradeDocumentsAsync(usdProfile);
+    const dutiable = issues.find(i => i.id === 'dutiable-value-info');
+    expect(dutiable).toBeDefined();
+    expect(dutiable?.severity).toBe('info');
+    expect(dutiable?.message).toContain('과세가격 환산');
+    expect(dutiable?.message).toContain('USD');
+  });
+
+  it('KRW 거래 또는 금액 미입력 시 과세가격 환산 이슈가 없다', async () => {
+    const krwProfile: TradeProfile = { ...baseAsyncProfile, currency: 'KRW', invoiceAmount: 5000000 };
+    const noAmountProfile: TradeProfile = { ...baseAsyncProfile, currency: 'USD', invoiceAmount: '' };
+
+    const krwIssues = await validateTradeDocumentsAsync(krwProfile);
+    const noAmtIssues = await validateTradeDocumentsAsync(noAmountProfile);
+
+    expect(krwIssues.find(i => i.id === 'dutiable-value-info')).toBeUndefined();
+    expect(noAmtIssues.find(i => i.id === 'dutiable-value-info')).toBeUndefined();
+  });
+
+  it('체크섬이 틀린 사업자등록번호는 error, 올바른 번호는 (키 미설정 시) 형식확인 info가 된다', async () => {
+    // 123-45-67890: 체크섬 불일치 → error
+    const badBizProfile: TradeProfile = { ...baseAsyncProfile, businessRegistrationNo: '123-45-67890' };
+    const badIssues = await validateTradeDocumentsAsync(badBizProfile);
+    const badIssue = badIssues.find(i => i.id === 'bizno-invalid');
+    expect(badIssue).toBeDefined();
+    expect(badIssue?.severity).toBe('error');
+
+    // 124-81-00998 (삼성전자): 체크섬 유효 → API 키 없는 테스트 환경에서는 형식확인 info
+    const okBizProfile: TradeProfile = { ...baseAsyncProfile, businessRegistrationNo: '124-81-00998' };
+    const okIssues = await validateTradeDocumentsAsync(okBizProfile);
+    expect(okIssues.find(i => i.id === 'bizno-invalid')).toBeUndefined();
+    const checksumInfo = okIssues.find(i => i.id === 'bizno-checksum-only');
+    expect(checksumInfo).toBeDefined();
+    expect(checksumInfo?.severity).toBe('info');
+  });
+
+  // ===== 입력값 검증 모듈 (팀원 Python 스펙 포팅) =====
+
+  it('필수 항목이 모두 입력된 경우 입력값 검증 오류가 없다 (Python 시나리오 B)', () => {
+    const fullProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp'
+    };
+    const issues = validateRequiredInputs(fullProfile);
+    expect(issues).toHaveLength(0);
+  });
+
+  it('품목명·거래처명 등 필수 항목 누락 시 error 이슈가 발생한다', () => {
+    const missingProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      itemName: '',
+      partnerName: ''
+    };
+    const issues = validateRequiredInputs(missingProfile);
+    expect(issues.find(i => i.id === 'input-missing-itemName')?.severity).toBe('error');
+    expect(issues.find(i => i.id === 'input-missing-partnerName')?.severity).toBe('error');
+  });
+
+  it('수량·중량이 0 이하이면 error 이슈가 발생한다 (Python 시나리오 A 핵심)', () => {
+    const zeroProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp',
+      quantity: 0,
+      weight: -5
+    };
+    const issues = validateRequiredInputs(zeroProfile);
+    expect(issues.find(i => i.id === 'input-nonpositive-quantity')).toBeDefined();
+    expect(issues.find(i => i.id === 'input-nonpositive-weight')).toBeDefined();
+  });
+
+  it('도착예정일이 출발일보다 빠르면 error 이슈가 발생한다', () => {
+    const badDateProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp',
+      departureDate: '2026-07-15',
+      arrivalDate: '2026-07-10'
+    };
+    const issues = validateRequiredInputs(badDateProfile);
+    const dateIssue = issues.find(i => i.id === 'input-date-order');
+    expect(dateIssue).toBeDefined();
+    expect(dateIssue?.severity).toBe('error');
+    expect(dateIssue?.message).toContain('도착예정일이 출발일보다 빠를 수 없습니다');
   });
 });
