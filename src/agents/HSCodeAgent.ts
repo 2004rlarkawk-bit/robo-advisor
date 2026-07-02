@@ -1,6 +1,14 @@
 import { Agent, HSCodeResult, AgentLog, createLog } from './types';
 import { suggestHSCode } from '../services/claudeService';
 import { findHSCodesByItemName } from './hsCodeDict';
+import { searchHSByKeyword, lookupHSByCode, loadHSData } from '../services/hsDataService';
+
+/** 검색 점수를 신뢰도 라벨로 변환 */
+function scoreToConfidence(score: number): string {
+  if (score >= 7) return '높음';
+  if (score >= 4) return '보통';
+  return '낮음';
+}
 
 export function cleanHSCode(code: string): string {
   return code.replace(/[\s.-]/g, '');
@@ -39,13 +47,26 @@ export class HSCodeAgent implements Agent<{ itemName: string; hsCode?: string; u
             reasoning: c.reasoning
           }));
         } else {
-          const localSuggestions = findHSCodesByItemName(itemName);
-          candidates = localSuggestions.map(c => ({
-            code: c.code, // hsCodeDict.ts에 이미 포맷팅되어 있음
-            description: c.description,
-            confidence: c.confidence,
-            reasoning: c.reasoning
-          }));
+          // 1순위: 관세청 HS부호 로컬 사전(12,469행) 검색
+          const dbResults = await searchHSByKeyword(itemName);
+          if (dbResults.length > 0) {
+            candidates = dbResults.map(r => ({
+              code: r.formattedCode,
+              description: r.category ? `${r.ko} ${r.category}` : r.ko,
+              confidence: scoreToConfidence(r.score),
+              reasoning: `관세청 HS부호 사전 기준 · 영문명: ${r.en || '-'} · 단위: ${r.wtUnit || r.qtyUnit || '-'}`
+            }));
+            logs.push(createLog(this.name, `관세청 HS 사전에서 ${candidates.length}건 매칭`, 'success'));
+          } else {
+            // 2순위: 내장 시뮬레이션 dict 폴백 (사전 로드 실패/무매칭 시)
+            const localSuggestions = findHSCodesByItemName(itemName);
+            candidates = localSuggestions.map(c => ({
+              code: c.code, // hsCodeDict.ts에 이미 포맷팅되어 있음
+              description: c.description,
+              confidence: c.confidence,
+              reasoning: c.reasoning
+            }));
+          }
         }
       } catch (error) {
         logs.push(createLog(this.name, `추천 중 오류 발생: ${error instanceof Error ? error.message : String(error)}`, 'error'));
@@ -95,6 +116,33 @@ export class HSCodeAgent implements Agent<{ itemName: string; hsCode?: string; u
           status: 'needs_review',
           formattedCode: formatted,
           validationMessage: msg
+        };
+      }
+
+      // 관세청 사전에서 실제 품목명 확인 (존재 시 보강)
+      const dbEntry = await lookupHSByCode(cleaned);
+      if (dbEntry) {
+        const label = dbEntry.category ? `${dbEntry.ko} ${dbEntry.category}` : dbEntry.ko;
+        logs.push(createLog(this.name, `HS Code 검증 통과: ${formatted} (${label})`, 'success'));
+        return {
+          topCode: formatted,
+          candidates,
+          status: 'valid',
+          formattedCode: formatted,
+          validationMessage: `유효한 HS CODE입니다. 관세청 사전 품목: ${label} (${dbEntry.en || '-'})`
+        };
+      }
+
+      // 사전이 실제 로드된 경우에만 "미등록 코드" 강등 적용 (테스트/오프라인 시 형식 검증만)
+      const dbLoaded = (await loadHSData()).length > 0;
+      if (dbLoaded && cleaned.length === 10) {
+        logs.push(createLog(this.name, `HS Code 형식 유효하나 사전 미등록: ${formatted}`, 'warning'));
+        return {
+          topCode: formatted,
+          candidates,
+          status: 'needs_review',
+          formattedCode: formatted,
+          validationMessage: '형식은 유효하나 관세청 HS부호 사전에 없는 코드입니다. 코드를 재확인하세요.'
         };
       }
 
