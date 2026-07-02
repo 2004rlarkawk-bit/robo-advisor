@@ -17,6 +17,10 @@ import {
   setNtsBusinessKey, hasNtsBusinessKey, clearNtsBusinessKey,
   getCustomsExchangeRate, verifyBusinessRegistration,
 } from '../services/customsApiService';
+import {
+  setUnipassKey, hasUnipassKey, clearUnipassKey,
+  getTariffRates, pickBasicRate, UnipassKeyId,
+} from '../services/unipassService';
 
 interface KeyRowProps {
   title: string;
@@ -168,6 +172,57 @@ export default function SettingsPanel() {
           return `테스트 조회 성공 — 124-81-00998(삼성전자): ${r.statusText}`;
         }}
       />
+
+      <div className="page-heading" style={{ marginTop: 32 }}>
+        <h2 className="page-title" style={{ fontSize: 20 }}>UNI-PASS 키 (관세청 전자통관 — 서비스별 개별 키)</h2>
+        <p className="page-subtitle">
+          ⚠ UNI-PASS는 브라우저 보안정책(CORS) 제한으로 <b>로컬 개발 환경(npm run dev)에서만 실데이터</b>로 동작합니다.
+          배포 사이트에서는 시뮬레이션 값이 표시됩니다.
+        </p>
+      </div>
+
+      {([
+        {
+          id: 'tariff' as UnipassKeyId,
+          title: 'UNI-PASS 관세율기본조회 키',
+          description: 'HSK 10자리 기준 기본세율/WTO/FTA 세율 조회 — 예상 관세액 계산에 사용됩니다.',
+          testable: true,
+        },
+        {
+          id: 'requirement' as UnipassKeyId,
+          title: 'UNI-PASS 수출입요건승인내역 키',
+          description: '요건승인번호로 발급된 승인 내역(서식명·유효기간)을 확인합니다.',
+          testable: false,
+        },
+        {
+          id: 'cargo' as UnipassKeyId,
+          title: 'UNI-PASS 화물통관진행정보 키',
+          description: 'B/L번호로 화물 통관 진행상태를 추적합니다.',
+          testable: false,
+        },
+        {
+          id: 'fulfillment' as UnipassKeyId,
+          title: 'UNI-PASS 수출이행내역 키',
+          description: '수출신고번호로 선적 이행 여부·적재의무기한을 확인합니다.',
+          testable: false,
+        },
+      ]).map((cfg) => (
+        <KeyRow
+          key={cfg.id}
+          title={cfg.title}
+          description={cfg.description}
+          placeholder="UNI-PASS 인증키 (crkyCn)"
+          saved={hasUnipassKey(cfg.id)}
+          onSave={(k) => setUnipassKey(cfg.id, k)}
+          onClear={() => clearUnipassKey(cfg.id)}
+          onTest={cfg.testable ? async () => {
+            const rates = await getTariffRates('8517130000');
+            const basic = pickBasicRate(rates);
+            if (!basic || basic.source !== 'api') throw new Error('API 응답 실패 — 시뮬레이션 폴백됨. 로컬 개발 환경인지, 키가 맞는지 확인하세요.');
+            return `스마트폰(8517130000) 기본세율 ${basic.rate}% — 세율 ${rates.length}건 조회 성공`;
+          } : undefined}
+        />
+      ))}
     </div>
   );
 }

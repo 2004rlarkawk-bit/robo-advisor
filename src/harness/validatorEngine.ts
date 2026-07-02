@@ -1,6 +1,7 @@
 import { TradeProfile, ValidationIssue } from '../types';
 import { getIncotermsRule } from '../agents/incotermsRules';
 import { calcDutiableValue, verifyBusinessRegistration } from '../services/customsApiService';
+import { estimateDuty } from '../services/unipassService';
 
 /**
  * 거래정보 입력값 검증 (팀원 Python 스펙 "거래정보 입력값 검증 모듈" 포팅)
@@ -190,6 +191,22 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
         message: `과세가격 환산: ${currency} ${amount.toLocaleString()} × ${dv.rate.toLocaleString()}원 = 약 ${dv.totalKrw.toLocaleString()}원 (${srcNote})`,
         field: 'invoiceAmount'
       });
+
+      // 6-1. 수입 거래 + 유효 HSK 10자리 → UNI-PASS 관세율 기반 예상 관세액 안내
+      const hsCleaned = profile.hsCode.replace(/[^0-9]/g, '');
+      if (profile.tradeType === 'import' && hsCleaned.length === 10) {
+        const duty = await estimateDuty(hsCleaned, dv.totalKrw);
+        if (duty) {
+          const dutySrc = duty.source === 'api' ? 'UNI-PASS 관세율 기준' : '시뮬레이션 세율 — 실세율은 UNI-PASS 키 설정 후 적용';
+          issues.push({
+            id: 'estimated-duty-info',
+            docType: 'customs_dec',
+            severity: 'info',
+            message: `예상 관세액: 과세가격 ${duty.dutiableValueKrw.toLocaleString()}원 × ${duty.rate}% (${duty.rateName}) = 약 ${duty.estimatedDutyKrw.toLocaleString()}원 (${dutySrc})`,
+            field: 'hsCode'
+          });
+        }
+      }
     } catch {
       // 환산 실패는 치명적이지 않음 — 이슈 미추가
     }

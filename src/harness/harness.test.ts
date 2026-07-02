@@ -301,6 +301,35 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(issues.find(i => i.id === 'input-nonpositive-weight')).toBeDefined();
   });
 
+  it('수입 + 외화 + 유효 HSK 10자리면 예상 관세액 info 이슈가 추가된다', async () => {
+    const importProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      tradeType: 'import',
+      partnerName: 'ABC Corp',
+      hsCode: '8517130000',
+      currency: 'USD',
+      invoiceAmount: 10000
+    };
+    const issues = await validateTradeDocumentsAsync(importProfile);
+    const duty = issues.find(i => i.id === 'estimated-duty-info');
+    expect(duty).toBeDefined();
+    expect(duty?.severity).toBe('info');
+    expect(duty?.message).toContain('예상 관세액');
+    expect(duty?.message).toContain('%');
+  });
+
+  it('수출 거래에서는 예상 관세액 이슈가 없다', async () => {
+    const exportProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp',
+      hsCode: '8517130000',
+      currency: 'USD',
+      invoiceAmount: 10000
+    };
+    const issues = await validateTradeDocumentsAsync(exportProfile);
+    expect(issues.find(i => i.id === 'estimated-duty-info')).toBeUndefined();
+  });
+
   it('도착예정일이 출발일보다 빠르면 error 이슈가 발생한다', () => {
     const badDateProfile: TradeProfile = {
       ...baseAsyncProfile,

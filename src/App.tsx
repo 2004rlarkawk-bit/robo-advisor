@@ -175,7 +175,7 @@ export default function App() {
       setProfile({
         tradeType: 'import',
         itemName: 'IT 원자재',
-        hsCode: '8517-62-0000', // Valid HS Code
+        hsCode: '8517-62-1010', // Valid HSK (유선통신용 송수신기기 — 관세청 사전 실코드)
         loadPort: '로스앤젤레스항',
         dischargePort: '인천항',
         incoterms: 'CIF',
