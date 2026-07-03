@@ -17,7 +17,8 @@ export function getSavedTrades(): SavedTrade[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch {
+  } catch (err) {
+    console.warn('저장된 거래 이력 파싱 실패 — 빈 목록 반환:', err);
     return [];
   }
 }
@@ -83,7 +84,8 @@ export function getSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
-  } catch {
+  } catch (err) {
+    console.warn('설정 파싱 실패 — 기본값 반환:', err);
     return DEFAULT_SETTINGS;
   }
 }

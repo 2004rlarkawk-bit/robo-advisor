@@ -164,7 +164,8 @@ export async function autoFillDocumentFields(
   try {
     const response = await callClaude(systemPrompt, userMessage);
     return JSON.parse(response);
-  } catch {
+  } catch (err) {
+    console.warn('LLM 인보이스 필드 추천 실패 — 기본값 폴백:', err);
     return {
       itemDescription: `${profile.itemName} (commercial goods)`,
       paymentTerms: 'T/T in advance',

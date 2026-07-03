@@ -105,6 +105,8 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
   // 2. 통관신고서 - HS CODE 검증 (HSCodeAgent에서 처리하므로 여기서는 중복 제거)
 
   // 3. 원산지증명서 - 작성 여부 검증
+  // TODO(데모용 placeholder): companyName.includes('산')은 시연 시나리오 분기용 임시 조건임.
+  //  실제 판단 기준은 "수출 + FTA 협정세율 적용 희망 or 상대국 요구" — 원산지 판정 로직으로 교체 필요.
   if (profile.tradeType === 'export' && !profile.companyName.includes('산')) {
     issues.push({
       id: 'co-required',
@@ -208,8 +210,9 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
           });
         }
       }
-    } catch {
-      // 환산 실패는 치명적이지 않음 — 이슈 미추가
+    } catch (err) {
+      // 환산 실패는 치명적이지 않음 — 이슈 미추가 (디버깅용 로그만 남김)
+      console.warn('과세가격 환산 실패 (이슈 미발행):', err);
     }
   }
 
@@ -235,8 +238,9 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
           field: 'businessRegistrationNo'
         });
       }
-    } catch {
-      // 조회 실패 시 이슈 미추가 (네트워크 등)
+    } catch (err) {
+      // 조회 실패 시 이슈 미추가 (네트워크 등) — 디버깅용 로그만 남김
+      console.warn('사업자등록번호 조회 실패 (이슈 미발행):', err);
     }
   }
 

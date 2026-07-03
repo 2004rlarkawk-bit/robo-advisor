@@ -466,34 +466,40 @@ export default function App() {
               문서 자동 생성
             </div>
           </li>
+          {/* 미구현 메뉴 — 구현 완료 시 onClick 연결 후 disabled/배지 제거 */}
           <li>
-            <div className="menu-item">
+            <div className="menu-item disabled" title="준비 중인 기능입니다">
               <FolderKanban size={18} />
               문서 관리
+              <span className="badge-soon">준비중</span>
             </div>
           </li>
           <li>
-            <div className="menu-item">
+            <div className="menu-item disabled" title="준비 중인 기능입니다">
               <Layers size={18} />
               거래 관리
+              <span className="badge-soon">준비중</span>
             </div>
           </li>
           <li>
-            <div className="menu-item">
+            <div className="menu-item disabled" title="준비 중인 기능입니다">
               <Ship size={18} />
               선적 일정 관리
+              <span className="badge-soon">준비중</span>
             </div>
           </li>
           <li>
-            <div className="menu-item">
+            <div className="menu-item disabled" title="준비 중인 기능입니다">
               <FileCheck2 size={18} />
               통관 내역
+              <span className="badge-soon">준비중</span>
             </div>
           </li>
           <li>
-            <div className="menu-item">
+            <div className="menu-item disabled" title="준비 중인 기능입니다">
               <BarChart3 size={18} />
               데이터 분석
+              <span className="badge-soon">준비중</span>
             </div>
           </li>
           <li>

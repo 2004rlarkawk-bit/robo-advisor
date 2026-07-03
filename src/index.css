@@ -115,6 +115,28 @@ body {
   box-shadow: 0 4px 12px rgba(11, 87, 208, 0.25);
 }
 
+/* 미구현 메뉴 — 준비중 표시 (클릭 불가) */
+.menu-item.disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.menu-item.disabled:hover {
+  background-color: transparent;
+  color: #cbd5e1;
+}
+
+.badge-soon {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 2px 8px;
+  letter-spacing: 0.02em;
+}
+
 .support-card {
   background-color: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
