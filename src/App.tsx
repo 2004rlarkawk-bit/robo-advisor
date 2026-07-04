@@ -28,6 +28,7 @@ import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { saveTrade } from './services/storageService';
 
 
 export default function App() {
@@ -237,6 +238,10 @@ export default function App() {
       const orchestrator = new OrchestratorAgent();
       const result = await orchestrator.run({ profile, useLLM: true });
 
+      if (!result.hs || !result.documents || !result.issues || !result.feedback) {
+       throw new Error("에이전트 실행 결과가 비어 있습니다.");
+      }
+
       // Simulate terminal printing for all logs chronologically
       for (let i = 0; i < result.logs.length; i++) {
         await new Promise(resolve => setTimeout(resolve, 120));
@@ -245,14 +250,22 @@ export default function App() {
 
       setProfile(prev => ({
         ...prev,
-        hsCode: prev.hsCode || result.hs.topCode
+        hsCode: prev.hsCode || result.hs!.topCode
       }));
-      setDocuments(result.documents.documents);
-      setHtmlTemplates(result.documents.htmlTemplates || {});
-      setIssues(result.issues.issues);
+      setDocuments(result.documents!.documents);
+      setHtmlTemplates(result.documents!.htmlTemplates || {});
+      setIssues(result.issues!.issues);
       setAiFeedback(result.feedback.message);
       setHsCandidates(result.hs.candidates || []);
       setHasGenerated(true);
+      await saveTrade(
+  {
+    ...profile,
+    hsCode: profile.hsCode || result.hs.topCode,
+  },
+  result.documents.documents,
+  result.issues.issues
+);
     } catch (error) {
       console.error(error);
       alert('에이전트 파이프라인 처리 중 오류가 발생했습니다.');
@@ -267,11 +280,11 @@ export default function App() {
       const orchestrator = new OrchestratorAgent();
       const result = await orchestrator.run({ profile: updatedProfile, useLLM: true });
       
-      setDocuments(result.documents.documents);
-      setHtmlTemplates(result.documents.htmlTemplates || {});
-      setIssues(result.issues.issues);
-      setAiFeedback(result.feedback.message);
-      setHsCandidates(result.hs.candidates || []);
+      setDocuments(result.documents!.documents);
+      setHtmlTemplates(result.documents!.htmlTemplates || {});
+      setIssues(result.issues!.issues);
+      setAiFeedback(result.feedback!.message);
+      setHsCandidates(result.hs!.candidates || []);
     } catch (error) {
       console.error(error);
     }
@@ -1004,7 +1017,7 @@ export default function App() {
                     </div>
 
                     <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <button 
+                      {/* <button 
                         className="btn btn-primary"
                         onClick={handleMobileSubmit}
                         disabled={issues.length > 0}
@@ -1014,6 +1027,20 @@ export default function App() {
                       </button>
                       <button className="btn btn-secondary" onClick={() => setHasGenerated(false)} style={{ width: '100%' }}>
                         뒤로 가기 (입력 수정)
+                      </button> */}
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleMobileSubmit}
+                        disabled={issues.some((issue) => issue.severity === 'error')}
+                        style={{
+                          width: '100%',
+                          opacity: issues.some((issue) => issue.severity === 'error') ? 0.6 : 1,
+                          cursor: issues.some((issue) => issue.severity === 'error')
+                            ? 'not-allowed'
+                            : 'pointer'
+                        }}
+                      >
+                        전체 문서 전송
                       </button>
                     </div>
                   </div>
@@ -1236,7 +1263,7 @@ export default function App() {
                 <div className="log-row" key={index}>
                   <span className="log-time">[{log.timestamp}]</span>
                   <span className="log-agent">{log.agentName}:</span>
-                  <span className={`log-text-content ${log.type}`}>
+                  <span className={`log-text-content ${log.level}`}>
                     {log.message}
                   </span>
                 </div>

@@ -6,6 +6,7 @@
  */
 /*수정했습니다
 */
+import { supabase } from '../lib/supabase';
 import type { SavedTrade, TradeProfile, DocumentStatus, GeneratedDocuments, ValidationIssue } from '../types';
 
 const STORAGE_KEY = 'portai_saved_trades';
@@ -23,17 +24,17 @@ export function getSavedTrades(): SavedTrade[] {
   }
 }
 
-export function saveTrade(
+export async function saveTrade(
   profile: TradeProfile,
   documents: DocumentStatus[],
   issues: ValidationIssue[],
   generatedDocs?: GeneratedDocuments
-): SavedTrade {
-  const trades = getSavedTrades();
+): Promise<SavedTrade> {
+
   const now = new Date().toISOString();
   
   const newTrade: SavedTrade = {
-    id: `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    id: '',
     profile,
     documents,
     generatedDocs,
@@ -42,15 +43,30 @@ export function saveTrade(
     updatedAt: now,
   };
 
-  trades.unshift(newTrade); // 최신순 정렬
 
-  // 최대 50건까지만 보관
-  if (trades.length > 50) {
-    trades.splice(50);
+
+  const { data, error } = await supabase
+    .from('trades')
+    .insert({
+      profile: newTrade.profile,
+      documents: newTrade.documents,
+      generated_docs: newTrade.generatedDocs,
+      issues: newTrade.issues,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Supabase 저장 실패:', error);
+    throw error;
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
-  return newTrade;
+  return {
+    ...newTrade,
+    id: data.id,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
 }
 
 export function deleteTrade(id: string): void {
