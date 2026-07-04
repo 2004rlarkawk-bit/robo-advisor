@@ -1,54 +1,225 @@
-import { Agent, OrchestratorResult, AgentLog, createLog } from './types';
-import { TradeProfile } from '../types';
-import { HSCodeAgent } from './HSCodeAgent';
-import { DocumentAgent } from './DocumentAgent';
-import { ComplianceAgent } from './ComplianceAgent';
-import { FeedbackAgent } from './FeedbackAgent';
+import { Agent, OrchestratorResult, AgentLog, createLog } from "./types";
+import { TradeProfile } from "../types";
+import { HSCodeAgent } from "./HSCodeAgent";
+import { DocumentAgent } from "./DocumentAgent";
+import { ComplianceAgent } from "./ComplianceAgent";
+import { FeedbackAgent } from "./FeedbackAgent";
+
+interface OrchestratorAgentConfig {
+  timeout?: number;
+  validateInput?: boolean;
+}
+
+interface ValidationError {
+  field: string;
+  message: string;
+}
 
 export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?: boolean }, OrchestratorResult> {
-  readonly name = 'Orchestrator Agent';
+  readonly name = "Orchestrator Agent";
+  private readonly config: OrchestratorAgentConfig;
+  private readonly executionId = this.generateExecutionId();
 
-  private hsCodeAgent = new HSCodeAgent();
-  private documentAgent = new DocumentAgent();
-  private complianceAgent = new ComplianceAgent();
-  private feedbackAgent = new FeedbackAgent();
+  private hsCodeAgent: Agent;
+  private documentAgent: Agent;
+  private complianceAgent: Agent;
+  private feedbackAgent: Agent;
+
+  constructor(
+    config: OrchestratorAgentConfig = {},
+    hsCodeAgent?: Agent,
+    documentAgent?: Agent,
+    complianceAgent?: Agent,
+    feedbackAgent?: Agent
+  ) {
+    this.config = {
+      timeout: 30000,
+      validateInput: true,
+      ...config
+    };
+
+    this.hsCodeAgent = hsCodeAgent || new HSCodeAgent();
+    this.documentAgent = documentAgent || new DocumentAgent();
+    this.complianceAgent = complianceAgent || new ComplianceAgent();
+    this.feedbackAgent = feedbackAgent || new FeedbackAgent();
+  }
+
+  private generateExecutionId(): string {
+    return `exec_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  }
+
+  private validateInput(profile: TradeProfile): ValidationError[] {
+    const errors: ValidationError[] = [];
+
+    if (!profile) {
+      errors.push({ field: "profile", message: "Profile이 필수입니다." });
+      return errors;
+    }
+
+    if (!profile.itemName || profile.itemName.trim() === "") {
+      errors.push({ field: "itemName", message: "상품명이 필수입니다." });
+    } else if (profile.itemName.length > 500) {
+      errors.push({ field: "itemName", message: "상품명은 500자 이하여야 합니다." });
+    }
+
+    if (profile.hsCode && !/^\d{6,10}$/.test(profile.hsCode)) {
+      errors.push({ field: "hsCode", message: "HS Code는 6-10자리 숫자여야 합니다." });
+    }
+
+    return errors;
+  }
+
+  private async runWithTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error(`작업 타임아웃 (${timeoutMs}ms)`)), timeoutMs)
+      )
+    ]);
+  }
 
   async run(input: { profile: TradeProfile; useLLM?: boolean }): Promise<OrchestratorResult> {
+    const startTime = Date.now();
     const { profile, useLLM = false } = input;
     const logs: AgentLog[] = [];
 
-    logs.push(createLog(this.name, '오케스트레이터 파이프라인 가동 시작...', 'info'));
+    logs.push(
+      createLog(this.name, `[${this.executionId}] 오케스트레이터 파이프라인 가동 시작...`, "info")
+    );
 
-    // 1. HSCodeAgent 실행 (품목명 및 기입력 HS Code -> 검증 및 추천)
-    const hsResult = await this.hsCodeAgent.run({ itemName: profile.itemName, hsCode: profile.hsCode, useLLM, logs });
+    try {
+      if (this.config.validateInput) {
+        const validationErrors = this.validateInput(profile);
+        if (validationErrors.length > 0) {
+          const errorMsg = validationErrors.map(e => `${e.field}: ${e.message}`).join(", ");
+          logs.push(createLog(this.name, `입력값 검증 실패: ${errorMsg}`, "error"));
+          throw new Error(`입력값 검증 오류: ${errorMsg}`);
+        }
+      }
 
-    // 2. 프로필 보완: 입력된 HS Code가 없다면 추천된 상위 코드를 적용
-    const updatedProfile: TradeProfile = {
-      ...profile,
-      hsCode: profile.hsCode || hsResult.topCode
-    };
+      let hsResult;
+      try {
+        hsResult = await this.runWithTimeout(
+          this.hsCodeAgent.run({ itemName: profile.itemName, hsCode: profile.hsCode, useLLM, logs }),
+          this.config.timeout!
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "알 수 없는 오류";
+        logs.push(createLog(this.name, `HSCodeAgent 실행 실패: ${errorMsg}`, "error"));
+        throw new Error(`HS Code 검증 실패: ${errorMsg}`);
+      }
 
-    if (!profile.hsCode && hsResult.topCode) {
-      logs.push(createLog(this.name, `프로필에 HS Code가 누락되어 추천 상위 코드 "${hsResult.topCode}"을(를) 자동 보완했습니다.`, 'info'));
+      if (!hsResult || !hsResult.topCode) {
+        logs.push(createLog(this.name, "HS Code 검증 결과가 유효하지 않습니다.", "error"));
+        throw new Error("HS Code 검증 결과 없음");
+      }
+
+      const updatedProfile: TradeProfile = {
+        ...profile,
+        hsCode: profile.hsCode || hsResult.topCode
+      };
+
+      if (!profile.hsCode && hsResult.topCode) {
+        logs.push(
+          createLog(
+            this.name,
+            `프로필에 HS Code가 누락되어 추천 상위 코드 "${hsResult.topCode}"을(를) 자동 보완했습니다.`,
+            "info"
+          )
+        );
+      }
+
+      let docResult;
+      try {
+        docResult = await this.runWithTimeout(
+          this.documentAgent.run({ profile: updatedProfile, hsResult, useLLM, logs }),
+          this.config.timeout!
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "알 수 없는 오류";
+        logs.push(createLog(this.name, `DocumentAgent 실행 실패: ${errorMsg}`, "error"));
+        throw new Error(`문서 생성 실패: ${errorMsg}`);
+      }
+
+      let compResult;
+      try {
+        compResult = await this.runWithTimeout(
+          this.complianceAgent.run({
+            profile: updatedProfile,
+            documents: docResult.documents,
+            hsResult,
+            logs
+          }),
+          this.config.timeout!
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "알 수 없는 오류";
+        logs.push(createLog(this.name, `ComplianceAgent 실행 실패: ${errorMsg}`, "error"));
+        throw new Error(`규정 검증 실패: ${errorMsg}`);
+      }
+
+      let feedResult;
+      try {
+        feedResult = await this.runWithTimeout(
+          this.feedbackAgent.run({
+            profile: updatedProfile,
+            issues: compResult.issues,
+            useLLM,
+            logs
+          }),
+          this.config.timeout!
+        );
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "알 수 없는 오류";
+        logs.push(createLog(this.name, `FeedbackAgent 실행 실패: ${errorMsg}`, "error"));
+        throw new Error(`피드백 생성 실패: ${errorMsg}`);
+      }
+
+      const executionTime = Date.now() - startTime;
+      logs.push(
+        createLog(
+          this.name,
+          `[${this.executionId}] 오케스트레이터 전체 에이전트 협업 루프 완료. (소요시간: ${executionTime}ms)`,
+          "success"
+        )
+      );
+
+      return {
+        hs: hsResult,
+        documents: docResult,
+        issues: compResult,
+        feedback: feedResult,
+        logs,
+        executionId: this.executionId,
+        executionTime
+      };
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+      const errorMsg = error instanceof Error ? error.message : "알 수 없는 오류";
+      const errorStack = error instanceof Error ? error.stack : "";
+
+      logs.push(
+        createLog(
+          this.name,
+          `[${this.executionId}] 오케스트레이터 전체 파이프라인 실패: ${errorMsg}`,
+          "error"
+        )
+      );
+
+      return {
+        hs: null as any,
+        documents: null as any,
+        issues: null as any,
+        feedback: null as any,
+        logs,
+        executionId: this.executionId,
+        executionTime: Date.now() - startTime,
+        error: {
+          message: errorMsg,
+          stack: errorStack,
+          timestamp: new Date().toISOString()
+        }
+      };
     }
-
-    // 3. DocumentAgent 실행 (필요 서류 식별 및 실제 본문 데이터 생성)
-    const docResult = await this.documentAgent.run({ profile: updatedProfile, hsResult, useLLM, logs });
-
-    // 4. ComplianceAgent 실행 (작성된 서류의 누락/규정 미비 여부 검증)
-    const compResult = await this.complianceAgent.run({ profile: updatedProfile, documents: docResult.documents, hsResult, logs });
-
-    // 5. FeedbackAgent 실행 (검증 결과를 토대로 사용자용 피드백 안내 생성)
-    const feedResult = await this.feedbackAgent.run({ profile: updatedProfile, issues: compResult.issues, useLLM, logs });
-
-    logs.push(createLog(this.name, '오케스트레이터 전체 에이전트 협업 루프 완료.', 'success'));
-
-    return {
-      hs: hsResult,
-      documents: docResult,
-      issues: compResult,
-      feedback: feedResult,
-      logs
-    };
   }
 }
