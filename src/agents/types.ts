@@ -3,7 +3,7 @@
  */
 
 // 모든 에이전트의 공통 인터페이스
-export interface Agent<I, O> {
+export interface Agent<I = any, O = any> {
   readonly name: string;
   run(input: I): Promise<O>;
 }
@@ -13,7 +13,14 @@ export interface AgentLog {
   timestamp: string;
   agentName: string;
   message: string;
-  type: 'info' | 'success' | 'warning' | 'error';
+  level: 'info' | 'success' | 'warning' | 'error';
+}
+
+// 에러 정보
+export interface ExecutionError {
+  message: string;
+  stack?: string;
+  timestamp: string;
 }
 
 // HSCodeAgent 출력
@@ -49,19 +56,26 @@ export interface FeedbackResult {
 
 // OrchestratorAgent 통합 출력
 export interface OrchestratorResult {
-  hs: HSCodeResult;
-  documents: DocumentResult;
-  issues: ComplianceResult;
-  feedback: FeedbackResult;
+  hs: HSCodeResult | null;
+  documents: DocumentResult | null;
+  issues: ComplianceResult | null;
+  feedback: FeedbackResult | null;
   logs: AgentLog[];
+  executionId: string;
+  executionTime: number;
+  error?: ExecutionError;
 }
 
 // 로그 헬퍼
-export function createLog(agentName: string, message: string, type: AgentLog['type'] = 'info'): AgentLog {
+export function createLog(
+  agentName: string,
+  message: string,
+  level: AgentLog['level'] = 'info'
+): AgentLog {
   return {
     timestamp: new Date().toLocaleTimeString('ko-KR'),
     agentName,
     message,
-    type,
+    level,
   };
 }
