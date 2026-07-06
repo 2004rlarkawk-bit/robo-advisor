@@ -1469,8 +1469,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         onChange={(e) => handleInputChange('businessRegistrationNo', e.target.value)}
                       />
                     </div>
-                  </div>
-<div className="form-group">
+                    <div className="form-group">
   <label className="form-label">서명자</label>
   <input
     type="text"
@@ -1502,6 +1501,8 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
     onChange={(e) => handleInputChange('signerPosition', e.target.value)}
   />
 </div>
+                  </div>
+
                   <div className="form-actions">
                     <button className="btn btn-secondary" onClick={handleReset}>
                       <RotateCcw size={16} />
