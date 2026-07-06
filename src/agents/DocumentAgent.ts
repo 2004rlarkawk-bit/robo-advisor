@@ -56,33 +56,44 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
       const totalAmount = Math.round(unitPrice * quantity * 100) / 100;
 
       const invoice: InvoiceData = {
-        invoiceNo: `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,
-        date: new Date().toISOString().split('T')[0],
-        exporter: {
-          name: profile.tradeType === 'export' ? (profile.companyName || 'Exporter Co., Ltd.') : (profile.partnerName || 'Overseas Supplier Co., Ltd.'),
-          address: profile.tradeType === 'export' ? 'Seoul, Republic of Korea' : 'Overseas Address',
-          contact: profile.contact || 'N/A'
-        },
+       invoiceNo: profile.invoiceNo || `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,
+date: profile.invoiceDate || new Date().toISOString().split('T')[0],
+       exporter: {
+  name: profile.tradeType === 'export' ? (profile.companyName || 'Exporter Co., Ltd.') : (profile.partnerName || 'Overseas Supplier Co., Ltd.'),
+  address: profile.tradeType === 'export'
+    ? (profile.companyAddress || 'Seoul, Republic of Korea')
+    : (profile.partnerAddress || 'Overseas Address'),
+  contact: profile.tradeType === 'export'
+    ? (profile.contact || 'N/A')
+    : (profile.partnerContact || 'N/A')
+},
         importer: {
-          name: profile.tradeType === 'import' ? (profile.companyName || 'Importer Co., Ltd.') : (profile.partnerName || 'Overseas Buyer Co., Ltd.'),
-          address: profile.tradeType === 'import' ? 'Seoul, Republic of Korea' : 'Overseas Address',
-          contact: profile.tradeType === 'import' ? (profile.contact || 'N/A') : 'N/A'
-        },
-        items: [{
-          no: 1,
-          description: itemDescription,
-          quantity: quantity,
-          unit: 'PCS',
-          unitPrice: unitPrice,
-          amount: totalAmount
-        }],
-        totalAmount,
-        currency,
-        incoterms: profile.incoterms || 'FOB',
+  name: profile.tradeType === 'import' ? (profile.companyName || 'Importer Co., Ltd.') : (profile.partnerName || 'Overseas Buyer Co., Ltd.'),
+  address: profile.tradeType === 'import'
+    ? (profile.companyAddress || 'Seoul, Republic of Korea')
+    : (profile.partnerAddress || 'Overseas Address'),
+  contact: profile.tradeType === 'import'
+    ? (profile.contact || 'N/A')
+    : (profile.partnerContact || 'N/A')
+},
+       items: [{
+  no: 1,
+  description: itemDescription,
+  hsCode: profile.hsCode || hsResult.topCode || 'N/A',
+  countryOfOrigin: profile.countryOfOrigin || 'N/A',
+  quantity: quantity,
+  unit: profile.unit || 'PCS',
+  unitPrice: profile.unitPrice ? Number(profile.unitPrice) : unitPrice,
+  amount: profile.totalAmount ? Number(profile.totalAmount) : totalAmount
+}],
+        totalAmount: profile.totalAmount ? Number(profile.totalAmount) : totalAmount,
+currency: profile.currency || currency,
+incoterms: profile.incoterms || 'FOB',
         loadPort: profile.loadPort || 'N/A',
         dischargePort: profile.dischargePort || 'N/A',
-        paymentTerms
-      };
+        paymentTerms,
+signedBy: profile.signedBy || profile.signerName || profile.companyName || 'Authorized Signature'
+};
 
       generatedDocs.invoice = invoice;
       logs.push(createLog(this.name, `상업송장 조립 완료 (총액: ${currency} ${totalAmount.toFixed(2)})`, 'success'));
