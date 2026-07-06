@@ -92,25 +92,86 @@ export default function App() {
   };
   
   // Trade profile state
-  const [profile, setProfile] = useState<TradeProfile>({
-    tradeType: 'export',
-    itemName: '',
-    hsCode: '',
-    loadPort: '',
-    dischargePort: '',
-    incoterms: '',
-    quantity: '',
-    weight: '',
-    departureDate: '',
-    arrivalDate: '',
-    companyName: '',
-    contact: '',
-    partnerName: '',
-    currency: 'KRW',
-    invoiceAmount: '',
-    businessRegistrationNo: ''
-  });
+const emptyProfile: TradeProfile = {
+  tradeType: 'export',
+  documentNo: '',
+  invoiceNo: '',
+  invoiceDate: '',
+  referenceNo: '',
 
+  blNo: '',
+  issuePlace: '',
+  issueDate: '',
+
+  itemName: '',
+  hsCode: '',
+  countryOfOrigin: '',
+  quantity: '',
+  unit: 'EA',
+
+  currency: 'KRW',
+  unitPrice: '',
+  totalAmount: '',
+  invoiceAmount: '',
+
+  packageCount: '',
+  packageType: '',
+  netWeight: '',
+  grossWeight: '',
+  weight: '',
+  measurement: '',
+  shippingMarks: '',
+
+  loadPort: '',
+  dischargePort: '',
+  departureDate: '',
+  arrivalDate: '',
+  vesselOrFlight: '',
+  carrier: '',
+
+  placeOfReceipt: '',
+  placeOfDelivery: '',
+  finalDestination: '',
+  voyageNo: '',
+  flag: '',
+
+  containerNo: '',
+  sealNo: '',
+
+  incoterms: '',
+  paymentTerms: '',
+  reasonForExport: '',
+  freightTerms: '',
+  freightCharges: '',
+  freightPrepaidAt: '',
+  freightPayableAt: '',
+
+  companyName: '',
+  companyAddress: '',
+  companyCountry: '',
+  contact: '',
+  taxNo: '',
+  businessRegistrationNo: '',
+
+  partnerName: '',
+  partnerAddress: '',
+  partnerCountry: '',
+  partnerContact: '',
+
+  buyerName: '',
+  buyerAddress: '',
+  buyerCountry: '',
+
+  notifyPartyName: '',
+  notifyPartyAddress: '',
+  notifyPartyContact: '',
+
+  signedBy: '',
+  signerName: '',
+  signerPosition: ''
+};
+
+const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   // Harness & Agent Pipeline State
   const [isProcessing, setIsProcessing] = useState(false);
   const [showConsole, setShowConsole] = useState(false);
@@ -151,47 +212,200 @@ export default function App() {
   }, [issues]);
 
   // Quick fill handlers
-  const handleQuickFill = (type: 'export_error' | 'import_valid') => {
-    if (type === 'export_error') {
-      setProfile({
-        tradeType: 'export',
-        itemName: '산업용 부품',
-        hsCode: 'ABC-12', // Invalid HS Code
-        loadPort: '부산항',
-        dischargePort: '상하이항',
-        incoterms: 'FOB',
-        quantity: 1500,
-        weight: '', // Omitted Weight
-        departureDate: '2026-07-01',
-        arrivalDate: '2026-07-05',
-        companyName: '인천테크',
-        contact: '010-1234-5678',
-        partnerName: '상하이 수입상사 (Shanghai Import Co.)',
-        currency: 'USD',
-        invoiceAmount: 85000,
-        businessRegistrationNo: '123-45-67890' // Invalid checksum
-      });
-    } else {
-      setProfile({
-        tradeType: 'import',
-        itemName: 'IT 원자재',
-        hsCode: '8517-62-1010', // Valid HSK (유선통신용 송수신기기 — 관세청 사전 실코드)
-        loadPort: '로스앤젤레스항',
-        dischargePort: '인천항',
-        incoterms: 'CIF',
-        quantity: 800,
-        weight: 2400, // Valid Weight
-        departureDate: '2026-07-15',
-        arrivalDate: '2026-07-30',
-        companyName: '글로벌 물류지원',
-        contact: '02-123-4567',
-        partnerName: '캘리포니아 엑스포트 (California Export Co.)',
-        currency: 'USD',
-        invoiceAmount: 120000,
-        businessRegistrationNo: '124-81-00998' // Valid (삼성전자)
-      });
-    }
-  };
+ // Quick fill handlers
+const handleQuickFill = (type: 'export_error' | 'import_valid') => {
+  if (type === 'export_error') {
+    setProfile({
+      ...emptyProfile,
+
+      // 1. 기본 거래 / 문서 정보
+      tradeType: 'export',
+      documentNo: 'DOC-20260701-001',
+      invoiceNo: 'INV-20260701-001',
+      invoiceDate: '2026-07-01',
+      referenceNo: 'REF-INCHON-001',
+
+      // 선하증권 Bill of Lading 정보
+      blNo: 'BL-20260701-001',
+      issuePlace: 'Seoul, Korea',
+      issueDate: '2026-07-01',
+
+      // 2. 상품 정보
+      itemName: '산업용 금속 부품',
+      hsCode: 'ABC-12', // 일부러 오류 테스트용
+      countryOfOrigin: '대한민국',
+      quantity: 1500,
+      unit: 'EA',
+
+      // 3. 가격 / 금액 정보
+      currency: 'USD',
+      unitPrice: 12,
+      totalAmount: 18000,
+      invoiceAmount: 18000,
+
+      // 4. 포장 / 중량 / 부피 정보
+      packageCount: 30,
+      packageType: 'Carton',
+      netWeight: 2200,
+      grossWeight: '',
+      weight: '', // 일부러 중량 누락 테스트용
+      measurement: '3.5 CBM',
+      shippingMarks: 'INCHON TECH / SHANGHAI / C/T NO. 1-30',
+
+      // 5. 운송 정보
+      loadPort: '부산항',
+      dischargePort: '상하이항',
+      departureDate: '2026-07-01',
+      arrivalDate: '2026-07-05',
+      vesselOrFlight: 'KMTC BUSAN V.2501',
+      carrier: 'KMTC',
+
+      // 선하증권 운송 세부 정보
+      placeOfReceipt: 'Busan, Korea',
+      placeOfDelivery: 'Shanghai, China',
+      finalDestination: 'Shanghai, China',
+      voyageNo: '2501E',
+      flag: 'Korea',
+
+      // 6. 컨테이너 정보
+      containerNo: 'TCLU1234567',
+      sealNo: 'SEAL987654',
+
+      // 7. 거래 조건 / 운임 정보
+      incoterms: 'FOB',
+      paymentTerms: 'T/T in advance',
+      reasonForExport: 'Sale of goods',
+      freightTerms: 'Prepaid',
+      freightCharges: 'Prepaid',
+      freightPrepaidAt: 'Busan, Korea',
+      freightPayableAt: '',
+
+      // 8. 수출자 / 판매자 / Shipper 정보
+      companyName: '인천테크',
+      companyAddress: '인천광역시 연수구 송도동',
+      companyCountry: '대한민국',
+      contact: '010-1234-5678',
+      taxNo: '123-45-67890',
+      businessRegistrationNo: '123-45-67890', // 일부러 검증 오류 테스트 가능
+
+      // 9. 수입자 / 수하인 / Consignee 정보
+      partnerName: '상하이 수입상사 (Shanghai Import Co.)',
+      partnerAddress: 'Pudong New Area, Shanghai, China',
+      partnerCountry: '중국',
+      partnerContact: '+86-21-0000-0000',
+
+      // 10. 구매자 / Bill To 정보
+      buyerName: 'Shanghai Import Co.',
+      buyerAddress: 'Pudong New Area, Shanghai, China',
+      buyerCountry: '중국',
+
+      // 11. Notify Party 정보
+      notifyPartyName: 'Shanghai Import Co.',
+      notifyPartyAddress: 'Pudong New Area, Shanghai, China',
+      notifyPartyContact: '+86-21-0000-0000',
+
+      // 12. 서명 정보
+      signedBy: '김지민',
+      signerName: 'Kim Jimin',
+      signerPosition: 'Export Manager'
+    });
+  } else {
+    setProfile({
+      ...emptyProfile,
+
+      // 1. 기본 거래 / 문서 정보
+      tradeType: 'import',
+      documentNo: 'DOC-20260715-001',
+      invoiceNo: 'INV-20260715-001',
+      invoiceDate: '2026-07-15',
+      referenceNo: 'REF-GLOBAL-001',
+
+      // 선하증권 Bill of Lading 정보
+      blNo: 'BL-20260715-001',
+      issuePlace: 'Los Angeles, USA',
+      issueDate: '2026-07-15',
+
+      // 2. 상품 정보
+      itemName: 'IT 원자재',
+      hsCode: '8517-62-1010',
+      countryOfOrigin: '미국',
+      quantity: 800,
+      unit: 'EA',
+
+      // 3. 가격 / 금액 정보
+      currency: 'USD',
+      unitPrice: 150,
+      totalAmount: 120000,
+      invoiceAmount: 120000,
+
+      // 4. 포장 / 중량 / 부피 정보
+      packageCount: 20,
+      packageType: 'Pallet',
+      netWeight: 2200,
+      grossWeight: 2400,
+      weight: 2400,
+      measurement: '5.2 CBM',
+      shippingMarks: 'GLOBAL LOGISTICS / INCHEON / P/L NO. 1-20',
+
+      // 5. 운송 정보
+      loadPort: '로스앤젤레스항',
+      dischargePort: '인천항',
+      departureDate: '2026-07-15',
+      arrivalDate: '2026-07-30',
+      vesselOrFlight: 'MAERSK LA V.3302',
+      carrier: 'Maersk',
+
+      // 선하증권 운송 세부 정보
+      placeOfReceipt: 'Los Angeles, USA',
+      placeOfDelivery: 'Incheon, Korea',
+      finalDestination: 'Incheon, Korea',
+      voyageNo: '3302W',
+      flag: 'USA',
+
+      // 6. 컨테이너 정보
+      containerNo: 'MSCU7654321',
+      sealNo: 'SEAL123456',
+
+      // 7. 거래 조건 / 운임 정보
+      incoterms: 'CIF',
+      paymentTerms: 'T/T 30 days',
+      reasonForExport: 'Commercial transaction',
+      freightTerms: 'Collect',
+      freightCharges: 'Collect',
+      freightPrepaidAt: '',
+      freightPayableAt: 'Incheon, Korea',
+
+      // 8. 수출자 / 판매자 / Shipper 정보
+      companyName: '글로벌 물류지원',
+      companyAddress: '서울특별시 중구 세종대로',
+      companyCountry: '대한민국',
+      contact: '02-123-4567',
+      taxNo: '124-81-00998',
+      businessRegistrationNo: '124-81-00998',
+
+      // 9. 수입자 / 수하인 / Consignee 정보
+      partnerName: '캘리포니아 엑스포트 (California Export Co.)',
+      partnerAddress: 'Los Angeles, CA, USA',
+      partnerCountry: '미국',
+      partnerContact: '+1-213-000-0000',
+
+      // 10. 구매자 / Bill To 정보
+      buyerName: '글로벌 물류지원',
+      buyerAddress: '서울특별시 중구 세종대로',
+      buyerCountry: '대한민국',
+
+      // 11. Notify Party 정보
+      notifyPartyName: '글로벌 물류지원',
+      notifyPartyAddress: '서울특별시 중구 세종대로',
+      notifyPartyContact: '02-123-4567',
+
+      // 12. 서명 정보
+      signedBy: '홍길동',
+      signerName: 'Hong Gil Dong',
+      signerPosition: 'Import Manager'
+    });
+  }
+};
 
   const handleInputChange = (field: keyof TradeProfile, value: string | number) => {
     setProfile(prev => ({
@@ -201,31 +415,14 @@ export default function App() {
   };
 
   const handleReset = () => {
-    setProfile({
-      tradeType: 'export',
-      itemName: '',
-      hsCode: '',
-      loadPort: '',
-      dischargePort: '',
-      incoterms: '',
-      quantity: '',
-      weight: '',
-      departureDate: '',
-      arrivalDate: '',
-      companyName: '',
-      contact: '',
-      partnerName: '',
-      currency: 'KRW',
-      invoiceAmount: '',
-      businessRegistrationNo: ''
-    });
-    setHasGenerated(false);
-    setDocuments([]);
-    setIssues([]);
-    setConsoleLogs([]);
-    setHtmlTemplates({});
-    setHsCandidates([]);
-  };
+  setProfile(emptyProfile);
+  setHasGenerated(false);
+  setDocuments([]);
+  setIssues([]);
+  setConsoleLogs([]);
+  setHtmlTemplates({});
+  setHsCandidates([]);
+};
 
   // Run the multi-agent pipeline simulator
   const handleGenerateDocuments = async () => {
@@ -595,7 +792,80 @@ export default function App() {
                         <option value="import">수입</option>
                       </select>
                     </div>
+<div className="form-group">
+  <label className="form-label">문서번호</label>
+  <input
+    type="text"
+    className="form-input"
+    placeholder="예: DOC-20260701-001"
+    value={profile.documentNo}
+    onChange={(e) => handleInputChange('documentNo', e.target.value)}
+  />
+</div>
 
+<div className="form-group">
+  <label className="form-label">송장번호</label>
+  <input
+    type="text"
+    className="form-input"
+    placeholder="예: INV-20260701-001"
+    value={profile.invoiceNo}
+    onChange={(e) => handleInputChange('invoiceNo', e.target.value)}
+  />
+</div>
+
+<div className="form-group">
+  <label className="form-label">송장 작성일</label>
+  <input
+    type="date"
+    className="form-input"
+    value={profile.invoiceDate}
+    onChange={(e) => handleInputChange('invoiceDate', e.target.value)}
+  />
+</div>
+
+<div className="form-group">
+  <label className="form-label">참조번호</label>
+  <input
+    type="text"
+    className="form-input"
+    placeholder="예: REF-INCHON-001"
+    value={profile.referenceNo}
+    onChange={(e) => handleInputChange('referenceNo', e.target.value)}
+  />
+</div>
+
+<div className="form-group">
+  <label className="form-label">B/L 번호</label>
+  <input
+    type="text"
+    className="form-input"
+    placeholder="예: BL-20260701-001"
+    value={profile.blNo}
+    onChange={(e) => handleInputChange('blNo', e.target.value)}
+  />
+</div>
+
+<div className="form-group">
+  <label className="form-label">발행 장소</label>
+  <input
+    type="text"
+    className="form-input"
+    placeholder="예: Seoul, Korea"
+    value={profile.issuePlace}
+    onChange={(e) => handleInputChange('issuePlace', e.target.value)}
+  />
+</div>
+
+<div className="form-group">
+  <label className="form-label">발행일</label>
+  <input
+    type="date"
+    className="form-input"
+    value={profile.issueDate}
+    onChange={(e) => handleInputChange('issueDate', e.target.value)}
+  />
+</div>
                     <div className="form-group">
                       <label className="form-label">품목명</label>
                       <input 
