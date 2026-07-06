@@ -105,3 +105,60 @@ export interface TradeProfile {
   signerName: string;
   signerPosition: string;
 }
+
+// 문서 생성 상태 타입
+export type DocumentStatusType =
+  | 'not_started'
+  | 'completed'
+  | 'review_required'
+  | 'not_needed';
+
+export interface DocumentStatus {
+  id: string;
+  name: string;
+  status: DocumentStatusType;
+  statusText: string;
+  lastReviewed?: string;
+}
+
+// 검증 이슈 타입
+export type ValidationSeverity = 'error' | 'warning' | 'info';
+
+export interface ValidationIssue {
+  id: string;
+  docType: string;
+  field: keyof TradeProfile | string;
+  message: string;
+  severity: ValidationSeverity;
+}
+
+// 문서 생성 결과 타입
+export interface GeneratedDocuments {
+  documents: DocumentStatus[];
+  htmlTemplates?: Record<string, string>;
+}
+
+// 인보이스 데이터 타입
+export interface InvoiceData {
+  seller?: string;
+  consignee?: string;
+  buyer?: string;
+  invoiceNo?: string;
+  invoiceDate?: string;
+  itemName?: string;
+  hsCode?: string;
+  quantity?: number | '';
+  unit?: string;
+  unitPrice?: number | '';
+  totalAmount?: number | '';
+  currency?: string;
+  incoterms?: Incoterms;
+  loadPort?: string;
+  dischargePort?: string;
+  departureDate?: string;
+  arrivalDate?: string;
+  countryOfOrigin?: string;
+  signedBy?: string;
+
+  [key: string]: string | number | undefined;
+}
