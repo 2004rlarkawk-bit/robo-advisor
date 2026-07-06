@@ -131,19 +131,19 @@ export interface PartyInfo {
 }
 
 export interface InvoiceItem {
-  no?: number | string;
+  no: number | string;
   description: string;
   hsCode: string;
   quantity: number;
-  unit?: string;
+  unit: string;
   unitPrice: number;
   amount: number;
 
   countryOfOrigin?: string;
   weight?: number;
-  netWeight?: number;
-  grossWeight?: number;
-  dimensions?: string;
+  netWeight: number;
+  grossWeight: number;
+  dimensions: string;
   packageCount?: number;
   packageType?: string;
 
@@ -212,8 +212,8 @@ export interface GeneratedDocuments {
 export interface SavedTrade {
   id: string;
   profile: TradeProfile;
-  documents?: GeneratedDocuments | DocumentStatus[];
-  issues?: ValidationIssue[];
+  documents: DocumentStatus[];
+  issues: ValidationIssue[];
   status?: string;
   createdAt: string;
   updatedAt?: string;
