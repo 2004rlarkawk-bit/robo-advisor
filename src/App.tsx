@@ -47,10 +47,17 @@ export default function App() {
         setUser(parsed);
         if (parsed.type === 'member') {
           setProfile(prev => ({
-            ...prev,
-            companyName: prev.companyName || '인천테크',
-            contact: prev.contact || '010-1234-5678'
-          }));
+  ...prev,
+  companyName: prev.companyName || '인천테크',
+  companyAddress: prev.companyAddress || '인천광역시 연수구 송도동',
+  companyCountry: prev.companyCountry || '대한민국',
+  contact: prev.contact || '010-1234-5678',
+  taxNo: prev.taxNo || '123-45-67890',
+  businessRegistrationNo: prev.businessRegistrationNo || '123-45-67890',
+  signedBy: prev.signedBy || '김지민',
+  signerName: prev.signerName || 'Kim Jimin',
+  signerPosition: prev.signerPosition || 'Export Manager'
+}));
         }
       } catch (e) {
         localStorage.removeItem('portai_user_session');
@@ -67,22 +74,36 @@ export default function App() {
     const memberUser = { name: '인천테크', type: 'member' as const };
     setUser(memberUser);
     localStorage.setItem('portai_user_session', JSON.stringify(memberUser));
-    setProfile(prev => ({
-      ...prev,
-      companyName: '인천테크',
-      contact: '010-1234-5678'
-    }));
+   setProfile(prev => ({
+  ...prev,
+  companyName: '인천테크',
+  companyAddress: '인천광역시 연수구 송도동',
+  companyCountry: '대한민국',
+  contact: '010-1234-5678',
+  taxNo: '123-45-67890',
+  businessRegistrationNo: '123-45-67890',
+  signedBy: '김지민',
+  signerName: 'Kim Jimin',
+  signerPosition: 'Export Manager'
+}));
   };
 
   const handleGuestLogin = () => {
     const guestUser = { name: '게스트', type: 'guest' as const };
     setUser(guestUser);
     localStorage.setItem('portai_user_session', JSON.stringify(guestUser));
-    setProfile(prev => ({
-      ...prev,
-      companyName: '',
-      contact: ''
-    }));
+   setProfile(prev => ({
+  ...prev,
+  companyName: '',
+  companyAddress: '',
+  companyCountry: '',
+  contact: '',
+  taxNo: '',
+  businessRegistrationNo: '',
+  signedBy: '',
+  signerName: '',
+  signerPosition: ''
+}));
   };
 
   const handleLogout = () => {
