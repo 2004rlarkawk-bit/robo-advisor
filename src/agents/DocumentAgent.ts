@@ -146,9 +146,9 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     if (generatedDocs.invoice) {
       htmlTemplates.invoice = renderInvoiceHTML(generatedDocs.invoice);
     }
-    if (generatedDocs.packingList) {
-      htmlTemplates.packingList = renderPackingListHTML(generatedDocs.packingList);
-    }
+   if (generatedDocs.packingList) {
+  htmlTemplates.packing_list = renderPackingListHTML(generatedDocs.packingList);
+}
     if (generatedDocs.certificateOfOrigin) {
       htmlTemplates.co = renderCertificateOfOriginHTML(generatedDocs.certificateOfOrigin);
     }
