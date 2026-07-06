@@ -415,7 +415,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   };
 
   const handleReset = () => {
-  setProfile(emptyProfile);
+ setProfile({ ...emptyProfile });
   setHasGenerated(false);
   setDocuments([]);
   setIssues([]);
