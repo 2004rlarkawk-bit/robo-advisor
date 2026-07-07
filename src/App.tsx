@@ -595,6 +595,14 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   const blockingIssuesCount = issues.filter(i => i.severity !== 'info').length;
   const reviewDocsCount = blockingIssuesCount;
 
+  // AI 피드백에서 이슈 상세 라인(📦🔢🌍⚓⚠️ 접두)은 아래 보완 카드와 중복되므로
+  // 요약 문단만 표시한다. 전부 이슈 라인이면(필터 결과가 비면) 원문 유지.
+  const feedbackParagraphs = (() => {
+    const lines = aiFeedback.split('\n').map(l => l.trim()).filter(Boolean);
+    const summary = lines.filter(l => !/^(📦|🔢|🌍|⚓|⚠️)/.test(l));
+    return summary.length > 0 ? summary : lines;
+  })();
+
   if (!user) {
     return (
       <div className="login-wrapper">
@@ -1769,18 +1777,10 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       </div>
 
                       {aiFeedback && (
-                        <div className="ai-feedback-narrative" style={{
-                          fontSize: '13px',
-                          lineHeight: '1.6',
-                          color: '#1e293b',
-                          backgroundColor: '#f1f5f9',
-                          padding: '12px',
-                          borderRadius: '8px',
-                          marginBottom: '16px',
-                          borderLeft: '4px solid #3b82f6',
-                          whiteSpace: 'pre-line'
-                        }}>
-                          {aiFeedback}
+                        <div className="ai-feedback-narrative">
+                          {feedbackParagraphs.map((line, idx) => (
+                            <p key={idx}>{line}</p>
+                          ))}
                         </div>
                       )}
 

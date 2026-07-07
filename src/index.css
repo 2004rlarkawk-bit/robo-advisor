@@ -631,9 +631,29 @@ body {
 
 .result-columns-layout {
   display: grid;
-  grid-template-columns: 1fr 1.3fr 1fr;
+  grid-template-columns: 0.9fr 1.1fr 1.4fr;
   gap: 24px;
   align-items: start;
+}
+
+/* AI 분석 결과 서술 박스 — 문단 단위로 여백을 주어 가독성 확보 */
+.ai-feedback-narrative {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #1e293b;
+  background-color: #f1f5f9;
+  padding: 14px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border-left: 4px solid #3b82f6;
+}
+
+.ai-feedback-narrative p {
+  margin: 0;
+  word-break: keep-all;
 }
 
 .result-column {
