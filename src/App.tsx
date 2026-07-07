@@ -814,8 +814,8 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                   <div className="form-grid">
                     <div className="form-group">
                       <label className="form-label">수출입 구분</label>
-                      <select 
-                        className="form-input" 
+                      <select
+                        className="form-input"
                         value={profile.tradeType}
                         onChange={(e) => handleInputChange('tradeType', e.target.value as 'export' | 'import')}
                       >
@@ -823,86 +823,13 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         <option value="import">수입</option>
                       </select>
                     </div>
-<div className="form-group">
-  <label className="form-label">문서번호</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: DOC-20260701-001"
-    value={profile.documentNo}
-    onChange={(e) => handleInputChange('documentNo', e.target.value)}
-  />
-</div>
 
-<div className="form-group">
-  <label className="form-label">송장번호</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: INV-20260701-001"
-    value={profile.invoiceNo}
-    onChange={(e) => handleInputChange('invoiceNo', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">송장 작성일</label>
-  <input
-    type="date"
-    className="form-input"
-    value={profile.invoiceDate}
-    onChange={(e) => handleInputChange('invoiceDate', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">참조번호</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: REF-INCHON-001"
-    value={profile.referenceNo}
-    onChange={(e) => handleInputChange('referenceNo', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">B/L 번호</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: BL-20260701-001"
-    value={profile.blNo}
-    onChange={(e) => handleInputChange('blNo', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">발행 장소</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Seoul, Korea"
-    value={profile.issuePlace}
-    onChange={(e) => handleInputChange('issuePlace', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">발행일</label>
-  <input
-    type="date"
-    className="form-input"
-    value={profile.issueDate}
-    onChange={(e) => handleInputChange('issueDate', e.target.value)}
-  />
-</div>
                     <div className="form-group">
                       <label className="form-label">품목명</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        placeholder="품목명을 입력하세요" 
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="품목명을 입력하세요"
                         value={profile.itemName}
                         onChange={(e) => handleInputChange('itemName', e.target.value)}
                       />
@@ -910,71 +837,18 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
                     <div className="form-group">
                       <label className="form-label">HS CODE</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        placeholder="HS CODE를 입력하세요" 
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="모르면 비워두세요 — AI가 자동 추천"
                         value={profile.hsCode}
                         onChange={(e) => handleInputChange('hsCode', e.target.value)}
                       />
                     </div>
-<div className="form-group">
-  <label className="form-label">원산지</label>
-  <select
-    className="form-input"
-    value={profile.countryOfOrigin}
-    onChange={(e) => handleInputChange('countryOfOrigin', e.target.value)}
-  >
-    <option value="">원산지를 선택하세요</option>
-    <option value="대한민국">대한민국 (KR)</option>
-    <option value="미국">미국 (US)</option>
-    <option value="중국">중국 (CN)</option>
-    <option value="일본">일본 (JP)</option>
-    <option value="베트남">베트남 (VN)</option>
-    <option value="독일">독일 (DE)</option>
-  </select>
-</div>
 
-<div className="form-group">
-  <label className="form-label">수량 단위</label>
-  <select
-    className="form-input"
-    value={profile.unit}
-    onChange={(e) => handleInputChange('unit', e.target.value)}
-  >
-    <option value="EA">EA</option>
-    <option value="PCS">PCS</option>
-    <option value="BOX">BOX</option>
-    <option value="SET">SET</option>
-    <option value="KG">KG</option>
-    <option value="CNTR">CNTR</option>
-  </select>
-</div>
-
-<div className="form-group">
-  <label className="form-label">단가</label>
-  <input
-    type="number"
-    className="form-input"
-    placeholder="예: 12"
-    value={profile.unitPrice}
-    onChange={(e) => handleInputChange('unitPrice', e.target.value ? Number(e.target.value) : '')}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">총 금액</label>
-  <input
-    type="number"
-    className="form-input"
-    placeholder="예: 18000"
-    value={profile.totalAmount}
-    onChange={(e) => handleInputChange('totalAmount', e.target.value ? Number(e.target.value) : '')}
-  />
-</div>
                     <div className="form-group">
                       <label className="form-label">선적항</label>
-                      <select 
+                      <select
                         className="form-input"
                         value={profile.loadPort}
                         onChange={(e) => handleInputChange('loadPort', e.target.value)}
@@ -990,7 +864,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
                     <div className="form-group">
                       <label className="form-label">도착항</label>
-                      <select 
+                      <select
                         className="form-input"
                         value={profile.dischargePort}
                         onChange={(e) => handleInputChange('dischargePort', e.target.value)}
@@ -1006,7 +880,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
                     <div className="form-group">
                       <label className="form-label">거래조건 (Incoterms)</label>
-                      <select 
+                      <select
                         className="form-input"
                         value={profile.incoterms}
                         onChange={(e) => handleInputChange('incoterms', e.target.value as any)}
@@ -1018,80 +892,14 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         <option value="DDP">DDP</option>
                       </select>
                     </div>
-<div className="form-group">
-  <label className="form-label">결제조건</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: T/T in advance"
-    value={profile.paymentTerms}
-    onChange={(e) => handleInputChange('paymentTerms', e.target.value)}
-  />
-</div>
 
-<div className="form-group">
-  <label className="form-label">수출 사유</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Sale of goods"
-    value={profile.reasonForExport}
-    onChange={(e) => handleInputChange('reasonForExport', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">운임 조건</label>
-  <select
-    className="form-input"
-    value={profile.freightTerms}
-    onChange={(e) => handleInputChange('freightTerms', e.target.value)}
-  >
-    <option value="">운임 조건을 선택하세요</option>
-    <option value="Prepaid">Prepaid</option>
-    <option value="Collect">Collect</option>
-  </select>
-</div>
-
-<div className="form-group">
-  <label className="form-label">운임 및 비용</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Freight Prepaid"
-    value={profile.freightCharges}
-    onChange={(e) => handleInputChange('freightCharges', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">운임 선불 장소</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Busan, Korea"
-    value={profile.freightPrepaidAt}
-    onChange={(e) => handleInputChange('freightPrepaidAt', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">운임 지급 장소</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Incheon, Korea"
-    value={profile.freightPayableAt}
-    onChange={(e) => handleInputChange('freightPayableAt', e.target.value)}
-  />
-</div>
                     <div className="form-group">
                       <label className="form-label">화물 수량</label>
                       <div className="input-suffix">
-                        <input 
-                          type="number" 
-                          className="form-input" 
-                          placeholder="숫자만 입력하세요" 
+                        <input
+                          type="number"
+                          className="form-input"
+                          placeholder="숫자만 입력하세요"
                           value={profile.quantity}
                           onChange={(e) => handleInputChange('quantity', e.target.value ? Number(e.target.value) : '')}
                         />
@@ -1102,92 +910,22 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                     <div className="form-group">
                       <label className="form-label">중량(kg)</label>
                       <div className="input-suffix">
-                        <input 
-                          type="number" 
-                          className="form-input" 
-                          placeholder="숫자만 입력하세요" 
+                        <input
+                          type="number"
+                          className="form-input"
+                          placeholder="숫자만 입력하세요"
                           value={profile.weight}
                           onChange={(e) => handleInputChange('weight', e.target.value ? Number(e.target.value) : '')}
                         />
                         <span className="suffix-text">kg</span>
                       </div>
                     </div>
-<div className="form-group">
-  <label className="form-label">포장 개수</label>
-  <input
-    type="number"
-    className="form-input"
-    placeholder="예: 30"
-    value={profile.packageCount}
-    onChange={(e) => handleInputChange('packageCount', e.target.value ? Number(e.target.value) : '')}
-  />
-</div>
 
-<div className="form-group">
-  <label className="form-label">포장 종류</label>
-  <select
-    className="form-input"
-    value={profile.packageType}
-    onChange={(e) => handleInputChange('packageType', e.target.value)}
-  >
-    <option value="">포장 종류를 선택하세요</option>
-    <option value="Carton">Carton</option>
-    <option value="Box">Box</option>
-    <option value="Pallet">Pallet</option>
-    <option value="Container">Container</option>
-    <option value="Wooden Case">Wooden Case</option>
-    <option value="Bag">Bag</option>
-  </select>
-</div>
-
-<div className="form-group">
-  <label className="form-label">순중량(kg)</label>
-  <input
-    type="number"
-    className="form-input"
-    placeholder="예: 2200"
-    value={profile.netWeight}
-    onChange={(e) => handleInputChange('netWeight', e.target.value ? Number(e.target.value) : '')}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">총중량(kg)</label>
-  <input
-    type="number"
-    className="form-input"
-    placeholder="예: 2400"
-    value={profile.grossWeight}
-    onChange={(e) => handleInputChange('grossWeight', e.target.value ? Number(e.target.value) : '')}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">Measurement / 부피</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: 3.5 CBM"
-    value={profile.measurement}
-    onChange={(e) => handleInputChange('measurement', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">Shipping Marks</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: INCHON TECH / SHANGHAI / C/T NO. 1-30"
-    value={profile.shippingMarks}
-    onChange={(e) => handleInputChange('shippingMarks', e.target.value)}
-  />
-</div>
                     <div className="form-group">
                       <label className="form-label">출발일</label>
-                      <input 
-                        type="date" 
-                        className="form-input" 
+                      <input
+                        type="date"
+                        className="form-input"
                         value={profile.departureDate}
                         onChange={(e) => handleInputChange('departureDate', e.target.value)}
                       />
@@ -1195,261 +933,25 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
                     <div className="form-group">
                       <label className="form-label">도착예정일</label>
-                      <input 
-                        type="date" 
-                        className="form-input" 
+                      <input
+                        type="date"
+                        className="form-input"
                         value={profile.arrivalDate}
                         onChange={(e) => handleInputChange('arrivalDate', e.target.value)}
                       />
                     </div>
-<div className="form-group">
-  <label className="form-label">선박명 / 항공편명</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: KMTC BUSAN V.2501"
-    value={profile.vesselOrFlight}
-    onChange={(e) => handleInputChange('vesselOrFlight', e.target.value)}
-  />
-</div>
 
-<div className="form-group">
-  <label className="form-label">항차번호 / Voyage No.</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: 2501E"
-    value={profile.voyageNo}
-    onChange={(e) => handleInputChange('voyageNo', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">운송사 / Carrier</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: KMTC, Maersk, DHL"
-    value={profile.carrier}
-    onChange={(e) => handleInputChange('carrier', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">수령지 / Place of Receipt</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Busan, Korea"
-    value={profile.placeOfReceipt}
-    onChange={(e) => handleInputChange('placeOfReceipt', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">인도지 / Place of Delivery</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Shanghai, China"
-    value={profile.placeOfDelivery}
-    onChange={(e) => handleInputChange('placeOfDelivery', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">최종 목적지</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Shanghai, China"
-    value={profile.finalDestination}
-    onChange={(e) => handleInputChange('finalDestination', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">선박 국적 / Flag</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Korea"
-    value={profile.flag}
-    onChange={(e) => handleInputChange('flag', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">컨테이너 번호</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: TCLU1234567"
-    value={profile.containerNo}
-    onChange={(e) => handleInputChange('containerNo', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">Seal 번호</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: SEAL987654"
-    value={profile.sealNo}
-    onChange={(e) => handleInputChange('sealNo', e.target.value)}
-  />
-</div>
                     <div className="form-group">
                       <label className="form-label">업체명</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        placeholder="업체명을 입력하세요" 
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="업체명을 입력하세요"
                         value={profile.companyName}
                         onChange={(e) => handleInputChange('companyName', e.target.value)}
                       />
                     </div>
-<div className="form-group">
-  <label className="form-label">수출자 주소</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: 인천광역시 연수구 송도동"
-    value={profile.companyAddress}
-    onChange={(e) => handleInputChange('companyAddress', e.target.value)}
-  />
-</div>
 
-<div className="form-group">
-  <label className="form-label">수출자 국가</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: 대한민국"
-    value={profile.companyCountry}
-    onChange={(e) => handleInputChange('companyCountry', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">Tax No.</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: 123-45-67890"
-    value={profile.taxNo}
-    onChange={(e) => handleInputChange('taxNo', e.target.value)}
-  />
-</div>
-                    <div className="form-group">
-                      <label className="form-label">거래처명 (Consignee)</label>
-                      <input 
-                        type="text" 
-                        className="form-input" 
-                        placeholder="상대방 업체명을 입력하세요" 
-                        value={profile.partnerName || ''}
-                        onChange={(e) => handleInputChange('partnerName', e.target.value)}
-                      />
-                    </div>
-<div className="form-group">
-  <label className="form-label">수입자 주소</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Pudong New Area, Shanghai, China"
-    value={profile.partnerAddress}
-    onChange={(e) => handleInputChange('partnerAddress', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">수입자 국가</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: 중국"
-    value={profile.partnerCountry}
-    onChange={(e) => handleInputChange('partnerCountry', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">수입자 연락처</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: +86-21-0000-0000"
-    value={profile.partnerContact}
-    onChange={(e) => handleInputChange('partnerContact', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">구매자명 / Buyer</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="거래처와 같으면 같은 이름 입력"
-    value={profile.buyerName}
-    onChange={(e) => handleInputChange('buyerName', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">구매자 주소</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="구매자 주소를 입력하세요"
-    value={profile.buyerAddress}
-    onChange={(e) => handleInputChange('buyerAddress', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">구매자 국가</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: 중국"
-    value={profile.buyerCountry}
-    onChange={(e) => handleInputChange('buyerCountry', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">Notify Party명</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Shanghai Import Co."
-    value={profile.notifyPartyName}
-    onChange={(e) => handleInputChange('notifyPartyName', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">Notify Party 주소</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Pudong New Area, Shanghai, China"
-    value={profile.notifyPartyAddress}
-    onChange={(e) => handleInputChange('notifyPartyAddress', e.target.value)}
-  />
-</div>
-
-<div className="form-group">
-  <label className="form-label">Notify Party 연락처</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: +86-21-0000-0000"
-    value={profile.notifyPartyContact}
-    onChange={(e) => handleInputChange('notifyPartyContact', e.target.value)}
-  />
-</div>
                     <div className="form-group">
                       <label className="form-label">담당자 연락처</label>
                       <input
@@ -1460,79 +962,628 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         onChange={(e) => handleInputChange('contact', e.target.value)}
                       />
                     </div>
+                  </div>
 
-                    <div className="form-group">
-                      <label className="form-label">결제 통화</label>
-                      <select
-                        className="form-input"
-                        value={profile.currency || 'KRW'}
-                        onChange={(e) => handleInputChange('currency', e.target.value)}
-                      >
-                        <option value="KRW">KRW (원화)</option>
-                        <option value="USD">USD (미국 달러)</option>
-                        <option value="EUR">EUR (유로)</option>
-                        <option value="JPY">JPY (일본 엔)</option>
-                        <option value="CNY">CNY (중국 위안)</option>
-                      </select>
-                    </div>
+                  <p className="form-optional-note">
+                    아래 상세 항목은 모두 선택 입력입니다 — 비워두면 AI 에이전트가 자동 생성하거나 기본값을 사용합니다.
+                  </p>
 
-                    <div className="form-group">
-                      <label className="form-label">인보이스 총액</label>
-                      <div className="input-suffix">
+                  <details className="form-section">
+                    <summary className="form-section-summary">
+                      📄 송장·문서 상세
+                      <span className="form-section-hint">비워두면 자동 생성</span>
+                    </summary>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label className="form-label">문서번호</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: DOC-20260701-001"
+                          value={profile.documentNo}
+                          onChange={(e) => handleInputChange('documentNo', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">송장번호</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: INV-20260701-001"
+                          value={profile.invoiceNo}
+                          onChange={(e) => handleInputChange('invoiceNo', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">송장 작성일</label>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={profile.invoiceDate}
+                          onChange={(e) => handleInputChange('invoiceDate', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">참조번호</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: REF-INCHON-001"
+                          value={profile.referenceNo}
+                          onChange={(e) => handleInputChange('referenceNo', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">원산지</label>
+                        <select
+                          className="form-input"
+                          value={profile.countryOfOrigin}
+                          onChange={(e) => handleInputChange('countryOfOrigin', e.target.value)}
+                        >
+                          <option value="">원산지를 선택하세요</option>
+                          <option value="대한민국">대한민국 (KR)</option>
+                          <option value="미국">미국 (US)</option>
+                          <option value="중국">중국 (CN)</option>
+                          <option value="일본">일본 (JP)</option>
+                          <option value="베트남">베트남 (VN)</option>
+                          <option value="독일">독일 (DE)</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">수량 단위</label>
+                        <select
+                          className="form-input"
+                          value={profile.unit}
+                          onChange={(e) => handleInputChange('unit', e.target.value)}
+                        >
+                          <option value="EA">EA</option>
+                          <option value="PCS">PCS</option>
+                          <option value="BOX">BOX</option>
+                          <option value="SET">SET</option>
+                          <option value="KG">KG</option>
+                          <option value="CNTR">CNTR</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">단가</label>
                         <input
                           type="number"
                           className="form-input"
-                          placeholder="외화 입력 시 과세가격 자동 환산"
-                          value={profile.invoiceAmount ?? ''}
-                          onChange={(e) => handleInputChange('invoiceAmount', e.target.value ? Number(e.target.value) : '')}
+                          placeholder="예: 12"
+                          value={profile.unitPrice}
+                          onChange={(e) => handleInputChange('unitPrice', e.target.value ? Number(e.target.value) : '')}
                         />
-                        <span className="suffix-text">{profile.currency || 'KRW'}</span>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">총 금액</label>
+                        <input
+                          type="number"
+                          className="form-input"
+                          placeholder="예: 18000"
+                          value={profile.totalAmount}
+                          onChange={(e) => handleInputChange('totalAmount', e.target.value ? Number(e.target.value) : '')}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">결제조건</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: T/T in advance"
+                          value={profile.paymentTerms}
+                          onChange={(e) => handleInputChange('paymentTerms', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">수출 사유</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Sale of goods"
+                          value={profile.reasonForExport}
+                          onChange={(e) => handleInputChange('reasonForExport', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">결제 통화</label>
+                        <select
+                          className="form-input"
+                          value={profile.currency || 'KRW'}
+                          onChange={(e) => handleInputChange('currency', e.target.value)}
+                        >
+                          <option value="KRW">KRW (원화)</option>
+                          <option value="USD">USD (미국 달러)</option>
+                          <option value="EUR">EUR (유로)</option>
+                          <option value="JPY">JPY (일본 엔)</option>
+                          <option value="CNY">CNY (중국 위안)</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">인보이스 총액</label>
+                        <div className="input-suffix">
+                          <input
+                            type="number"
+                            className="form-input"
+                            placeholder="외화 입력 시 과세가격 자동 환산"
+                            value={profile.invoiceAmount ?? ''}
+                            onChange={(e) => handleInputChange('invoiceAmount', e.target.value ? Number(e.target.value) : '')}
+                          />
+                          <span className="suffix-text">{profile.currency || 'KRW'}</span>
+                        </div>
                       </div>
                     </div>
+                  </details>
 
-                    <div className="form-group">
-                      <label className="form-label">사업자등록번호</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="000-00-00000 (입력 시 국세청 상태 검증)"
-                        value={profile.businessRegistrationNo || ''}
-                        onChange={(e) => handleInputChange('businessRegistrationNo', e.target.value)}
-                      />
+                  <details className="form-section">
+                    <summary className="form-section-summary">
+                      🚢 선적·운송 상세
+                      <span className="form-section-hint">B/L·패킹리스트용 — 필요 시에만</span>
+                    </summary>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label className="form-label">B/L 번호</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: BL-20260701-001"
+                          value={profile.blNo}
+                          onChange={(e) => handleInputChange('blNo', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">발행 장소</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Seoul, Korea"
+                          value={profile.issuePlace}
+                          onChange={(e) => handleInputChange('issuePlace', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">발행일</label>
+                        <input
+                          type="date"
+                          className="form-input"
+                          value={profile.issueDate}
+                          onChange={(e) => handleInputChange('issueDate', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">운임 조건</label>
+                        <select
+                          className="form-input"
+                          value={profile.freightTerms}
+                          onChange={(e) => handleInputChange('freightTerms', e.target.value)}
+                        >
+                          <option value="">운임 조건을 선택하세요</option>
+                          <option value="Prepaid">Prepaid</option>
+                          <option value="Collect">Collect</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">운임 및 비용</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Freight Prepaid"
+                          value={profile.freightCharges}
+                          onChange={(e) => handleInputChange('freightCharges', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">운임 선불 장소</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Busan, Korea"
+                          value={profile.freightPrepaidAt}
+                          onChange={(e) => handleInputChange('freightPrepaidAt', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">운임 지급 장소</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Incheon, Korea"
+                          value={profile.freightPayableAt}
+                          onChange={(e) => handleInputChange('freightPayableAt', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">포장 개수</label>
+                        <input
+                          type="number"
+                          className="form-input"
+                          placeholder="예: 30"
+                          value={profile.packageCount}
+                          onChange={(e) => handleInputChange('packageCount', e.target.value ? Number(e.target.value) : '')}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">포장 종류</label>
+                        <select
+                          className="form-input"
+                          value={profile.packageType}
+                          onChange={(e) => handleInputChange('packageType', e.target.value)}
+                        >
+                          <option value="">포장 종류를 선택하세요</option>
+                          <option value="Carton">Carton</option>
+                          <option value="Box">Box</option>
+                          <option value="Pallet">Pallet</option>
+                          <option value="Container">Container</option>
+                          <option value="Wooden Case">Wooden Case</option>
+                          <option value="Bag">Bag</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">순중량(kg)</label>
+                        <input
+                          type="number"
+                          className="form-input"
+                          placeholder="예: 2200"
+                          value={profile.netWeight}
+                          onChange={(e) => handleInputChange('netWeight', e.target.value ? Number(e.target.value) : '')}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">총중량(kg)</label>
+                        <input
+                          type="number"
+                          className="form-input"
+                          placeholder="예: 2400"
+                          value={profile.grossWeight}
+                          onChange={(e) => handleInputChange('grossWeight', e.target.value ? Number(e.target.value) : '')}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Measurement / 부피</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: 3.5 CBM"
+                          value={profile.measurement}
+                          onChange={(e) => handleInputChange('measurement', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Shipping Marks</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: INCHON TECH / SHANGHAI / C/T NO. 1-30"
+                          value={profile.shippingMarks}
+                          onChange={(e) => handleInputChange('shippingMarks', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">선박명 / 항공편명</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: KMTC BUSAN V.2501"
+                          value={profile.vesselOrFlight}
+                          onChange={(e) => handleInputChange('vesselOrFlight', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">항차번호 / Voyage No.</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: 2501E"
+                          value={profile.voyageNo}
+                          onChange={(e) => handleInputChange('voyageNo', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">운송사 / Carrier</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: KMTC, Maersk, DHL"
+                          value={profile.carrier}
+                          onChange={(e) => handleInputChange('carrier', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">수령지 / Place of Receipt</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Busan, Korea"
+                          value={profile.placeOfReceipt}
+                          onChange={(e) => handleInputChange('placeOfReceipt', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">인도지 / Place of Delivery</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Shanghai, China"
+                          value={profile.placeOfDelivery}
+                          onChange={(e) => handleInputChange('placeOfDelivery', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">최종 목적지</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Shanghai, China"
+                          value={profile.finalDestination}
+                          onChange={(e) => handleInputChange('finalDestination', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">선박 국적 / Flag</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Korea"
+                          value={profile.flag}
+                          onChange={(e) => handleInputChange('flag', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">컨테이너 번호</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: TCLU1234567"
+                          value={profile.containerNo}
+                          onChange={(e) => handleInputChange('containerNo', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Seal 번호</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: SEAL987654"
+                          value={profile.sealNo}
+                          onChange={(e) => handleInputChange('sealNo', e.target.value)}
+                        />
+                      </div>
                     </div>
-                    <div className="form-group">
-  <label className="form-label">서명자</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: 김지민"
-    value={profile.signedBy}
-    onChange={(e) => handleInputChange('signedBy', e.target.value)}
-  />
-</div>
+                  </details>
 
-<div className="form-group">
-  <label className="form-label">서명자 영문명</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Kim Jimin"
-    value={profile.signerName}
-    onChange={(e) => handleInputChange('signerName', e.target.value)}
-  />
-</div>
+                  <details className="form-section">
+                    <summary className="form-section-summary">
+                      🤝 상대방·구매자 정보
+                      <span className="form-section-hint">선택</span>
+                    </summary>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label className="form-label">거래처명 (Consignee)</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="상대방 업체명을 입력하세요"
+                          value={profile.partnerName || ''}
+                          onChange={(e) => handleInputChange('partnerName', e.target.value)}
+                        />
+                      </div>
 
-<div className="form-group">
-  <label className="form-label">직책</label>
-  <input
-    type="text"
-    className="form-input"
-    placeholder="예: Export Manager"
-    value={profile.signerPosition}
-    onChange={(e) => handleInputChange('signerPosition', e.target.value)}
-  />
-</div>
-                  </div>
+                      <div className="form-group">
+                        <label className="form-label">수입자 주소</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Pudong New Area, Shanghai, China"
+                          value={profile.partnerAddress}
+                          onChange={(e) => handleInputChange('partnerAddress', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">수입자 국가</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: 중국"
+                          value={profile.partnerCountry}
+                          onChange={(e) => handleInputChange('partnerCountry', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">수입자 연락처</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: +86-21-0000-0000"
+                          value={profile.partnerContact}
+                          onChange={(e) => handleInputChange('partnerContact', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">구매자명 / Buyer</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="거래처와 같으면 같은 이름 입력"
+                          value={profile.buyerName}
+                          onChange={(e) => handleInputChange('buyerName', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">구매자 주소</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="구매자 주소를 입력하세요"
+                          value={profile.buyerAddress}
+                          onChange={(e) => handleInputChange('buyerAddress', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">구매자 국가</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: 중국"
+                          value={profile.buyerCountry}
+                          onChange={(e) => handleInputChange('buyerCountry', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Notify Party명</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Shanghai Import Co."
+                          value={profile.notifyPartyName}
+                          onChange={(e) => handleInputChange('notifyPartyName', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Notify Party 주소</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Pudong New Area, Shanghai, China"
+                          value={profile.notifyPartyAddress}
+                          onChange={(e) => handleInputChange('notifyPartyAddress', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Notify Party 연락처</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: +86-21-0000-0000"
+                          value={profile.notifyPartyContact}
+                          onChange={(e) => handleInputChange('notifyPartyContact', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </details>
+
+                  <details className="form-section">
+                    <summary className="form-section-summary">
+                      🏢 회사·서명 정보
+                      <span className="form-section-hint">한 번 입력하면 거의 고정</span>
+                    </summary>
+                    <div className="form-grid">
+                      <div className="form-group">
+                        <label className="form-label">수출자 주소</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: 인천광역시 연수구 송도동"
+                          value={profile.companyAddress}
+                          onChange={(e) => handleInputChange('companyAddress', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">수출자 국가</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: 대한민국"
+                          value={profile.companyCountry}
+                          onChange={(e) => handleInputChange('companyCountry', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Tax No.</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: 123-45-67890"
+                          value={profile.taxNo}
+                          onChange={(e) => handleInputChange('taxNo', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">사업자등록번호</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="000-00-00000 (입력 시 국세청 상태 검증)"
+                          value={profile.businessRegistrationNo || ''}
+                          onChange={(e) => handleInputChange('businessRegistrationNo', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">서명자</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: 김지민"
+                          value={profile.signedBy}
+                          onChange={(e) => handleInputChange('signedBy', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">서명자 영문명</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Kim Jimin"
+                          value={profile.signerName}
+                          onChange={(e) => handleInputChange('signerName', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">직책</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: Export Manager"
+                          value={profile.signerPosition}
+                          onChange={(e) => handleInputChange('signerPosition', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </details>
 
                   <div className="form-actions">
                     <button className="btn btn-secondary" onClick={handleReset}>
