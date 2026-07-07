@@ -20,8 +20,11 @@ import {
   Eye,
   Edit3
 } from 'lucide-react';
-import { TradeProfile, DocumentStatus, ValidationIssue } from './types';
+import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade } from './types';
 import SettingsPanel from './components/SettingsPanel';
+import DataAnalysisPanel from './components/DataAnalysisPanel';
+import DocumentManagerPanel from './components/DocumentManagerPanel';
+import { saveTrade } from './services/storageService';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
 import html2canvas from 'html2canvas';
@@ -474,12 +477,36 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
       setAiFeedback(result.feedback?.message || '');
       setHsCandidates(result.hs?.candidates || []);
       setHasGenerated(true);
+
+      // 생성 이력 자동 저장 → [문서 관리] 메뉴에서 조회/복원
+      try {
+        saveTrade(
+          { ...profile, hsCode: profile.hsCode || result.hs?.topCode || '' },
+          result.documents?.documents || [],
+          result.issues?.issues || [],
+          { htmlTemplates: result.documents?.htmlTemplates || {} }
+        );
+      } catch (err) {
+        console.warn('생성 이력 저장 실패 (기능에는 영향 없음):', err);
+      }
     } catch (error) {
       console.error(error);
       alert('에이전트 파이프라인 처리 중 오류가 발생했습니다.');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // [문서 관리]에서 저장 이력 복원
+  const handleLoadSavedTrade = (t: SavedTrade) => {
+    setProfile(t.profile);
+    setDocuments(t.documents);
+    setIssues(t.issues);
+    setHtmlTemplates((t.generatedDocs?.htmlTemplates as Record<string, string>) || {});
+    setAiFeedback('');
+    setHsCandidates([]);
+    setHasGenerated(true);
+    setActiveMenu('dashboard');
   };
 
   // Re-run validation helper (e.g. after fixing something in mobile view)
@@ -711,14 +738,16 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
               문서 자동 생성
             </div>
           </li>
-          {/* 미구현 메뉴 — 구현 완료 시 onClick 연결 후 disabled/배지 제거 */}
           <li>
-            <div className="menu-item disabled" title="준비 중인 기능입니다">
+            <div
+              className={`menu-item ${activeMenu === 'docs' ? 'active' : ''}`}
+              onClick={() => setActiveMenu('docs')}
+            >
               <FolderKanban size={18} />
               문서 관리
-              <span className="badge-soon">준비중</span>
             </div>
           </li>
+          {/* 미구현 메뉴 — 구현 완료 시 onClick 연결 후 disabled/배지 제거 */}
           <li>
             <div className="menu-item disabled" title="준비 중인 기능입니다">
               <Layers size={18} />
@@ -741,10 +770,12 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
             </div>
           </li>
           <li>
-            <div className="menu-item disabled" title="준비 중인 기능입니다">
+            <div
+              className={`menu-item ${activeMenu === 'analysis' ? 'active' : ''}`}
+              onClick={() => setActiveMenu('analysis')}
+            >
               <BarChart3 size={18} />
               데이터 분석
-              <span className="badge-soon">준비중</span>
             </div>
           </li>
           <li>
@@ -800,7 +831,10 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
         <main className="content-body">
           <div className="workspace-area">
-            {activeMenu === 'settings' ? <SettingsPanel /> : <>
+            {activeMenu === 'settings' ? <SettingsPanel />
+            : activeMenu === 'analysis' ? <DataAnalysisPanel />
+            : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} />
+            : <>
             {/* Page Title & Subtitle */}
             <div className="page-heading">
               <h1 className="page-title">항만 수출입 문서 자동화 서비스</h1>
