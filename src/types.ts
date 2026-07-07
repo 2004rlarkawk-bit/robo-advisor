@@ -164,7 +164,7 @@ export interface InvoiceData {
   arrivalDate: string;
   items: InvoiceItem[];
   totalAmount: number;
-  signedBy: string;
+  signedBy?: string;
 
   [key: string]: any;
 }
