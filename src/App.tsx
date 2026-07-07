@@ -16,11 +16,9 @@ import {
   AlertTriangle, 
   CheckCircle2, 
   Terminal, 
-  Download, 
-  Eye, 
-  Edit3, 
-  ArrowLeft,
-  Smartphone
+  Download,
+  Eye,
+  Edit3
 } from 'lucide-react';
 import { TradeProfile, DocumentStatus, ValidationIssue } from './types';
 import SettingsPanel from './components/SettingsPanel';
@@ -588,7 +586,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
     }
   };
 
-  const handleMobileSubmit = () => {
+  const handleSubmitAll = () => {
     alert('모든 통관 문서 정보 보완이 완료되었습니다. 관세청 통관 시스템으로 제출합니다.');
   };
 
@@ -1740,17 +1738,28 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         <div className="mobile-empty-state">
                           <span className="mobile-empty-icon">📁</span>
                           <span className="mobile-empty-text">생성된 문서 없음</span>
-                          <span className="mobile-empty-sub">정보를 정상적으로 채우거나 모바일에서 보완해 주세요.</span>
+                          <span className="mobile-empty-sub">아래 검토 안내에 따라 입력을 보완해 주세요.</span>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Column 3: AI 검토 및 경고 안내 */}
+                  {/* Column 3: AI 검토 및 보완 워크스페이스 */}
                   <div className="result-column">
                     <div className="col-header">
                       <div className="col-number">3</div>
                       <h3 className="col-title">검토 및 누락 항목 안내</h3>
+                    </div>
+
+                    <div className="review-summary-line">
+                      <span className="review-summary-item">
+                        <CheckCircle2 size={14} className="text-success" />
+                        검토 완료 <strong>{completedDocsCount}</strong>건
+                      </span>
+                      <span className="review-summary-item">
+                        <AlertTriangle size={14} className="text-warning" />
+                        보완 필요 <strong>{reviewDocsCount}</strong>건
+                      </span>
                     </div>
 
                     <div className="ai-report-box">
@@ -1758,15 +1767,15 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         <CheckCircle2 size={16} className="text-success" />
                         AI 분석 결과
                       </div>
-                      
+
                       {aiFeedback && (
-                        <div className="ai-feedback-narrative" style={{ 
-                          fontSize: '13px', 
-                          lineHeight: '1.6', 
-                          color: '#1e293b', 
-                          backgroundColor: '#f1f5f9', 
-                          padding: '12px', 
-                          borderRadius: '8px', 
+                        <div className="ai-feedback-narrative" style={{
+                          fontSize: '13px',
+                          lineHeight: '1.6',
+                          color: '#1e293b',
+                          backgroundColor: '#f1f5f9',
+                          padding: '12px',
+                          borderRadius: '8px',
                           marginBottom: '16px',
                           borderLeft: '4px solid #3b82f6',
                           whiteSpace: 'pre-line'
@@ -1774,102 +1783,6 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                           {aiFeedback}
                         </div>
                       )}
-
-                      <div className="ai-warning-list">
-                        {issues.map((issue) => (
-                          <div className={`warning-item ${issue.severity}`} key={issue.id}>
-                            <span className="warning-icon">
-                              {issue.severity === 'error' ? '❌' : issue.severity === 'warning' ? '⚠️' : 'ℹ️'}
-                            </span>
-                            <div className="warning-body">
-                              <span className="warning-title">{issue.message.split(' (')[0]}</span>
-                              <span className="warning-text">
-                                {issue.message.includes(' (') ? issue.message.split(' (')[1].replace(')', '') : ''}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-
-                        {issues.length === 0 && (
-                          <div className="warning-item info">
-                            <span className="warning-icon">✅</span>
-                            <div className="warning-body">
-                              <span className="warning-title">문서 검증 통과</span>
-                              <span className="warning-text">수출입 통관 및 해상 운송에 필요한 모든 서류 규격이 완벽히 충족되었습니다.</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <button 
-                        className="btn btn-primary"
-                        onClick={handleMobileSubmit}
-                        disabled={issues.length > 0}
-                        style={{ width: '100%', opacity: issues.length > 0 ? 0.6 : 1, cursor: issues.length > 0 ? 'not-allowed' : 'pointer' }}
-                      >
-                        전체 문서 전송
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setHasGenerated(false)} style={{ width: '100%' }}>
-                        뒤로 가기 (입력 수정)
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            </>}
-          </div>
-
-          {/* 3. Interactive Right Mobile Simulator Panel */}
-          <div className="simulator-wrapper">
-            <div className="iphone-frame">
-              <div className="iphone-notch"></div>
-              
-              <div className="iphone-screen">
-                <div className="mobile-status-bar">
-                  <span>12:25</span>
-                  <div className="status-bar-icons">
-                    <span>📶</span>
-                    <span>🔋</span>
-                  </div>
-                </div>
-
-                <div className="mobile-header">
-                  <ArrowLeft size={16} className="mobile-back-icon" onClick={() => setHasGenerated(false)} />
-                  <span className="mobile-title">문서 검토 결과</span>
-                </div>
-
-                <div className="mobile-body">
-                  {!hasGenerated ? (
-                    /* Mobile Standby screen */
-                    <div className="mobile-empty-state">
-                      <Smartphone size={40} className="text-light" />
-                      <span className="mobile-empty-text">실시간 보완 대기 중</span>
-                      <span className="mobile-empty-sub">좌측 대시보드에서 [필요 서류 자동 생성]을 누르면 실시간 보완 및 피드백 기능이 활성화됩니다.</span>
-                    </div>
-                  ) : (
-                    /* Mobile active verification & fix workspace */
-                    <>
-                      <div className="mobile-summary-card">
-                        <div className="mobile-summary-row">
-                          <span className="mobile-summary-label">
-                            <CheckCircle2 size={14} className="text-success" />
-                            검토 완료 문서
-                          </span>
-                          <span className="mobile-summary-value success">{completedDocsCount}건</span>
-                        </div>
-                        <div className="mobile-summary-row">
-                          <span className="mobile-summary-label">
-                            <AlertTriangle size={14} className="text-warning" />
-                            보완 필요
-                          </span>
-                          <span className="mobile-summary-value warning">{reviewDocsCount}건</span>
-                        </div>
-                      </div>
-
-                      <div className="mobile-section-title">누락 및 수정이 필요한 서류</div>
 
                       <div className="mobile-fix-list">
                         {issues.map((issue) => (
@@ -1895,14 +1808,14 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                               </span>
                             </div>
 
-                            {/* Dynamic input form depending on error type */}
+                            {/* 이슈 유형별 즉시 보완 입력 */}
                             {issue.field === 'weight' && (
                               <div className="mobile-input-group">
                                 <label className="mobile-input-label">화물 중량 입력 (kg)</label>
-                                <input 
-                                  type="number" 
-                                  className="mobile-input" 
-                                  placeholder="예: 4500" 
+                                <input
+                                  type="number"
+                                  className="mobile-input"
+                                  placeholder="예: 4500"
                                   value={mobileWeight}
                                   onChange={(e) => setMobileWeight(e.target.value)}
                                 />
@@ -1915,24 +1828,24 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                             {issue.field === 'hsCode' && (
                               <div className="mobile-input-group">
                                 <label className="mobile-input-label">올바른 HS CODE 입력</label>
-                                <input 
-                                  type="text" 
-                                  className="mobile-input" 
-                                  placeholder="예: 8479899090" 
+                                <input
+                                  type="text"
+                                  className="mobile-input"
+                                  placeholder="예: 8479899090"
                                   value={mobileHSCode}
                                   onChange={(e) => setMobileHSCode(e.target.value)}
                                 />
-                                
+
                                 {hsCandidates && hsCandidates.length > 0 && (
                                   <div className="hs-candidates-container" style={{ marginTop: '8px', marginBottom: '8px' }}>
                                     <div className="hs-candidates-title" style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-light)', marginBottom: '4px' }}>
                                       추천 HS CODE 후보군 (클릭 시 자동 기입):
                                     </div>
-                                    <div className="hs-candidates-list" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    <div className="hs-candidates-list" style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto' }}>
                                       {hsCandidates.map((cand, idx) => (
-                                        <div 
-                                          key={idx} 
-                                          className="hs-candidate-card" 
+                                        <div
+                                          key={idx}
+                                          className="hs-candidate-card"
                                           onClick={() => setMobileHSCode(cand.code)}
                                           style={{
                                             border: '1px solid var(--border-color)',
@@ -1945,10 +1858,10 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                                         >
                                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
                                             <span style={{ fontWeight: 'bold', fontSize: '12px', color: 'var(--primary-color)' }}>{cand.code}</span>
-                                            <span style={{ 
-                                              fontSize: '10px', 
-                                              padding: '2px 6px', 
-                                              borderRadius: '4px', 
+                                            <span style={{
+                                              fontSize: '10px',
+                                              padding: '2px 6px',
+                                              borderRadius: '4px',
                                               backgroundColor: cand.confidence.includes('낮음') ? 'rgba(220, 53, 69, 0.1)' : cand.confidence.includes('보통') ? 'rgba(255, 193, 7, 0.1)' : 'rgba(40, 167, 69, 0.1)',
                                               color: cand.confidence.includes('낮음') ? '#d32f2f' : cand.confidence.includes('보통') ? '#b78103' : '#2e7d32',
                                               fontWeight: 'bold'
@@ -1973,8 +1886,8 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                             {issue.docType === 'co' && (
                               <div className="mobile-input-group">
                                 <label className="mobile-input-label">원산지 정보 선택</label>
-                                <select 
-                                  className="mobile-input" 
+                                <select
+                                  className="mobile-input"
                                   value={mobileOrigin}
                                   onChange={(e) => setMobileOrigin(e.target.value)}
                                 >
@@ -2002,27 +1915,35 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         ))}
 
                         {issues.length === 0 && (
-                          <div className="mobile-empty-state">
-                            <span className="mobile-empty-icon">🎉</span>
-                            <span className="mobile-empty-text">보완할 사항 없음</span>
-                            <span className="mobile-empty-sub">모든 관세법 서류 제출 요건이 충족되었습니다. 아래 [수정 후 제출] 버튼을 눌러 발송을 완료하세요.</span>
+                          <div className="warning-item info">
+                            <span className="warning-icon">✅</span>
+                            <div className="warning-body">
+                              <span className="warning-title">문서 검증 통과</span>
+                              <span className="warning-text">수출입 통관 및 해상 운송에 필요한 모든 서류 규격이 완벽히 충족되었습니다.</span>
+                            </div>
                           </div>
                         )}
                       </div>
+                    </div>
 
+                    <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <button
-                        className="mobile-btn mobile-btn-primary"
-                        onClick={handleMobileSubmit}
-                        style={{ marginTop: 'auto' }}
+                        className="btn btn-primary"
+                        onClick={handleSubmitAll}
                         disabled={blockingIssuesCount > 0}
+                        style={{ width: '100%', opacity: blockingIssuesCount > 0 ? 0.6 : 1, cursor: blockingIssuesCount > 0 ? 'not-allowed' : 'pointer' }}
                       >
-                        수정 후 제출
+                        전체 문서 전송
                       </button>
-                    </>
-                  )}
+                      <button className="btn btn-secondary" onClick={() => setHasGenerated(false)} style={{ width: '100%' }}>
+                        뒤로 가기 (입력 수정)
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+            </>}
           </div>
         </main>
       </div>
