@@ -528,7 +528,9 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
   const handleSolveOrigin = async () => {
     if (!mobileOrigin) return;
-    
+
+    // TODO(데모용 placeholder): rulesEngine의 includes('산') 임시 조건을 통과시키기 위한
+    //  문자열 트릭. 원산지 판정 로직 교체 시 profile에 origin 필드를 추가하고 함께 정리할 것.
     const updatedProfile = {
       ...profile,
       companyName: `${profile.companyName} (${mobileOrigin}산)`
@@ -538,7 +540,15 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   };
 
   const getDocFileName = (docId: string) => {
-    const docTypeLabel = docId === 'invoice' ? 'Invoice' : docId === 'packing_list' ? 'PackingList' : 'CO';
+    const labels: Record<string, string> = {
+      invoice: 'Invoice',
+      packing_list: 'PackingList',
+      co: 'CO',
+      bl: 'BL',
+      customs_dec: 'CustomsDeclaration',
+      insurance: 'InsurancePolicy',
+    };
+    const docTypeLabel = labels[docId] ?? docId;
     const company = profile.companyName || 'ExportCo';
     const dateStr = (profile.departureDate || new Date().toISOString().split('T')[0]).replace(/[-]/g, '');
     return `${docTypeLabel}_${company}_${dateStr}.pdf`;

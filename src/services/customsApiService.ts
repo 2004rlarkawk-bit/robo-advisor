@@ -69,9 +69,18 @@ function toYmd(d: Date): string {
   return `${y}${m}${day}`;
 }
 
-/** XML 응답에서 태그 배열 추출 (관세청 GW는 XML 기본) */
+/**
+ * XML 응답에서 태그 배열 추출 (관세청 GW는 XML 기본).
+ * resultCode가 정상(00)이 아니면 throw — 키 만료/인증 실패가
+ * "데이터 없음"으로 위장되어 조용히 시뮬 폴백되는 것을 방지.
+ */
 function xmlItems(xml: string): Record<string, string>[] {
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
+  const resultCode = doc.getElementsByTagName('resultCode')[0]?.textContent?.trim();
+  if (resultCode && resultCode !== '00') {
+    const resultMsg = doc.getElementsByTagName('resultMsg')[0]?.textContent?.trim() ?? '';
+    throw new Error(`관세청 GW 오류 (resultCode ${resultCode}): ${resultMsg || '사유 미상 — 키 상태를 확인하세요'}`);
+  }
   return Array.from(doc.getElementsByTagName('item')).map((item) => {
     const rec: Record<string, string> = {};
     Array.from(item.children).forEach((c) => {
@@ -79,6 +88,19 @@ function xmlItems(xml: string): Record<string, string>[] {
     });
     return rec;
   });
+}
+
+/**
+ * 관세청 고시환율의 100단위 통화 처리.
+ * 관세청 주간환율은 JPY·IDR을 100단위로 고시 (예: "일본 엔(100)" 940.2원).
+ * 1단위 환율로 정규화하지 않으면 과세가격이 100배 계산되므로 반드시 나눠준다.
+ */
+const HUNDRED_UNIT_CURRENCIES = new Set(['JPY', 'IDR']);
+
+function currencyUnitDivisor(currency: string, currencyName: string): number {
+  if (HUNDRED_UNIT_CURRENCIES.has(currency.toUpperCase())) return 100;
+  const m = currencyName.match(/\((\d+)\)/); // 이름에 "(100)" 표기가 있으면 그 단위 사용
+  return m ? parseInt(m[1], 10) : 1;
 }
 
 // ===== 1. 관세환율 (관세청_관세환율정보 GW) =====
@@ -116,10 +138,11 @@ export async function getCustomsExchangeRate(
       const items = xmlItems(await res.text());
       const hit = items.find((i) => i.currSgn === currency.toUpperCase());
       if (hit) {
+        const name = hit.mtryUtNm || hit.currKorNm || '';
         return {
           currency: hit.currSgn,
-          currencyName: hit.mtryUtNm || hit.currKorNm || '',
-          rate: parseFloat(hit.fxrt),
+          currencyName: name,
+          rate: parseFloat(hit.fxrt) / currencyUnitDivisor(hit.currSgn, name),
           effectiveDate: hit.aplyBgnDt || aplyBgnDt,
           tradeType,
           source: 'api',
@@ -146,7 +169,7 @@ function simulatedRate(currency: string): Omit<ExchangeRate, 'tradeType' | 'effe
   return {
     currency: currency.toUpperCase(),
     currencyName: hit.name,
-    rate: hit.rate,
+    rate: hit.rate / currencyUnitDivisor(currency, hit.name),
     source: 'simulation',
   };
 }
@@ -542,7 +565,7 @@ export async function calcDutiableValue(
   tradeType: 'export' | 'import' = 'import'
 ): Promise<DutiableValueResult> {
   const fx = await getCustomsExchangeRate(currency, tradeType);
-  // JPY 등 100단위 통화 처리: 관세청 응답은 이미 1단위 환산 기준이므로 그대로 곱함
+  // fx.rate는 getCustomsExchangeRate에서 1단위 기준으로 정규화됨 (JPY 등 100단위 고시 통화 포함)
   return {
     totalForeign,
     currency: fx.currency,
