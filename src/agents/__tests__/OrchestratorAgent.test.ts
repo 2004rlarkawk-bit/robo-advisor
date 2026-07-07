@@ -226,12 +226,15 @@ describe('OrchestratorAgent', () => {
       expect(result.error?.message).toContain('500자');
     });
 
-    it('HS Code 형식이 잘못되면 검증 오류를 반환해야 함', async () => {
+    it('HS Code 형식이 잘못되어도 파이프라인은 계속 진행해야 함 (HSCodeAgent에 위임)', async () => {
       const invalidProfile = { ...validProfile, hsCode: 'ABC123' };
       const result = await orchestrator.run({ profile: invalidProfile, useLLM: false });
 
-      expect(result.error).toBeDefined();
-      expect(result.error?.message).toContain('HS Code');
+      expect(result.error).toBeUndefined();
+      expect(result.hs).toBeDefined();
+      expect(
+        result.logs.some(log => log.level === 'warning' && log.message.includes('HS Code'))
+      ).toBe(true);
     });
 
     it('profile이 null이면 검증 오류를 반환해야 함', async () => {
@@ -287,7 +290,7 @@ describe('OrchestratorAgent', () => {
       expect(result.hs).toBeDefined();
     });
 
-    it('매우 긴 HS Code를 처리해야 함', async () => {
+    it('매우 긴 HS Code는 경고 후 계속 진행해야 함', async () => {
       const profileWithLongHSCode = {
         ...validProfile,
         hsCode: '12345678901' // 11자리
@@ -297,8 +300,10 @@ describe('OrchestratorAgent', () => {
         useLLM: false
       });
 
-      expect(result.error).toBeDefined();
-      expect(result.error?.message).toContain('HS Code');
+      expect(result.error).toBeUndefined();
+      expect(
+        result.logs.some(log => log.level === 'warning' && log.message.includes('HS Code'))
+      ).toBe(true);
     });
 
     it('HS Code가 null 값을 반환할 때 처리해야 함', async () => {

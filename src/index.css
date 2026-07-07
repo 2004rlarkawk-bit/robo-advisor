@@ -728,6 +728,16 @@ body {
   color: var(--warning-color);
 }
 
+.status-error {
+  background-color: var(--error-bg);
+  color: var(--error-color);
+}
+
+.status-info {
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+}
+
 .status-not-started {
   background-color: #f1f5f9;
   color: var(--text-light);

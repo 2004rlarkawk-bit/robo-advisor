@@ -592,9 +592,10 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
     alert('모든 통관 문서 정보 보완이 완료되었습니다. 관세청 통관 시스템으로 제출합니다.');
   };
 
-  // Calculate statistics
+  // Calculate statistics — info 수준 이슈는 안내일 뿐 제출을 막지 않음
   const completedDocsCount = documents.filter(d => d.status === 'completed').length;
-  const reviewDocsCount = issues.length;
+  const blockingIssuesCount = issues.filter(i => i.severity !== 'info').length;
+  const reviewDocsCount = blockingIssuesCount;
 
   if (!user) {
     return (
@@ -1876,18 +1877,21 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                             <div className="mobile-fix-header">
                               <div className="mobile-fix-info">
                                 <span className="mobile-fix-name">
-                                  {issue.docType === 'packing_list' ? '패킹리스트' : 
-                                   issue.docType === 'customs_dec' ? '통관신고서' : 
-                                   issue.docType === 'co' ? '원산지증명서' : '기타 서류'}
+                                  {issue.docType === 'invoice' ? '상업송장' :
+                                   issue.docType === 'packing_list' ? '패킹리스트' :
+                                   issue.docType === 'bl' ? '선하증권(B/L)' :
+                                   issue.docType === 'customs_dec' ? '통관신고서' :
+                                   issue.docType === 'co' ? '원산지증명서' :
+                                   issue.docType === 'insurance' ? '적하보험증권' : '기타 서류'}
                                 </span>
-                                <span className="mobile-fix-msg">
-                                  {issue.field === 'weight' ? '중량 정보 확인 필요' : 
-                                   issue.field === 'hsCode' ? 'HS CODE 유효성 검사 오류' : 
-                                   '수출국 규제 서류 작성 필요'}
-                                </span>
+                                <span className="mobile-fix-msg">{issue.message}</span>
                               </div>
-                              <span className="mobile-fix-badge status-review-required">
-                                {issue.severity === 'error' ? '오류' : '보완 필요'}
+                              <span className={`mobile-fix-badge ${
+                                issue.severity === 'error' ? 'status-error' :
+                                issue.severity === 'info' ? 'status-info' : 'status-review-required'
+                              }`}>
+                                {issue.severity === 'error' ? '오류' :
+                                 issue.severity === 'info' ? '안내' : '보완 필요'}
                               </span>
                             </div>
 
@@ -1984,6 +1988,16 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                                 </button>
                               </div>
                             )}
+
+                            {/* 전용 보완 입력이 없는 이슈는 입력 화면으로 돌아가 수정 */}
+                            {issue.severity !== 'info' &&
+                              issue.field !== 'weight' &&
+                              issue.field !== 'hsCode' &&
+                              issue.docType !== 'co' && (
+                              <button className="mobile-btn mobile-btn-secondary" onClick={() => setHasGenerated(false)}>
+                                입력 화면에서 수정
+                              </button>
+                            )}
                           </div>
                         ))}
 
@@ -1996,11 +2010,11 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         )}
                       </div>
 
-                      <button 
-                        className="mobile-btn mobile-btn-primary" 
+                      <button
+                        className="mobile-btn mobile-btn-primary"
                         onClick={handleMobileSubmit}
                         style={{ marginTop: 'auto' }}
-                        disabled={issues.length > 0}
+                        disabled={blockingIssuesCount > 0}
                       >
                         수정 후 제출
                       </button>

@@ -61,13 +61,8 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
       errors.push({ field: "itemName", message: "상품명은 500자 이하여야 합니다." });
     }
 
-    if (profile.hsCode) {
-      // 포맷 구분자(., -, 공백)를 제거한 뒤 순수 숫자 자릿수로 검증 (예: "8517-62-0000" 허용)
-      const digitsOnly = profile.hsCode.replace(/[.\-\s]/g, "");
-      if (!/^\d{6,10}$/.test(digitsOnly)) {
-        errors.push({ field: "hsCode", message: "HS Code는 6-10자리 숫자여야 합니다." });
-      }
-    }
+    // hsCode 형식 오류는 치명 오류로 다루지 않는다 — HSCodeAgent가 invalid/needs_review
+    // 상태로 판정하고 ComplianceAgent가 보완 이슈로 변환해 사용자 수정 흐름으로 이어진다.
 
     return errors;
   }
@@ -99,6 +94,19 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
           const errorMsg = validationErrors.map(e => `${e.field}: ${e.message}`).join(", ");
           logs.push(createLog(this.name, `입력값 검증 실패: ${errorMsg}`, "error"));
           throw new Error(`입력값 검증 오류: ${errorMsg}`);
+        }
+
+        if (profile?.hsCode) {
+          const digitsOnly = profile.hsCode.replace(/[.\-\s]/g, "");
+          if (!/^\d{6,10}$/.test(digitsOnly)) {
+            logs.push(
+              createLog(
+                this.name,
+                `HS Code 형식이 비표준입니다("${profile.hsCode}") — HSCodeAgent 검증으로 위임합니다.`,
+                "warning"
+              )
+            );
+          }
         }
       }
 
