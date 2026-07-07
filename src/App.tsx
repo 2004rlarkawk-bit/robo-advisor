@@ -461,15 +461,20 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
         setConsoleLogs(prev => [...prev, result.logs[i]]);
       }
 
+      if (result.error) {
+        alert(`에이전트 파이프라인 처리 중 오류가 발생했습니다: ${result.error.message}`);
+        return;
+      }
+
       setProfile(prev => ({
         ...prev,
-        hsCode: prev.hsCode || result.hs.topCode
+        hsCode: prev.hsCode || result.hs?.topCode || ''
       }));
-      setDocuments(result.documents.documents);
-      setHtmlTemplates(result.documents.htmlTemplates || {});
-      setIssues(result.issues.issues);
-      setAiFeedback(result.feedback.message);
-      setHsCandidates(result.hs.candidates || []);
+      setDocuments(result.documents?.documents || []);
+      setHtmlTemplates(result.documents?.htmlTemplates || {});
+      setIssues(result.issues?.issues || []);
+      setAiFeedback(result.feedback?.message || '');
+      setHsCandidates(result.hs?.candidates || []);
       setHasGenerated(true);
     } catch (error) {
       console.error(error);
@@ -484,12 +489,17 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
     try {
       const orchestrator = new OrchestratorAgent();
       const result = await orchestrator.run({ profile: updatedProfile, useLLM: true });
-      
-      setDocuments(result.documents.documents);
-      setHtmlTemplates(result.documents.htmlTemplates || {});
-      setIssues(result.issues.issues);
-      setAiFeedback(result.feedback.message);
-      setHsCandidates(result.hs.candidates || []);
+
+      if (result.error) {
+        console.error('에이전트 재실행 중 오류:', result.error.message);
+        return;
+      }
+
+      setDocuments(result.documents?.documents || []);
+      setHtmlTemplates(result.documents?.htmlTemplates || {});
+      setIssues(result.issues?.issues || []);
+      setAiFeedback(result.feedback?.message || '');
+      setHsCandidates(result.hs?.candidates || []);
     } catch (error) {
       console.error(error);
     }
@@ -1973,7 +1983,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                 <div className="log-row" key={index}>
                   <span className="log-time">[{log.timestamp}]</span>
                   <span className="log-agent">{log.agentName}:</span>
-                  <span className={`log-text-content ${log.type}`}>
+                  <span className={`log-text-content ${log.level}`}>
                     {log.message}
                   </span>
                 </div>

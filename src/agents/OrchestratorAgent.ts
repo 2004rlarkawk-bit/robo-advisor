@@ -18,7 +18,6 @@ interface ValidationError {
 export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?: boolean }, OrchestratorResult> {
   readonly name = "Orchestrator Agent";
   private readonly config: OrchestratorAgentConfig;
-  private readonly executionId = this.generateExecutionId();
 
   private hsCodeAgent: Agent;
   private documentAgent: Agent;
@@ -62,8 +61,12 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
       errors.push({ field: "itemName", message: "상품명은 500자 이하여야 합니다." });
     }
 
-    if (profile.hsCode && !/^\d{6,10}$/.test(profile.hsCode)) {
-      errors.push({ field: "hsCode", message: "HS Code는 6-10자리 숫자여야 합니다." });
+    if (profile.hsCode) {
+      // 포맷 구분자(., -, 공백)를 제거한 뒤 순수 숫자 자릿수로 검증 (예: "8517-62-0000" 허용)
+      const digitsOnly = profile.hsCode.replace(/[.\-\s]/g, "");
+      if (!/^\d{6,10}$/.test(digitsOnly)) {
+        errors.push({ field: "hsCode", message: "HS Code는 6-10자리 숫자여야 합니다." });
+      }
     }
 
     return errors;
@@ -80,11 +83,13 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
 
   async run(input: { profile: TradeProfile; useLLM?: boolean }): Promise<OrchestratorResult> {
     const startTime = Date.now();
+    // 동시 실행 시에도 각 run() 호출이 고유 ID를 갖도록 실행마다 새로 생성
+    const executionId = this.generateExecutionId();
     const { profile, useLLM = false } = input;
     const logs: AgentLog[] = [];
 
     logs.push(
-      createLog(this.name, `[${this.executionId}] 오케스트레이터 파이프라인 가동 시작...`, "info")
+      createLog(this.name, `[${executionId}] 오케스트레이터 파이프라인 가동 시작...`, "info")
     );
 
     try {
@@ -179,7 +184,7 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
       logs.push(
         createLog(
           this.name,
-          `[${this.executionId}] 오케스트레이터 전체 에이전트 협업 루프 완료. (소요시간: ${executionTime}ms)`,
+          `[${executionId}] 오케스트레이터 전체 에이전트 협업 루프 완료. (소요시간: ${executionTime}ms)`,
           "success"
         )
       );
@@ -190,7 +195,7 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
         issues: compResult,
         feedback: feedResult,
         logs,
-        executionId: this.executionId,
+        executionId: executionId,
         executionTime
       };
     } catch (error) {
@@ -201,7 +206,7 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
       logs.push(
         createLog(
           this.name,
-          `[${this.executionId}] 오케스트레이터 전체 파이프라인 실패: ${errorMsg}`,
+          `[${executionId}] 오케스트레이터 전체 파이프라인 실패: ${errorMsg}`,
           "error"
         )
       );
@@ -212,8 +217,8 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
         issues: null as any,
         feedback: null as any,
         logs,
-        executionId: this.executionId,
-        executionTime: Date.now() - startTime,
+        executionId: executionId,
+        executionTime,
         error: {
           message: errorMsg,
           stack: errorStack,
