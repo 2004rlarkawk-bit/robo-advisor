@@ -9,11 +9,14 @@ export interface Agent<I = any, O = any> {
 }
 
 // 에이전트 실행 로그
+export type AgentLogType = 'info' | 'success' | 'warning' | 'error';
+
 export interface AgentLog {
   timestamp: string;
   agentName: string;
   message: string;
-  level: 'info' | 'success' | 'warning' | 'error';
+  type: AgentLogType;
+  level?: AgentLogType;
 }
 
 // 에러 정보
@@ -56,13 +59,13 @@ export interface FeedbackResult {
 
 // OrchestratorAgent 통합 출력
 export interface OrchestratorResult {
-  hs: HSCodeResult | null;
-  documents: DocumentResult | null;
-  issues: ComplianceResult | null;
-  feedback: FeedbackResult | null;
+  hs: HSCodeResult;
+  documents: DocumentResult;
+  issues: ComplianceResult;
+  feedback: FeedbackResult;
   logs: AgentLog[];
-  executionId: string;
-  executionTime: number;
+  executionId?: string;
+  executionTime?: number;
   error?: ExecutionError;
 }
 
@@ -70,12 +73,13 @@ export interface OrchestratorResult {
 export function createLog(
   agentName: string,
   message: string,
-  level: AgentLog['level'] = 'info'
+  type: AgentLogType = 'info'
 ): AgentLog {
   return {
     timestamp: new Date().toLocaleTimeString('ko-KR'),
     agentName,
     message,
-    level,
+    type,
+    level: type,
   };
 }
