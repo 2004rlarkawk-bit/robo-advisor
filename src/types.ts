@@ -209,12 +209,25 @@ export interface GeneratedDocuments {
   [key: string]: any;
 }
 
+// [EDIT: Trade Persistence] 거래 row와 작업 캐시가 함께 사용하는 상태값입니다.
+export type TradeStatus =
+  | 'draft'
+  | 'generating'
+  | 'generated'
+  | 'submitting'
+  | 'submitted'
+  | 'failed';
+
 export interface SavedTrade {
   id: string;
   profile: TradeProfile;
   documents: DocumentStatus[];
   issues: ValidationIssue[];
-  status?: string;
+  // [EDIT: Trade Persistence] Supabase trades.status 값을 프론트에서도 명시적으로 다룹니다.
+  status?: TradeStatus;
+  generatedDocs?: GeneratedDocuments;
+  generatedAt?: string | null;
+  submittedAt?: string | null;
   createdAt: string;
   updatedAt?: string;
 

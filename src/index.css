@@ -1386,7 +1386,8 @@ body {
   margin-left: 12px;
 }
 
-.login-btn-guest {
+/* [EDIT: Trade Persistence] 이 버튼은 로그인/회원가입 화면 전환용입니다. */
+.login-btn-switch {
   background: #ffffff;
   border: 1px solid var(--border-color);
   color: var(--text-dark);
@@ -1403,7 +1404,7 @@ body {
   gap: 6px;
 }
 
-.login-btn-guest:hover {
+.login-btn-switch:hover {
   background: #f1f5f9;
   color: var(--text-dark);
   border-color: #cbd5e1;
@@ -1469,7 +1470,8 @@ body {
   border: 1px solid rgba(11, 87, 208, 0.15);
 }
 
-.auth-badge.guest {
+/* [EDIT: Trade Persistence] 수입 거래 배지 스타일입니다. */
+.auth-badge.import {
   background-color: #f1f5f9;
   color: var(--text-light);
   border: 1px solid var(--border-color);

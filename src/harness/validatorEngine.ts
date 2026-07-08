@@ -105,15 +105,14 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
   // 2. 통관신고서 - HS CODE 검증 (HSCodeAgent에서 처리하므로 여기서는 중복 제거)
 
   // 3. 원산지증명서 - 작성 여부 검증
-  // TODO(데모용 placeholder): companyName.includes('산')은 시연 시나리오 분기용 임시 조건임.
-  //  실제 판단 기준은 "수출 + FTA 협정세율 적용 희망 or 상대국 요구" — 원산지 판정 로직으로 교체 필요.
-  if (profile.tradeType === 'export' && !profile.companyName.includes('산')) {
+  // 원산지증명서(C/O)는 회사명 문자열이 아니라 profile.countryOfOrigin 입력 여부로 판단합니다.
+  if (profile.tradeType === 'export' && !profile.countryOfOrigin?.trim()) {
     issues.push({
       id: 'co-required',
       docType: 'co',
       severity: 'info',
       message: '원산지증명서: 작성 필요 (원산지증명서 작성을 진행해 주세요.)',
-      field: 'tradeType'
+      field: 'countryOfOrigin'
     });
   }
 
