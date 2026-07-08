@@ -61,7 +61,11 @@ export function renderPackingListHTML(data: PackingListData): string {
           </td>
         </tr>
       </table>
-
+      <!-- Shipping Marks -->
+      <div style="margin-bottom: 25px; padding: 14px 16px; border: 1px solid #cbd5e1; background-color: #f8fafc;">
+        <div style="font-size: 11px; font-weight: bold; color: #059669; text-transform: uppercase; margin-bottom: 6px;">Shipping Marks</div>
+        <div style="font-size: 13px; color: #0f172a; line-height: 1.5; white-space: pre-line;">${data.shippingMarks || 'N/A'}</div>
+      </div>
       <!-- Items Table -->
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 13px;">
         <thead>
@@ -90,7 +94,7 @@ export function renderPackingListHTML(data: PackingListData): string {
       <div style="margin-top: 50px; display: flex; justify-content: flex-end;">
         <div style="text-align: center; width: 250px;">
           <div style="height: 60px; display: flex; align-items: flex-end; justify-content: center; font-family: 'Courier New', Courier, monospace; font-size: 18px; color: #475569; font-style: italic; border-bottom: 1px solid #94a3b8; margin-bottom: 8px; padding-bottom: 5px;">
-            ${data.exporter.name.split(' ')[0]}
+            ${data.signedBy || data.exporter?.name || data.seller?.name || ''}
           </div>
           <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; letter-spacing: 0.05em;">Checked & Approved By</div>
         </div>
