@@ -337,6 +337,73 @@ body {
   margin-bottom: 32px;
 }
 
+.form-optional-note {
+  font-size: 13px;
+  color: var(--text-light);
+  background-color: var(--primary-light);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+
+.form-section {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 14px;
+  background-color: #fafcff;
+  overflow: hidden;
+}
+
+.form-section[open] {
+  background-color: #ffffff;
+}
+
+.form-section-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dark);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.form-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.form-section-summary::after {
+  content: '▾';
+  margin-left: auto;
+  color: var(--text-light);
+  transition: transform 0.2s ease;
+}
+
+.form-section[open] > .form-section-summary::after {
+  transform: rotate(180deg);
+}
+
+.form-section-summary:hover {
+  background-color: var(--primary-light);
+}
+
+.form-section-hint {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-light);
+  background-color: #f1f5f9;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.form-section > .form-grid {
+  padding: 4px 18px 18px;
+  margin-bottom: 0;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
@@ -564,9 +631,29 @@ body {
 
 .result-columns-layout {
   display: grid;
-  grid-template-columns: 1fr 1.3fr 1fr;
+  grid-template-columns: 0.9fr 1.1fr 1.4fr;
   gap: 24px;
   align-items: start;
+}
+
+/* AI 분석 결과 서술 박스 — 문단 단위로 여백을 주어 가독성 확보 */
+.ai-feedback-narrative {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #1e293b;
+  background-color: #f1f5f9;
+  padding: 14px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border-left: 4px solid #3b82f6;
+}
+
+.ai-feedback-narrative p {
+  margin: 0;
+  word-break: keep-all;
 }
 
 .result-column {
@@ -659,6 +746,16 @@ body {
 .status-review-required {
   background-color: var(--warning-bg);
   color: var(--warning-color);
+}
+
+.status-error {
+  background-color: var(--error-bg);
+  color: var(--error-color);
+}
+
+.status-info {
+  background-color: var(--primary-light);
+  color: var(--primary-color);
 }
 
 .status-not-started {
@@ -953,140 +1050,28 @@ body {
 }
 
 /* Phone Simulator Frame */
-.simulator-wrapper {
-  width: 320px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 96px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.iphone-frame {
-  width: 100%;
-  height: 600px;
-  background-color: #000000;
-  border: 10px solid #1e293b;
-  border-radius: 40px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Notch */
-.iphone-notch {
-  width: 110px;
-  height: 24px;
-  background-color: #000000;
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px;
-  z-index: 100;
-}
-
-/* Mobile Screen Container */
-.iphone-screen {
-  flex-grow: 1;
-  background-color: #f8fafc;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  padding-top: 24px; /* Space for status bar */
-}
-
-/* Mobile Status Bar */
-.mobile-status-bar {
-  height: 24px;
-  padding: 4px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 10px;
-  font-weight: 700;
-  color: #000000;
-  z-index: 99;
-}
-
-.status-bar-icons {
-  display: flex;
-  gap: 4px;
-}
-
-/* Mobile Content */
-.mobile-header {
-  padding: 12px 16px;
+/* 결과 3열 검토 요약 라인 */
+.review-summary-line {
   display: flex;
   align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid var(--border-color);
-  background-color: #ffffff;
-}
-
-.mobile-back-icon {
-  font-size: 16px;
-  color: var(--text-dark);
-  cursor: pointer;
-}
-
-.mobile-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-dark);
-}
-
-.mobile-body {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
   gap: 16px;
-  flex-grow: 1;
-}
-
-.mobile-summary-card {
+  padding: 10px 14px;
   background-color: #ffffff;
-  border-radius: 12px;
-  padding: 14px;
   border: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.mobile-summary-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  border-radius: 10px;
+  margin-bottom: 12px;
   font-size: 12px;
-  font-weight: 500;
+  color: var(--text-light);
 }
 
-.mobile-summary-label {
+.review-summary-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--text-light);
+  gap: 6px;
 }
 
-.mobile-summary-value {
-  font-weight: 700;
+.review-summary-item strong {
   color: var(--text-dark);
-}
-
-.mobile-summary-value.success { color: var(--primary-color); }
-.mobile-summary-value.warning { color: var(--warning-color); }
-
-.mobile-section-title {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--text-light);
-  font-weight: 700;
-  letter-spacing: 0.5px;
 }
 
 .mobile-fix-list {
@@ -1133,6 +1118,9 @@ body {
   font-weight: 700;
   padding: 3px 6px;
   border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 
 .mobile-input-group {

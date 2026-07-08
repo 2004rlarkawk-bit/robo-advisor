@@ -55,33 +55,58 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
       const quantity = Number(profile.quantity) || 1;
       const totalAmount = Math.round(unitPrice * quantity * 100) / 100;
 
+      const invoiceDate = profile.invoiceDate || new Date().toISOString().split('T')[0];
+      const exporterParty = {
+        name: profile.tradeType === 'export' ? (profile.companyName || 'Exporter Co., Ltd.') : (profile.partnerName || 'Overseas Supplier Co., Ltd.'),
+        address: profile.tradeType === 'export'
+          ? (profile.companyAddress || 'Seoul, Republic of Korea')
+          : (profile.partnerAddress || 'Overseas Address'),
+        contact: profile.tradeType === 'export'
+          ? (profile.contact || 'N/A')
+          : (profile.partnerContact || 'N/A')
+      };
+      const importerParty = {
+        name: profile.tradeType === 'import' ? (profile.companyName || 'Importer Co., Ltd.') : (profile.partnerName || 'Overseas Buyer Co., Ltd.'),
+        address: profile.tradeType === 'import'
+          ? (profile.companyAddress || 'Seoul, Republic of Korea')
+          : (profile.partnerAddress || 'Overseas Address'),
+        contact: profile.tradeType === 'import'
+          ? (profile.contact || 'N/A')
+          : (profile.partnerContact || 'N/A')
+      };
+      const invGrossWeight = Number(profile.grossWeight || profile.weight) || 0;
+      const invNetWeight = Number(profile.netWeight) || Math.round(invGrossWeight * 0.9 * 10) / 10;
+
       const invoice: InvoiceData = {
-        invoiceNo: `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,
-        date: new Date().toISOString().split('T')[0],
-        exporter: {
-          name: profile.tradeType === 'export' ? (profile.companyName || 'Exporter Co., Ltd.') : (profile.partnerName || 'Overseas Supplier Co., Ltd.'),
-          address: profile.tradeType === 'export' ? 'Seoul, Republic of Korea' : 'Overseas Address',
-          contact: profile.contact || 'N/A'
-        },
-        importer: {
-          name: profile.tradeType === 'import' ? (profile.companyName || 'Importer Co., Ltd.') : (profile.partnerName || 'Overseas Buyer Co., Ltd.'),
-          address: profile.tradeType === 'import' ? 'Seoul, Republic of Korea' : 'Overseas Address',
-          contact: profile.tradeType === 'import' ? (profile.contact || 'N/A') : 'N/A'
-        },
+        invoiceNo: profile.invoiceNo || `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,
+        invoiceDate,
+        date: invoiceDate, // 템플릿 호환용 별칭
+        seller: exporterParty,
+        consignee: importerParty,
+        exporter: exporterParty, // 템플릿 호환용 별칭
+        importer: importerParty, // 템플릿 호환용 별칭
+        departureDate: profile.departureDate || 'N/A',
+        arrivalDate: profile.arrivalDate || 'N/A',
         items: [{
           no: 1,
           description: itemDescription,
+          hsCode: profile.hsCode || hsResult.topCode || 'N/A',
+          countryOfOrigin: profile.countryOfOrigin || 'N/A',
           quantity: quantity,
-          unit: 'PCS',
-          unitPrice: unitPrice,
-          amount: totalAmount
+          unit: profile.unit || 'PCS',
+          unitPrice: profile.unitPrice ? Number(profile.unitPrice) : unitPrice,
+          amount: profile.totalAmount ? Number(profile.totalAmount) : totalAmount,
+          netWeight: invNetWeight,
+          grossWeight: invGrossWeight,
+          dimensions: profile.measurement || 'N/A'
         }],
-        totalAmount,
-        currency,
+        totalAmount: profile.totalAmount ? Number(profile.totalAmount) : totalAmount,
+        currency: profile.currency || currency,
         incoterms: profile.incoterms || 'FOB',
         loadPort: profile.loadPort || 'N/A',
         dischargePort: profile.dischargePort || 'N/A',
-        paymentTerms
+        paymentTerms,
+        signedBy: profile.signedBy || profile.signerName || profile.companyName || 'Authorized Signature'
       };
 
       generatedDocs.invoice = invoice;
@@ -97,16 +122,32 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
       const grossWeight = Number(profile.weight) || 0;
       const netWeight = Math.round(grossWeight * 0.9 * 10) / 10;
 
+      const plSeller = generatedDocs.invoice?.seller || { name: profile.companyName, address: '', contact: '' };
+      const plConsignee = generatedDocs.invoice?.consignee || { name: 'N/A', address: '', contact: '' };
+
       const packingList: PackingListData = {
         plNo: `PL-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,
         date: new Date().toISOString().split('T')[0],
-        invoiceRef: generatedDocs.invoice?.invoiceNo || 'N/A',
-        exporter: generatedDocs.invoice?.exporter || { name: profile.companyName, address: '', contact: '' },
-        importer: generatedDocs.invoice?.importer || { name: 'N/A', address: '', contact: '' },
+        invoiceNo: generatedDocs.invoice?.invoiceNo || 'N/A',
+        invoiceRef: generatedDocs.invoice?.invoiceNo || 'N/A', // 템플릿 호환용 별칭
+        seller: plSeller,
+        consignee: plConsignee,
+        exporter: plSeller, // 템플릿 호환용 별칭
+        importer: plConsignee, // 템플릿 호환용 별칭
+        shippingMarks: profile.shippingMarks || 'N/M',
+        packageCount: Number(profile.packageCount) || qty,
+        packageType: profile.packageType || 'CTN',
+        netWeight,
+        grossWeight,
+        measurement: profile.measurement || 'N/A',
         items: [{
           no: 1,
           description: itemDescription,
+          hsCode: profile.hsCode || hsResult.topCode || 'N/A',
           quantity: qty,
+          unit: profile.unit || 'PCS',
+          unitPrice: generatedDocs.invoice?.items?.[0]?.unitPrice ?? 0,
+          amount: generatedDocs.invoice?.items?.[0]?.amount ?? 0,
           netWeight,
           grossWeight,
           dimensions: `${Math.ceil(Math.cbrt(qty) * 10)}x${Math.ceil(Math.cbrt(qty) * 10)}x${Math.ceil(Math.cbrt(qty) * 8)} cm`
@@ -125,16 +166,27 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     if (coDoc && coDoc.status !== 'not_needed' && profile.tradeType === 'export') {
       logs.push(createLog(this.name, '원산지증명서(C/O) 데이터 조립 중...', 'info'));
       
+      const coIssueDate = new Date().toISOString().split('T')[0];
+      const coExporter = generatedDocs.invoice?.seller || { name: profile.companyName, address: 'Seoul, Korea', contact: '' };
+      const coConsignee = generatedDocs.invoice?.consignee || { name: 'N/A', address: '', contact: '' };
+
       const co: CertificateOfOriginData = {
         coNo: `CO-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,
-        date: new Date().toISOString().split('T')[0],
-        exporter: generatedDocs.invoice?.exporter || { name: profile.companyName, address: 'Seoul, Korea', contact: '' },
-        importer: generatedDocs.invoice?.importer || { name: 'N/A', address: '', contact: '' },
+        issueDate: coIssueDate,
+        date: coIssueDate, // 템플릿 호환용 별칭
+        exporter: coExporter,
+        consignee: coConsignee,
+        importer: coConsignee, // 템플릿 호환용 별칭
         itemDescription,
         hsCode: profile.hsCode || hsResult.topCode || 'N/A',
         quantity: `${profile.quantity || 'N/A'} PCS`,
-        originCountry: 'Republic of Korea',
-        invoiceRef: generatedDocs.invoice?.invoiceNo || 'N/A'
+        countryOfOrigin: profile.countryOfOrigin || 'Republic of Korea',
+        originCountry: profile.countryOfOrigin || 'Republic of Korea', // 템플릿 호환용 별칭
+        destinationCountry: profile.partnerCountry || profile.dischargePort || 'N/A',
+        items: generatedDocs.invoice?.items || [],
+        signedBy: profile.signedBy || profile.signerName || profile.companyName || 'Authorized Signature',
+        invoiceNo: generatedDocs.invoice?.invoiceNo || 'N/A',
+        invoiceRef: generatedDocs.invoice?.invoiceNo || 'N/A' // 템플릿 호환용 별칭
       };
 
       generatedDocs.certificateOfOrigin = co;
@@ -146,9 +198,9 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     if (generatedDocs.invoice) {
       htmlTemplates.invoice = renderInvoiceHTML(generatedDocs.invoice);
     }
-    if (generatedDocs.packingList) {
-      htmlTemplates.packingList = renderPackingListHTML(generatedDocs.packingList);
-    }
+   if (generatedDocs.packingList) {
+  htmlTemplates.packing_list = renderPackingListHTML(generatedDocs.packingList);
+}
     if (generatedDocs.certificateOfOrigin) {
       htmlTemplates.co = renderCertificateOfOriginHTML(generatedDocs.certificateOfOrigin);
     }

@@ -93,6 +93,9 @@ export function determineRequiredDocuments(profile: TradeProfile): DocumentStatu
   });
 
   // 5. 원산지증명서 (C/O) - 수출의 경우 필수
+  // TODO(데모용 placeholder): companyName.includes('산')은 시연 시나리오 분기용 임시 조건임
+  //  (validatorEngine.ts의 co-required 룰과 동일한 핵). 실제 판단 기준은
+  //  "FTA 협정세율 적용 희망 or 상대국 요구"이며 원산지 판정 로직으로 함께 교체해야 함.
   const isExport = profile.tradeType === 'export';
   const isCOCompleted = isExport && profile.companyName.includes('산');
   docs.push({

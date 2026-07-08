@@ -5,6 +5,8 @@ export function renderInvoiceHTML(data: InvoiceData): string {
     <tr>
       <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.no}</td>
       <td style="padding: 10px; border: 1px solid #cbd5e1;"><strong>${item.description}</strong></td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.hsCode || 'N/A'}</td>
+<td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.countryOfOrigin || 'N/A'}</td>
       <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${item.quantity.toLocaleString()}</td>
       <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.unit}</td>
       <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${data.currency} ${item.unitPrice.toFixed(2)}</td>
@@ -84,8 +86,10 @@ export function renderInvoiceHTML(data: InvoiceData): string {
         <thead>
           <tr style="background-color: #1e3a8a; color: #ffffff;">
             <th style="padding: 12px 10px; text-align: center; font-weight: 600; width: 8%; border: 1px solid #1e3a8a;">No.</th>
-            <th style="padding: 12px 10px; text-align: left; font-weight: 600; width: 48%; border: 1px solid #1e3a8a;">Description of Goods</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 600; width: 12%; border: 1px solid #1e3a8a;">Qty</th>
+            <th style="padding: 12px 10px; text-align: left; font-weight: 600; width: 34%; border: 1px solid #1e3a8a;">Description of Goods</th>
+<th style="padding: 12px 10px; text-align: center; font-weight: 600; width: 12%; border: 1px solid #1e3a8a;">HS Code</th>
+<th style="padding: 12px 10px; text-align: center; font-weight: 600; width: 12%; border: 1px solid #1e3a8a;">Origin</th>
+<th style="padding: 12px 10px; text-align: right; font-weight: 600; width: 10%; border: 1px solid #1e3a8a;">Qty</th>
             <th style="padding: 12px 10px; text-align: center; font-weight: 600; width: 10%; border: 1px solid #1e3a8a;">Unit</th>
             <th style="padding: 12px 10px; text-align: right; font-weight: 600; width: 12%; border: 1px solid #1e3a8a;">Unit Price</th>
             <th style="padding: 12px 10px; text-align: right; font-weight: 600; width: 10%; border: 1px solid #1e3a8a;">Amount</th>
@@ -94,7 +98,7 @@ export function renderInvoiceHTML(data: InvoiceData): string {
         <tbody>
           ${itemsHTML}
           <tr style="background-color: #f8fafc; font-weight: bold; font-size: 14px;">
-            <td colspan="4" style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #475569;">TOTAL AMOUNT:</td>
+            <td colspan="6" style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #475569;">TOTAL AMOUNT:</td>
             <td colspan="2" style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #1e3a8a; font-size: 16px;">${data.currency} ${data.totalAmount.toFixed(2)}</td>
           </tr>
         </tbody>
@@ -104,7 +108,7 @@ export function renderInvoiceHTML(data: InvoiceData): string {
       <div style="margin-top: 50px; display: flex; justify-content: flex-end;">
         <div style="text-align: center; width: 250px;">
           <div style="height: 60px; display: flex; align-items: flex-end; justify-content: center; font-family: 'Courier New', Courier, monospace; font-size: 18px; color: #475569; font-style: italic; border-bottom: 1px solid #94a3b8; margin-bottom: 8px; padding-bottom: 5px;">
-            ${data.exporter.name.split(' ')[0]}
+            ${data.signedBy || data.exporter?.name || data.seller?.name || ''}
           </div>
           <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; letter-spacing: 0.05em;">Authorized Signature</div>
         </div>

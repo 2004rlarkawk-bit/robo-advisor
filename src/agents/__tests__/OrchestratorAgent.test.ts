@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { OrchestratorAgent } from '../OrchestratorAgent';
 import { TradeProfile } from '../../types';
-import { Agent, OrchestratorResult, AgentLog } from '../types';
+import { Agent } from '../types';
 
 // Mock agents
 const createMockAgent = (name: string, result: any): Agent => ({
@@ -17,11 +17,18 @@ describe('OrchestratorAgent', () => {
   let mockFeedbackAgent: Agent;
 
   const validProfile: TradeProfile = {
+    tradeType: 'export',
     itemName: '전자제품',
     hsCode: '847330',
-    exportCountry: 'KR',
-    importCountry: 'US',
-    incoterms: 'CIF'
+    loadPort: 'KRPUS',
+    dischargePort: 'USLAX',
+    incoterms: 'CIF',
+    quantity: 100,
+    weight: 500,
+    departureDate: '2026-07-10',
+    arrivalDate: '2026-07-25',
+    companyName: '테스트무역',
+    contact: '010-0000-0000'
   };
 
   beforeEach(() => {
@@ -68,10 +75,10 @@ describe('OrchestratorAgent', () => {
     });
 
     it('HS Code가 없을 때 추천 코드를 자동 보완해야 함', async () => {
-      const profileWithoutHS = { ...validProfile, hsCode: undefined };
+      const profileWithoutHS = { ...validProfile, hsCode: '' };
       const result = await orchestrator.run({ profile: profileWithoutHS, useLLM: false });
 
-      expect(result.hs.topCode).toBe('847330');
+      expect(result.hs?.topCode).toBe('847330');
       const logMessages = result.logs.map(l => l.message);
       expect(logMessages.some(msg => msg.includes('자동 보완'))).toBe(true);
     });
@@ -219,12 +226,15 @@ describe('OrchestratorAgent', () => {
       expect(result.error?.message).toContain('500자');
     });
 
-    it('HS Code 형식이 잘못되면 검증 오류를 반환해야 함', async () => {
+    it('HS Code 형식이 잘못되어도 파이프라인은 계속 진행해야 함 (HSCodeAgent에 위임)', async () => {
       const invalidProfile = { ...validProfile, hsCode: 'ABC123' };
       const result = await orchestrator.run({ profile: invalidProfile, useLLM: false });
 
-      expect(result.error).toBeDefined();
-      expect(result.error?.message).toContain('HS Code');
+      expect(result.error).toBeUndefined();
+      expect(result.hs).toBeDefined();
+      expect(
+        result.logs.some(log => log.level === 'warning' && log.message.includes('HS Code'))
+      ).toBe(true);
     });
 
     it('profile이 null이면 검증 오류를 반환해야 함', async () => {
@@ -254,10 +264,10 @@ describe('OrchestratorAgent', () => {
   });
 
   describe('엣지 케이스', () => {
-    it('빈 문자열을 포함한 프로필을 처리해야 함', async () => {
+    it('공백 문자열만 있는 상품명을 처리해야 함', async () => {
       const profileWithEmptyFields = {
         ...validProfile,
-        exportCountry: ''
+        itemName: '   '
       };
       const result = await orchestrator.run({
         profile: profileWithEmptyFields,
@@ -280,7 +290,7 @@ describe('OrchestratorAgent', () => {
       expect(result.hs).toBeDefined();
     });
 
-    it('매우 긴 HS Code를 처리해야 함', async () => {
+    it('매우 긴 HS Code는 경고 후 계속 진행해야 함', async () => {
       const profileWithLongHSCode = {
         ...validProfile,
         hsCode: '12345678901' // 11자리
@@ -290,8 +300,10 @@ describe('OrchestratorAgent', () => {
         useLLM: false
       });
 
-      expect(result.error).toBeDefined();
-      expect(result.error?.message).toContain('HS Code');
+      expect(result.error).toBeUndefined();
+      expect(
+        result.logs.some(log => log.level === 'warning' && log.message.includes('HS Code'))
+      ).toBe(true);
     });
 
     it('HS Code가 null 값을 반환할 때 처리해야 함', async () => {
@@ -307,7 +319,7 @@ describe('OrchestratorAgent', () => {
         mockFeedbackAgent
       );
 
-      const profileWithoutHS = { ...validProfile, hsCode: undefined };
+      const profileWithoutHS = { ...validProfile, hsCode: '' };
       const result = await orchestratorWithNullHSCode.run({
         profile: profileWithoutHS,
         useLLM: false
@@ -362,7 +374,7 @@ describe('OrchestratorAgent', () => {
     });
 
     it('로그에 타임스탐프를 포함해야 함', async () => {
-      const result = await orchestrator.run({ profile: validProfile, useLJM: false });
+      const result = await orchestrator.run({ profile: validProfile, useLLM: false });
 
       expect(result.logs[0].timestamp).toBeDefined();
       expect(typeof result.logs[0].timestamp).toBe('string');
@@ -419,7 +431,7 @@ describe('OrchestratorAgent', () => {
         useLLM: false
       });
 
-      expect(result.documents.documents.length).toBe(100);
+      expect(result.documents?.documents.length).toBe(100);
     });
   });
 });

@@ -52,6 +52,12 @@ function baseUrl(): string {
 
 function parseXmlItems(xml: string, itemTag: string): Record<string, string>[] {
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
+  // UNI-PASS는 인증 실패·조회 불가 사유를 HTTP 200 + ntceInfo 태그로 전달함.
+  // 이를 던지지 않으면 키 만료가 "데이터 없음"으로 위장되어 조용히 시뮬 폴백된다.
+  const notice = doc.getElementsByTagName('ntceInfo')[0]?.textContent?.trim();
+  if (notice && doc.getElementsByTagName(itemTag).length === 0) {
+    throw new Error(`UNI-PASS 안내: ${notice}`);
+  }
   return Array.from(doc.getElementsByTagName(itemTag)).map((item) => {
     const rec: Record<string, string> = {};
     Array.from(item.children).forEach((c) => {

@@ -124,21 +124,21 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     const result = await orchestrator.run({ profile: testProfile, useLLM: false });
 
     // 1. HSCode 결과 검증
-    expect(result.hs.topCode).toBe('8517.62-0000');
-    expect(result.hs.candidates.length).toBeGreaterThan(0);
+    expect(result.hs?.topCode).toBe('8517.62-0000');
+    expect(result.hs?.candidates.length).toBeGreaterThan(0);
 
     // 2. Documents 결과 검증 (CIF 조건이므로 보험증서 포함 총 6개)
-    expect(result.documents.documents).toHaveLength(6);
-    expect(result.documents.generatedDocs.invoice).toBeDefined();
-    expect(result.documents.generatedDocs.packingList).toBeDefined();
+    expect(result.documents?.documents).toHaveLength(6);
+    expect(result.documents?.generatedDocs.invoice).toBeDefined();
+    expect(result.documents?.generatedDocs.packingList).toBeDefined();
 
     // 3. Issues 결과 검증 (중량 누락 경고 확인)
-    const weightIssue = result.issues.issues.find(i => i.id === 'weight-missing');
+    const weightIssue = result.issues?.issues.find(i => i.id === 'weight-missing');
     expect(weightIssue).toBeDefined();
 
     // 4. Feedback 결과 검증
-    expect(result.feedback.message).toContain('IT 기기');
-    expect(result.feedback.message).toContain('중량');
+    expect(result.feedback?.message).toContain('IT 기기');
+    expect(result.feedback?.message).toContain('중량');
 
     // 5. 전체 실행 로그 확인
     expect(result.logs.length).toBeGreaterThan(0);
@@ -166,16 +166,16 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     const result = await orchestrator.run({ profile: cifProfile, useLLM: false });
 
     // 적하보험증권 포함 확인
-    const insuranceDoc = result.documents.documents.find(d => d.id === 'insurance');
+    const insuranceDoc = result.documents?.documents.find(d => d.id === 'insurance');
     expect(insuranceDoc).toBeDefined();
 
     // 누락 에러 검증
-    const insuranceIssue = result.issues.issues.find(i => i.id === 'insurance-missing');
+    const insuranceIssue = result.issues?.issues.find(i => i.id === 'insurance-missing');
     expect(insuranceIssue).toBeDefined();
     expect(insuranceIssue?.severity).toBe('error');
 
     // 피드백 검증
-    expect(result.feedback.message).toContain('적하보험증권을 준비하세요');
+    expect(result.feedback?.message).toContain('적하보험증권을 준비하세요');
   });
 
   it('EXW 조건의 경우 B/L이 비필수(not_needed) 처리되고 정보성 안내가 발생한다', async () => {
@@ -198,16 +198,16 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     const result = await orchestrator.run({ profile: exwProfile, useLLM: false });
 
     // B/L 비필수 검증
-    const blDoc = result.documents.documents.find(d => d.id === 'bl');
+    const blDoc = result.documents?.documents.find(d => d.id === 'bl');
     expect(blDoc?.status).toBe('not_needed');
 
     // 정보성 알림 검증
-    const exwIssue = result.issues.issues.find(i => i.id === 'exw-responsibility-info');
+    const exwIssue = result.issues?.issues.find(i => i.id === 'exw-responsibility-info');
     expect(exwIssue).toBeDefined();
     expect(exwIssue?.severity).toBe('info');
 
     // 피드백 검증
-    expect(result.feedback.message).toContain('공장 인도 조건입니다');
+    expect(result.feedback?.message).toContain('공장 인도 조건입니다');
   });
 
   const baseAsyncProfile: TradeProfile = {

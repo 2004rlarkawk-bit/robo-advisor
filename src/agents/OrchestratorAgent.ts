@@ -18,7 +18,6 @@ interface ValidationError {
 export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?: boolean }, OrchestratorResult> {
   readonly name = "Orchestrator Agent";
   private readonly config: OrchestratorAgentConfig;
-  private readonly executionId = this.generateExecutionId();
 
   private hsCodeAgent: Agent;
   private documentAgent: Agent;
@@ -62,9 +61,8 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
       errors.push({ field: "itemName", message: "상품명은 500자 이하여야 합니다." });
     }
 
-    if (profile.hsCode && !/^\d{6,10}$/.test(profile.hsCode)) {
-      errors.push({ field: "hsCode", message: "HS Code는 6-10자리 숫자여야 합니다." });
-    }
+    // hsCode 형식 오류는 치명 오류로 다루지 않는다 — HSCodeAgent가 invalid/needs_review
+    // 상태로 판정하고 ComplianceAgent가 보완 이슈로 변환해 사용자 수정 흐름으로 이어진다.
 
     return errors;
   }
@@ -80,11 +78,13 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
 
   async run(input: { profile: TradeProfile; useLLM?: boolean }): Promise<OrchestratorResult> {
     const startTime = Date.now();
+    // 동시 실행 시에도 각 run() 호출이 고유 ID를 갖도록 실행마다 새로 생성
+    const executionId = this.generateExecutionId();
     const { profile, useLLM = false } = input;
     const logs: AgentLog[] = [];
 
     logs.push(
-      createLog(this.name, `[${this.executionId}] 오케스트레이터 파이프라인 가동 시작...`, "info")
+      createLog(this.name, `[${executionId}] 오케스트레이터 파이프라인 가동 시작...`, "info")
     );
 
     try {
@@ -94,6 +94,19 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
           const errorMsg = validationErrors.map(e => `${e.field}: ${e.message}`).join(", ");
           logs.push(createLog(this.name, `입력값 검증 실패: ${errorMsg}`, "error"));
           throw new Error(`입력값 검증 오류: ${errorMsg}`);
+        }
+
+        if (profile?.hsCode) {
+          const digitsOnly = profile.hsCode.replace(/[.\-\s]/g, "");
+          if (!/^\d{6,10}$/.test(digitsOnly)) {
+            logs.push(
+              createLog(
+                this.name,
+                `HS Code 형식이 비표준입니다("${profile.hsCode}") — HSCodeAgent 검증으로 위임합니다.`,
+                "warning"
+              )
+            );
+          }
         }
       }
 
@@ -179,7 +192,7 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
       logs.push(
         createLog(
           this.name,
-          `[${this.executionId}] 오케스트레이터 전체 에이전트 협업 루프 완료. (소요시간: ${executionTime}ms)`,
+          `[${executionId}] 오케스트레이터 전체 에이전트 협업 루프 완료. (소요시간: ${executionTime}ms)`,
           "success"
         )
       );
@@ -190,7 +203,7 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
         issues: compResult,
         feedback: feedResult,
         logs,
-        executionId: this.executionId,
+        executionId: executionId,
         executionTime
       };
     } catch (error) {
@@ -201,7 +214,7 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
       logs.push(
         createLog(
           this.name,
-          `[${this.executionId}] 오케스트레이터 전체 파이프라인 실패: ${errorMsg}`,
+          `[${executionId}] 오케스트레이터 전체 파이프라인 실패: ${errorMsg}`,
           "error"
         )
       );
@@ -212,8 +225,8 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
         issues: null as any,
         feedback: null as any,
         logs,
-        executionId: this.executionId,
-        executionTime: Date.now() - startTime,
+        executionId: executionId,
+        executionTime,
         error: {
           message: errorMsg,
           stack: errorStack,
