@@ -119,7 +119,7 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
       logs.push(createLog(this.name, '패킹리스트(Packing List) 데이터 조립 중...', 'info'));
       
       const qty = Number(profile.quantity) || 0;
-      const grossWeight = Number(profile.weight) || 0;
+      const grossWeight = Number(profile.grossWeight ?? profile.weight) || 0;
       const netWeight = Math.round(grossWeight * 0.9 * 10) / 10;
 
       const plSeller = generatedDocs.invoice?.seller || { name: profile.companyName, address: '', contact: '' };
@@ -135,6 +135,7 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
         exporter: plSeller, // 템플릿 호환용 별칭
         importer: plConsignee, // 템플릿 호환용 별칭
         shippingMarks: profile.shippingMarks || 'N/M',
+        signedBy: profile.signedBy || profile.signerName || profile.companyName || 'Authorized Signature',
         packageCount: Number(profile.packageCount) || qty,
         packageType: profile.packageType || 'CTN',
         netWeight,
@@ -152,7 +153,7 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
           grossWeight,
           dimensions: `${Math.ceil(Math.cbrt(qty) * 10)}x${Math.ceil(Math.cbrt(qty) * 10)}x${Math.ceil(Math.cbrt(qty) * 8)} cm`
         }],
-        totalPackages: qty,
+        totalPackages: Number(profile.packageCount) || qty,
         totalNetWeight: netWeight,
         totalGrossWeight: grossWeight
       };
