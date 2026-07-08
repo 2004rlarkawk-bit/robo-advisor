@@ -6,12 +6,52 @@
  */
 /*수정했습니다
 */
-import type { SavedTrade, TradeProfile, DocumentStatus, GeneratedDocuments, ValidationIssue } from '../types';
+import { supabase } from '../lib/supabase';
+import type { SavedTrade, TradeProfile, DocumentStatus, GeneratedDocuments, TradeStatus, ValidationIssue } from '../types';
 
 const STORAGE_KEY = 'portai_saved_trades';
 const SETTINGS_KEY = 'portai_settings';
 
 // ===== 거래 이력 저장/조회 =====
+
+// [EDIT: Trade Persistence] Supabase trades 테이블에서 읽어오는 row 형태입니다.
+interface TradeRow {
+  id: string;
+  profile: TradeProfile;
+  documents: DocumentStatus[] | null;
+  generated_docs: GeneratedDocuments | null;
+  issues: ValidationIssue[] | null;
+  status: TradeStatus | null;
+  generated_at?: string | null;
+  submitted_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+// [EDIT: Trade Persistence] Supabase trades row를 SavedTrade 타입으로 변환하는 공통 함수입니다.
+function mapTradeRow(row: TradeRow): SavedTrade {
+  return {
+    id: row.id,
+    profile: row.profile,
+    documents: row.documents || [],
+    generatedDocs: row.generated_docs ?? undefined,
+    issues: row.issues || [],
+    status: row.status ?? 'generated',
+    generatedAt: row.generated_at ?? null,
+    submittedAt: row.submitted_at ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+// [EDIT: Trade Persistence] 프론트에서 전달한 user_id를 믿지 않고 Supabase 세션에서 현재 사용자만 가져옵니다.
+async function getRequiredUserId(): Promise<string> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  const userId = userData.user?.id;
+  if (!userId) throw new Error('로그인이 필요합니다.');
+  return userId;
+}
 
 export function getSavedTrades(): SavedTrade[] {
   try {
@@ -23,34 +63,148 @@ export function getSavedTrades(): SavedTrade[] {
   }
 }
 
-export function saveTrade(
+export async function saveTrade(
   profile: TradeProfile,
   documents: DocumentStatus[],
   issues: ValidationIssue[],
-  generatedDocs?: GeneratedDocuments
-): SavedTrade {
-  const trades = getSavedTrades();
+  generatedDocs?: GeneratedDocuments,
+  options?: {
+    tradeId?: string | null;
+    status?: TradeStatus;
+  }
+): Promise<SavedTrade> {
+  // [EDIT: Trade Persistence] 현재 로그인한 사용자의 id만 서버 세션에서 읽어 trades.user_id에 사용합니다.
+  const userId = await getRequiredUserId();
+
   const now = new Date().toISOString();
   
-  const newTrade: SavedTrade = {
-    id: `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    profile,
-    documents,
-    generatedDocs,
-    issues,
-    createdAt: now,
-    updatedAt: now,
+  // [EDIT: Trade Persistence] 같은 거래에서 다시 생성하면 새 row를 만들지 않고 기존 row를 업데이트합니다.
+  const payload = {
+      user_id: userId,
+      profile,
+      documents,
+      generated_docs: generatedDocs,
+      issues,
+      status: options?.status ?? 'generated',
+      generated_at: now,
+      submitted_at: null,
   };
 
-  trades.unshift(newTrade); // 최신순 정렬
+  const query = options?.tradeId
+    ? supabase
+        .from('trades')
+        .update(payload)
+        .eq('id', options.tradeId)
+        .eq('user_id', userId)
+        .select()
+        .single()
+    : supabase
+        .from('trades')
+        .insert(payload)
+        .select()
+        .single();
 
-  // 최대 50건까지만 보관
-  if (trades.length > 50) {
-    trades.splice(50);
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Supabase 저장 실패:', error);
+    throw error;
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
-  return newTrade;
+  return mapTradeRow(data);
+}
+
+// [EDIT: Trade Persistence] 캐시에 남은 currentTradeId가 실제 DB에 존재하는지 현재 사용자 범위에서 확인합니다.
+export async function fetchSavedTradeById(id: string): Promise<SavedTrade | null> {
+  const userId = await getRequiredUserId();
+
+  const { data, error } = await supabase
+    .from('trades')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapTradeRow(data) : null;
+}
+
+// [EDIT: Trade Persistence] 전체 문서 전송은 새 row를 만들지 않고 같은 거래 row의 상태만 submitted로 갱신합니다.
+export async function markTradeAsSubmitted(
+  tradeId: string,
+  latestData: {
+    profile: TradeProfile;
+    documents: DocumentStatus[];
+    issues: ValidationIssue[];
+    generatedDocs?: GeneratedDocuments;
+  }
+): Promise<SavedTrade> {
+  const userId = await getRequiredUserId();
+  const submittedAt = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('trades')
+    .update({
+      profile: latestData.profile,
+      documents: latestData.documents,
+      generated_docs: latestData.generatedDocs,
+      issues: latestData.issues,
+      status: 'submitted',
+      submitted_at: submittedAt,
+    })
+    .eq('id', tradeId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Supabase 전송 상태 업데이트 실패:', error);
+    throw error;
+  }
+
+  return mapTradeRow(data);
+}
+
+// [EDIT: Document Management] 문서관리 목록은 Supabase 조회 단계에서 status를 필터링할 수 있습니다.
+export async function fetchSavedTrades(status?: TradeStatus): Promise<SavedTrade[]> {
+  let query = supabase
+    .from('trades')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (status) {
+    query = query.eq('status', status);
+  }
+
+  const { data, error } = await query;
+
+  if (error) throw error;
+
+  return (data || []).map(mapTradeRow);
+}
+
+// [EDIT: Supabase Auth] RLS 정책에 따라 본인 trade만 삭제됩니다.
+export async function deleteSavedTrade(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('trades')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+// [EDIT: Supabase Auth] 로그인한 사용자에게 보이는 모든 trade를 삭제합니다.
+export async function clearSavedTrades(): Promise<void> {
+  // [EDIT: Document Management] 문서관리 화면에 보이는 최종 전송 거래만 전체 삭제 대상으로 삼습니다.
+  const trades = await fetchSavedTrades('submitted');
+  if (trades.length === 0) return;
+
+  const { error } = await supabase
+    .from('trades')
+    .delete()
+    .in('id', trades.map((trade) => trade.id));
+
+  if (error) throw error;
 }
 
 export function deleteTrade(id: string): void {
