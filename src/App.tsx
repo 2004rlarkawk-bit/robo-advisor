@@ -1776,11 +1776,11 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                     <span className="result-stat-value">{completedDocsCount}</span>
                   </div>
                   <div className="result-stat-card">
-                    <span className="result-stat-label">준비중</span>
+                    <span className="result-stat-label">양식 준비 중</span>
                     <span className="result-stat-value">{pendingTemplateCount}</span>
                   </div>
                   <div className="result-stat-card">
-                    <span className="result-stat-label">검토 필요</span>
+                    <span className="result-stat-label">보완 필요</span>
                     <span className="result-stat-value">{reviewDocsCount}</span>
                   </div>
                 </div>
@@ -1892,7 +1892,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                 <div className="result-column result-review-full">
                     <div className="col-header">
                       <div className="col-number">3</div>
-                      <h3 className="col-title">검토 및 누락 항목 안내</h3>
+                      <h3 className="col-title">검토 및 입력 보완 안내</h3>
                     </div>
 
                     <div className="review-summary-line">
