@@ -315,7 +315,15 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(duty).toBeDefined();
     expect(duty?.severity).toBe('info');
     expect(duty?.message).toContain('예상 관세액');
-    expect(duty?.message).toContain('%');
+
+    // 시뮬레이션 입력은 결정적이므로 산술까지 검증한다:
+    // USD 10,000 × 1,385.5원 = 13,855,000원 (과세가격) × 8% (기본세율) = 1,108,400원
+    expect(duty?.message).toContain('13,855,000');
+    expect(duty?.message).toContain('8%');
+    expect(duty?.message).toContain('1,108,400');
+
+    const dutiable = issues.find(i => i.id === 'dutiable-value-info');
+    expect(dutiable?.message).toContain('13,855,000');
   });
 
   it('수출 거래에서는 예상 관세액 이슈가 없다', async () => {

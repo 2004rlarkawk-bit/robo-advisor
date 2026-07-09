@@ -1,13 +1,38 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { OrchestratorAgent } from '../OrchestratorAgent';
 import { TradeProfile } from '../../types';
-import { Agent } from '../types';
+import { Agent, HSCodeResult, DocumentResult, ComplianceResult, FeedbackResult } from '../types';
 
 // Mock agents
 const createMockAgent = (name: string, result: any): Agent => ({
   name,
   run: vi.fn().mockResolvedValue(result)
 });
+
+// 모킹 결과를 실제 에이전트 계약 타입으로 선언 — 계약이 바뀌면 이 파일이 컴파일 단계에서 깨진다
+const hsMockResult: HSCodeResult = {
+  topCode: '847330',
+  candidates: [
+    { code: '8473.30', description: '사무용 기계의 부분품', confidence: '높음', reasoning: '모킹 후보 1' },
+    { code: '8473.50', description: '기타 부분품과 부속품', confidence: '보통', reasoning: '모킹 후보 2' }
+  ],
+  status: 'valid',
+  formattedCode: '8473.30',
+  validationMessage: '유효한 HS CODE 형식입니다.'
+};
+
+const docMockResult: DocumentResult = {
+  documents: [
+    { id: 'invoice', name: '상업송장(Invoice)', status: 'completed', statusText: '생성 완료' },
+    { id: 'packing_list', name: '패킹리스트(Packing List)', status: 'completed', statusText: '생성 완료' }
+  ],
+  generatedDocs: {},
+  htmlTemplates: {}
+};
+
+const compMockResult: ComplianceResult = { issues: [] };
+
+const feedMockResult: FeedbackResult = { message: '모든 통관 서류가 규정에 부합합니다.' };
 
 describe('OrchestratorAgent', () => {
   let orchestrator: OrchestratorAgent;
@@ -32,26 +57,10 @@ describe('OrchestratorAgent', () => {
   };
 
   beforeEach(() => {
-    mockHSCodeAgent = createMockAgent('HSCodeAgent', {
-      topCode: '847330',
-      suggestions: ['847330', '847350']
-    });
-
-    mockDocumentAgent = createMockAgent('DocumentAgent', {
-      documents: [
-        { type: 'INVOICE', content: 'Sample Invoice' },
-        { type: 'PACKING_LIST', content: 'Sample Packing List' }
-      ]
-    });
-
-    mockComplianceAgent = createMockAgent('ComplianceAgent', {
-      issues: []
-    });
-
-    mockFeedbackAgent = createMockAgent('FeedbackAgent', {
-      recommendations: ['All documents are ready'],
-      isReady: true
-    });
+    mockHSCodeAgent = createMockAgent('HSCodeAgent', hsMockResult);
+    mockDocumentAgent = createMockAgent('DocumentAgent', docMockResult);
+    mockComplianceAgent = createMockAgent('ComplianceAgent', compMockResult);
+    mockFeedbackAgent = createMockAgent('FeedbackAgent', feedMockResult);
 
     orchestrator = new OrchestratorAgent(
       { timeout: 5000, validateInput: true },
@@ -81,6 +90,13 @@ describe('OrchestratorAgent', () => {
       expect(result.hs?.topCode).toBe('847330');
       const logMessages = result.logs.map(l => l.message);
       expect(logMessages.some(msg => msg.includes('자동 보완'))).toBe(true);
+
+      // 보완된 코드가 하위 에이전트(DocumentAgent)에 실제로 전파되는지 검증
+      expect(mockDocumentAgent.run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          profile: expect.objectContaining({ hsCode: '847330' })
+        })
+      );
     });
 
     it('실행 시간을 기록해야 함', async () => {
@@ -259,7 +275,11 @@ describe('OrchestratorAgent', () => {
         useLLM: false
       });
 
-      expect(result.hs).toBeDefined();
+      // 주의: 실패 경로에서도 result.hs는 null로 채워져 toBeDefined()가 통과하므로
+      // 파이프라인이 실제로 성공했는지(error 없음 + 에이전트 실행됨)를 검증해야 한다.
+      expect(result.error).toBeUndefined();
+      expect(result.hs?.topCode).toBe('847330');
+      expect(mockHSCodeAgent.run).toHaveBeenCalled();
     });
   });
 
@@ -287,7 +307,8 @@ describe('OrchestratorAgent', () => {
         useLLM: false
       });
 
-      expect(result.hs).toBeDefined();
+      expect(result.error).toBeUndefined();
+      expect(result.hs?.topCode).toBe('847330');
     });
 
     it('매우 긴 HS Code는 경고 후 계속 진행해야 함', async () => {
@@ -392,7 +413,8 @@ describe('OrchestratorAgent', () => {
 
       results.forEach(result => {
         expect(result.executionId).toBeDefined();
-        expect(result.hs).toBeDefined();
+        expect(result.error).toBeUndefined();
+        expect(result.hs?.topCode).toBe('847330');
       });
 
       // 각 실행이 고유한 executionId를 가져야 함
@@ -410,11 +432,15 @@ describe('OrchestratorAgent', () => {
     });
 
     it('대량의 문서를 처리할 수 있어야 함', async () => {
-      const largeDocumentResult = {
+      const largeDocumentResult: DocumentResult = {
         documents: Array.from({ length: 100 }, (_, i) => ({
-          type: `DOC_${i}`,
-          content: 'Sample'.repeat(1000)
-        }))
+          id: `doc_${i}`,
+          name: `문서 ${i}`,
+          status: 'completed' as const,
+          statusText: '생성 완료'
+        })),
+        generatedDocs: {},
+        htmlTemplates: {}
       };
 
       const mockLargeDocumentAgent = createMockAgent('DocumentAgent', largeDocumentResult);
