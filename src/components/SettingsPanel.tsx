@@ -12,6 +12,7 @@
 import { useState } from 'react';
 import { KeyRound, CheckCircle2, XCircle, Loader2, Trash2, PlugZap } from 'lucide-react';
 import { setApiKey, hasApiKey, clearApiKey } from '../services/claudeService';
+import { getSettings, saveSettings } from '../services/storageService';
 import {
   setDataGoKrKey, hasDataGoKrKey, clearDataGoKrKey,
   setNtsBusinessKey, hasNtsBusinessKey, clearNtsBusinessKey,
@@ -126,6 +127,35 @@ function KeyRow({ title, description, placeholder, saved, onSave, onClear, onTes
   );
 }
 
+function LLMToggleRow() {
+  const [useLLM, setUseLLM] = useState(getSettings().useLLM);
+
+  const handleToggle = () => {
+    const next = !useLLM;
+    setUseLLM(next);
+    saveSettings({ useLLM: next });
+  };
+
+  return (
+    <div className="form-card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <h2 className="card-title" style={{ margin: 0 }}>AI(LLM) 기능 사용</h2>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '6px 0 0' }}>
+            끄면 문서 생성·재검증 시 Claude API를 호출하지 않고 로컬 사전과 룰 기반으로만 동작합니다 (API 비용 절약).
+          </p>
+        </div>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={useLLM} onChange={handleToggle} style={{ width: 18, height: 18 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: useLLM ? '#16a34a' : '#94a3b8' }}>
+            {useLLM ? '사용 중' : '꺼짐'}
+          </span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPanel() {
   return (
     <div>
@@ -135,6 +165,8 @@ export default function SettingsPanel() {
           API 키를 등록하면 실데이터 기반으로 동작합니다. 미등록 시에도 모든 기능은 시뮬레이션 모드로 이용 가능합니다.
         </p>
       </div>
+
+      <LLMToggleRow />
 
       <KeyRow
         title="Claude API 키"

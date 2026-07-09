@@ -146,7 +146,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(startLog).toBeDefined();
   });
 
-  it('CIF 조건의 경우 적하보험증권 누락 에러 및 책임 안내 피드백이 발생한다', async () => {
+  it('CIF 조건의 경우 적하보험증권 준비 확인 경고 및 책임 안내 피드백이 발생한다', async () => {
     const cifProfile: TradeProfile = {
       tradeType: 'export',
       itemName: '기계부품',
@@ -168,14 +168,69 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     // 적하보험증권 포함 확인
     const insuranceDoc = result.documents?.documents.find(d => d.id === 'insurance');
     expect(insuranceDoc).toBeDefined();
+    expect(insuranceDoc?.status).toBe('not_started');
 
-    // 누락 에러 검증
+    // 준비 확인 경고 검증 — 해소 수단(insuranceConfirmed)이 있으므로 error가 아닌 warning
     const insuranceIssue = result.issues?.issues.find(i => i.id === 'insurance-missing');
     expect(insuranceIssue).toBeDefined();
-    expect(insuranceIssue?.severity).toBe('error');
+    expect(insuranceIssue?.severity).toBe('warning');
 
     // 피드백 검증
     expect(result.feedback?.message).toContain('적하보험증권을 준비하세요');
+  });
+
+  it('CIF 조건에서 적하보험증권 준비를 확인하면 이슈가 해소되고 서류가 완료 처리된다', async () => {
+    const cifConfirmedProfile: TradeProfile = {
+      tradeType: 'export',
+      itemName: '기계부품',
+      hsCode: '8479-89-9090',
+      loadPort: '부산항',
+      dischargePort: '상하이항',
+      incoterms: 'CIF',
+      quantity: 100,
+      weight: 500,
+      departureDate: '2026-07-01',
+      arrivalDate: '2026-07-05',
+      companyName: '수출상사',
+      contact: '010-1234-5678',
+      insuranceConfirmed: true
+    };
+
+    const orchestrator = new OrchestratorAgent();
+    const result = await orchestrator.run({ profile: cifConfirmedProfile, useLLM: false });
+
+    const insuranceIssue = result.issues?.issues.find(i => i.id === 'insurance-missing');
+    expect(insuranceIssue).toBeUndefined();
+
+    const insuranceDoc = result.documents?.documents.find(d => d.id === 'insurance');
+    expect(insuranceDoc?.status).toBe('completed');
+  });
+
+  it('수출 거래에서 원산지증명서 발급 확인(coIssuanceConfirmed) 시 co-required 이슈가 해소된다', async () => {
+    const base: TradeProfile = {
+      tradeType: 'export',
+      itemName: '기계부품',
+      hsCode: '8479-89-9090',
+      loadPort: '부산항',
+      dischargePort: '상하이항',
+      incoterms: 'FOB',
+      quantity: 100,
+      weight: 500,
+      departureDate: '2026-07-01',
+      arrivalDate: '2026-07-05',
+      companyName: '수출상사',
+      contact: '010-1234-5678'
+    };
+
+    const orchestrator = new OrchestratorAgent();
+
+    const before = await orchestrator.run({ profile: base, useLLM: false });
+    expect(before.issues?.issues.find(i => i.id === 'co-required')).toBeDefined();
+    expect(before.documents?.documents.find(d => d.id === 'co')?.status).toBe('not_started');
+
+    const after = await orchestrator.run({ profile: { ...base, coIssuanceConfirmed: true, countryOfOrigin: '대한민국' }, useLLM: false });
+    expect(after.issues?.issues.find(i => i.id === 'co-required')).toBeUndefined();
+    expect(after.documents?.documents.find(d => d.id === 'co')?.status).toBe('completed');
   });
 
   it('EXW 조건의 경우 B/L이 비필수(not_needed) 처리되고 정보성 안내가 발생한다', async () => {

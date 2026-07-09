@@ -24,7 +24,7 @@ import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade } from './typ
 import SettingsPanel from './components/SettingsPanel';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
-import { saveTrade } from './services/storageService';
+import { saveTrade, getSettings } from './services/storageService';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
 import html2canvas from 'html2canvas';
@@ -214,6 +214,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
   const consoleEndRef = useRef<HTMLDivElement>(null);
 
+  // 재검증(rerunAgents) 동시 실행 제어 — 마지막 요청의 결과만 반영한다
+  const rerunSeqRef = useRef(0);
+  const [isRevalidating, setIsRevalidating] = useState(false);
+
   // Auto-scroll console logs
   useEffect(() => {
     if (consoleEndRef.current) {
@@ -230,6 +234,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     const hsIssue = issues.find(i => i.field === 'hsCode');
     if (!hsIssue) {
       setMobileHSCode('');
+    }
+    const coIssue = issues.find(i => i.docType === 'co');
+    if (!coIssue) {
+      setMobileOrigin('');
     }
   }, [issues]);
 
@@ -390,6 +398,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
       // 7. 거래 조건 / 운임 정보
       incoterms: 'CIF',
+      insuranceConfirmed: true, // CIF 필수 서류인 적하보험증권 준비 완료 상태 ("모든 규정 정상 통과" 시나리오)
       paymentTerms: 'T/T 30 days',
       reasonForExport: 'Commercial transaction',
       freightTerms: 'Collect',
@@ -444,17 +453,22 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   setConsoleLogs([]);
   setHtmlTemplates({});
   setHsCandidates([]);
+  setAiFeedback('');
+  setMobileWeight('');
+  setMobileHSCode('');
+  setMobileOrigin('');
 };
 
   // Run the multi-agent pipeline simulator
   const handleGenerateDocuments = async () => {
+    if (isProcessing) return; // 빠른 더블클릭으로 파이프라인이 중복 실행되는 것 방지
     setIsProcessing(true);
     setShowConsole(true);
     setConsoleLogs([]);
 
     try {
       const orchestrator = new OrchestratorAgent();
-      const result = await orchestrator.run({ profile, useLLM: true });
+      const result = await orchestrator.run({ profile, useLLM: getSettings().useLLM });
 
       // Simulate terminal printing for all logs chronologically
       for (let i = 0; i < result.logs.length; i++) {
@@ -510,13 +524,19 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   };
 
   // Re-run validation helper (e.g. after fixing something in mobile view)
+  // 실행 순번(seq)으로 동시 실행을 제어 — 늦게 도착한 낡은 결과가 최신 결과를 덮어쓰지 않는다.
   const rerunAgents = async (updatedProfile: TradeProfile) => {
+    const seq = ++rerunSeqRef.current;
+    setIsRevalidating(true);
     try {
       const orchestrator = new OrchestratorAgent();
-      const result = await orchestrator.run({ profile: updatedProfile, useLLM: true });
+      const result = await orchestrator.run({ profile: updatedProfile, useLLM: getSettings().useLLM });
+
+      if (seq !== rerunSeqRef.current) return; // 더 최신 재검증이 시작됨 — 이 결과는 폐기
 
       if (result.error) {
         console.error('에이전트 재실행 중 오류:', result.error.message);
+        alert(`재검증 중 오류가 발생했습니다: ${result.error.message}\n입력값은 반영되어 있으니 잠시 후 다시 시도해 주세요.`);
         return;
       }
 
@@ -526,7 +546,14 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
       setAiFeedback(result.feedback?.message || '');
       setHsCandidates(result.hs?.candidates || []);
     } catch (error) {
-      console.error(error);
+      if (seq === rerunSeqRef.current) {
+        console.error(error);
+        alert('재검증 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+      }
+    } finally {
+      if (seq === rerunSeqRef.current) {
+        setIsRevalidating(false);
+      }
     }
   };
 
@@ -556,11 +583,19 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   const handleSolveOrigin = async () => {
     if (!mobileOrigin) return;
 
-    // TODO(데모용 placeholder): rulesEngine의 includes('산') 임시 조건을 통과시키기 위한
-    //  문자열 트릭. 원산지 판정 로직 교체 시 profile에 origin 필드를 추가하고 함께 정리할 것.
     const updatedProfile = {
       ...profile,
-      companyName: `${profile.companyName} (${mobileOrigin}산)`
+      countryOfOrigin: mobileOrigin,
+      coIssuanceConfirmed: true
+    };
+    setProfile(updatedProfile);
+    await rerunAgents(updatedProfile);
+  };
+
+  const handleSolveInsurance = async () => {
+    const updatedProfile = {
+      ...profile,
+      insuranceConfirmed: true
     };
     setProfile(updatedProfile);
     await rerunAgents(updatedProfile);
@@ -608,10 +643,21 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
       
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgWidth = 210;
+      const pageHeight = 297; // A4 세로 (mm)
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-      
+
+      // A4 한 장을 넘는 문서는 페이지를 나눠 이어 붙인다 (하단 잘림 방지)
+      let heightLeft = imgHeight;
+      let position = 0;
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      while (heightLeft > 0) {
+        position -= pageHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
       const fileName = getDocFileName(docId);
       pdf.save(fileName);
     } catch (error) {
@@ -1641,9 +1687,9 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       <RotateCcw size={16} />
                       초기화
                     </button>
-                    <button className="btn btn-primary" onClick={handleGenerateDocuments}>
+                    <button className="btn btn-primary" onClick={handleGenerateDocuments} disabled={isProcessing}>
                       <FileText size={16} />
-                      필요 서류 자동 생성
+                      {isProcessing ? '생성 중...' : '필요 서류 자동 생성'}
                     </button>
                   </div>
                 </div>
@@ -1764,23 +1810,34 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                               </div>
                               
                               <div className="preview-actions">
-                                <button 
-                                  className="action-btn-circle" 
-                                  title="미리보기"
-                                  onClick={() => setPreviewDocId(doc.id)}
-                                >
-                                  <Eye size={14} />
-                                </button>
-                                <button 
-                                  className="action-btn-circle" 
-                                  title="다운로드"
-                                  onClick={() => handleDownloadDoc(doc.id)}
-                                >
-                                  <Download size={14} />
-                                </button>
-                                <button className="action-btn-circle" title="편집">
-                                  <Edit3 size={14} />
-                                </button>
+                                {htmlTemplates[doc.id] ? (
+                                  <>
+                                    <button
+                                      className="action-btn-circle"
+                                      title="미리보기"
+                                      onClick={() => setPreviewDocId(doc.id)}
+                                    >
+                                      <Eye size={14} />
+                                    </button>
+                                    <button
+                                      className="action-btn-circle"
+                                      title="다운로드"
+                                      onClick={() => handleDownloadDoc(doc.id)}
+                                    >
+                                      <Download size={14} />
+                                    </button>
+                                    <button className="action-btn-circle" title="편집">
+                                      <Edit3 size={14} />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <span
+                                    title="이 서류의 자동 생성 양식은 준비 중입니다"
+                                    style={{ fontSize: '11px', color: 'var(--text-light)', padding: '4px 8px', border: '1px dashed var(--border-color)', borderRadius: '10px' }}
+                                  >
+                                    양식 준비 중
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1863,8 +1920,8 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                                   value={mobileWeight}
                                   onChange={(e) => setMobileWeight(e.target.value)}
                                 />
-                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveWeight}>
-                                  중량 입력 및 보완 완료
+                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveWeight} disabled={isRevalidating}>
+                                  {isRevalidating ? '재검증 중...' : '중량 입력 및 보완 완료'}
                                 </button>
                               </div>
                             )}
@@ -1921,8 +1978,8 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                                   </div>
                                 )}
 
-                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveHSCode}>
-                                  HS CODE 수정 반영
+                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveHSCode} disabled={isRevalidating}>
+                                  {isRevalidating ? '재검증 중...' : 'HS CODE 수정 반영'}
                                 </button>
                               </div>
                             )}
@@ -1940,8 +1997,17 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                                   <option value="미국">미국 (US)</option>
                                   <option value="중국">중국 (CN)</option>
                                 </select>
-                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveOrigin}>
-                                  원산지증명서 발급 요청
+                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveOrigin} disabled={isRevalidating}>
+                                  {isRevalidating ? '재검증 중...' : '원산지증명서 발급 요청'}
+                                </button>
+                              </div>
+                            )}
+
+                            {issue.id === 'insurance-missing' && (
+                              <div className="mobile-input-group">
+                                <label className="mobile-input-label">CIF 조건 필수 서류 — 적하보험증권을 준비하셨나요?</label>
+                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveInsurance} disabled={isRevalidating}>
+                                  {isRevalidating ? '재검증 중...' : '적하보험증권 준비 완료로 표시'}
                                 </button>
                               </div>
                             )}
@@ -1950,7 +2016,8 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                             {issue.severity !== 'info' &&
                               issue.field !== 'weight' &&
                               issue.field !== 'hsCode' &&
-                              issue.docType !== 'co' && (
+                              issue.docType !== 'co' &&
+                              issue.id !== 'insurance-missing' && (
                               <button className="mobile-btn mobile-btn-secondary" onClick={() => setHasGenerated(false)}>
                                 입력 화면에서 수정
                               </button>
@@ -2081,9 +2148,14 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
               backgroundColor: '#ffffff'
             }}>
               <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>
-                {previewDocId === 'invoice' ? '상업송장(Commercial Invoice) 미리보기' : 
-                 previewDocId === 'packing_list' ? '패킹리스트(Packing List) 미리보기' : 
-                 '원산지증명서(Certificate of Origin) 미리보기'}
+                {(({
+                  invoice: '상업송장(Commercial Invoice)',
+                  packing_list: '패킹리스트(Packing List)',
+                  co: '원산지증명서(Certificate of Origin)',
+                  bl: '선하증권(B/L)',
+                  customs_dec: '통관신고서',
+                  insurance: '적하보험증권(Insurance Policy)',
+                } as Record<string, string>)[previewDocId ?? ''] ?? '문서')} 미리보기
               </h3>
               <button 
                 onClick={() => setPreviewDocId(null)}

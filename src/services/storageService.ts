@@ -72,12 +72,14 @@ export interface AppSettings {
   useLLM: boolean;
 }
 
+// useLLM 기본값 true: 키가 등록돼 있으면 LLM 기능이 바로 동작하는 기존 동작을 유지하고,
+// 설정 페이지에서 끌 수 있게 한다 (API 비용 절약 옵션).
 const DEFAULT_SETTINGS: AppSettings = {
   userName: '',
   companyName: '',
   companyAddress: '',
   claudeApiKey: '',
-  useLLM: false,
+  useLLM: true,
 };
 
 export function getSettings(): AppSettings {
