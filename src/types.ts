@@ -92,13 +92,14 @@ export interface TradeProfile {
   signerPosition?: string;
 }
 
+// 주의: '| string'을 붙이면 유니언이 사실상 string으로 붕괴되어 오타를 컴파일이 못 잡는다
 export type DocumentType =
   | 'invoice'
   | 'packing_list'
   | 'co'
   | 'customs_dec'
   | 'bl'
-  | string;
+  | 'insurance';
 
 export type DocumentStatusType =
   | 'not_started'

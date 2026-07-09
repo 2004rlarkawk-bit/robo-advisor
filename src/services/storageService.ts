@@ -16,7 +16,20 @@ const SETTINGS_KEY = 'portai_settings';
 export function getSavedTrades(): SavedTrade[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    // 형태가 깨진 항목이 하나라도 있으면 문서 관리 탭 렌더링 전체가 죽으므로 걸러낸다
+    return parsed.filter(
+      (t): t is SavedTrade =>
+        !!t &&
+        typeof t === 'object' &&
+        typeof (t as SavedTrade).id === 'string' &&
+        typeof (t as SavedTrade).createdAt === 'string' &&
+        !!(t as SavedTrade).profile &&
+        typeof (t as SavedTrade).profile === 'object' &&
+        Array.isArray((t as SavedTrade).documents) &&
+        Array.isArray((t as SavedTrade).issues)
+    );
   } catch (err) {
     console.warn('저장된 거래 이력 파싱 실패 — 빈 목록 반환:', err);
     return [];
