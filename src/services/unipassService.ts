@@ -126,56 +126,6 @@ export function pickBasicRate(rates: TariffRate[]): TariffRate | null {
   return rates.find((r) => r.typeCode === 'A') ?? rates[0];
 }
 
-// ===== 키 연결 테스트 =====
-
-/**
- * UNI-PASS 키 인증 테스트.
- * 서비스별 샘플 파라미터로 실호출해 관세청 응답의 ntceInfo로 판정한다:
- *  - "…인증키…" 안내       → 키 무효 (throw)
- *  - 조회 0건·파라미터 안내 → 인증 통과 = 키 유효 (테스트용 가짜 번호라 정상)
- * 관세율조회만 실존 HSK(스마트폰)로 실데이터 건수까지 확인한다.
- * fetch 자체가 실패하면 CORS 차단(배포 사이트) 안내를 던진다.
- */
-export async function testUnipassKey(id: UnipassKeyId): Promise<string> {
-  const key = getUnipassKey(id);
-  if (!key) throw new Error('저장된 키가 없습니다. 먼저 키를 저장하세요.');
-  const k = encodeURIComponent(key);
-
-  const paths: Record<UnipassKeyId, string> = {
-    tariff: `trrtQry/retrieveTrrt?crkyCn=${k}&hsSgn=8517130000`,
-    requirement: `xtrnUserReqApreBrkdQry/retrieveXtrnUserReqApreBrkd?crkyCn=${k}&imexTpcd=E&reqApreNo=TEST00000000`,
-    cargo: `cargCsclPrgsInfoQry/retrieveCargCsclPrgsInfo?crkyCn=${k}&blYy=${new Date().getFullYear()}&hblNo=TESTBL000000`,
-    fulfillment: `expDclrNoPrExpFfmnBrkdQry/retrieveExpDclrNoPrExpFfmnBrkd?crkyCn=${k}&expDclrNo=00000000000000`,
-  };
-
-  let xml: string;
-  try {
-    const res = await fetch(`${baseUrl()}/${paths[id]}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    xml = await res.text();
-  } catch {
-    throw new Error(
-      '관세청 서버 호출이 차단되었습니다 (CORS/네트워크). 배포 사이트에서는 테스트가 불가하니 로컬 개발 환경(npm run dev)에서 확인하세요.'
-    );
-  }
-
-  const doc = new DOMParser().parseFromString(xml, 'text/xml');
-  const ntceInfo = doc.getElementsByTagName('ntceInfo')[0]?.textContent?.trim() ?? '';
-
-  if (ntceInfo.includes('인증키')) {
-    throw new Error(`인증키 무효 — 관세청 응답: "${ntceInfo}". UNI-PASS 신청내역에서 승인 상태와 키를 다시 확인하세요.`);
-  }
-
-  if (id === 'tariff') {
-    const count = doc.getElementsByTagName('trrtQryRsltVo').length;
-    if (count > 0) return `인증키 유효 — 스마트폰(8517130000) 세율 ${count}건 조회 성공`;
-  }
-
-  return ntceInfo
-    ? `인증키 유효 — 인증 통과 (테스트 파라미터 안내: ${ntceInfo})`
-    : '인증키 유효 — 인증 통과. 테스트용 가짜 번호라 조회 0건이며, 실제 번호로 조회하면 데이터가 표시됩니다.';
-}
-
 // ===== 2. 수출입 요건승인내역 조회 =====
 
 export interface RequirementApproval {
