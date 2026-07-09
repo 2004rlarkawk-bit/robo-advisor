@@ -15,10 +15,12 @@ import {
   FileSignature, 
   AlertTriangle, 
   CheckCircle2, 
-  Terminal, 
+  Terminal,
   Download,
   Eye,
-  Edit3
+  Edit3,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade } from './types';
 import SettingsPanel from './components/SettingsPanel';
@@ -33,6 +35,7 @@ import jsPDF from 'jspdf';
 
 export default function App() {
   const [activeMenu, setActiveMenu] = useState('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Auth states
   const [user, setUser] = useState<{ name: string; type: 'member' | 'guest' } | null>(null);
@@ -675,6 +678,10 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
   // Calculate statistics — info 수준 이슈는 안내일 뿐 제출을 막지 않음
   const completedDocsCount = documents.filter(d => d.status === 'completed').length;
+  // 결과 상단 통계 바 — 생성 대상인데 자동 생성 양식이 아직 없는 서류(= '양식 준비 중' 카드) 개수
+  const pendingTemplateCount = documents.filter(
+    d => d.status !== 'not_needed' && d.status !== 'not_started' && !htmlTemplates[d.id]
+  ).length;
   const blockingIssuesCount = issues.filter(i => i.severity !== 'info').length;
   const reviewDocsCount = blockingIssuesCount;
 
@@ -756,7 +763,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   return (
     <div className="app-container">
       {/* 1. Left Navigation Sidebar */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="logo-section">
           <div className="logo-icon">🚢</div>
           <div>
@@ -849,6 +856,13 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
       <div className="main-wrapper">
         <header className="header">
           <div className="header-title-sec">
+            <button
+              className="icon-btn sidebar-toggle"
+              onClick={() => setSidebarCollapsed(prev => !prev)}
+              title={sidebarCollapsed ? '메뉴 펼치기' : '메뉴 접기'}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+            </button>
             <span className="platform-badge">Mentoring Project 2026</span>
           </div>
 
@@ -876,7 +890,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
         </header>
 
         <main className="content-body">
-          <div className="workspace-area">
+          <div className={`workspace-area ${hasGenerated && !['settings', 'analysis', 'docs'].includes(activeMenu) ? 'results-wide' : ''}`}>
             {activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'analysis' ? <DataAnalysisPanel />
             : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} />
@@ -1712,7 +1726,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
               </div>
             ) : (
               /* --- 결과 리포트 대시보드 모드 --- */
-              <div className="workspace-area">
+              <div className="workspace-area results-wide">
                 <div className="result-header-summary">
                   <div className="summary-badge-list">
                     <div className="summary-badge">
@@ -1749,6 +1763,26 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                     <Terminal size={14} />
                     에이전트 실행 로그 확인
                   </button>
+                </div>
+
+                {/* 결과 요약 통계 바 */}
+                <div className="result-stats-grid">
+                  <div className="result-stat-card">
+                    <span className="result-stat-label">필요 서류</span>
+                    <span className="result-stat-value">{documents.length}</span>
+                  </div>
+                  <div className="result-stat-card">
+                    <span className="result-stat-label">생성 완료</span>
+                    <span className="result-stat-value">{completedDocsCount}</span>
+                  </div>
+                  <div className="result-stat-card">
+                    <span className="result-stat-label">준비중</span>
+                    <span className="result-stat-value">{pendingTemplateCount}</span>
+                  </div>
+                  <div className="result-stat-card">
+                    <span className="result-stat-label">검토 필요</span>
+                    <span className="result-stat-value">{reviewDocsCount}</span>
+                  </div>
                 </div>
 
                 <div className="result-columns-layout">
@@ -1852,9 +1886,10 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       )}
                     </div>
                   </div>
+                </div>
 
-                  {/* Column 3: AI 검토 및 보완 워크스페이스 */}
-                  <div className="result-column">
+                {/* Section 3: AI 검토 및 보완 워크스페이스 — 스크롤 하단 전체 폭 */}
+                <div className="result-column result-review-full">
                     <div className="col-header">
                       <div className="col-number">3</div>
                       <h3 className="col-title">검토 및 누락 항목 안내</h3>
@@ -2037,20 +2072,19 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       </div>
                     </div>
 
-                    <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
                       <button
                         className="btn btn-primary"
                         onClick={handleSubmitAll}
                         disabled={blockingIssuesCount > 0}
-                        style={{ width: '100%', opacity: blockingIssuesCount > 0 ? 0.6 : 1, cursor: blockingIssuesCount > 0 ? 'not-allowed' : 'pointer' }}
+                        style={{ flex: 1, opacity: blockingIssuesCount > 0 ? 0.6 : 1, cursor: blockingIssuesCount > 0 ? 'not-allowed' : 'pointer' }}
                       >
                         전체 문서 전송
                       </button>
-                      <button className="btn btn-secondary" onClick={() => setHasGenerated(false)} style={{ width: '100%' }}>
+                      <button className="btn btn-secondary" onClick={() => setHasGenerated(false)} style={{ flex: 1 }}>
                         뒤로 가기 (입력 수정)
                       </button>
                     </div>
-                  </div>
                 </div>
               </div>
             )}
