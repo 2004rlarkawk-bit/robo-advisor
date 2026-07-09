@@ -69,6 +69,13 @@ function toYmd(d: Date): string {
   return `${y}${m}${day}`;
 }
 
+/** 해당 날짜가 속한 주의 시작일(일요일) yyyyMMdd */
+function toWeekStartYmd(d: Date): string {
+  const copy = new Date(d);
+  copy.setDate(copy.getDate() - copy.getDay());
+  return toYmd(copy);
+}
+
 /**
  * XML 응답에서 태그 배열 추출 (관세청 GW는 XML 기본).
  * resultCode가 정상(00)이 아니면 throw — 키 만료/인증 실패가
@@ -130,23 +137,31 @@ export async function getCustomsExchangeRate(
 
   if (key) {
     try {
-      const url =
-        `${BASE_1220000}/retrieveTrifFxrtInfo/getRetrieveTrifFxrtInfo` +
-        `?serviceKey=${encodeURIComponent(key)}&aplyBgnDt=${aplyBgnDt}&weekFxrtTpcd=${tpcd}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`환율 API 오류 (${res.status})`);
-      const items = xmlItems(await res.text());
-      const hit = items.find((i) => i.currSgn === currency.toUpperCase());
-      if (hit) {
-        const name = hit.mtryUtNm || hit.currKorNm || '';
-        return {
-          currency: hit.currSgn,
-          currencyName: name,
-          rate: parseFloat(hit.fxrt) / currencyUnitDivisor(hit.currSgn, name),
-          effectiveDate: hit.aplyBgnDt || aplyBgnDt,
-          tradeType,
-          source: 'api',
-        };
+      // 관세청 환율은 주 단위 고시 — 임의 날짜(평일)로 조회하면 빈 결과가 될 수 있어
+      // 해당 주의 시작일(일요일)로 한 번 더 시도한다. 명시 날짜가 오면 그 날짜만 조회.
+      const attempts = date
+        ? [date]
+        : [...new Set([aplyBgnDt, toWeekStartYmd(new Date())])];
+
+      for (const attemptDt of attempts) {
+        const url =
+          `${BASE_1220000}/retrieveTrifFxrtInfo/getRetrieveTrifFxrtInfo` +
+          `?serviceKey=${encodeURIComponent(key)}&aplyBgnDt=${attemptDt}&weekFxrtTpcd=${tpcd}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`환율 API 오류 (${res.status})`);
+        const items = xmlItems(await res.text());
+        const hit = items.find((i) => i.currSgn === currency.toUpperCase());
+        if (hit) {
+          const name = hit.mtryUtNm || hit.currKorNm || '';
+          return {
+            currency: hit.currSgn,
+            currencyName: name,
+            rate: parseFloat(hit.fxrt) / currencyUnitDivisor(hit.currSgn, name),
+            effectiveDate: hit.aplyBgnDt || attemptDt,
+            tradeType,
+            source: 'api',
+          };
+        }
       }
       throw new Error(`통화 ${currency} 미발견`);
     } catch (err) {

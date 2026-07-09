@@ -1,7 +1,9 @@
 import { DocumentType } from '../types';
 
+export type RuledIncoterm = 'EXW' | 'FOB' | 'CIF' | 'DDP' | 'DAP' | 'FCA';
+
 export interface IncotermsRule {
-  incoterm: 'EXW' | 'FOB' | 'CIF' | 'DDP';
+  incoterm: RuledIncoterm;
   description: string;
   exporterResponsibility: string;
   requiredDocuments: DocumentType[];
@@ -10,7 +12,7 @@ export interface IncotermsRule {
   keyBranchingNote: string;
 }
 
-export const INCOTERMS_RULES: Record<'EXW' | 'FOB' | 'CIF' | 'DDP', IncotermsRule> = {
+export const INCOTERMS_RULES: Record<RuledIncoterm, IncotermsRule> = {
   EXW: {
     incoterm: 'EXW',
     description: '공장 인도 조건 (Ex Works)',
@@ -46,13 +48,28 @@ export const INCOTERMS_RULES: Record<'EXW' | 'FOB' | 'CIF' | 'DDP', IncotermsRul
     insuranceRequirement: 'buyer',
     transportMode: 'all',
     keyBranchingNote: '최대 의무 조건. 수입국 통관 및 관세까지 매도인이 부담하므로 수입국 관세율 확인 필수.'
+  },
+  DAP: {
+    incoterm: 'DAP',
+    description: '도착장소 인도 조건 (Delivered At Place)',
+    exporterResponsibility: '지정 목적지 도착까지 운송 매도인 부담 (수입통관 제외)',
+    requiredDocuments: ['invoice', 'packing_list', 'bl'],
+    insuranceRequirement: 'buyer',
+    transportMode: 'all',
+    keyBranchingNote: '지정 목적지까지 운송은 매도인 부담이며, 수입통관·관세는 매수인 부담입니다.'
+  },
+  FCA: {
+    incoterm: 'FCA',
+    description: '운송인 인도 조건 (Free Carrier)',
+    exporterResponsibility: '지정 장소에서 운송인 인도 + 수출통관',
+    requiredDocuments: ['invoice', 'packing_list'],
+    insuranceRequirement: 'buyer',
+    transportMode: 'all',
+    keyBranchingNote: '매수인이 지정한 운송인에게 인도하는 시점에 위험이 이전됩니다. 이후 운송·보험은 매수인 수배 사항입니다.'
   }
 };
 
 export function getIncotermsRule(incoterm: string): IncotermsRule | null {
-  const normalized = incoterm.toUpperCase();
-  if (normalized === 'EXW' || normalized === 'FOB' || normalized === 'CIF' || normalized === 'DDP') {
-    return INCOTERMS_RULES[normalized];
-  }
-  return null;
+  const normalized = incoterm.toUpperCase() as RuledIncoterm;
+  return normalized in INCOTERMS_RULES ? INCOTERMS_RULES[normalized] : null;
 }

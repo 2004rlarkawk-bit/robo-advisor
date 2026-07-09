@@ -26,6 +26,26 @@ export function hasApiKey(): boolean {
 
 export function clearApiKey(): void {
   localStorage.removeItem('portai_claude_api_key');
+  // 설정 JSON(portai_settings)에 남은 사본도 함께 제거 — 한쪽만 지우면
+  // "삭제했는데 키가 남아 보이는" 불일치 상태가 된다.
+  try {
+    const raw = localStorage.getItem('portai_settings');
+    if (raw) {
+      const settings = JSON.parse(raw);
+      if (settings && settings.claudeApiKey) {
+        settings.claudeApiKey = '';
+        localStorage.setItem('portai_settings', JSON.stringify(settings));
+      }
+    }
+  } catch {
+    // 설정 파싱 실패 시 무시 (getSettings가 기본값으로 복구)
+  }
+}
+
+/** LLM 응답에서 JSON 본문 추출 — 마크다운 코드펜스(```json ... ```)로 감싼 응답 대응 */
+export function extractJson(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  return (fenced ? fenced[1] : text).trim();
 }
 
 /** Claude API 직접 호출 (프록시 필요 시 URL 교체) */
@@ -98,17 +118,24 @@ export async function suggestHSCode(itemName: string): Promise<HSCodeSuggestion[
 
 위 품목에 적합한 HS CODE 후보 3개를 추천해 주세요.`;
 
+  let response: string;
   try {
-    const response = await callClaude(systemPrompt, userMessage);
-    const parsed = JSON.parse(response);
-    return Array.isArray(parsed) ? parsed : [];
+    response = await callClaude(systemPrompt, userMessage);
   } catch (error) {
     if (error instanceof Error && error.message === 'CORS_ERROR') {
       return getSimulatedHSCodeSuggestions(itemName);
     }
-    // JSON 파싱 실패 시에도 시뮬레이션
-    console.warn('HS Code 추천 응답 파싱 실패, 시뮬레이션 모드 사용');
-    return getSimulatedHSCodeSuggestions(itemName);
+    // 잘못된 키(401)·쿼터 초과(429) 등 실제 API 오류는 시뮬레이션으로 위장하지 않고
+    // 호출측(HSCodeAgent)에 전달 — 로그에 사유가 남고 관세청 사전 검색으로 폴백된다.
+    throw error;
+  }
+
+  try {
+    const parsed = JSON.parse(extractJson(response));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    console.warn('HS Code 추천 응답이 JSON 형식이 아님 — 후보 없음 처리 (사전 검색 폴백)');
+    return [];
   }
 }
 
@@ -139,7 +166,8 @@ ${issueMessages.map((m, i) => `${i + 1}. ${m}`).join('\n')}
     if (error instanceof Error && error.message === 'CORS_ERROR') {
       return getSimulatedFeedback(profile, issueMessages);
     }
-    return getSimulatedFeedback(profile, issueMessages);
+    // 실제 API 오류는 호출측(FeedbackAgent)에 전달 — 룰 기반 폴백 + 사유 로그
+    throw error;
   }
 }
 
@@ -163,14 +191,18 @@ export async function autoFillDocumentFields(
 
   try {
     const response = await callClaude(systemPrompt, userMessage);
-    return JSON.parse(response);
+    return JSON.parse(extractJson(response));
   } catch (err) {
-    console.warn('LLM 인보이스 필드 추천 실패 — 기본값 폴백:', err);
-    return {
-      itemDescription: `${profile.itemName} (commercial goods)`,
-      paymentTerms: 'T/T in advance',
-      currency: 'USD'
-    };
+    if (err instanceof Error && err.message === 'CORS_ERROR') {
+      console.warn('LLM 인보이스 필드 추천 CORS 차단 — 기본값 폴백');
+      return {
+        itemDescription: `${profile.itemName} (commercial goods)`,
+        paymentTerms: 'T/T in advance',
+        currency: 'USD'
+      };
+    }
+    // 실제 API 오류·파싱 실패는 호출측(DocumentAgent)에 전달 — 기본값 폴백 + 사유 로그
+    throw err;
   }
 }
 
