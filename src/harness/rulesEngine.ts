@@ -93,11 +93,10 @@ export function determineRequiredDocuments(profile: TradeProfile): DocumentStatu
   });
 
   // 5. 원산지증명서 (C/O) - 수출의 경우 필수
-  // TODO(데모용 placeholder): companyName.includes('산')은 시연 시나리오 분기용 임시 조건임
-  //  (validatorEngine.ts의 co-required 룰과 동일한 핵). 실제 판단 기준은
-  //  "FTA 협정세율 적용 희망 or 상대국 요구"이며 원산지 판정 로직으로 함께 교체해야 함.
+  // 사용자가 발급 요청을 확인(coIssuanceConfirmed)하면 완료 처리 (validatorEngine co-required 룰과 동일 기준).
+  // TODO: FTA 협정세율 적용 희망 여부 등 실제 원산지 판정 로직으로 고도화 예정.
   const isExport = profile.tradeType === 'export';
-  const isCOCompleted = isExport && profile.companyName.includes('산');
+  const isCOCompleted = isExport && !!profile.coIssuanceConfirmed;
   docs.push({
     id: 'co',
     name: '원산지증명서(C/O)',
@@ -111,8 +110,9 @@ export function determineRequiredDocuments(profile: TradeProfile): DocumentStatu
     docs.push({
       id: 'insurance',
       name: '적하보험증권(Insurance Policy)',
-      status: 'not_started',
-      statusText: 'CIF 조건 - 작성 필요',
+      status: profile.insuranceConfirmed ? 'completed' : 'not_started',
+      statusText: profile.insuranceConfirmed ? '준비 완료 확인됨' : 'CIF 조건 - 준비 필요',
+      lastReviewed: profile.insuranceConfirmed ? timestamp : undefined,
     });
   }
 

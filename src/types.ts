@@ -90,6 +90,11 @@ export interface TradeProfile {
   signedBy?: string;
   signerName?: string;
   signerPosition?: string;
+
+  /** CIF 조건에서 적하보험증권을 준비했음을 사용자가 확인 (insurance-missing 이슈 해소) */
+  insuranceConfirmed?: boolean;
+  /** 원산지증명서 발급 요청을 확인 (co-required 이슈 해소 — 원산지 판정 로직 도입 전 단계) */
+  coIssuanceConfirmed?: boolean;
 }
 
 export type DocumentType =
