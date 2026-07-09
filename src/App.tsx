@@ -24,7 +24,9 @@ import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade } from './typ
 import SettingsPanel from './components/SettingsPanel';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
+import AuthPage from './components/AuthPage';
 import { saveTrade } from './services/storageService';
+import { getCurrentAuthUser, onAuthStateChange, signOutUser } from './services/authService';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
 import html2canvas from 'html2canvas';
@@ -38,6 +40,7 @@ export default function App() {
   const [user, setUser] = useState<{ name: string; type: 'member' | 'guest' } | null>(null);
   const [loginId, setLoginId] = useState('');
   const [loginPw, setLoginPw] = useState('');
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
 
   // Mount logic: restore session
   useEffect(() => {
@@ -64,6 +67,37 @@ export default function App() {
         localStorage.removeItem('portai_user_session');
       }
     }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getCurrentAuthUser()
+      .then((currentUser) => {
+        if (isMounted) setUser(currentUser);
+      })
+      .catch((error) => {
+        console.error('[Supabase Auth] Failed to restore session:', error);
+        if (isMounted) setUser(null);
+      })
+      .finally(() => {
+        if (isMounted) setIsAuthLoading(false);
+      });
+
+    const { data: authListener } = onAuthStateChange((authUser) => {
+      setUser(authUser);
+      setIsAuthLoading(false);
+
+      if (!authUser) {
+        localStorage.removeItem('portai_user_session');
+        handleReset();
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const handleMemberLogin = (e?: React.FormEvent) => {
@@ -107,10 +141,13 @@ export default function App() {
 }));
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('portai_user_session');
-    handleReset();
+  const handleLogout = async () => {
+    try {
+      await signOutUser();
+    } catch (error) {
+      console.error('[Supabase Auth] Logout failed:', error);
+      alert('로그아웃 중 오류가 발생했습니다.');
+    }
   };
   
   // Trade profile state
@@ -639,6 +676,26 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
     const summary = lines.filter(l => !/^(📦|🔢|🌍|⚓|⚠️)/.test(l));
     return summary.length > 0 ? summary : lines;
   })();
+
+  if (isAuthLoading) {
+    return (
+      <div className="login-wrapper">
+        <div className="login-bg-decoration login-bg-decor1"></div>
+        <div className="login-bg-decoration login-bg-decor2"></div>
+        <div className="login-card">
+          <div className="login-header">
+            <div className="login-logo">P</div>
+            <div className="login-brand">PortAI</div>
+            <div className="login-subtitle">세션을 확인하는 중입니다</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage onAuthenticated={setUser} />;
+  }
 
   if (!user) {
     return (
