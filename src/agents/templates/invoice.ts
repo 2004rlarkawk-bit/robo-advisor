@@ -1,16 +1,17 @@
 import type { InvoiceData } from '../../types';
+import { escapeHtml as esc } from './escapeHtml';
 
 export function renderInvoiceHTML(data: InvoiceData): string {
   const itemsHTML = data.items.map(item => `
     <tr>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.no}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1;"><strong>${item.description}</strong></td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.hsCode || 'N/A'}</td>
-<td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.countryOfOrigin || 'N/A'}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${item.quantity.toLocaleString()}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.unit}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${data.currency} ${item.unitPrice.toFixed(2)}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold;">${data.currency} ${item.amount.toFixed(2)}</td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${esc(item.no)}</td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1;"><strong>${esc(item.description)}</strong></td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${esc(item.hsCode || 'N/A')}</td>
+<td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${esc(item.countryOfOrigin || 'N/A')}</td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${esc(item.quantity.toLocaleString())}</td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${esc(item.unit)}</td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${esc(data.currency)} ${esc(item.unitPrice.toFixed(2))}</td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold;">${esc(data.currency)} ${esc(item.amount.toFixed(2))}</td>
     </tr>
   `).join('');
 
@@ -27,27 +28,27 @@ export function renderInvoiceHTML(data: InvoiceData): string {
         <tr>
           <td style="width: 50%; vertical-align: top; padding-right: 20px;">
             <div style="font-size: 11px; font-weight: bold; color: #4f46e5; text-transform: uppercase; margin-bottom: 5px;">Exporter / Shipper</div>
-            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${data.exporter.name}</div>
-            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${data.exporter.address}</div>
-            <div style="font-size: 12px; color: #475569;">Contact: ${data.exporter.contact}</div>
+            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${esc(data.exporter.name)}</div>
+            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${esc(data.exporter.address)}</div>
+            <div style="font-size: 12px; color: #475569;">Contact: ${esc(data.exporter.contact)}</div>
           </td>
           <td style="width: 50%; vertical-align: top; border-left: 1px solid #e2e8f0; padding-left: 20px;">
             <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
               <tr>
                 <td style="padding: 4px 0; font-weight: bold; color: #64748b; width: 45%;">Invoice No:</td>
-                <td style="padding: 4px 0; font-weight: bold; color: #0f172a;">${data.invoiceNo}</td>
+                <td style="padding: 4px 0; font-weight: bold; color: #0f172a;">${esc(data.invoiceNo)}</td>
               </tr>
               <tr>
                 <td style="padding: 4px 0; font-weight: bold; color: #64748b;">Date:</td>
-                <td style="padding: 4px 0; color: #0f172a;">${data.date}</td>
+                <td style="padding: 4px 0; color: #0f172a;">${esc(data.date)}</td>
               </tr>
               <tr>
                 <td style="padding: 4px 0; font-weight: bold; color: #64748b;">Incoterms:</td>
-                <td style="padding: 4px 0; color: #2563eb; font-weight: bold;">${data.incoterms}</td>
+                <td style="padding: 4px 0; color: #2563eb; font-weight: bold;">${esc(data.incoterms)}</td>
               </tr>
               <tr>
                 <td style="padding: 4px 0; font-weight: bold; color: #64748b;">Payment Terms:</td>
-                <td style="padding: 4px 0; color: #0f172a;">${data.paymentTerms}</td>
+                <td style="padding: 4px 0; color: #0f172a;">${esc(data.paymentTerms)}</td>
               </tr>
             </table>
           </td>
@@ -61,20 +62,20 @@ export function renderInvoiceHTML(data: InvoiceData): string {
         <tr>
           <td style="width: 50%; vertical-align: top; padding-right: 20px;">
             <div style="font-size: 11px; font-weight: bold; color: #4f46e5; text-transform: uppercase; margin-bottom: 5px;">Consignee / Importer</div>
-            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${data.importer.name}</div>
-            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${data.importer.address}</div>
-            <div style="font-size: 12px; color: #475569;">Contact: ${data.importer.contact}</div>
+            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${esc(data.importer.name)}</div>
+            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${esc(data.importer.address)}</div>
+            <div style="font-size: 12px; color: #475569;">Contact: ${esc(data.importer.contact)}</div>
           </td>
           <td style="width: 50%; vertical-align: top; border-left: 1px solid #e2e8f0; padding-left: 20px;">
             <div style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 5px;">Shipping Routing</div>
             <table style="width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.5;">
               <tr>
                 <td style="padding: 2px 0; font-weight: bold; color: #64748b; width: 45%;">Port of Loading:</td>
-                <td style="padding: 2px 0; color: #0f172a;">${data.loadPort}</td>
+                <td style="padding: 2px 0; color: #0f172a;">${esc(data.loadPort)}</td>
               </tr>
               <tr>
                 <td style="padding: 2px 0; font-weight: bold; color: #64748b;">Port of Discharge:</td>
-                <td style="padding: 2px 0; color: #0f172a;">${data.dischargePort}</td>
+                <td style="padding: 2px 0; color: #0f172a;">${esc(data.dischargePort)}</td>
               </tr>
             </table>
           </td>
@@ -99,7 +100,7 @@ export function renderInvoiceHTML(data: InvoiceData): string {
           ${itemsHTML}
           <tr style="background-color: #f8fafc; font-weight: bold; font-size: 14px;">
             <td colspan="6" style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #475569;">TOTAL AMOUNT:</td>
-            <td colspan="2" style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #1e3a8a; font-size: 16px;">${data.currency} ${data.totalAmount.toFixed(2)}</td>
+            <td colspan="2" style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #1e3a8a; font-size: 16px;">${esc(data.currency)} ${esc(data.totalAmount.toFixed(2))}</td>
           </tr>
         </tbody>
       </table>
@@ -108,12 +109,12 @@ export function renderInvoiceHTML(data: InvoiceData): string {
       <div style="margin-top: 50px; display: flex; justify-content: flex-end;">
         <div style="text-align: center; width: 250px;">
           <div style="height: 60px; display: flex; align-items: flex-end; justify-content: center; font-family: 'Courier New', Courier, monospace; font-size: 18px; color: #475569; font-style: italic; border-bottom: 1px solid #94a3b8; margin-bottom: 8px; padding-bottom: 5px;">
-            ${data.signedBy || data.exporter?.name || data.seller?.name || ''}
+            ${esc(data.signedBy || data.exporter?.name || data.seller?.name || '')}
           </div>
           <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; letter-spacing: 0.05em;">Authorized Signature</div>
         </div>
       </div>
-      
+
       <!-- Footer Note -->
       <div style="border-top: 1px solid #e2e8f0; margin-top: 50px; padding-top: 10px; text-align: center; font-size: 9px; color: #94a3b8;">
         Generated automatically by PortAI Smart Customs Platform • A4 Document Page 1 of 1

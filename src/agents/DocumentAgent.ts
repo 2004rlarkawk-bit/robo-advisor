@@ -48,12 +48,14 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     if (invoiceDoc && invoiceDoc.status !== 'not_needed') {
       logs.push(createLog(this.name, '상업송장(Invoice) 데이터 조립 중...', 'info'));
       
-      const unitPrice = profile.quantity && profile.weight 
+      const quantity = Number(profile.quantity) || 1;
+      // 단가·총액은 사용자 입력을 우선하고, 미입력 시에만 추정치를 쓴다.
+      // 총액을 단가와 별개로 추정하면 "단가 × 수량 ≠ 금액"인 송장이 생긴다.
+      const estimatedUnitPrice = profile.quantity && profile.weight
         ? Math.round((Number(profile.weight) * 2.5) / Number(profile.quantity) * 100) / 100
         : 10.00;
-
-      const quantity = Number(profile.quantity) || 1;
-      const totalAmount = Math.round(unitPrice * quantity * 100) / 100;
+      const unitPrice = Number(profile.unitPrice) || estimatedUnitPrice;
+      const totalAmount = Number(profile.totalAmount) || Math.round(unitPrice * quantity * 100) / 100;
 
       const invoiceDate = profile.invoiceDate || new Date().toISOString().split('T')[0];
       const exporterParty = {
@@ -94,13 +96,13 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
           countryOfOrigin: profile.countryOfOrigin || 'N/A',
           quantity: quantity,
           unit: profile.unit || 'PCS',
-          unitPrice: profile.unitPrice ? Number(profile.unitPrice) : unitPrice,
-          amount: profile.totalAmount ? Number(profile.totalAmount) : totalAmount,
+          unitPrice: unitPrice,
+          amount: totalAmount,
           netWeight: invNetWeight,
           grossWeight: invGrossWeight,
           dimensions: profile.measurement || 'N/A'
         }],
-        totalAmount: profile.totalAmount ? Number(profile.totalAmount) : totalAmount,
+        totalAmount: totalAmount,
         currency: profile.currency || currency,
         incoterms: profile.incoterms || 'FOB',
         loadPort: profile.loadPort || 'N/A',
@@ -119,8 +121,10 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
       logs.push(createLog(this.name, '패킹리스트(Packing List) 데이터 조립 중...', 'info'));
       
       const qty = Number(profile.quantity) || 0;
-      const grossWeight = Number(profile.grossWeight ?? profile.weight) || 0;
-      const netWeight = Math.round(grossWeight * 0.9 * 10) / 10;
+      // 인보이스(invGrossWeight/invNetWeight)와 동일 규칙 — 두 문서의 중량이 어긋나면 안 된다.
+      // grossWeight의 빈 문자열('')은 ??로는 걸러지지 않으므로 ||로 weight까지 폴백한다.
+      const grossWeight = Number(profile.grossWeight || profile.weight) || 0;
+      const netWeight = Number(profile.netWeight) || Math.round(grossWeight * 0.9 * 10) / 10;
 
       const plSeller = generatedDocs.invoice?.seller || { name: profile.companyName, address: '', contact: '' };
       const plConsignee = generatedDocs.invoice?.consignee || { name: 'N/A', address: '', contact: '' };

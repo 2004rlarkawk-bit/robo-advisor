@@ -1,4 +1,5 @@
 import type { CertificateOfOriginData } from '../../types';
+import { escapeHtml as esc } from './escapeHtml';
 
 export function renderCertificateOfOriginHTML(data: CertificateOfOriginData): string {
   return `
@@ -14,23 +15,23 @@ export function renderCertificateOfOriginHTML(data: CertificateOfOriginData): st
         <tr>
           <td style="width: 50%; vertical-align: top; padding-right: 20px;">
             <div style="font-size: 11px; font-weight: bold; color: #d97706; text-transform: uppercase; margin-bottom: 5px;">Exporter / Manufacturer</div>
-            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${data.exporter.name}</div>
-            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${data.exporter.address}</div>
-            <div style="font-size: 12px; color: #475569;">Contact: ${data.exporter.contact}</div>
+            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${esc(data.exporter.name)}</div>
+            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${esc(data.exporter.address)}</div>
+            <div style="font-size: 12px; color: #475569;">Contact: ${esc(data.exporter.contact)}</div>
           </td>
           <td style="width: 50%; vertical-align: top; border-left: 1px solid #e2e8f0; padding-left: 20px;">
             <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
               <tr>
                 <td style="padding: 4px 0; font-weight: bold; color: #64748b; width: 45%;">C/O No:</td>
-                <td style="padding: 4px 0; font-weight: bold; color: #0f172a;">${data.coNo}</td>
+                <td style="padding: 4px 0; font-weight: bold; color: #0f172a;">${esc(data.coNo)}</td>
               </tr>
               <tr>
                 <td style="padding: 4px 0; font-weight: bold; color: #64748b;">Date:</td>
-                <td style="padding: 4px 0; color: #0f172a;">${data.date}</td>
+                <td style="padding: 4px 0; color: #0f172a;">${esc(data.date)}</td>
               </tr>
               <tr>
                 <td style="padding: 4px 0; font-weight: bold; color: #64748b;">Invoice Ref:</td>
-                <td style="padding: 4px 0; color: #0f172a; font-family: monospace;">${data.invoiceRef}</td>
+                <td style="padding: 4px 0; color: #0f172a; font-family: monospace;">${esc(data.invoiceRef)}</td>
               </tr>
             </table>
           </td>
@@ -44,9 +45,9 @@ export function renderCertificateOfOriginHTML(data: CertificateOfOriginData): st
         <tr>
           <td style="width: 100%; vertical-align: top;">
             <div style="font-size: 11px; font-weight: bold; color: #d97706; text-transform: uppercase; margin-bottom: 5px;">Consignee / Importer</div>
-            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${data.importer.name}</div>
-            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${data.importer.address}</div>
-            <div style="font-size: 12px; color: #475569;">Contact: ${data.importer.contact}</div>
+            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${esc(data.importer.name)}</div>
+            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${esc(data.importer.address)}</div>
+            <div style="font-size: 12px; color: #475569;">Contact: ${esc(data.importer.contact)}</div>
           </td>
         </tr>
       </table>
@@ -62,23 +63,23 @@ export function renderCertificateOfOriginHTML(data: CertificateOfOriginData): st
         <tbody>
           <tr>
             <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; font-weight: bold; color: #475569; background-color: #fafaf9;">Description of Goods</td>
-            <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; font-weight: bold; color: #0f172a;">${data.itemDescription}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; font-weight: bold; color: #0f172a;">${esc(data.itemDescription)}</td>
           </tr>
           <tr>
             <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; font-weight: bold; color: #475569; background-color: #fafaf9;">HS CODE (6 digits or more)</td>
-            <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; font-family: monospace; font-size: 14px; color: #0f172a;">${data.hsCode}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; font-family: monospace; font-size: 14px; color: #0f172a;">${esc(data.hsCode)}</td>
           </tr>
           <tr>
             <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; font-weight: bold; color: #475569; background-color: #fafaf9;">Quantity / Packing unit</td>
-            <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; color: #0f172a;">${data.quantity}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; color: #0f172a;">${esc(data.quantity)}</td>
           </tr>
           <tr>
             <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; font-weight: bold; color: #475569; background-color: #fafaf9;">Country of Origin</td>
-            <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; color: #b45309; font-weight: bold; font-size: 14px;">${data.originCountry}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #cbd5e1; color: #b45309; font-weight: bold; font-size: 14px;">${esc(data.originCountry)}</td>
           </tr>
           <tr>
             <td style="padding: 10px; border-right: 1px solid #cbd5e1; font-weight: bold; color: #475569; background-color: #fafaf9;">Invoice Reference</td>
-            <td style="padding: 10px; color: #0f172a; font-family: monospace;">${data.invoiceRef}</td>
+            <td style="padding: 10px; color: #0f172a; font-family: monospace;">${esc(data.invoiceRef)}</td>
           </tr>
         </tbody>
       </table>
@@ -93,7 +94,7 @@ export function renderCertificateOfOriginHTML(data: CertificateOfOriginData): st
         <tr>
           <td style="width: 50%; padding-right: 25px; text-align: center; vertical-align: bottom;">
             <div style="border-bottom: 1px solid #94a3b8; height: 50px; font-family: monospace; font-size: 15px; color: #475569; font-style: italic; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px;">
-              ${data.exporter.name.split(' ')[0]}
+              ${esc(data.exporter.name.split(' ')[0])}
             </div>
             <div style="margin-top: 8px; font-size: 10px; font-weight: bold; color: #64748b; text-transform: uppercase;">Signature of Exporter</div>
           </td>
@@ -107,7 +108,7 @@ export function renderCertificateOfOriginHTML(data: CertificateOfOriginData): st
           </td>
         </tr>
       </table>
-      
+
       <!-- Footer Note -->
       <div style="border-top: 1px solid #e2e8f0; margin-top: 50px; padding-top: 10px; text-align: center; font-size: 9px; color: #94a3b8;">
         Generated automatically by PortAI Smart Customs Platform • A4 Document Page 1 of 1
