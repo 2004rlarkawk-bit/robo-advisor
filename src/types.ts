@@ -106,6 +106,8 @@ export type DocumentStatusType =
   | 'review_required'
   | 'not_needed';
 
+export type TradeStatus = 'draft' | 'generated' | 'submitted';
+
 export interface DocumentStatus {
   id: string;
   name: string;
@@ -214,7 +216,10 @@ export interface SavedTrade {
   profile: TradeProfile;
   documents: DocumentStatus[];
   issues: ValidationIssue[];
-  status?: string;
+  status?: TradeStatus;
+  generatedDocs?: GeneratedDocuments;
+  generatedAt?: string | null;
+  submittedAt?: string | null;
   createdAt: string;
   updatedAt?: string;
 
