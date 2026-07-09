@@ -19,7 +19,7 @@ import {
 } from '../services/customsApiService';
 import {
   setUnipassKey, hasUnipassKey, clearUnipassKey,
-  testUnipassKey, UnipassKeyId,
+  getTariffRates, pickBasicRate, UnipassKeyId,
 } from '../services/unipassService';
 import { setLawOC, hasLawOC, clearLawOC, searchLaw } from '../services/lawService';
 
@@ -187,21 +187,25 @@ export default function SettingsPanel() {
           id: 'tariff' as UnipassKeyId,
           title: 'UNI-PASS 관세율기본조회 키',
           description: 'HSK 10자리 기준 기본세율/WTO/FTA 세율 조회 — 예상 관세액 계산에 사용됩니다.',
+          testable: true,
         },
         {
           id: 'requirement' as UnipassKeyId,
           title: 'UNI-PASS 수출입요건승인내역 키',
           description: '요건승인번호로 발급된 승인 내역(서식명·유효기간)을 확인합니다.',
+          testable: false,
         },
         {
           id: 'cargo' as UnipassKeyId,
           title: 'UNI-PASS 화물통관진행정보 키',
           description: 'B/L번호로 화물 통관 진행상태를 추적합니다.',
+          testable: false,
         },
         {
           id: 'fulfillment' as UnipassKeyId,
           title: 'UNI-PASS 수출이행내역 키',
           description: '수출신고번호로 선적 이행 여부·적재의무기한을 확인합니다.',
+          testable: false,
         },
       ]).map((cfg) => (
         <KeyRow
@@ -212,7 +216,12 @@ export default function SettingsPanel() {
           saved={hasUnipassKey(cfg.id)}
           onSave={(k) => setUnipassKey(cfg.id, k)}
           onClear={() => clearUnipassKey(cfg.id)}
-          onTest={() => testUnipassKey(cfg.id)}
+          onTest={cfg.testable ? async () => {
+            const rates = await getTariffRates('8517130000');
+            const basic = pickBasicRate(rates);
+            if (!basic || basic.source !== 'api') throw new Error('API 응답 실패 — 시뮬레이션 폴백됨. 로컬 개발 환경인지, 키가 맞는지 확인하세요.');
+            return `스마트폰(8517130000) 기본세율 ${basic.rate}% — 세율 ${rates.length}건 조회 성공`;
+          } : undefined}
         />
       ))}
 
