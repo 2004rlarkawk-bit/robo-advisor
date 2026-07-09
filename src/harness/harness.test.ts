@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { determineRequiredDocuments } from './rulesEngine';
+import { determineRequiredDocuments, calculateReadiness } from './rulesEngine';
 import { validateTradeDocuments, validateTradeDocumentsAsync, validateRequiredInputs } from './validatorEngine';
 import { OrchestratorAgent } from '../agents/OrchestratorAgent';
 import { HSCodeAgent } from '../agents/HSCodeAgent';
@@ -100,6 +100,39 @@ describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테
     expect(invoice?.status).toBe('completed');
     expect(packing?.status).toBe('completed');
     expect(bl?.status).toBe('completed');
+  });
+
+  it('원산지증명서 발급 확인 전까지는 준비도가 100% 미만이고 다음 단계 힌트를 안내한다', () => {
+    const docs = determineRequiredDocuments(mockValidProfile);
+    const readiness = calculateReadiness(docs);
+
+    expect(readiness.percent).toBeLessThan(100);
+    expect(readiness.nextStepDocId).toBe('co');
+    expect(readiness.nextStepLabel).toContain('원산지증명서');
+  });
+
+  it('원산지증명서 발급을 확인하면 수출 필수 서류가 모두 완료되어 준비도 100%가 된다', () => {
+    const readyProfile: TradeProfile = {
+      ...mockValidProfile,
+      coIssuanceConfirmed: true,
+    };
+    const docs = determineRequiredDocuments(readyProfile);
+    const readiness = calculateReadiness(docs);
+
+    expect(readiness.percent).toBe(100);
+    expect(readiness.nextStepDocId).toBeUndefined();
+  });
+
+  it('수입 거래는 해당 없음(C/O)을 분모에서 제외하고 준비도를 계산한다', () => {
+    const importProfile: TradeProfile = {
+      ...mockValidProfile,
+      tradeType: 'import',
+    };
+    const docs = determineRequiredDocuments(importProfile);
+    const readiness = calculateReadiness(docs);
+
+    expect(readiness.applicableCount).toBe(docs.filter(d => d.status !== 'not_needed').length);
+    expect(readiness.percent).toBe(100);
   });
 });
 
