@@ -1,14 +1,15 @@
 import type { PackingListData } from '../../types';
+import { escapeHtml as esc } from './escapeHtml';
 
 export function renderPackingListHTML(data: PackingListData): string {
   const itemsHTML = data.items.map(item => `
     <tr>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.no}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1;"><strong>${item.description}</strong></td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${item.quantity.toLocaleString()}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${item.netWeight.toFixed(1)} kg</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold;">${item.grossWeight.toFixed(1)} kg</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center; color: #475569;">${item.dimensions}</td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${esc(item.no)}</td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1;"><strong>${esc(item.description)}</strong></td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${esc(item.quantity.toLocaleString())}</td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${esc(item.netWeight.toFixed(1))} kg</td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold;">${esc(item.grossWeight.toFixed(1))} kg</td>
+      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center; color: #475569;">${esc(item.dimensions)}</td>
     </tr>
   `).join('');
 
@@ -25,23 +26,23 @@ export function renderPackingListHTML(data: PackingListData): string {
         <tr>
           <td style="width: 50%; vertical-align: top; padding-right: 20px;">
             <div style="font-size: 11px; font-weight: bold; color: #059669; text-transform: uppercase; margin-bottom: 5px;">Exporter / Shipper</div>
-            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${data.exporter.name}</div>
-            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${data.exporter.address}</div>
-            <div style="font-size: 12px; color: #475569;">Contact: ${data.exporter.contact}</div>
+            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${esc(data.exporter.name)}</div>
+            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${esc(data.exporter.address)}</div>
+            <div style="font-size: 12px; color: #475569;">Contact: ${esc(data.exporter.contact)}</div>
           </td>
           <td style="width: 50%; vertical-align: top; border-left: 1px solid #e2e8f0; padding-left: 20px;">
             <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
               <tr>
                 <td style="padding: 4px 0; font-weight: bold; color: #64748b; width: 45%;">P/L No:</td>
-                <td style="padding: 4px 0; font-weight: bold; color: #0f172a;">${data.plNo}</td>
+                <td style="padding: 4px 0; font-weight: bold; color: #0f172a;">${esc(data.plNo)}</td>
               </tr>
               <tr>
                 <td style="padding: 4px 0; font-weight: bold; color: #64748b;">Date:</td>
-                <td style="padding: 4px 0; color: #0f172a;">${data.date}</td>
+                <td style="padding: 4px 0; color: #0f172a;">${esc(data.date)}</td>
               </tr>
               <tr>
                 <td style="padding: 4px 0; font-weight: bold; color: #64748b;">Invoice Ref No:</td>
-                <td style="padding: 4px 0; color: #0f172a; font-family: monospace;">${data.invoiceRef}</td>
+                <td style="padding: 4px 0; color: #0f172a; font-family: monospace;">${esc(data.invoiceRef)}</td>
               </tr>
             </table>
           </td>
@@ -55,16 +56,16 @@ export function renderPackingListHTML(data: PackingListData): string {
         <tr>
           <td style="width: 100%; vertical-align: top;">
             <div style="font-size: 11px; font-weight: bold; color: #059669; text-transform: uppercase; margin-bottom: 5px;">Consignee / Importer</div>
-            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${data.importer.name}</div>
-            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${data.importer.address}</div>
-            <div style="font-size: 12px; color: #475569;">Contact: ${data.importer.contact}</div>
+            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${esc(data.importer.name)}</div>
+            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${esc(data.importer.address)}</div>
+            <div style="font-size: 12px; color: #475569;">Contact: ${esc(data.importer.contact)}</div>
           </td>
         </tr>
       </table>
       <!-- Shipping Marks -->
       <div style="margin-bottom: 25px; padding: 14px 16px; border: 1px solid #cbd5e1; background-color: #f8fafc;">
         <div style="font-size: 11px; font-weight: bold; color: #059669; text-transform: uppercase; margin-bottom: 6px;">Shipping Marks</div>
-        <div style="font-size: 13px; color: #0f172a; line-height: 1.5; white-space: pre-line;">${data.shippingMarks || 'N/A'}</div>
+        <div style="font-size: 13px; color: #0f172a; line-height: 1.5; white-space: pre-line;">${esc(data.shippingMarks || 'N/A')}</div>
       </div>
       <!-- Items Table -->
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 13px;">
@@ -82,9 +83,9 @@ export function renderPackingListHTML(data: PackingListData): string {
           ${itemsHTML}
           <tr style="background-color: #f0fdf4; font-weight: bold; font-size: 14px;">
             <td colspan="2" style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #0f5132;">TOTALS:</td>
-            <td style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #0f5132;">${data.totalPackages.toLocaleString()}</td>
-            <td style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #0f5132;">${data.totalNetWeight.toFixed(1)} kg</td>
-            <td style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #0f5132; font-size: 15px;">${data.totalGrossWeight.toFixed(1)} kg</td>
+            <td style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #0f5132;">${esc(data.totalPackages.toLocaleString())}</td>
+            <td style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #0f5132;">${esc(data.totalNetWeight.toFixed(1))} kg</td>
+            <td style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #0f5132; font-size: 15px;">${esc(data.totalGrossWeight.toFixed(1))} kg</td>
             <td style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: center; color: #64748b;">-</td>
           </tr>
         </tbody>
@@ -94,12 +95,12 @@ export function renderPackingListHTML(data: PackingListData): string {
       <div style="margin-top: 50px; display: flex; justify-content: flex-end;">
         <div style="text-align: center; width: 250px;">
           <div style="height: 60px; display: flex; align-items: flex-end; justify-content: center; font-family: 'Courier New', Courier, monospace; font-size: 18px; color: #475569; font-style: italic; border-bottom: 1px solid #94a3b8; margin-bottom: 8px; padding-bottom: 5px;">
-            ${data.signedBy || data.exporter?.name || data.seller?.name || ''}
+            ${esc(data.signedBy || data.exporter?.name || data.seller?.name || '')}
           </div>
           <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; letter-spacing: 0.05em;">Checked & Approved By</div>
         </div>
       </div>
-      
+
       <!-- Footer Note -->
       <div style="border-top: 1px solid #e2e8f0; margin-top: 50px; padding-top: 10px; text-align: center; font-size: 9px; color: #94a3b8;">
         Generated automatically by PortAI Smart Customs Platform • A4 Document Page 1 of 1
