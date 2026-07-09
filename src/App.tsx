@@ -250,6 +250,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const [hsCandidates, setHsCandidates] = useState<{ code: string; description: string; confidence: string; reasoning: string; }[]>([]);
 
   const consoleEndRef = useRef<HTMLDivElement>(null);
+  const currentTradeIdRef = useRef<string | null>(null);
 
   // Auto-scroll console logs
   useEffect(() => {
@@ -481,10 +482,13 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   setConsoleLogs([]);
   setHtmlTemplates({});
   setHsCandidates([]);
+  currentTradeIdRef.current = null;
 };
 
   // Run the multi-agent pipeline simulator
   const handleGenerateDocuments = async () => {
+    if (isProcessing) return;
+
     setIsProcessing(true);
     setShowConsole(true);
     setConsoleLogs([]);
@@ -517,12 +521,17 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
       // 생성 이력 자동 저장 → [문서 관리] 메뉴에서 조회/복원
       try {
-        saveTrade(
+        const savedTrade = await saveTrade(
           { ...profile, hsCode: profile.hsCode || result.hs?.topCode || '' },
           result.documents?.documents || [],
           result.issues?.issues || [],
-          { htmlTemplates: result.documents?.htmlTemplates || {} }
+          { htmlTemplates: result.documents?.htmlTemplates || {} },
+          {
+            tradeId: currentTradeIdRef.current,
+            status: 'generated',
+          }
         );
+        currentTradeIdRef.current = savedTrade.id;
       } catch (err) {
         console.warn('생성 이력 저장 실패 (기능에는 영향 없음):', err);
       }
