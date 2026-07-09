@@ -53,7 +53,7 @@ async function callClaude(systemPrompt: string, userMessage: string): Promise<st
   const apiKey = getApiKey();
   
   if (!apiKey) {
-    throw new Error('API 키가 설정되지 않았습니다. 설정 페이지에서 Claude API 키를 입력해 주세요.');
+    throw new Error('API 키가 설정되지 않았습니다. 설정 페이지에서 LLM API 키를 입력해 주세요.');
   }
 
   try {

@@ -2,7 +2,7 @@
  * 설정 페이지 — API 키 관리
  *
  * 3종 키를 localStorage에 저장:
- *  1. Claude API (LLM 추천·피드백)
+ *  1. LLM API (추천·피드백)
  *  2. data.go.kr 관세청 GW (환율·수출입실적)
  *  3. 국세청 사업자등록 상태조회
  *
@@ -142,7 +142,7 @@ function LLMToggleRow() {
         <div>
           <h2 className="card-title" style={{ margin: 0 }}>AI(LLM) 기능 사용</h2>
           <p style={{ fontSize: 13, color: '#64748b', margin: '6px 0 0' }}>
-            끄면 문서 생성·재검증 시 Claude API를 호출하지 않고 로컬 사전과 룰 기반으로만 동작합니다 (API 비용 절약).
+            끄면 문서 생성·재검증 시 LLM API를 호출하지 않고 로컬 사전과 룰 기반으로만 동작합니다 (API 비용 절약).
           </p>
         </div>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', whiteSpace: 'nowrap' }}>
@@ -169,9 +169,9 @@ export default function SettingsPanel() {
       <LLMToggleRow />
 
       <KeyRow
-        title="Claude API 키"
-        description="LLM 기반 HS Code 추천, 자연어 피드백, 문서 필드 자동 채움에 사용됩니다. console.anthropic.com에서 발급."
-        placeholder="sk-ant-..."
+        title="LLM API 키"
+        description="LLM 기반 HS Code 추천, 자연어 피드백, 문서 필드 자동 채움에 사용됩니다."
+        placeholder="sk-..."
         saved={hasApiKey()}
         onSave={setApiKey}
         onClear={clearApiKey}
