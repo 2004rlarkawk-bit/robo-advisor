@@ -297,7 +297,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  max-width: 1200px;
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
 }
 
 /* Heading section */
@@ -647,11 +649,6 @@ body {
   grid-template-columns: 1fr 1.2fr;
   gap: 24px;
   align-items: start;
-}
-
-/* 결과 모드에서는 작업 영역 폭 제한을 완화해 사이드바 접힘 효과를 살림 */
-.workspace-area.results-wide {
-  max-width: 1560px;
 }
 
 /* 결과 상단 요약 통계 바 */

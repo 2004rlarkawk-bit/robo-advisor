@@ -890,7 +890,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
         </header>
 
         <main className="content-body">
-          <div className={`workspace-area ${hasGenerated && !['settings', 'analysis', 'docs'].includes(activeMenu) ? 'results-wide' : ''}`}>
+          <div className="workspace-area">
             {activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'analysis' ? <DataAnalysisPanel />
             : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} />
@@ -1726,7 +1726,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
               </div>
             ) : (
               /* --- 결과 리포트 대시보드 모드 --- */
-              <div className="workspace-area results-wide">
+              <div className="workspace-area">
                 <div className="result-header-summary">
                   <div className="summary-badge-list">
                     <div className="summary-badge">
