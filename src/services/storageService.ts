@@ -83,16 +83,19 @@ export interface AppSettings {
   companyAddress: string;
   claudeApiKey: string;
   useLLM: boolean;
+  demoMode: boolean;
 }
 
 // useLLM 기본값 true: 키가 등록돼 있으면 LLM 기능이 바로 동작하는 기존 동작을 유지하고,
 // 설정 페이지에서 끌 수 있게 한다 (API 비용 절약 옵션).
+// demoMode 기본값 false: 테스트 시나리오 버튼은 시연·발표 때만 설정에서 켠다.
 const DEFAULT_SETTINGS: AppSettings = {
   userName: '',
   companyName: '',
   companyAddress: '',
   claudeApiKey: '',
   useLLM: true,
+  demoMode: false,
 };
 
 export function getSettings(): AppSettings {
@@ -109,6 +112,9 @@ export function saveSettings(settings: Partial<AppSettings>): void {
   const current = getSettings();
   const updated = { ...current, ...settings };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
+
+  // 같은 탭의 다른 컴포넌트(예: 데모 모드에 반응하는 App)가 즉시 갱신되도록 알림
+  window.dispatchEvent(new CustomEvent('portai-settings-changed'));
   
   // API 키가 변경되면 claudeService에도 동기화
   if (settings.claudeApiKey !== undefined) {

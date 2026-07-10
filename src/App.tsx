@@ -3,9 +3,8 @@ import {
   LayoutDashboard, 
   FileText, 
   FolderKanban, 
-  Layers, 
-  Ship, 
-  FileCheck2, 
+  Layers,
+  FileCheck2,
   BarChart3, 
   Settings, 
   PhoneCall, 
@@ -34,14 +33,54 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
 
+// 거래 정보 입력 폼의 서류 종류 라벨 탭 — 각 필드의 data-docs와 CSS 필터로 연동
+const DOC_TABS = [
+  { id: 'all', label: '전체' },
+  { id: 'invoice', label: '상업송장' },
+  { id: 'packing_list', label: '패킹리스트' },
+  { id: 'bl', label: '선하증권' },
+  { id: 'customs_dec', label: '수출입신고서' },
+  { id: 'co', label: '원산지증명서' },
+  { id: 'insurance', label: '적하보험증권' },
+] as const;
+type DocTabId = typeof DOC_TABS[number]['id'];
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [docTab, setDocTab] = useState<DocTabId>('all');
+  const formCardRef = useRef<HTMLDivElement>(null);
+
+  // 데모 모드(테스트 시나리오 버튼 표시) — 설정 변경 시 같은 탭·다른 탭 모두 즉시 반영
+  const [demoMode, setDemoMode] = useState(() => getSettings().demoMode);
+  useEffect(() => {
+    const sync = () => setDemoMode(getSettings().demoMode);
+    window.addEventListener('portai-settings-changed', sync); // 같은 탭 (saveSettings에서 발행)
+    window.addEventListener('storage', sync); // 다른 탭에서 변경된 경우
+    return () => {
+      window.removeEventListener('portai-settings-changed', sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
+  // 서류 탭 선택 시 관련 접이식 섹션을 자동으로 펼침 (필드 숨김 필터는 CSS가 처리)
+  useEffect(() => {
+    if (docTab === 'all') return;
+    formCardRef.current?.querySelectorAll<HTMLDetailsElement>('details.form-section').forEach(d => {
+      d.open = true;
+    });
+  }, [docTab]);
   
   // Auth states
   const [user, setUser] = useState<{ name: string; type: 'member' | 'guest' } | null>(null);
   const [loginId, setLoginId] = useState('');
   const [loginPw, setLoginPw] = useState('');
+
+  // 첫 로그인 온보딩 (사용 목적·회사·업종) — 저장되면 다음 로그인부터 건너뜀
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [obPurpose, setObPurpose] = useState<'export' | 'import' | 'both' | ''>('');
+  const [obCompany, setObCompany] = useState('');
+  const [obRole, setObRole] = useState('');
 
   // Mount logic: restore session
   useEffect(() => {
@@ -70,45 +109,56 @@ export default function App() {
     }
   }, []);
 
+  // 온보딩 정보를 반영해 실제 로그인 처리 (회사명 → 프로필·표시명, 사용 목적 → 수출입 기본값)
+  const loginWithOnboarding = (ob: { purpose?: string; company?: string; role?: string }) => {
+    const companyName = ob.company?.trim() || '인천테크';
+    const memberUser = { name: companyName, type: 'member' as const };
+    setUser(memberUser);
+    localStorage.setItem('portai_user_session', JSON.stringify(memberUser));
+    setProfile(prev => ({
+      ...prev,
+      tradeType: ob.purpose === 'import' ? 'import' : prev.tradeType,
+      companyName,
+      companyAddress: '인천광역시 연수구 송도동',
+      companyCountry: '대한민국',
+      contact: '010-1234-5678',
+      taxNo: '123-45-67890',
+      businessRegistrationNo: '123-45-67890',
+      signedBy: '김지민',
+      signerName: 'Kim Jimin',
+      signerPosition: 'Export Manager'
+    }));
+    setShowOnboarding(false);
+  };
+
   const handleMemberLogin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!loginId || !loginPw) {
       alert('아이디와 비밀번호를 입력해주세요.');
       return;
     }
-    const memberUser = { name: '인천테크', type: 'member' as const };
-    setUser(memberUser);
-    localStorage.setItem('portai_user_session', JSON.stringify(memberUser));
-   setProfile(prev => ({
-  ...prev,
-  companyName: '인천테크',
-  companyAddress: '인천광역시 연수구 송도동',
-  companyCountry: '대한민국',
-  contact: '010-1234-5678',
-  taxNo: '123-45-67890',
-  businessRegistrationNo: '123-45-67890',
-  signedBy: '김지민',
-  signerName: 'Kim Jimin',
-  signerPosition: 'Export Manager'
-}));
+    // 첫 로그인이면 맞춤 설정(온보딩) 단계로 — 저장된 정보가 있으면 바로 입장
+    try {
+      const stored = localStorage.getItem('portai_onboarding');
+      if (stored) {
+        loginWithOnboarding(JSON.parse(stored));
+        return;
+      }
+    } catch {
+      localStorage.removeItem('portai_onboarding');
+    }
+    setShowOnboarding(true);
   };
 
-  const handleGuestLogin = () => {
-    const guestUser = { name: '게스트', type: 'guest' as const };
-    setUser(guestUser);
-    localStorage.setItem('portai_user_session', JSON.stringify(guestUser));
-   setProfile(prev => ({
-  ...prev,
-  companyName: '',
-  companyAddress: '',
-  companyCountry: '',
-  contact: '',
-  taxNo: '',
-  businessRegistrationNo: '',
-  signedBy: '',
-  signerName: '',
-  signerPosition: ''
-}));
+  const handleOnboardingComplete = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!obPurpose) {
+      alert('사용 목적을 선택해주세요.');
+      return;
+    }
+    const ob = { purpose: obPurpose, company: obCompany.trim(), role: obRole };
+    localStorage.setItem('portai_onboarding', JSON.stringify(ob));
+    loginWithOnboarding(ob);
   };
 
   const handleLogout = () => {
@@ -707,8 +757,9 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
       <div className="login-wrapper">
         <div className="login-bg-decoration login-bg-decor1"></div>
         <div className="login-bg-decoration login-bg-decor2"></div>
-        
-        <div className="login-card">
+
+        <div className="login-stage">
+        <div className={`login-card ${showOnboarding ? 'stage-dimmed' : ''}`}>
           <div className="login-header">
             <div className="login-logo">🚢</div>
             <div className="login-brand">PortAI</div>
@@ -759,11 +810,70 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
             </div>
           </div>
 
-          <div className="login-divider">또는</div>
-          
-          <button type="button" className="login-btn-guest" onClick={handleGuestLogin}>
-            비회원으로 시작하기 (체험)
-          </button>
+        </div>
+
+        {/* 첫 로그인 맞춤 설정 패널 — 로그인 카드 오른쪽에서 슬라이드 인 */}
+        <div className={`onboarding-panel ${showOnboarding ? 'open' : ''}`}>
+          <div className="onboarding-inner">
+            <div className="onboarding-heading">
+              <div className="onboarding-title">👋 거의 다 됐어요</div>
+              <div className="onboarding-subtitle">맞춤 서비스를 위해 몇 가지만 알려주세요.</div>
+            </div>
+
+            <form className="login-form" onSubmit={handleOnboardingComplete}>
+              <div className="login-input-group">
+                <label className="login-label">사용 목적</label>
+                <div className="ob-pill-group">
+                  {([
+                    { value: 'export', label: '수출' },
+                    { value: 'import', label: '수입' },
+                    { value: 'both', label: '둘 다' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={`ob-pill ${obPurpose === opt.value ? 'selected' : ''}`}
+                      onClick={() => setObPurpose(opt.value)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="login-input-group">
+                <label className="login-label">회사명</label>
+                <input
+                  type="text"
+                  className="login-input"
+                  placeholder="예: 인천테크"
+                  value={obCompany}
+                  onChange={(e) => setObCompany(e.target.value)}
+                />
+              </div>
+
+              <div className="login-input-group">
+                <label className="login-label">업종 / 담당 업무</label>
+                <select
+                  className="login-input"
+                  value={obRole}
+                  onChange={(e) => setObRole(e.target.value)}
+                >
+                  <option value="">선택하세요 (선택 사항)</option>
+                  <option value="manufacturing">제조업</option>
+                  <option value="trading">무역 / 유통</option>
+                  <option value="logistics">물류 / 포워딩</option>
+                  <option value="ecommerce">전자상거래</option>
+                  <option value="etc">기타</option>
+                </select>
+              </div>
+
+              <button type="submit" className="login-btn-primary" style={{ marginTop: '8px' }}>
+                시작하기
+              </button>
+            </form>
+          </div>
+        </div>
         </div>
       </div>
     );
@@ -783,21 +893,12 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
         <ul className="menu-list">
           <li>
-            <div 
+            <div
               className={`menu-item ${activeMenu === 'dashboard' ? 'active' : ''}`}
               onClick={() => setActiveMenu('dashboard')}
             >
               <LayoutDashboard size={18} />
-              대시보드
-            </div>
-          </li>
-          <li>
-            <div 
-              className={`menu-item ${activeMenu === 'generation' ? 'active' : ''}`}
-              onClick={() => setActiveMenu('generation')}
-            >
-              <FileText size={18} />
-              문서 자동 생성
+              통관 작업실
             </div>
           </li>
           <li>
@@ -814,13 +915,6 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
             <div className="menu-item disabled" title="준비 중인 기능입니다">
               <Layers size={18} />
               거래 관리
-              <span className="badge-soon">준비중</span>
-            </div>
-          </li>
-          <li>
-            <div className="menu-item disabled" title="준비 중인 기능입니다">
-              <Ship size={18} />
-              선적 일정 관리
               <span className="badge-soon">준비중</span>
             </div>
           </li>
@@ -910,8 +1004,8 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
               <p className="page-subtitle">AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.</p>
             </div>
 
-            {/* Quick test scenario filler */}
-            {!hasGenerated && (
+            {/* Quick test scenario filler — 설정의 데모 모드가 켜져 있을 때만 노출 */}
+            {!hasGenerated && demoMode && (
               <div className="quick-fill-container">
                 <button className="btn-pill" onClick={() => handleQuickFill('export_error')}>
                   ⚡ 테스트 시나리오 A 불러오기 (수출 - 중량 누락 & HS코드 오류)
@@ -925,14 +1019,36 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
             {!hasGenerated ? (
               /* --- 거래 정보 입력 모드 --- */
               <div className="dashboard-grid">
-                <div className="form-card">
+                <div className="form-card" data-doctab={docTab} ref={formCardRef}>
                   <div className="card-header-icon-title">
                     <FileSignature size={20} className="text-primary" />
                     <h2 className="card-title">거래 정보 입력</h2>
                   </div>
 
+                  {/* 서류 종류 라벨 탭 — 선택한 서류에 실제 반영되는 입력만 표시 */}
+                  <div className="doc-tab-bar">
+                    {DOC_TABS.map(tab => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        className={`doc-tab ${docTab === tab.id ? 'active' : ''}`}
+                        onClick={() => setDocTab(tab.id)}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {docTab !== 'all' && (
+                    <p className="doc-tab-hint">
+                      {docTab === 'insurance'
+                        ? '적하보험증권은 거래조건이 CIF일 때만 필요한 서류입니다. 아래 항목만 이 서류에 반영됩니다.'
+                        : `${DOC_TABS.find(t => t.id === docTab)?.label}에 실제 반영되는 항목만 표시 중입니다 — 생성은 전체 서류를 일괄 생성합니다.`}
+                    </p>
+                  )}
+
                   <div className="form-grid">
-                    <div className="form-group">
+                    <div className="form-group" data-docs="invoice customs_dec co">
                       <label className="form-label">수출입 구분</label>
                       <select
                         className="form-input"
@@ -944,7 +1060,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       </select>
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group" data-docs="invoice packing_list co">
                       <label className="form-label">품목명</label>
                       <input
                         type="text"
@@ -955,7 +1071,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       />
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group" data-docs="invoice customs_dec co">
                       <label className="form-label">HS CODE</label>
                       <input
                         type="text"
@@ -966,7 +1082,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       />
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group" data-docs="invoice bl">
                       <label className="form-label">선적항</label>
                       <select
                         className="form-input"
@@ -982,7 +1098,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       </select>
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group" data-docs="invoice bl">
                       <label className="form-label">도착항</label>
                       <select
                         className="form-input"
@@ -998,7 +1114,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       </select>
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group" data-docs="invoice bl insurance">
                       <label className="form-label">거래조건 (Incoterms)</label>
                       <select
                         className="form-input"
@@ -1013,7 +1129,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       </select>
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group" data-docs="invoice packing_list co">
                       <label className="form-label">화물 수량</label>
                       <div className="input-suffix">
                         <input
@@ -1027,7 +1143,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       </div>
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group" data-docs="packing_list">
                       <label className="form-label">중량(kg)</label>
                       <div className="input-suffix">
                         <input
@@ -1041,7 +1157,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       </div>
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group" data-docs="bl">
                       <label className="form-label">출발일</label>
                       <input
                         type="date"
@@ -1051,7 +1167,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       />
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group" data-docs="bl">
                       <label className="form-label">도착예정일</label>
                       <input
                         type="date"
@@ -1061,7 +1177,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       />
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group" data-docs="invoice packing_list co">
                       <label className="form-label">업체명</label>
                       <input
                         type="text"
@@ -1072,7 +1188,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       />
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group" data-docs="invoice packing_list co">
                       <label className="form-label">담당자 연락처</label>
                       <input
                         type="text"
@@ -1105,7 +1221,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice">
                         <label className="form-label">송장번호</label>
                         <input
                           type="text"
@@ -1116,7 +1232,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice">
                         <label className="form-label">송장 작성일</label>
                         <input
                           type="date"
@@ -1137,7 +1253,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice co">
                         <label className="form-label">원산지</label>
                         <select
                           className="form-input"
@@ -1154,7 +1270,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         </select>
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice">
                         <label className="form-label">수량 단위</label>
                         <select
                           className="form-input"
@@ -1170,7 +1286,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         </select>
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice">
                         <label className="form-label">단가</label>
                         <input
                           type="number"
@@ -1181,7 +1297,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice">
                         <label className="form-label">총 금액</label>
                         <input
                           type="number"
@@ -1214,7 +1330,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice customs_dec">
                         <label className="form-label">결제 통화</label>
                         <select
                           className="form-input"
@@ -1229,7 +1345,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         </select>
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="customs_dec">
                         <label className="form-label">인보이스 총액</label>
                         <div className="input-suffix">
                           <input
@@ -1329,7 +1445,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="packing_list">
                         <label className="form-label">포장 개수</label>
                         <input
                           type="number"
@@ -1340,7 +1456,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="packing_list">
                         <label className="form-label">포장 종류</label>
                         <select
                           className="form-input"
@@ -1357,7 +1473,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         </select>
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="packing_list">
                         <label className="form-label">순중량(kg)</label>
                         <input
                           type="number"
@@ -1368,7 +1484,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="packing_list">
                         <label className="form-label">총중량(kg)</label>
                         <input
                           type="number"
@@ -1390,7 +1506,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="packing_list">
                         <label className="form-label">Shipping Marks</label>
                         <input
                           type="text"
@@ -1508,7 +1624,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       <span className="form-section-hint">채우면 인보이스의 수입자 정보가 정확해져요</span>
                     </summary>
                     <div className="form-grid">
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice packing_list co">
                         <label className="form-label">거래처명 (Consignee)</label>
                         <input
                           type="text"
@@ -1519,7 +1635,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice packing_list co">
                         <label className="form-label">수입자 주소</label>
                         <input
                           type="text"
@@ -1541,7 +1657,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice packing_list co">
                         <label className="form-label">수입자 연락처</label>
                         <input
                           type="text"
@@ -1626,7 +1742,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       <span className="form-section-hint">한 번 입력하면 거의 고정 — 원산지증명서(C/O) 발급에 필요해요</span>
                     </summary>
                     <div className="form-grid">
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice packing_list co">
                         <label className="form-label">수출자 주소</label>
                         <input
                           type="text"
@@ -1659,7 +1775,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="customs_dec">
                         <label className="form-label">사업자등록번호</label>
                         <input
                           type="text"
@@ -1670,7 +1786,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice packing_list">
                         <label className="form-label">서명자</label>
                         <input
                           type="text"
@@ -1681,7 +1797,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         />
                       </div>
 
-                      <div className="form-group">
+                      <div className="form-group" data-docs="invoice">
                         <label className="form-label">서명자 영문명</label>
                         <input
                           type="text"

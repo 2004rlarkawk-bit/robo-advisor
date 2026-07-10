@@ -156,6 +156,35 @@ function LLMToggleRow() {
   );
 }
 
+function DemoModeToggleRow() {
+  const [demoMode, setDemoMode] = useState(getSettings().demoMode);
+
+  const handleToggle = () => {
+    const next = !demoMode;
+    setDemoMode(next);
+    saveSettings({ demoMode: next });
+  };
+
+  return (
+    <div className="form-card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <h2 className="card-title" style={{ margin: 0 }}>데모 모드</h2>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '6px 0 0' }}>
+            켜면 통관 작업실 상단에 테스트 시나리오 A/B 불러오기 버튼이 표시됩니다 (시연·발표용).
+          </p>
+        </div>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={demoMode} onChange={handleToggle} style={{ width: 18, height: 18 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: demoMode ? '#16a34a' : '#94a3b8' }}>
+            {demoMode ? '켜짐' : '꺼짐'}
+          </span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPanel() {
   return (
     <div>
@@ -167,6 +196,7 @@ export default function SettingsPanel() {
       </div>
 
       <LLMToggleRow />
+      <DemoModeToggleRow />
 
       <KeyRow
         title="LLM API 키"
