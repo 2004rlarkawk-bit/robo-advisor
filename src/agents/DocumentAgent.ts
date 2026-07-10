@@ -1,10 +1,11 @@
 import { Agent, DocumentResult, HSCodeResult, AgentLog, createLog } from './types';
-import { TradeProfile, GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData } from '../types';
+import { TradeProfile, GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, InsuranceData } from '../types';
 import { determineRequiredDocuments } from '../harness/rulesEngine';
 import { autoFillDocumentFields } from '../services/claudeService';
 import { renderInvoiceHTML } from './templates/invoice';
 import { renderPackingListHTML } from './templates/packingList';
 import { renderCertificateOfOriginHTML } from './templates/co';
+import { renderInsuranceHTML } from './templates/insurance';
 
 export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: HSCodeResult; useLLM?: boolean; logs: AgentLog[] }, DocumentResult> {
   readonly name = 'Document Agent';
@@ -108,7 +109,15 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
         loadPort: profile.loadPort || 'N/A',
         dischargePort: profile.dischargePort || 'N/A',
         paymentTerms,
-        signedBy: profile.signedBy || profile.signerName || profile.companyName || 'Authorized Signature'
+        signedBy: profile.signedBy || profile.signerName || profile.companyName || 'Authorized Signature',
+        // 무역협회 표준 서식 ①~⑱ 추가 필드
+        sellerTaxNo: profile.tradeType === 'export' ? (profile.businessRegistrationNo || profile.taxNo || '') : '',
+        buyer: profile.buyerName ? { name: profile.buyerName, address: profile.buyerAddress || '', contact: '' } : undefined,
+        vessel: profile.vesselOrFlight || '',
+        shippingMarks: profile.shippingMarks || '',
+        packageCount: Number(profile.packageCount) || 0,
+        packageType: profile.packageType || 'CARTONS',
+        countryOfOrigin: profile.countryOfOrigin || ''
       };
 
       generatedDocs.invoice = invoice;
@@ -159,7 +168,15 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
         }],
         totalPackages: Number(profile.packageCount) || qty,
         totalNetWeight: netWeight,
-        totalGrossWeight: grossWeight
+        totalGrossWeight: grossWeight,
+        // 무역협회 표준 서식 ①~⑯ 추가 필드
+        sellerTaxNo: profile.tradeType === 'export' ? (profile.businessRegistrationNo || profile.taxNo || '') : '',
+        buyer: profile.buyerName ? { name: profile.buyerName, address: profile.buyerAddress || '', contact: '' } : undefined,
+        departureDate: profile.departureDate || '',
+        vessel: profile.vesselOrFlight || '',
+        loadPort: profile.loadPort || '',
+        dischargePort: profile.dischargePort || '',
+        countryOfOrigin: profile.countryOfOrigin || ''
       };
 
       generatedDocs.packingList = packingList;
@@ -191,11 +208,52 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
         items: generatedDocs.invoice?.items || [],
         signedBy: profile.signedBy || profile.signerName || profile.companyName || 'Authorized Signature',
         invoiceNo: generatedDocs.invoice?.invoiceNo || 'N/A',
-        invoiceRef: generatedDocs.invoice?.invoiceNo || 'N/A' // 템플릿 호환용 별칭
+        invoiceRef: generatedDocs.invoice?.invoiceNo || 'N/A', // 템플릿 호환용 별칭
+        // RCEP 표준 서식(FORM RCEP, Box 1~14) 추가 필드
+        certNo: `CO-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,
+        agreement: 'RCEP',
+        departureDate: profile.departureDate || '',
+        vessel: profile.vesselOrFlight || '',
+        dischargePort: profile.dischargePort || '',
+        grossWeight: Number(profile.grossWeight || profile.weight) || 0,
+        originCriterion: 'PSR',
+        shippingMarks: profile.shippingMarks || '',
+        packages: Number(profile.packageCount) ? `${profile.packageCount} ${profile.packageType || 'CARTONS'}` : ''
       };
 
       generatedDocs.certificateOfOrigin = co;
       logs.push(createLog(this.name, '원산지증명서 초안 조립 완료 (원산지: 대한민국)', 'success'));
+    }
+
+    // 6. 적하보험증권 (Insurance) 데이터 조립 — CIF 등 부보 의무 조건일 때만
+    const insuranceDoc = requiredDocs.find(d => d.id === 'insurance');
+    if (insuranceDoc && generatedDocs.invoice) {
+      logs.push(createLog(this.name, '적하보험증권(Cargo Insurance) 초안 조립 중...', 'info'));
+
+      const inv = generatedDocs.invoice;
+      // 부보금액은 통상 송장금액(CIF)의 110%로 산정한다.
+      const insuredAmount = Math.round((inv.totalAmount || 0) * 1.1 * 100) / 100;
+
+      const insurance: InsuranceData = {
+        certNo: `INS-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`,
+        assured: inv.seller,
+        invoiceNo: inv.invoiceNo,
+        amountInsured: insuredAmount,
+        insuredRate: `${inv.currency} ${(inv.totalAmount || 0).toLocaleString()} × 110%`,
+        currency: inv.currency,
+        conditions: 'INSTITUTE CARGO CLAUSE (A)',
+        vesselName: profile.vesselOrFlight || '',
+        fromPort: profile.loadPort || '',
+        toPort: profile.dischargePort || '',
+        sailingOn: profile.departureDate || '',
+        goods: itemDescription,
+        placeAndDateSigned: `${profile.loadPort || 'SEOUL, KOREA'} ${new Date().toISOString().split('T')[0]}`,
+        noOfCertificates: 'TWO',
+        signedBy: profile.signedBy || profile.signerName || profile.companyName || 'Authorized Signatory'
+      };
+
+      generatedDocs.insurance = insurance;
+      logs.push(createLog(this.name, `적하보험증권 초안 조립 완료 (부보금액: ${inv.currency} ${insuredAmount.toLocaleString()})`, 'success'));
     }
 
     // HTML 템플릿 렌더링 적용
@@ -208,6 +266,9 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
 }
     if (generatedDocs.certificateOfOrigin) {
       htmlTemplates.co = renderCertificateOfOriginHTML(generatedDocs.certificateOfOrigin);
+    }
+    if (generatedDocs.insurance) {
+      htmlTemplates.insurance = renderInsuranceHTML(generatedDocs.insurance);
     }
 
     logs.push(createLog(this.name, '문서 생성 에이전트 작업 완료.', 'success'));
