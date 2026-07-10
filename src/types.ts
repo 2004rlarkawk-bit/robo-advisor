@@ -205,11 +205,29 @@ export interface CertificateOfOriginData {
   [key: string]: any;
 }
 
+export interface InsuranceData {
+  certNo: string;
+  assured: PartyInfo;
+  invoiceNo: string;
+  amountInsured: number;
+  currency: string;
+  conditions: string;
+  vesselName: string;
+  fromPort: string;
+  toPort: string;
+  sailingOn: string;
+  goods: string;
+  signedBy: string;
+
+  [key: string]: any;
+}
+
 export interface GeneratedDocuments {
   documents?: DocumentStatus[];
   invoice?: InvoiceData;
   packingList?: PackingListData;
   certificateOfOrigin?: CertificateOfOriginData;
+  insurance?: InsuranceData;
   htmlTemplates?: Record<string, string>;
 
   [key: string]: any;
