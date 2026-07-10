@@ -131,25 +131,13 @@ export default function App() {
     setShowOnboarding(false);
   };
 
-  // 온보딩 완료 기록은 로그인 아이디별로 저장 — 새 아이디로 로그인하면 온보딩이 다시 뜬다
-  const onboardingKey = () => `portai_onboarding:${loginId.trim().toLowerCase()}`;
-
   const handleMemberLogin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!loginId || !loginPw) {
       alert('아이디와 비밀번호를 입력해주세요.');
       return;
     }
-    // 이 아이디의 첫 로그인이면 맞춤 설정(온보딩) 단계로 — 저장된 정보가 있으면 바로 입장
-    try {
-      const stored = localStorage.getItem(onboardingKey());
-      if (stored) {
-        loginWithOnboarding(JSON.parse(stored));
-        return;
-      }
-    } catch {
-      localStorage.removeItem(onboardingKey());
-    }
+    // 로그인 후 항상 맞춤 설정(온보딩) 단계를 거친다 — 조건부 스킵 없음
     setShowOnboarding(true);
   };
 
@@ -159,9 +147,7 @@ export default function App() {
       alert('사용 목적을 선택해주세요.');
       return;
     }
-    const ob = { purpose: obPurpose, company: obCompany.trim(), role: obRole };
-    localStorage.setItem(onboardingKey(), JSON.stringify(ob));
-    loginWithOnboarding(ob);
+    loginWithOnboarding({ purpose: obPurpose, company: obCompany.trim(), role: obRole });
   };
 
   const handleLogout = () => {
