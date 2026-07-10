@@ -27,6 +27,7 @@ import SettingsPanel from './components/SettingsPanel';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
 import { saveTrade, getSettings } from './services/storageService';
+import { calculateReadiness } from './harness/rulesEngine';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
 import html2canvas from 'html2canvas';
@@ -673,6 +674,12 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   };
 
   const handleSubmitAll = () => {
+    if (readiness.percent < 100) {
+      const proceed = window.confirm(
+        `아직 준비되지 않은 서류가 있습니다 (준비도 ${readiness.percent}%).\n${readiness.nextStepLabel ?? ''}\n\n그래도 제출하시겠습니까?`
+      );
+      if (!proceed) return;
+    }
     alert('모든 통관 문서 정보 보완이 완료되었습니다. 관세청 통관 시스템으로 제출합니다.');
   };
 
@@ -684,6 +691,8 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   ).length;
   const blockingIssuesCount = issues.filter(i => i.severity !== 'info').length;
   const reviewDocsCount = blockingIssuesCount;
+  // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
+  const readiness = calculateReadiness(documents);
 
   // AI 피드백에서 이슈 상세 라인(📦🔢🌍⚓⚠️ 접두)은 아래 보완 카드와 중복되므로
   // 요약 문단만 표시한다. 전부 이슈 라인이면(필터 결과가 비면) 원문 유지.
@@ -1082,7 +1091,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                   <details className="form-section">
                     <summary className="form-section-summary">
                       📄 송장·문서 상세
-                      <span className="form-section-hint">비워두면 자동 생성</span>
+                      <span className="form-section-hint">비워두면 자동 생성 — 채우면 상업송장이 실제 서류와 정확히 일치해요</span>
                     </summary>
                     <div className="form-grid">
                       <div className="form-group">
@@ -1239,7 +1248,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                   <details className="form-section">
                     <summary className="form-section-summary">
                       🚢 선적·운송 상세
-                      <span className="form-section-hint">B/L·패킹리스트용 — 필요 시에만</span>
+                      <span className="form-section-hint">채우면 선하증권(B/L) 준비 완료로 표시돼요</span>
                     </summary>
                     <div className="form-grid">
                       <div className="form-group">
@@ -1496,7 +1505,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                   <details className="form-section">
                     <summary className="form-section-summary">
                       🤝 상대방·구매자 정보
-                      <span className="form-section-hint">선택</span>
+                      <span className="form-section-hint">채우면 인보이스의 수입자 정보가 정확해져요</span>
                     </summary>
                     <div className="form-grid">
                       <div className="form-group">
@@ -1614,7 +1623,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                   <details className="form-section">
                     <summary className="form-section-summary">
                       🏢 회사·서명 정보
-                      <span className="form-section-hint">한 번 입력하면 거의 고정</span>
+                      <span className="form-section-hint">한 번 입력하면 거의 고정 — 원산지증명서(C/O) 발급에 필요해요</span>
                     </summary>
                     <div className="form-grid">
                       <div className="form-group">
@@ -1763,6 +1772,20 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                     <Terminal size={14} />
                     에이전트 실행 로그 확인
                   </button>
+                </div>
+
+                {/* 실제 제출 전 준비도 바 */}
+                <div className="readiness-card">
+                  <div className="readiness-card-header">
+                    <span className="readiness-card-title">수출 준비도</span>
+                    <span className="readiness-card-percent">{readiness.percent}%</span>
+                  </div>
+                  <div className="readiness-bar-track">
+                    <div className="readiness-bar-fill" style={{ width: `${readiness.percent}%` }} />
+                  </div>
+                  {readiness.nextStepLabel && (
+                    <p className="readiness-next-step">다음 단계: {readiness.nextStepLabel}</p>
+                  )}
                 </div>
 
                 {/* 결과 요약 통계 바 */}
