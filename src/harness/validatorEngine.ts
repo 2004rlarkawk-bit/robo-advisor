@@ -105,9 +105,9 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
   // 2. 통관신고서 - HS CODE 검증 (HSCodeAgent에서 처리하므로 여기서는 중복 제거)
 
   // 3. 원산지증명서 - 작성 여부 검증
-  // TODO(데모용 placeholder): companyName.includes('산')은 시연 시나리오 분기용 임시 조건임.
-  //  실제 판단 기준은 "수출 + FTA 협정세율 적용 희망 or 상대국 요구" — 원산지 판정 로직으로 교체 필요.
-  if (profile.tradeType === 'export' && !profile.companyName.includes('산')) {
+  // 사용자가 발급 요청을 확인(coIssuanceConfirmed)하면 해소된다.
+  // TODO: FTA 협정세율 적용 희망 여부 등 실제 원산지 판정 로직으로 고도화 예정.
+  if (profile.tradeType === 'export' && !profile.coIssuanceConfirmed) {
     issues.push({
       id: 'co-required',
       docType: 'co',
@@ -132,14 +132,15 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
   // 5. Incoterms 조건별 검증 규칙 추가
   const rule = getIncotermsRule(profile.incoterms);
   if (rule) {
-    // CIF 조건인 경우 적하보험증권 누락 에러
-    if (rule.incoterm === 'CIF') {
+    // CIF 조건인 경우 적하보험증권 준비 확인 — 사용자가 준비 완료로 표시하면 해소된다.
+    // (error로 두면 해소 수단 없이 제출이 영구 차단되므로 warning + 해소 플래그 방식 사용)
+    if (rule.incoterm === 'CIF' && !profile.insuranceConfirmed) {
       issues.push({
         id: 'insurance-missing',
         docType: 'insurance',
-        severity: 'error',
-        message: '적하보험증권: 필수 누락 (CIF 조건은 적하보험증권 필수입니다. 적하보험증권을 준비하세요.)',
-        field: 'incoterms'
+        severity: 'warning',
+        message: '적하보험증권: 준비 확인 필요 (CIF 조건은 적하보험증권이 필수입니다. 증권 준비 후 완료로 표시해 주세요.)',
+        field: 'insuranceConfirmed'
       });
     }
 
@@ -154,16 +155,18 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
       });
     }
 
-    // FOB/CIF(해상 전용)인데 운송 맥락 불일치 (선적항/도착항 입력값에 '항' 자가 없는 경우 자문 경고)
+    // FOB/CIF(해상 전용)인데 공항이 입력된 경우만 자문 경고.
+    // (기존 endsWith('항') 방식은 "Busan"·"KRPUS" 같은 영문/UN LOCODE 표기를
+    //  전부 허위 경고로 잡았다 — 명백한 공항 표기만 잡는 것이 정확하다)
     if (rule.transportMode === 'sea') {
-      const isLoadPortSea = !profile.loadPort || profile.loadPort.endsWith('항');
-      const isDischargePortSea = !profile.dischargePort || profile.dischargePort.endsWith('항');
-      if (!isLoadPortSea || !isDischargePortSea) {
+      const looksLikeAirport = (port: string) =>
+        /공항|airport|air\s?port/i.test(port);
+      if (looksLikeAirport(profile.loadPort || '') || looksLikeAirport(profile.dischargePort || '')) {
         issues.push({
           id: 'transport-context-mismatch',
           docType: 'bl',
           severity: 'info', // 자문 경고 (info/advisory)
-          message: '운송 맥락 불일치 경고: FOB/CIF 조건은 해상 운송 전용이므로 선적항/도착항은 항구여야 합니다.',
+          message: '운송 맥락 불일치 경고: FOB/CIF 조건은 해상 운송 전용인데 공항이 입력되어 있습니다. 항구를 입력하세요.',
           field: 'loadPort'
         });
       }

@@ -2,7 +2,7 @@
  * 설정 페이지 — API 키 관리
  *
  * 3종 키를 localStorage에 저장:
- *  1. Claude API (LLM 추천·피드백)
+ *  1. LLM API (추천·피드백)
  *  2. data.go.kr 관세청 GW (환율·수출입실적)
  *  3. 국세청 사업자등록 상태조회
  *
@@ -12,6 +12,7 @@
 import { useState } from 'react';
 import { KeyRound, CheckCircle2, XCircle, Loader2, Trash2, PlugZap } from 'lucide-react';
 import { setApiKey, hasApiKey, clearApiKey } from '../services/claudeService';
+import { getSettings, saveSettings } from '../services/storageService';
 import {
   setDataGoKrKey, hasDataGoKrKey, clearDataGoKrKey,
   setNtsBusinessKey, hasNtsBusinessKey, clearNtsBusinessKey,
@@ -126,6 +127,64 @@ function KeyRow({ title, description, placeholder, saved, onSave, onClear, onTes
   );
 }
 
+function LLMToggleRow() {
+  const [useLLM, setUseLLM] = useState(getSettings().useLLM);
+
+  const handleToggle = () => {
+    const next = !useLLM;
+    setUseLLM(next);
+    saveSettings({ useLLM: next });
+  };
+
+  return (
+    <div className="form-card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <h2 className="card-title" style={{ margin: 0 }}>AI(LLM) 기능 사용</h2>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '6px 0 0' }}>
+            끄면 문서 생성·재검증 시 LLM API를 호출하지 않고 로컬 사전과 룰 기반으로만 동작합니다 (API 비용 절약).
+          </p>
+        </div>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={useLLM} onChange={handleToggle} style={{ width: 18, height: 18 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: useLLM ? '#16a34a' : '#94a3b8' }}>
+            {useLLM ? '사용 중' : '꺼짐'}
+          </span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function DemoModeToggleRow() {
+  const [demoMode, setDemoMode] = useState(getSettings().demoMode);
+
+  const handleToggle = () => {
+    const next = !demoMode;
+    setDemoMode(next);
+    saveSettings({ demoMode: next });
+  };
+
+  return (
+    <div className="form-card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <h2 className="card-title" style={{ margin: 0 }}>데모 모드</h2>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '6px 0 0' }}>
+            켜면 통관 작업실 상단에 테스트 시나리오 A/B 불러오기 버튼이 표시됩니다 (시연·발표용).
+          </p>
+        </div>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={demoMode} onChange={handleToggle} style={{ width: 18, height: 18 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: demoMode ? '#16a34a' : '#94a3b8' }}>
+            {demoMode ? '켜짐' : '꺼짐'}
+          </span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPanel() {
   return (
     <div>
@@ -136,10 +195,13 @@ export default function SettingsPanel() {
         </p>
       </div>
 
+      <LLMToggleRow />
+      <DemoModeToggleRow />
+
       <KeyRow
-        title="Claude API 키"
-        description="LLM 기반 HS Code 추천, 자연어 피드백, 문서 필드 자동 채움에 사용됩니다. console.anthropic.com에서 발급."
-        placeholder="sk-ant-..."
+        title="LLM API 키"
+        description="LLM 기반 HS Code 추천, 자연어 피드백, 문서 필드 자동 채움에 사용됩니다."
+        placeholder="sk-..."
         saved={hasApiKey()}
         onSave={setApiKey}
         onClear={clearApiKey}

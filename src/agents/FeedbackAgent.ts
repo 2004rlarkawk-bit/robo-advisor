@@ -49,6 +49,10 @@ export class FeedbackAgent implements Agent<{ profile: TradeProfile; issues: Val
       responsibilityNote = '💡 [EXW 책임안내] 공장 인도 조건입니다. 이후 운송·통관은 매수인 책임입니다.\n\n';
     } else if (profile.incoterms === 'DDP') {
       responsibilityNote = '💡 [DDP 책임안내] 수입국 통관·관세까지 매도인 부담입니다. 수입국 규정을 확인하세요.\n\n';
+    } else if (profile.incoterms === 'DAP') {
+      responsibilityNote = '💡 [DAP 책임안내] 지정 목적지 도착까지 운송을 매도인이 부담합니다. 수입통관·관세는 매수인 몫입니다.\n\n';
+    } else if (profile.incoterms === 'FCA') {
+      responsibilityNote = '💡 [FCA 책임안내] 지정 장소에서 운송인에게 인도하면 위험이 이전됩니다. 이후 운송·보험은 매수인이 수배합니다.\n\n';
     }
 
     return { message: responsibilityNote + message };

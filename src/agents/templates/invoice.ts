@@ -1,123 +1,147 @@
 import type { InvoiceData } from '../../types';
+import { escapeHtml as esc } from './escapeHtml';
 
+/**
+ * 상업송장 (Commercial Invoice)
+ * 한국무역협회(KITA) 표준 서식 ①~⑱ 기준.
+ * 참고 양식: 무역협회_상업송장_commercial invoice.docx
+ */
 export function renderInvoiceHTML(data: InvoiceData): string {
-  const itemsHTML = data.items.map(item => `
-    <tr>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.no}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1;"><strong>${item.description}</strong></td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.hsCode || 'N/A'}</td>
-<td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.countryOfOrigin || 'N/A'}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${item.quantity.toLocaleString()}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center;">${item.unit}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right;">${data.currency} ${item.unitPrice.toFixed(2)}</td>
-      <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: right; font-weight: bold;">${data.currency} ${item.amount.toFixed(2)}</td>
-    </tr>
-  `).join('');
+  const d = data as Record<string, any>;
+  const fb = (v: any, fallback = '—') => {
+    const s = v === undefined || v === null ? '' : String(v).trim();
+    return s === '' ? `<span style="color:#94a3b8;">${esc(fallback)}</span>` : esc(s);
+  };
+  const cur = esc(data.currency || 'USD');
+  const marks = d.shippingMarks && String(d.shippingMarks).trim() !== '' ? esc(d.shippingMarks) : '<span style="color:#94a3b8;">N/M</span>';
+
+  const itemsHTML = data.items.map(item => {
+    const it = item as Record<string, any>;
+    const pkg = it.packageCount ? `${esc(String(it.packageCount))} ${esc(it.packageType || d.packageType || 'CARTONS')}` : fb(d.packageCount ? `${d.packageCount} ${d.packageType || 'CARTONS'}` : '');
+    const hs = item.hsCode ? `<br><span style="color:#94a3b8; font-size:11px;">HS ${esc(item.hsCode)}</span>` : '';
+    return `
+      <tr>
+        <td style="border:1px solid #444; padding:9px 8px; text-align:center; color:#94a3b8;">${marks}</td>
+        <td style="border:1px solid #444; padding:9px 8px;">${pkg}</td>
+        <td style="border:1px solid #444; padding:9px 8px;"><strong>${esc(item.description)}</strong>${hs}</td>
+        <td style="border:1px solid #444; padding:9px 8px; text-align:right;">${esc((item.quantity ?? 0).toLocaleString())} ${esc(item.unit || '')}</td>
+        <td style="border:1px solid #444; padding:9px 8px; text-align:right;">${cur} ${esc((item.unitPrice ?? 0).toFixed(2))}</td>
+        <td style="border:1px solid #444; padding:9px 8px; text-align:right; font-weight:700;">${cur} ${esc((item.amount ?? 0).toFixed(2))}</td>
+      </tr>`;
+  }).join('');
+
+  const originRef = d.countryOfOrigin || data.items?.[0]?.countryOfOrigin;
+  const buyer = d.buyer?.name ? esc(d.buyer.name) : '<span style="color:#94a3b8;">SAME AS CONSIGNEE</span>';
+  const sellerTax = d.sellerTaxNo || d.businessRegistrationNo || d.taxNo;
 
   return `
-    <div style="font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; border: 1px solid #e2e8f0; background: #ffffff; color: #1e293b; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
-      <!-- Header -->
-      <div style="text-align: center; border-bottom: 3px double #2563eb; padding-bottom: 20px; margin-bottom: 30px;">
-        <h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: 0.05em; color: #1e3a8a;">COMMERCIAL INVOICE</h1>
-        <p style="margin: 5px 0 0 0; font-size: 12px; text-transform: uppercase; color: #64748b; letter-spacing: 0.1em;">International Trade & Customs Document</p>
-      </div>
+    <div style="font-family:'Malgun Gothic','Inter','Helvetica Neue',Arial,sans-serif; max-width:800px; margin:0 auto; padding:28px 32px 40px; background:#fff; color:#111;">
+      <h1 style="text-align:center; font-size:22px; letter-spacing:3px; margin:0 0 4px; font-weight:700;">COMMERCIAL INVOICE</h1>
+      <div style="text-align:center; font-size:10px; color:#555; letter-spacing:2px; margin-bottom:14px; text-transform:uppercase;">Korea International Trade Association Standard Form</div>
 
-      <!-- Metadata & Info Grid -->
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
+      <table style="border-collapse:collapse; width:100%; border:1px solid #222;">
         <tr>
-          <td style="width: 50%; vertical-align: top; padding-right: 20px;">
-            <div style="font-size: 11px; font-weight: bold; color: #4f46e5; text-transform: uppercase; margin-bottom: 5px;">Exporter / Shipper</div>
-            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${data.exporter.name}</div>
-            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${data.exporter.address}</div>
-            <div style="font-size: 12px; color: #475569;">Contact: ${data.exporter.contact}</div>
+          <td style="border:1px solid #222; padding:6px 8px; vertical-align:top; width:55%;" rowspan="2">
+            <div style="font-size:10px; color:#1e3a8a; font-weight:700; margin-bottom:3px;">① Shipper / Seller</div>
+            <div style="font-size:12px; line-height:1.45;"><span style="font-weight:700; font-size:13px;">${esc(data.seller?.name || '')}</span><br>
+            ${fb(data.seller?.address)}<br>
+            ${data.seller?.contact ? 'TEL: ' + esc(data.seller.contact) : ''}${sellerTax ? ' &nbsp; 사업자등록번호: ' + esc(sellerTax) : ''}</div>
           </td>
-          <td style="width: 50%; vertical-align: top; border-left: 1px solid #e2e8f0; padding-left: 20px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <td style="border:1px solid #222; padding:6px 8px; vertical-align:top; width:45%;">
+            <div style="font-size:10px; color:#1e3a8a; font-weight:700; margin-bottom:3px;">⑦ Invoice No. and date</div>
+            <div style="font-size:12px;"><span style="font-weight:700;">${esc(data.invoiceNo || '')}</span> &nbsp; ${esc(data.invoiceDate || d.date || '')}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #222; padding:6px 8px; vertical-align:top;">
+            <div style="font-size:10px; color:#1e3a8a; font-weight:700; margin-bottom:3px;">⑧ L/C No. and date</div>
+            <div style="font-size:12px;">${fb(d.lcNo)}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #222; padding:6px 8px; vertical-align:top;" rowspan="2">
+            <div style="font-size:10px; color:#1e3a8a; font-weight:700; margin-bottom:3px;">② Consignee (or For account &amp; risk of Messrs)</div>
+            <div style="font-size:12px; line-height:1.45;"><span style="font-weight:700; font-size:13px;">${esc(data.consignee?.name || '')}</span><br>
+            ${fb(data.consignee?.address)}<br>
+            ${data.consignee?.contact ? 'TEL: ' + esc(data.consignee.contact) : ''}</div>
+          </td>
+          <td style="border:1px solid #222; padding:6px 8px; vertical-align:top;">
+            <div style="font-size:10px; color:#1e3a8a; font-weight:700; margin-bottom:3px;">⑨ Buyer (if other than consignee)</div>
+            <div style="font-size:12px;">${buyer}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #222; padding:6px 8px; vertical-align:top;">
+            <div style="font-size:10px; color:#1e3a8a; font-weight:700; margin-bottom:3px;">⑩ Other references</div>
+            <div style="font-size:12px;">${originRef ? 'COUNTRY OF ORIGIN: ' + esc(originRef) : fb('')}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #222; padding:0;">
+            <table style="width:100%; border-collapse:collapse;">
               <tr>
-                <td style="padding: 4px 0; font-weight: bold; color: #64748b; width: 45%;">Invoice No:</td>
-                <td style="padding: 4px 0; font-weight: bold; color: #0f172a;">${data.invoiceNo}</td>
+                <td style="border-right:1px solid #222; padding:6px 8px; width:50%; vertical-align:top;">
+                  <div style="font-size:10px; color:#1e3a8a; font-weight:700; margin-bottom:3px;">③ Departure date</div>
+                  <div style="font-size:12px;">${fb(data.departureDate)}</div>
+                </td>
+                <td style="padding:6px 8px; width:50%; vertical-align:top;">
+                  <div style="font-size:10px; color:#1e3a8a; font-weight:700; margin-bottom:3px;">④ Vessel / flight</div>
+                  <div style="font-size:12px;">${fb(d.vessel || d.vesselOrFlight)}</div>
+                </td>
               </tr>
+            </table>
+          </td>
+          <td style="border:1px solid #222; padding:6px 8px; vertical-align:top;" rowspan="2">
+            <div style="font-size:10px; color:#1e3a8a; font-weight:700; margin-bottom:3px;">⑪ Terms of delivery and payment</div>
+            <div style="font-size:12px; line-height:1.5;"><span style="font-weight:700;">${esc(data.incoterms || '')} ${esc(data.loadPort || '')}</span><br>${fb(data.paymentTerms)}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #222; padding:0;">
+            <table style="width:100%; border-collapse:collapse;">
               <tr>
-                <td style="padding: 4px 0; font-weight: bold; color: #64748b;">Date:</td>
-                <td style="padding: 4px 0; color: #0f172a;">${data.date}</td>
-              </tr>
-              <tr>
-                <td style="padding: 4px 0; font-weight: bold; color: #64748b;">Incoterms:</td>
-                <td style="padding: 4px 0; color: #2563eb; font-weight: bold;">${data.incoterms}</td>
-              </tr>
-              <tr>
-                <td style="padding: 4px 0; font-weight: bold; color: #64748b;">Payment Terms:</td>
-                <td style="padding: 4px 0; color: #0f172a;">${data.paymentTerms}</td>
+                <td style="border-right:1px solid #222; padding:6px 8px; width:50%; vertical-align:top;">
+                  <div style="font-size:10px; color:#1e3a8a; font-weight:700; margin-bottom:3px;">⑤ From</div>
+                  <div style="font-size:12px;">${fb(data.loadPort)}</div>
+                </td>
+                <td style="padding:6px 8px; width:50%; vertical-align:top;">
+                  <div style="font-size:10px; color:#1e3a8a; font-weight:700; margin-bottom:3px;">⑥ To</div>
+                  <div style="font-size:12px;">${fb(data.dischargePort)}</div>
+                </td>
               </tr>
             </table>
           </td>
         </tr>
       </table>
 
-      <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-
-      <!-- Consignee Info -->
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-        <tr>
-          <td style="width: 50%; vertical-align: top; padding-right: 20px;">
-            <div style="font-size: 11px; font-weight: bold; color: #4f46e5; text-transform: uppercase; margin-bottom: 5px;">Consignee / Importer</div>
-            <div style="font-size: 14px; font-weight: bold; color: #0f172a; margin-bottom: 3px;">${data.importer.name}</div>
-            <div style="font-size: 12px; color: #475569; line-height: 1.4; margin-bottom: 3px;">${data.importer.address}</div>
-            <div style="font-size: 12px; color: #475569;">Contact: ${data.importer.contact}</div>
-          </td>
-          <td style="width: 50%; vertical-align: top; border-left: 1px solid #e2e8f0; padding-left: 20px;">
-            <div style="font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase; margin-bottom: 5px;">Shipping Routing</div>
-            <table style="width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.5;">
-              <tr>
-                <td style="padding: 2px 0; font-weight: bold; color: #64748b; width: 45%;">Port of Loading:</td>
-                <td style="padding: 2px 0; color: #0f172a;">${data.loadPort}</td>
-              </tr>
-              <tr>
-                <td style="padding: 2px 0; font-weight: bold; color: #64748b;">Port of Discharge:</td>
-                <td style="padding: 2px 0; color: #0f172a;">${data.dischargePort}</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-
-      <!-- Items Table -->
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 13px;">
+      <table style="border-collapse:collapse; width:100%; margin-top:-1px;">
         <thead>
-          <tr style="background-color: #1e3a8a; color: #ffffff;">
-            <th style="padding: 12px 10px; text-align: center; font-weight: 600; width: 8%; border: 1px solid #1e3a8a;">No.</th>
-            <th style="padding: 12px 10px; text-align: left; font-weight: 600; width: 34%; border: 1px solid #1e3a8a;">Description of Goods</th>
-<th style="padding: 12px 10px; text-align: center; font-weight: 600; width: 12%; border: 1px solid #1e3a8a;">HS Code</th>
-<th style="padding: 12px 10px; text-align: center; font-weight: 600; width: 12%; border: 1px solid #1e3a8a;">Origin</th>
-<th style="padding: 12px 10px; text-align: right; font-weight: 600; width: 10%; border: 1px solid #1e3a8a;">Qty</th>
-            <th style="padding: 12px 10px; text-align: center; font-weight: 600; width: 10%; border: 1px solid #1e3a8a;">Unit</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 600; width: 12%; border: 1px solid #1e3a8a;">Unit Price</th>
-            <th style="padding: 12px 10px; text-align: right; font-weight: 600; width: 10%; border: 1px solid #1e3a8a;">Amount</th>
+          <tr style="background:#1e3a8a; color:#fff; font-size:11px;">
+            <th style="border:1px solid #1e3a8a; padding:8px 6px; width:14%;">⑫ Shipping Marks</th>
+            <th style="border:1px solid #1e3a8a; padding:8px 6px; width:16%;">⑬ No. &amp; kind of packages</th>
+            <th style="border:1px solid #1e3a8a; padding:8px 6px; width:32%;">⑭ Goods description</th>
+            <th style="border:1px solid #1e3a8a; padding:8px 6px; width:12%;">⑮ Quantity</th>
+            <th style="border:1px solid #1e3a8a; padding:8px 6px; width:13%;">⑯ Unit price</th>
+            <th style="border:1px solid #1e3a8a; padding:8px 6px; width:13%;">⑰ Amount</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody style="font-size:12px;">
           ${itemsHTML}
-          <tr style="background-color: #f8fafc; font-weight: bold; font-size: 14px;">
-            <td colspan="6" style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #475569;">TOTAL AMOUNT:</td>
-            <td colspan="2" style="padding: 12px 10px; border: 1px solid #cbd5e1; text-align: right; color: #1e3a8a; font-size: 16px;">${data.currency} ${data.totalAmount.toFixed(2)}</td>
+          <tr style="background:#f1f5f9; font-weight:700;">
+            <td colspan="5" style="border:1px solid #444; padding:9px 8px; text-align:right;">TOTAL AMOUNT</td>
+            <td style="border:1px solid #444; padding:9px 8px; text-align:right; color:#1e3a8a;">${cur} ${esc((data.totalAmount ?? 0).toFixed(2))}</td>
           </tr>
         </tbody>
       </table>
 
-      <!-- Signoff section -->
-      <div style="margin-top: 50px; display: flex; justify-content: flex-end;">
-        <div style="text-align: center; width: 250px;">
-          <div style="height: 60px; display: flex; align-items: flex-end; justify-content: center; font-family: 'Courier New', Courier, monospace; font-size: 18px; color: #475569; font-style: italic; border-bottom: 1px solid #94a3b8; margin-bottom: 8px; padding-bottom: 5px;">
-            ${data.signedBy || data.exporter?.name || data.seller?.name || ''}
-          </div>
-          <div style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; letter-spacing: 0.05em;">Authorized Signature</div>
+      <div style="margin-top:22px; display:flex; justify-content:flex-end;">
+        <div style="width:290px;">
+          <div style="font-size:11px; color:#1e3a8a; font-weight:700; margin-bottom:24px;">⑱ Signed by</div>
+          <div style="border-bottom:1px solid #333; font-family:'Courier New',monospace; font-style:italic; font-size:15px; padding-bottom:4px; color:#333;">${esc(data.signedBy || data.seller?.name || '')}</div>
         </div>
       </div>
-      
-      <!-- Footer Note -->
-      <div style="border-top: 1px solid #e2e8f0; margin-top: 50px; padding-top: 10px; text-align: center; font-size: 9px; color: #94a3b8;">
-        Generated automatically by PortAI Smart Customs Platform • A4 Document Page 1 of 1
-      </div>
+
+      <div style="border-top:1px solid #e2e8f0; margin-top:24px; padding-top:8px; text-align:center; font-size:9px; color:#aaa;">Generated by PortAI • Korea International Trade Association Standard Commercial Invoice</div>
     </div>
   `;
 }

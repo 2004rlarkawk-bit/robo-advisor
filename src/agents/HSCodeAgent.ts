@@ -40,14 +40,20 @@ export class HSCodeAgent implements Agent<{ itemName: string; hsCode?: string; u
       try {
         // 폴백 체인: Claude(키 있을 때만, 의미 검색) → 관세청 로컬 사전(정확 매칭) → 내장 dict
         if (useLLM && hasApiKey()) {
-          const suggestions = await suggestHSCode(itemName);
-          candidates = suggestions.map(c => ({
-            code: formatHSCode(c.code),
-            description: c.description,
-            confidence: c.confidence,
-            reasoning: c.reasoning
-          }));
-          logs.push(createLog(this.name, `Claude LLM 기반 후보 ${candidates.length}건 수신`, 'success'));
+          // LLM 호출만 별도 try — 잘못된 키(401) 등 API 오류가 나도 사전 검색은 계속돼야 한다
+          try {
+            const suggestions = await suggestHSCode(itemName);
+            candidates = suggestions.map(c => ({
+              code: formatHSCode(c.code),
+              description: c.description,
+              confidence: c.confidence,
+              reasoning: c.reasoning
+            }));
+            logs.push(createLog(this.name, `Claude LLM 기반 후보 ${candidates.length}건 수신`, 'success'));
+          } catch (llmError) {
+            const msg = llmError instanceof Error ? llmError.message : String(llmError);
+            logs.push(createLog(this.name, `Claude 추천 실패(${msg}) — 관세청 HS 사전 검색으로 대체합니다.`, 'warning'));
+          }
         }
 
         if (candidates.length === 0) {

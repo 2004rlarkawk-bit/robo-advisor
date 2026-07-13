@@ -52,6 +52,19 @@ body {
   top: 0;
   height: 100vh;
   z-index: 10;
+  overflow: hidden;
+  transition: width 0.25s ease, padding 0.25s ease;
+}
+
+/* 접히는 동안 내부 콘텐츠가 찌그러지지 않고 잘려 나가도록 폭 고정 */
+.sidebar > * {
+  min-width: 228px;
+}
+
+.sidebar.collapsed {
+  width: 0;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .logo-section {
@@ -284,7 +297,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  max-width: 1200px;
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
 }
 
 /* Heading section */
@@ -344,6 +359,73 @@ body {
   border-radius: 8px;
   padding: 10px 14px;
   margin-bottom: 16px;
+}
+
+/* 서류 종류 라벨 탭 */
+.doc-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.doc-tab {
+  padding: 8px 16px;
+  border: 1.5px solid var(--border-color);
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-light);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.doc-tab:hover {
+  border-color: #94a3b8;
+  color: var(--text-dark);
+}
+
+.doc-tab.active {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(11, 87, 208, 0.25);
+}
+
+.doc-tab-hint {
+  font-size: 13px;
+  color: var(--primary-dark);
+  background-color: var(--primary-light);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+
+/* 서류 탭 필터 — 해당 서류(data-docs)가 사용하지 않는 필드는 숨김 */
+.form-card[data-doctab="invoice"] .form-group:not([data-docs~="invoice"]),
+.form-card[data-doctab="packing_list"] .form-group:not([data-docs~="packing_list"]),
+.form-card[data-doctab="bl"] .form-group:not([data-docs~="bl"]),
+.form-card[data-doctab="customs_dec"] .form-group:not([data-docs~="customs_dec"]),
+.form-card[data-doctab="co"] .form-group:not([data-docs~="co"]),
+.form-card[data-doctab="insurance"] .form-group:not([data-docs~="insurance"]) {
+  display: none;
+}
+
+/* 보이는 필드가 하나도 없는 접이식 섹션은 통째로 숨김 */
+.form-card[data-doctab="invoice"] .form-section:not(:has([data-docs~="invoice"])),
+.form-card[data-doctab="packing_list"] .form-section:not(:has([data-docs~="packing_list"])),
+.form-card[data-doctab="bl"] .form-section:not(:has([data-docs~="bl"])),
+.form-card[data-doctab="customs_dec"] .form-section:not(:has([data-docs~="customs_dec"])),
+.form-card[data-doctab="co"] .form-section:not(:has([data-docs~="co"])),
+.form-card[data-doctab="insurance"] .form-section:not(:has([data-docs~="insurance"])) {
+  display: none;
+}
+
+/* 상세 섹션이 전혀 없는 탭에서는 선택입력 안내문도 숨김 */
+.form-card[data-doctab="bl"] .form-optional-note,
+.form-card[data-doctab="insurance"] .form-optional-note {
+  display: none;
 }
 
 .form-section {
@@ -631,8 +713,103 @@ body {
 
 .result-columns-layout {
   display: grid;
-  grid-template-columns: 0.9fr 1.1fr 1.4fr;
+  grid-template-columns: 1fr 1.2fr;
   gap: 24px;
+  align-items: start;
+}
+
+/* 실제 제출 전 준비도 바 */
+.readiness-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.02);
+}
+
+.readiness-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.readiness-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.readiness-card-percent {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--primary-color);
+}
+
+.readiness-bar-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--bg-color);
+  overflow: hidden;
+}
+
+.readiness-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background-color: var(--primary-color);
+  transition: width 0.3s ease;
+}
+
+.readiness-next-step {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+/* 결과 상단 요약 통계 바 */
+.result-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background-color: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.02);
+}
+
+.result-stat-card {
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.result-stat-card + .result-stat-card {
+  border-left: 1px solid var(--border-color);
+}
+
+.result-stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-light);
+}
+
+.result-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-dark);
+}
+
+/* 3번 검토 섹션 — 열 그리드 밖 전체 폭 배치 */
+.result-review-full {
+  min-height: auto;
+}
+
+.result-review-full .mobile-fix-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 14px;
   align-items: start;
 }
 
@@ -1361,52 +1538,99 @@ body {
   transform: translateY(0);
 }
 
-.login-divider {
+/* 로그인 + 온보딩 2단계 스테이지 */
+.login-stage {
   display: flex;
-  align-items: center;
-  text-align: center;
-  color: var(--text-light);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  align-items: stretch;
+  justify-content: center;
+  z-index: 10;
 }
 
-.login-divider::before,
-.login-divider::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid var(--border-color);
+.login-stage .login-card {
+  width: 420px;
+  flex-shrink: 0;
+  transition: opacity 0.35s ease, transform 0.35s ease;
 }
 
-.login-divider:not(:empty)::before {
-  margin-right: 12px;
+/* 온보딩 단계에서는 로그인 카드가 살짝 물러남 */
+.login-card.stage-dimmed {
+  opacity: 0.45;
+  transform: scale(0.97);
+  pointer-events: none;
 }
 
-.login-divider:not(:empty)::after {
-  margin-left: 12px;
+/* 오른쪽에서 폭이 자라며 슬라이드 인 — 로그인 카드가 자연스럽게 왼쪽으로 밀림 */
+.onboarding-panel {
+  width: 0;
+  margin-left: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: width 0.45s cubic-bezier(0.16, 1, 0.3, 1), margin-left 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease 0.12s;
 }
 
-.login-btn-guest {
+.onboarding-panel.open {
+  width: 400px;
+  margin-left: 24px;
+  opacity: 1;
+}
+
+.onboarding-inner {
+  width: 400px;
+  height: 100%;
   background: #ffffff;
   border: 1px solid var(--border-color);
-  color: var(--text-dark);
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: center;
+  border-radius: 24px;
+  padding: 40px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.login-btn-guest:hover {
-  background: #f1f5f9;
+.onboarding-heading {
+  text-align: center;
+}
+
+.onboarding-title {
+  font-family: var(--font-logo);
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.onboarding-subtitle {
+  font-size: 13px;
+  color: var(--text-light);
+  margin-top: 6px;
+}
+
+.ob-pill-group {
+  display: flex;
+  gap: 8px;
+}
+
+.ob-pill {
+  flex: 1;
+  padding: 11px 0;
+  border: 1.5px solid var(--border-color);
+  border-radius: 10px;
+  background: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-light);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ob-pill:hover {
+  border-color: #94a3b8;
   color: var(--text-dark);
-  border-color: #cbd5e1;
+}
+
+.ob-pill.selected {
+  border-color: var(--primary-color);
+  background: var(--primary-light);
+  color: var(--primary-color);
 }
 
 .login-demo-helper {

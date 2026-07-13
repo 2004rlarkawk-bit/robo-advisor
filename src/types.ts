@@ -90,15 +90,21 @@ export interface TradeProfile {
   signedBy?: string;
   signerName?: string;
   signerPosition?: string;
+
+  /** CIF 조건에서 적하보험증권을 준비했음을 사용자가 확인 (insurance-missing 이슈 해소) */
+  insuranceConfirmed?: boolean;
+  /** 원산지증명서 발급 요청을 확인 (co-required 이슈 해소 — 원산지 판정 로직 도입 전 단계) */
+  coIssuanceConfirmed?: boolean;
 }
 
+// 주의: '| string'을 붙이면 유니언이 사실상 string으로 붕괴되어 오타를 컴파일이 못 잡는다
 export type DocumentType =
   | 'invoice'
   | 'packing_list'
   | 'co'
   | 'customs_dec'
   | 'bl'
-  | string;
+  | 'insurance';
 
 export type DocumentStatusType =
   | 'not_started'
@@ -201,11 +207,29 @@ export interface CertificateOfOriginData {
   [key: string]: any;
 }
 
+export interface InsuranceData {
+  certNo: string;
+  assured: PartyInfo;
+  invoiceNo: string;
+  amountInsured: number;
+  currency: string;
+  conditions: string;
+  vesselName: string;
+  fromPort: string;
+  toPort: string;
+  sailingOn: string;
+  goods: string;
+  signedBy: string;
+
+  [key: string]: any;
+}
+
 export interface GeneratedDocuments {
   documents?: DocumentStatus[];
   invoice?: InvoiceData;
   packingList?: PackingListData;
   certificateOfOrigin?: CertificateOfOriginData;
+  insurance?: InsuranceData;
   htmlTemplates?: Record<string, string>;
 
   [key: string]: any;

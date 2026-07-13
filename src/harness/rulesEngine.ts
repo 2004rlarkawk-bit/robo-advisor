@@ -93,11 +93,10 @@ export function determineRequiredDocuments(profile: TradeProfile): DocumentStatu
   });
 
   // 5. 원산지증명서 (C/O) - 수출의 경우 필수
-  // TODO(데모용 placeholder): companyName.includes('산')은 시연 시나리오 분기용 임시 조건임
-  //  (validatorEngine.ts의 co-required 룰과 동일한 핵). 실제 판단 기준은
-  //  "FTA 협정세율 적용 희망 or 상대국 요구"이며 원산지 판정 로직으로 함께 교체해야 함.
+  // 사용자가 발급 요청을 확인(coIssuanceConfirmed)하면 완료 처리 (validatorEngine co-required 룰과 동일 기준).
+  // TODO: FTA 협정세율 적용 희망 여부 등 실제 원산지 판정 로직으로 고도화 예정.
   const isExport = profile.tradeType === 'export';
-  const isCOCompleted = isExport && profile.companyName.includes('산');
+  const isCOCompleted = isExport && !!profile.coIssuanceConfirmed;
   docs.push({
     id: 'co',
     name: '원산지증명서(C/O)',
@@ -111,10 +110,48 @@ export function determineRequiredDocuments(profile: TradeProfile): DocumentStatu
     docs.push({
       id: 'insurance',
       name: '적하보험증권(Insurance Policy)',
-      status: 'not_started',
-      statusText: 'CIF 조건 - 작성 필요',
+      status: profile.insuranceConfirmed ? 'completed' : 'not_started',
+      statusText: profile.insuranceConfirmed ? '준비 완료 확인됨' : 'CIF 조건 - 준비 필요',
+      lastReviewed: profile.insuranceConfirmed ? timestamp : undefined,
     });
   }
 
   return docs;
+}
+
+// 서류별로 "무엇을 채우면 완료되는지" 안내 문구 — 준비도 카드의 다음 단계 힌트에 사용
+const NEXT_STEP_HINTS: Record<string, string> = {
+  invoice: '품목명·업체명·거래조건을 입력하면 상업송장이 완료돼요',
+  packing_list: '수량과 중량을 입력하면 패킹리스트가 완료돼요',
+  bl: '선적항과 도착항을 입력하면 선하증권 준비가 완료돼요',
+  customs_dec: '정확한 HS Code(6자리 이상 숫자)를 입력하면 통관신고서가 완료돼요',
+  co: '원산지증명서 발급 확인 체크박스를 선택하면 완료돼요',
+  insurance: '적하보험 준비 확인 체크박스를 선택하면 완료돼요',
+};
+
+export interface ReadinessInfo {
+  percent: number;
+  completedCount: number;
+  applicableCount: number;
+  nextStepDocId?: string;
+  nextStepLabel?: string;
+}
+
+/**
+ * 실제 제출 전 준비도 — 해당 없음(not_needed) 서류는 분모에서 제외하고,
+ * 완료된 서류 비율(%)과 다음으로 채워야 할 서류의 안내 문구를 계산한다.
+ */
+export function calculateReadiness(docs: DocumentStatus[]): ReadinessInfo {
+  const applicable = docs.filter((d) => d.status !== 'not_needed');
+  const completed = applicable.filter((d) => d.status === 'completed');
+  const percent = applicable.length > 0 ? Math.round((completed.length / applicable.length) * 100) : 0;
+  const nextStepDoc = applicable.find((d) => d.status !== 'completed');
+
+  return {
+    percent,
+    completedCount: completed.length,
+    applicableCount: applicable.length,
+    nextStepDocId: nextStepDoc?.id,
+    nextStepLabel: nextStepDoc ? (NEXT_STEP_HINTS[nextStepDoc.id] ?? `${nextStepDoc.name}을(를) 완료해 주세요`) : undefined,
+  };
 }

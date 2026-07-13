@@ -1,6 +1,7 @@
 import { Agent, ComplianceResult, AgentLog, createLog, HSCodeResult } from './types';
 import { TradeProfile, DocumentStatus, ValidationIssue } from '../types';
 import { validateTradeDocumentsAsync } from '../harness/validatorEngine';
+import { getRelatedLawForIssue } from '../services/lawService';
 
 export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents: DocumentStatus[]; hsResult?: HSCodeResult; logs: AgentLog[] }, ComplianceResult> {
   readonly name = 'Compliance Agent';
@@ -32,6 +33,15 @@ export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents
           message: `통관신고서: HS CODE 검토 필요 (${hsResult.validationMessage || '특수 범위의 Chapter 코드입니다.'})`,
           field: 'hsCode'
         });
+      }
+    }
+
+    // 근거 법령 표기 — validatorEngine의 주석 루프는 위 HS 이슈 push보다 먼저 끝나므로
+    // 여기서 다시 적용해야 hscode-* 이슈에도 관세법 조문이 붙는다 (중복 방지 검사 포함)
+    for (const issue of issues) {
+      const law = getRelatedLawForIssue(issue.id);
+      if (law && !issue.message.includes('근거:')) {
+        issue.message += ` [근거: ${law.lawName} ${law.article}]`;
       }
     }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { determineRequiredDocuments } from './rulesEngine';
+import { determineRequiredDocuments, calculateReadiness } from './rulesEngine';
 import { validateTradeDocuments, validateTradeDocumentsAsync, validateRequiredInputs } from './validatorEngine';
 import { OrchestratorAgent } from '../agents/OrchestratorAgent';
 import { HSCodeAgent } from '../agents/HSCodeAgent';
@@ -101,6 +101,39 @@ describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테
     expect(packing?.status).toBe('completed');
     expect(bl?.status).toBe('completed');
   });
+
+  it('원산지증명서 발급 확인 전까지는 준비도가 100% 미만이고 다음 단계 힌트를 안내한다', () => {
+    const docs = determineRequiredDocuments(mockValidProfile);
+    const readiness = calculateReadiness(docs);
+
+    expect(readiness.percent).toBeLessThan(100);
+    expect(readiness.nextStepDocId).toBe('co');
+    expect(readiness.nextStepLabel).toContain('원산지증명서');
+  });
+
+  it('원산지증명서 발급을 확인하면 수출 필수 서류가 모두 완료되어 준비도 100%가 된다', () => {
+    const readyProfile: TradeProfile = {
+      ...mockValidProfile,
+      coIssuanceConfirmed: true,
+    };
+    const docs = determineRequiredDocuments(readyProfile);
+    const readiness = calculateReadiness(docs);
+
+    expect(readiness.percent).toBe(100);
+    expect(readiness.nextStepDocId).toBeUndefined();
+  });
+
+  it('수입 거래는 해당 없음(C/O)을 분모에서 제외하고 준비도를 계산한다', () => {
+    const importProfile: TradeProfile = {
+      ...mockValidProfile,
+      tradeType: 'import',
+    };
+    const docs = determineRequiredDocuments(importProfile);
+    const readiness = calculateReadiness(docs);
+
+    expect(readiness.applicableCount).toBe(docs.filter(d => d.status !== 'not_needed').length);
+    expect(readiness.percent).toBe(100);
+  });
 });
 
 describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
@@ -146,7 +179,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(startLog).toBeDefined();
   });
 
-  it('CIF 조건의 경우 적하보험증권 누락 에러 및 책임 안내 피드백이 발생한다', async () => {
+  it('CIF 조건의 경우 적하보험증권 준비 확인 경고 및 책임 안내 피드백이 발생한다', async () => {
     const cifProfile: TradeProfile = {
       tradeType: 'export',
       itemName: '기계부품',
@@ -168,14 +201,69 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     // 적하보험증권 포함 확인
     const insuranceDoc = result.documents?.documents.find(d => d.id === 'insurance');
     expect(insuranceDoc).toBeDefined();
+    expect(insuranceDoc?.status).toBe('not_started');
 
-    // 누락 에러 검증
+    // 준비 확인 경고 검증 — 해소 수단(insuranceConfirmed)이 있으므로 error가 아닌 warning
     const insuranceIssue = result.issues?.issues.find(i => i.id === 'insurance-missing');
     expect(insuranceIssue).toBeDefined();
-    expect(insuranceIssue?.severity).toBe('error');
+    expect(insuranceIssue?.severity).toBe('warning');
 
     // 피드백 검증
     expect(result.feedback?.message).toContain('적하보험증권을 준비하세요');
+  });
+
+  it('CIF 조건에서 적하보험증권 준비를 확인하면 이슈가 해소되고 서류가 완료 처리된다', async () => {
+    const cifConfirmedProfile: TradeProfile = {
+      tradeType: 'export',
+      itemName: '기계부품',
+      hsCode: '8479-89-9090',
+      loadPort: '부산항',
+      dischargePort: '상하이항',
+      incoterms: 'CIF',
+      quantity: 100,
+      weight: 500,
+      departureDate: '2026-07-01',
+      arrivalDate: '2026-07-05',
+      companyName: '수출상사',
+      contact: '010-1234-5678',
+      insuranceConfirmed: true
+    };
+
+    const orchestrator = new OrchestratorAgent();
+    const result = await orchestrator.run({ profile: cifConfirmedProfile, useLLM: false });
+
+    const insuranceIssue = result.issues?.issues.find(i => i.id === 'insurance-missing');
+    expect(insuranceIssue).toBeUndefined();
+
+    const insuranceDoc = result.documents?.documents.find(d => d.id === 'insurance');
+    expect(insuranceDoc?.status).toBe('completed');
+  });
+
+  it('수출 거래에서 원산지증명서 발급 확인(coIssuanceConfirmed) 시 co-required 이슈가 해소된다', async () => {
+    const base: TradeProfile = {
+      tradeType: 'export',
+      itemName: '기계부품',
+      hsCode: '8479-89-9090',
+      loadPort: '부산항',
+      dischargePort: '상하이항',
+      incoterms: 'FOB',
+      quantity: 100,
+      weight: 500,
+      departureDate: '2026-07-01',
+      arrivalDate: '2026-07-05',
+      companyName: '수출상사',
+      contact: '010-1234-5678'
+    };
+
+    const orchestrator = new OrchestratorAgent();
+
+    const before = await orchestrator.run({ profile: base, useLLM: false });
+    expect(before.issues?.issues.find(i => i.id === 'co-required')).toBeDefined();
+    expect(before.documents?.documents.find(d => d.id === 'co')?.status).toBe('not_started');
+
+    const after = await orchestrator.run({ profile: { ...base, coIssuanceConfirmed: true, countryOfOrigin: '대한민국' }, useLLM: false });
+    expect(after.issues?.issues.find(i => i.id === 'co-required')).toBeUndefined();
+    expect(after.documents?.documents.find(d => d.id === 'co')?.status).toBe('completed');
   });
 
   it('EXW 조건의 경우 B/L이 비필수(not_needed) 처리되고 정보성 안내가 발생한다', async () => {
@@ -315,7 +403,15 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(duty).toBeDefined();
     expect(duty?.severity).toBe('info');
     expect(duty?.message).toContain('예상 관세액');
-    expect(duty?.message).toContain('%');
+
+    // 시뮬레이션 입력은 결정적이므로 산술까지 검증한다:
+    // USD 10,000 × 1,385.5원 = 13,855,000원 (과세가격) × 8% (기본세율) = 1,108,400원
+    expect(duty?.message).toContain('13,855,000');
+    expect(duty?.message).toContain('8%');
+    expect(duty?.message).toContain('1,108,400');
+
+    const dutiable = issues.find(i => i.id === 'dutiable-value-info');
+    expect(dutiable?.message).toContain('13,855,000');
   });
 
   it('수출 거래에서는 예상 관세액 이슈가 없다', async () => {
