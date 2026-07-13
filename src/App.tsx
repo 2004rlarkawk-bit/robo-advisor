@@ -25,7 +25,7 @@ import SettingsPanel from './components/SettingsPanel';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
 import AuthPage from './components/AuthPage';
-import { saveTrade } from './services/storageService';
+import { markTradeAsSubmitted, saveTrade } from './services/storageService';
 import { getCurrentAuthUser, onAuthStateChange, signOutUser } from './services/authService';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
@@ -251,6 +251,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
   const consoleEndRef = useRef<HTMLDivElement>(null);
   const currentTradeIdRef = useRef<string | null>(null);
+  const isSubmittingTradeRef = useRef(false);
+  const hasSubmittedTradeRef = useRef(false);
 
   // Auto-scroll console logs
   useEffect(() => {
@@ -483,6 +485,8 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   setHtmlTemplates({});
   setHsCandidates([]);
   currentTradeIdRef.current = null;
+  isSubmittingTradeRef.current = false;
+  hasSubmittedTradeRef.current = false;
 };
 
   // Run the multi-agent pipeline simulator
@@ -532,6 +536,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
           }
         );
         currentTradeIdRef.current = savedTrade.id;
+        hasSubmittedTradeRef.current = false;
       } catch (err) {
         console.warn('생성 이력 저장 실패 (기능에는 영향 없음):', err);
       }
@@ -669,8 +674,37 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
     }
   };
 
-  const handleSubmitAll = () => {
-    alert('모든 통관 문서 정보 보완이 완료되었습니다. 관세청 통관 시스템으로 제출합니다.');
+  const handleSubmitAll = async () => {
+    if (isSubmittingTradeRef.current) return;
+
+    if (hasSubmittedTradeRef.current) {
+      alert('이미 전송이 완료된 거래입니다.');
+      return;
+    }
+
+    const tradeId = currentTradeIdRef.current;
+    if (!tradeId) {
+      alert('저장된 생성 거래를 찾을 수 없습니다. 필요서류 자동생성을 먼저 완료한 뒤 다시 전송해 주세요.');
+      return;
+    }
+
+    isSubmittingTradeRef.current = true;
+
+    try {
+      await markTradeAsSubmitted(tradeId, {
+        profile,
+        documents,
+        issues,
+        generatedDocs: { htmlTemplates },
+      });
+      hasSubmittedTradeRef.current = true;
+      alert('모든 통관 문서 정보 보완이 완료되었습니다. 관세청 통관 시스템으로 제출합니다.');
+    } catch (error) {
+      console.error('[Trade Submission] Failed to submit generated trade:', error);
+      alert('전체 문서 전송 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      isSubmittingTradeRef.current = false;
+    }
   };
 
   // Calculate statistics — info 수준 이슈는 안내일 뿐 제출을 막지 않음
