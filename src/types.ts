@@ -24,6 +24,7 @@ export interface TradeProfile {
   arrivalDate: string;
   companyName: string;
   contact: string;
+  contactName?: string;
 
   partnerName?: string;
   currency?: string;

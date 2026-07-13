@@ -67,9 +67,9 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
 
       <div className="login-card">
         <div className="login-header">
-          <div className="login-logo">P</div>
+          <div className="login-logo">🚢</div>
           <div className="login-brand">PortAI</div>
-          <div className="login-subtitle">회원 로그인 후 이용할 수 있습니다</div>
+          <div className="login-subtitle">스마트 물류 &amp; 통관 자동화 플랫폼</div>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>

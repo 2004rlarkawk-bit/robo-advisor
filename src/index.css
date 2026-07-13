@@ -183,6 +183,7 @@ body {
 /* Main Content Area */
 .main-wrapper {
   flex-grow: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background-color: var(--bg-color);
@@ -191,6 +192,7 @@ body {
 /* Header Styling */
 .header {
   height: 64px;
+  flex-shrink: 0;
   background-color: #ffffff;
   border-bottom: 1px solid var(--border-color);
   display: flex;
@@ -264,10 +266,18 @@ body {
   padding: 6px 12px;
   border-radius: 20px;
   transition: background-color 0.2s;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
 }
 
 .user-profile:hover {
   background-color: #f1f5f9;
+}
+
+.user-profile:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
 }
 
 .user-avatar {
@@ -290,6 +300,7 @@ body {
   gap: 32px;
   align-items: flex-start;
   flex-grow: 1;
+  min-width: 0;
 }
 
 .workspace-area {
@@ -1715,5 +1726,122 @@ body {
   background-color: #f1f5f9;
   color: var(--error-color);
   border-color: rgba(185, 28, 28, 0.2);
+}
+
+.draft-save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  margin: -12px 0 18px;
+  color: var(--text-light);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.draft-save-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.draft-save-status.saving .draft-save-dot { background: var(--warning-color); animation: draftPulse 1s ease-in-out infinite; }
+.draft-save-status.saved .draft-save-dot { background: var(--success-color); }
+.draft-save-status.error { color: var(--error-color); }
+.draft-save-status.error .draft-save-dot { background: var(--error-color); }
+
+@keyframes draftPulse {
+  50% { opacity: 0.35; }
+}
+
+.login-divider {
+  color: var(--text-light);
+  font-size: 12px;
+  text-align: center;
+}
+
+.login-btn-switch {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--primary-color);
+  padding: 12px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.login-btn-switch:hover { background: var(--primary-light); }
+.login-btn-primary:disabled { cursor: wait; opacity: 0.65; transform: none; }
+.user-profile { cursor: pointer; }
+
+.onboarding-page {
+  height: 100vh;
+  overflow-y: auto;
+  align-items: flex-start;
+  padding: 40px 20px;
+}
+
+.onboarding-card,
+.profile-settings-card {
+  position: relative;
+  z-index: 10;
+  width: min(100%, 820px);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+  padding: 36px;
+}
+
+.onboarding-card { animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+.onboarding-card .onboarding-heading { margin-bottom: 28px; }
+.onboarding-card .login-logo { margin-bottom: 4px; }
+
+.profile-settings-page {
+  width: 100%;
+  max-width: 820px;
+  margin-inline: auto;
+  padding-bottom: 32px;
+}
+
+.profile-settings-card { z-index: 1; }
+
+.profile-settings-page > .page-heading,
+.profile-settings-page > .profile-settings-card {
+  width: 100%;
+}
+
+.profile-form { display: flex; flex-direction: column; gap: 24px; }
+.profile-form-section { display: flex; flex-direction: column; gap: 16px; }
+.profile-form-section + .profile-form-section { border-top: 1px solid var(--border-color); padding-top: 24px; }
+.profile-section-heading h2 { margin: 0; color: var(--text-dark); font-size: 17px; }
+.profile-section-heading p { margin: 5px 0 0; color: var(--text-light); font-size: 12px; }
+.profile-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.profile-grid-wide { grid-column: 1 / -1; }
+.profile-trade-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.profile-submit { width: 100%; max-width: 320px; align-self: flex-end; }
+.profile-form .login-label b { color: var(--error-color); }
+
+.form-message { border-radius: 8px; padding: 11px 13px; font-size: 13px; line-height: 1.5; }
+.form-message.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.form-message.success { margin-bottom: 20px; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.profile-error-card .login-subtitle { line-height: 1.6; color: #b91c1c; }
+
+@media (max-width: 720px) {
+  .header { padding-inline: 12px; }
+  .header-actions { gap: 6px; }
+  .platform-badge { display: none; }
+  .content-body { padding: 20px 12px; }
+  .user-info-section { gap: 6px; }
+  .user-profile { max-width: 190px; padding: 4px 8px; }
+  .user-profile > span:not(.auth-badge) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .onboarding-page { padding: 20px 12px; }
+  .onboarding-card, .profile-settings-card { padding: 24px 18px; border-radius: 18px; }
+  .profile-form-grid, .profile-trade-grid { grid-template-columns: 1fr; }
+  .profile-grid-wide { grid-column: auto; }
+  .profile-submit { max-width: none; }
+  .ob-pill-group { flex-wrap: wrap; }
+  .ob-pill { min-width: 80px; }
 }
 

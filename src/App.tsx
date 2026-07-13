@@ -19,14 +19,21 @@ import {
   Eye,
   Edit3,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  UserRound
 } from 'lucide-react';
 import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade } from './types';
 import SettingsPanel from './components/SettingsPanel';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
 import AuthPage from './components/AuthPage';
-import { getCurrentAuthUser, onAuthStateChange, signOutUser } from './services/authService';
+import OnboardingPage from './components/OnboardingPage';
+import ProfileSettingsPage from './components/ProfileSettingsPage';
+import { getCurrentAuthUser, onAuthStateChange, signOutUser, type AuthSessionUser } from './services/authService';
+import { useUserProfile } from './hooks/useUserProfile';
+import { useTradeDraft } from './hooks/useTradeDraft';
+import { userProfileToTradeDefaults } from './services/profileService';
+import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from './constants/portOptions';
 import { calculateReadiness } from './harness/rulesEngine';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
@@ -77,12 +84,18 @@ export default function App() {
   }, [docTab]);
   
  // Auth states
-const [user, setUser] = useState<{
-  name: string;
-  type: 'member' | 'guest';
-} | null>(null);
+const [user, setUser] = useState<AuthSessionUser | null>(null);
 
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const {
+    profile: userProfile,
+    isLoading: isProfileLoading,
+    isSaving: isProfileSaving,
+    error: profileError,
+    needsOnboarding,
+    reload: reloadUserProfile,
+    saveProfile: saveUserProfile,
+  } = useUserProfile(user?.id ?? null);
 /*
   // 첫 로그인 온보딩 (사용 목적·회사·업종) — 저장되면 다음 로그인부터 건너뜀
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -196,6 +209,13 @@ const [user, setUser] = useState<{
 */
   const handleLogout = async () => {
     try {
+      await flushTradeDraft();
+    } catch (error) {
+      // localStorage 초안은 이미 유지되므로 DB 실패가 로그아웃을 막지는 않습니다.
+      console.warn('[Trade Draft] 로그아웃 전 마지막 저장 실패:', error);
+    }
+
+    try {
       await signOutUser();
     } catch (error) {
       console.error('[Supabase Auth] Logout failed:', error);
@@ -284,6 +304,39 @@ const emptyProfile: TradeProfile = {
 };
 
 const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
+  const hydratedProfileUserRef = useRef<string | null>(null);
+
+  // 로그인 직후에만 회사 프로필을 거래 입력 기본값으로 옮긴다.
+  // 이후 거래 화면에서 사용자가 수정한 값은 프로필 재조회로 덮어쓰지 않는다.
+  useEffect(() => {
+    if (!user) {
+      hydratedProfileUserRef.current = null;
+      return;
+    }
+    if (!userProfile || needsOnboarding || hydratedProfileUserRef.current === user.id) return;
+    setProfile((current) => ({ ...current, ...userProfileToTradeDefaults(userProfile) }));
+    hydratedProfileUserRef.current = user.id;
+  }, [needsOnboarding, user, userProfile]);
+
+  const tradeDraftDefaultProfile: TradeProfile = {
+    ...emptyProfile,
+    ...(userProfile ? userProfileToTradeDefaults(userProfile) : {}),
+  };
+  const {
+    isDraftRestored,
+    saveStatus: draftSaveStatus,
+    lastSavedAt: draftLastSavedAt,
+    flushDraft: flushTradeDraft,
+    completeDraft,
+    startNewDraft,
+    pauseDraftSaving,
+  } = useTradeDraft({
+    userId: user?.id ?? null,
+    enabled: Boolean(user && userProfile && !needsOnboarding),
+    profile,
+    defaultProfile: tradeDraftDefaultProfile,
+    setProfile,
+  });
   // Harness & Agent Pipeline State
   const [isProcessing, setIsProcessing] = useState(false);
   const [showConsole, setShowConsole] = useState(false);
@@ -539,7 +592,11 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   };
 
   const handleReset = () => {
- setProfile({ ...emptyProfile });
+  startNewDraft();
+ setProfile({
+   ...emptyProfile,
+   ...(userProfile ? userProfileToTradeDefaults(userProfile) : {}),
+ });
   setHasGenerated(false);
   setDocuments([]);
   setIssues([]);
@@ -604,6 +661,9 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
         );
         currentTradeIdRef.current = savedTrade.id;
         hasSubmittedTradeRef.current = false;
+        await completeDraft().catch((error) => {
+          console.warn('[Trade Draft] 거래 저장 후 초안 정리 실패:', error);
+        });
       } catch (err) {
         console.warn('생성 이력 저장 실패 (기능에는 영향 없음):', err);
       }
@@ -617,6 +677,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
   // [문서 관리]에서 저장 이력 복원
   const handleLoadSavedTrade = (t: SavedTrade) => {
+    pauseDraftSaving();
     setProfile(t.profile);
     setDocuments(t.documents);
     setIssues(t.issues);
@@ -834,6 +895,19 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
     return summary.length > 0 ? summary : lines;
   })();
 
+  const draftSaveLabel = (() => {
+    if (draftSaveStatus === 'local') return '로컬에 저장됨';
+    if (draftSaveStatus === 'saving') return '초안 저장 중...';
+    if (draftSaveStatus === 'error') return '초안 저장 실패';
+    if (draftSaveStatus === 'saved') {
+      const savedTime = draftLastSavedAt
+        ? new Date(draftLastSavedAt).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })
+        : '';
+      return savedTime ? `${savedTime} 초안 저장 완료` : '초안 저장 완료';
+    }
+    return '';
+  })();
+
   if (isAuthLoading) {
     return (
       <div className="login-wrapper">
@@ -852,6 +926,64 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
   if (!user) {
     return <AuthPage onAuthenticated={setUser} />;
+  }
+
+  if (isProfileLoading || (!userProfile && !profileError)) {
+    return (
+      <div className="login-wrapper">
+        <div className="login-bg-decoration login-bg-decor1"></div>
+        <div className="login-bg-decoration login-bg-decor2"></div>
+        <div className="login-card">
+          <div className="login-header">
+            <div className="login-logo">🚢</div>
+            <div className="login-brand">PortAI</div>
+            <div className="login-subtitle">회사 프로필을 불러오는 중입니다</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (profileError || !userProfile) {
+    return (
+      <div className="login-wrapper">
+        <div className="login-card profile-error-card">
+          <div className="login-header">
+            <div className="login-logo">⚠️</div>
+            <div className="login-brand">프로필을 확인해 주세요</div>
+            <div className="login-subtitle">{profileError ?? '프로필 정보를 찾을 수 없습니다.'}</div>
+          </div>
+          <button type="button" className="login-btn-primary" onClick={() => void reloadUserProfile()}>다시 시도</button>
+          <button type="button" className="login-btn-switch" onClick={() => void handleLogout()}>로그아웃</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (needsOnboarding) {
+    return (
+      <OnboardingPage
+        profile={userProfile}
+        isSaving={isProfileSaving}
+        onComplete={async (values) => { await saveUserProfile(values); }}
+      />
+    );
+  }
+
+  if (!isDraftRestored) {
+    return (
+      <div className="login-wrapper">
+        <div className="login-bg-decoration login-bg-decor1"></div>
+        <div className="login-bg-decoration login-bg-decor2"></div>
+        <div className="login-card">
+          <div className="login-header">
+            <div className="login-logo">🚢</div>
+            <div className="login-brand">PortAI</div>
+            <div className="login-subtitle">작성 중인 거래를 확인하는 중입니다</div>
+          </div>
+        </div>
+      </div>
+    );
   }
 /*
   if (!user) {
@@ -1038,6 +1170,15 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
           </li>
           <li>
             <div
+              className={`menu-item ${activeMenu === 'profile' ? 'active' : ''}`}
+              onClick={() => setActiveMenu('profile')}
+            >
+              <UserRound size={18} />
+              프로필 관리
+            </div>
+          </li>
+          <li>
+            <div
               className={`menu-item ${activeMenu === 'settings' ? 'active' : ''}`}
               onClick={() => setActiveMenu('settings')}
             >
@@ -1080,13 +1221,13 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
               <HelpCircle size={20} />
             </button>
             <div className="user-info-section">
-              <div className="user-profile">
+              <button type="button" className="user-profile" onClick={() => setActiveMenu('profile')} title="프로필 관리" aria-label="프로필 관리 페이지로 이동">
                 <div className="user-avatar">{user.type === 'member' ? '회' : '비'}</div>
-                <span>{user.name} 님</span>
+                <span>{userProfile.company_name || userProfile.contact_name || user.email} 님</span>
                 <span className={`auth-badge ${user.type}`}>
                   {user.type === 'member' ? '회원' : '비회원'}
                 </span>
-              </div>
+              </button>
               <button className="btn-logout" onClick={handleLogout}>
                 로그아웃
               </button>
@@ -1096,7 +1237,8 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
         <main className="content-body">
           <div className="workspace-area">
-            {activeMenu === 'settings' ? <SettingsPanel />
+            {activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} />
+            : activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'analysis' ? <DataAnalysisPanel />
             : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} />
             : <>
@@ -1126,6 +1268,12 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                     <FileSignature size={20} className="text-primary" />
                     <h2 className="card-title">거래 정보 입력</h2>
                   </div>
+                  {draftSaveLabel && (
+                    <div className={`draft-save-status ${draftSaveStatus}`} role="status" aria-live="polite">
+                      <span className="draft-save-dot" />
+                      {draftSaveLabel}
+                    </div>
+                  )}
 
                   {/* 서류 종류 라벨 탭 — 선택한 서류에 실제 반영되는 입력만 표시 */}
                   <div className="doc-tab-bar">
@@ -1192,11 +1340,9 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         onChange={(e) => handleInputChange('loadPort', e.target.value)}
                       >
                         <option value="">선적항을 선택하세요</option>
-                        <option value="부산항">부산항</option>
-                        <option value="인천항">인천항</option>
-                        <option value="광양항">광양항</option>
-                        <option value="로스앤젤레스항">로스앤젤레스항 (미국)</option>
-                        <option value="상하이항">상하이항 (중국)</option>
+                        {LOAD_PORT_OPTIONS.map((port) => (
+                          <option key={port.value} value={port.value}>{port.label}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -1208,11 +1354,9 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                         onChange={(e) => handleInputChange('dischargePort', e.target.value)}
                       >
                         <option value="">도착항을 선택하세요</option>
-                        <option value="부산항">부산항</option>
-                        <option value="인천항">인천항</option>
-                        <option value="상하이항">상하이항 (중국)</option>
-                        <option value="로스앤젤레스항">로스앤젤레스항 (미국)</option>
-                        <option value="로테르담항">로테르담항 (네덜란드)</option>
+                        {DISCHARGE_PORT_OPTIONS.map((port) => (
+                          <option key={port.value} value={port.value}>{port.label}</option>
+                        ))}
                       </select>
                     </div>
 

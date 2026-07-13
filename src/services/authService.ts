@@ -2,7 +2,6 @@
 // 이메일/비밀번호 회원가입, 로그인, 로그아웃, 세션 확인을 한 곳에서 관리합니다.
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { ensureUserProfile } from './profileService';
 
 export interface AuthSessionUser {
   id: string;
@@ -82,12 +81,6 @@ export async function signInWithEmail(email: string, password: string): Promise<
   }
   if (!data.user) throw new Error('로그인 사용자 정보를 가져오지 못했습니다.');
 
-  // [EDIT: DB Trigger Auth] 로그인 시에는 과거 가입자나 트리거 적용 전 계정을 위해 프로필 보정만 유지합니다.
-  await ensureUserProfile({
-    id: data.user.id,
-    email: data.user.email ?? email,
-  });
-
   return toAuthSessionUser(data.user);
 }
 
@@ -100,12 +93,6 @@ export async function getCurrentAuthUser(): Promise<AuthSessionUser | null> {
   const { data, error } = await supabase.auth.getUser();
   if (error) return null;
   if (!data.user) return null;
-
-  // [EDIT: DB Trigger Auth] 새로고침/세션 복구 시에도 프로필이 없으면 보정 생성합니다.
-  await ensureUserProfile({
-    id: data.user.id,
-    email: data.user.email ?? '',
-  });
 
   return toAuthSessionUser(data.user);
 }
