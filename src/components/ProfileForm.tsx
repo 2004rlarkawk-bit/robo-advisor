@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { INCOTERM_OPTIONS, INDUSTRY_OPTIONS, TRADE_PURPOSE_OPTIONS, type UserProfile, type UserProfileUpdate } from '../services/profileService';
 import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from '../constants/portOptions';
 
-interface Props { profile: UserProfile; submitLabel: string; isSaving: boolean; onSubmit: (values: UserProfileUpdate) => Promise<void>; }
+interface Props { profile: UserProfile; submitLabel: string; isSaving: boolean; onSubmit: (values: UserProfileUpdate) => Promise<void>; secondaryAction?: ReactNode; }
 const formValues = (p: UserProfile): UserProfileUpdate => ({
   company_name: p.company_name ?? '', business_number: p.business_number ?? '', contact_name: p.contact_name ?? '',
   phone: p.phone ?? '', country: p.country ?? '', industry: p.industry ?? '', trade_purpose: p.trade_purpose ?? '',
   default_load_port: p.default_load_port ?? '', default_discharge_port: p.default_discharge_port ?? '', default_incoterm: p.default_incoterm ?? '',
 });
 
-export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit }: Props) {
+export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, secondaryAction }: Props) {
   const [values, setValues] = useState<UserProfileUpdate>(() => formValues(profile));
   const [message, setMessage] = useState('');
   useEffect(() => setValues(formValues(profile)), [profile]);
@@ -50,7 +50,10 @@ export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit }
         </div>
       </section>
       {message && <div className={'form-message error'} role={'alert'}>{message}</div>}
-      <button type={'submit'} className={'login-btn-primary profile-submit'} disabled={isSaving}>{isSaving ? '저장 중...' : submitLabel}</button>
+      <div className={'profile-actions'}>
+        <button type={'submit'} className={'login-btn-primary profile-submit'} disabled={isSaving}>{isSaving ? '저장 중...' : submitLabel}</button>
+        {secondaryAction}
+      </div>
     </form>
   );
 }

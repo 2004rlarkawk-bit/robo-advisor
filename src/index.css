@@ -591,31 +591,6 @@ body {
   box-shadow: 0 4px 14px rgba(11, 87, 208, 0.3);
 }
 
-/* Quick Fill Section */
-.quick-fill-container {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
-  justify-content: center;
-}
-
-.btn-pill {
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px dashed var(--primary-color);
-  background-color: var(--primary-light);
-  color: var(--primary-dark);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-pill:hover {
-  background-color: var(--primary-color);
-  color: #ffffff;
-}
-
 /* Informational Sidepanel (Matching Mockup Right card) */
 .info-card {
   border: 1px solid var(--border-color);
@@ -1728,6 +1703,58 @@ body {
   border-color: rgba(185, 28, 28, 0.2);
 }
 
+.trade-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 16px;
+}
+
+.trade-section-title,
+.dev-test-actions,
+.document-manager-title,
+.document-manager-actions,
+.document-trade-heading,
+.document-trade-counts,
+.document-trade-buttons {
+  display: flex;
+  align-items: center;
+}
+
+.trade-section-title { gap: 10px; }
+.dev-test-actions { gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.dev-badge,
+.test-trade-badge,
+.perfect-test-badge,
+.needs-revision-badge,
+.test-error-badge,
+.trade-type-badge {
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.dev-badge { background: #f3f4f6; color: #6b7280; }
+.dev-test-button,
+.dev-test-disable {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dev-test-button-perfect { border: 1px solid #a5b4fc; background: #eef2ff; color: #364fc7; }
+.dev-test-button-revision { border: 1px solid #f5c86b; background: #fff8e6; color: #9a6700; }
+.dev-test-disable { border: 1px solid #d1d5db; background: #fff; color: #6b7280; }
+.dev-test-button:disabled { cursor: not-allowed; opacity: 0.45; }
+.dev-test-mode-label { margin: 0 0 10px; color: #6366f1; font-size: 12px; font-weight: 700; }
+
 .draft-save-status {
   display: inline-flex;
   align-items: center;
@@ -1820,13 +1847,66 @@ body {
 .profile-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .profile-grid-wide { grid-column: 1 / -1; }
 .profile-trade-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.profile-submit { width: 100%; max-width: 320px; align-self: flex-end; }
+.profile-actions { display: flex; justify-content: flex-end; gap: 10px; width: 100%; }
+.profile-submit { flex: 1 1 auto; max-width: 320px; min-width: 0; }
+.profile-delete-button,
+.email-check-button,
+.account-modal button { border-radius: 8px; font-family: inherit; font-weight: 700; cursor: pointer; }
+.profile-delete-button { flex: 0 0 116px; min-height: 46px; border: 1px solid #fecaca; background: #fff7f7; color: #b42318; }
+.profile-delete-button:hover { background: #feecec; }
+.profile-delete-button:disabled,
+.email-check-button:disabled,
+.account-modal button:disabled { cursor: wait; opacity: 0.6; }
+.auth-email-row { display: flex; align-items: stretch; gap: 8px; min-width: 0; }
+.auth-email-row .login-input { flex: 1 1 auto; min-width: 0; }
+.email-check-button { flex: 0 0 92px; border: 1px solid #bfdbfe; background: #eff6ff; color: var(--primary-color); }
+.email-check-button:hover:not(:disabled) { background: #dbeafe; }
+.auth-helper-message { margin-top: -6px; color: #64748b; font-size: 12px; line-height: 1.5; }
+.account-modal-backdrop { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, 0.5); }
+.account-modal { width: min(100%, 430px); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; background: #fff; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24); }
+.account-modal h2 { margin: 0 0 18px; color: var(--text-dark); font-size: 20px; }
+.account-modal-warning { margin: 0 0 8px; color: #991b1b; font-weight: 700; }
+.account-modal-description { margin: 0; color: var(--text-light); font-size: 14px; line-height: 1.65; }
+.account-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.account-modal-actions button { min-height: 42px; padding: 0 18px; }
+.account-modal-cancel { border: 1px solid var(--border-color); background: #fff; color: var(--text-dark); }
+.account-modal-confirm { border: 1px solid #b42318; background: #b42318; color: #fff; }
 .profile-form .login-label b { color: var(--error-color); }
 
 .form-message { border-radius: 8px; padding: 11px 13px; font-size: 13px; line-height: 1.5; }
 .form-message.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
 .form-message.success { margin-bottom: 20px; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.form-message.info { margin-bottom: 16px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
 .profile-error-card .login-subtitle { line-height: 1.6; color: #b91c1c; }
+
+.document-manager-title { display: inline-flex; gap: 10px; }
+.document-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px 24px; text-align: center; color: #64748b; }
+.document-manager-actions { justify-content: flex-end; margin-bottom: 12px; }
+.document-delete-all,
+.document-delete-button { color: #dc2626; }
+.document-delete-all,
+.document-trade-buttons button { display: inline-flex; align-items: center; gap: 6px; }
+.document-trade-card { margin-bottom: 12px; padding: 18px 22px; }
+.document-trade-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.document-trade-summary { flex: 1; min-width: 220px; }
+.document-trade-heading { gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+.trade-type-badge.export { background: #e8f0fe; color: #0b57d0; }
+.trade-type-badge.import { background: #fef3c7; color: #b45309; }
+.test-trade-badge { background: #f3f4f6; color: #4b5563; }
+.perfect-test-badge { background: #eef2ff; color: #4338ca; }
+.needs-revision-badge { background: #fff7ed; color: #b45309; }
+.test-error-badge { background: #fef2f2; color: #b91c1c; }
+.document-trade-name { font-size: 15px; font-weight: 700; }
+.document-hs-code,
+.document-trade-meta { color: #64748b; font-size: 12px; }
+.document-trade-meta { font-size: 12.5px; }
+.document-trade-counts { gap: 14px; font-size: 12.5px; }
+.document-complete-count,
+.document-error-count { display: inline-flex; align-items: center; gap: 4px; }
+.document-complete-count { color: #15803d; }
+.document-error-count { color: #64748b; }
+.document-error-count.active { color: #b91c1c; }
+.document-trade-buttons { gap: 8px; flex-wrap: wrap; }
 
 @media (max-width: 720px) {
   .header { padding-inline: 12px; }
@@ -1841,6 +1921,14 @@ body {
   .profile-form-grid, .profile-trade-grid { grid-template-columns: 1fr; }
   .profile-grid-wide { grid-column: auto; }
   .profile-submit { max-width: none; }
+  .profile-delete-button { flex-basis: 104px; }
+  .auth-email-row { gap: 6px; }
+  .email-check-button { flex-basis: 84px; padding-inline: 6px; font-size: 12px; }
+  .trade-section-header { align-items: flex-start; flex-direction: column; }
+  .dev-test-actions { width: 100%; margin-left: 0; }
+  .dev-test-button { flex: 1 1 130px; }
+  .document-trade-counts,
+  .document-trade-buttons { width: 100%; }
   .ob-pill-group { flex-wrap: wrap; }
   .ob-pill { min-width: 80px; }
 }

@@ -22,17 +22,27 @@ import {
   PanelLeftOpen,
   UserRound
 } from 'lucide-react';
-import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade } from './types';
+import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade, TradeStatus } from './types';
 import SettingsPanel from './components/SettingsPanel';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
 import AuthPage from './components/AuthPage';
 import OnboardingPage from './components/OnboardingPage';
 import ProfileSettingsPage from './components/ProfileSettingsPage';
-import { getCurrentAuthUser, onAuthStateChange, signOutUser, type AuthSessionUser } from './services/authService';
+import { deleteCurrentAccount, getCurrentAuthUser, onAuthStateChange, signOutUser, type AuthSessionUser } from './services/authService';
 import { useUserProfile } from './hooks/useUserProfile';
 import { useTradeDraft } from './hooks/useTradeDraft';
+import { removeDraftFromLocal } from './services/draftCacheService';
 import { userProfileToTradeDefaults } from './services/profileService';
+import {
+  createPerfectTestProfile,
+  createProfileForNewTrade,
+  createNormalDocumentIdentifiers,
+  createRevisionTestProfile,
+  createTestSubmissionMeta,
+  removeDevOnlyFields,
+  type DevTestMode,
+} from './services/devTestDataService';
 import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from './constants/portOptions';
 import { calculateReadiness } from './harness/rulesEngine';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
@@ -40,10 +50,12 @@ import { AgentLog } from './agents/types';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import {
+  createGeneratedTrade,
   markTradeAsSubmitted,
-  saveTrade,
+  updateGeneratedTrade,
   getSettings
 } from './services/storageService';
+import { decideGeneratedTradeWrite } from './services/tradePersistencePolicy';
 
 // 거래 정보 입력 폼의 서류 종류 라벨 탭 — 각 필드의 data-docs와 CSS 필터로 연동
 const DOC_TABS = [
@@ -56,24 +68,13 @@ const DOC_TABS = [
   { id: 'insurance', label: '적하보험증권' },
 ] as const;
 type DocTabId = typeof DOC_TABS[number]['id'];
+const IS_DEV_TEST_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
 
 export default function App() {
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [docTab, setDocTab] = useState<DocTabId>('all');
   const formCardRef = useRef<HTMLDivElement>(null);
-
-  // 데모 모드(테스트 시나리오 버튼 표시) — 설정 변경 시 같은 탭·다른 탭 모두 즉시 반영
-  const [demoMode, setDemoMode] = useState(() => getSettings().demoMode);
-  useEffect(() => {
-    const sync = () => setDemoMode(getSettings().demoMode);
-    window.addEventListener('portai-settings-changed', sync); // 같은 탭 (saveSettings에서 발행)
-    window.addEventListener('storage', sync); // 다른 탭에서 변경된 경우
-    return () => {
-      window.removeEventListener('portai-settings-changed', sync);
-      window.removeEventListener('storage', sync);
-    };
-  }, []);
 
   // 서류 탭 선택 시 관련 접이식 섹션을 자동으로 펼침 (필드 숨김 필터는 CSS가 처리)
   useEffect(() => {
@@ -339,6 +340,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   });
   // Harness & Agent Pipeline State
   const [isProcessing, setIsProcessing] = useState(false);
+  const [devTestMode, setDevTestMode] = useState<DevTestMode | null>(null);
+  const [devTestMessage, setDevTestMessage] = useState('');
   const [showConsole, setShowConsole] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState<AgentLog[]>([]);
   const [hasGenerated, setHasGenerated] = useState(false);
@@ -357,6 +360,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
   const consoleEndRef = useRef<HTMLDivElement>(null);
   const currentTradeIdRef = useRef<string | null>(null);
+  const [currentTradeStatus, setCurrentTradeStatus] = useState<TradeStatus | null>(null);
   const isSubmittingTradeRef = useRef(false);
   const hasSubmittedTradeRef = useRef(false);
 
@@ -387,203 +391,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     }
   }, [issues]);
 
-  // Quick fill handlers
- // Quick fill handlers
-const handleQuickFill = (type: 'export_error' | 'import_valid') => {
-  if (type === 'export_error') {
-    setProfile({
-      ...emptyProfile,
-
-      // 1. 기본 거래 / 문서 정보
-      tradeType: 'export',
-      documentNo: 'DOC-20260701-001',
-      invoiceNo: 'INV-20260701-001',
-      invoiceDate: '2026-07-01',
-      referenceNo: 'REF-INCHON-001',
-
-      // 선하증권 Bill of Lading 정보
-      blNo: 'BL-20260701-001',
-      issuePlace: 'Seoul, Korea',
-      issueDate: '2026-07-01',
-
-      // 2. 상품 정보
-      itemName: '산업용 금속 부품',
-      hsCode: 'ABC-12', // 일부러 오류 테스트용
-      countryOfOrigin: '대한민국',
-      quantity: 1500,
-      unit: 'EA',
-
-      // 3. 가격 / 금액 정보
-      currency: 'USD',
-      unitPrice: 12,
-      totalAmount: 18000,
-      invoiceAmount: 18000,
-
-      // 4. 포장 / 중량 / 부피 정보
-      packageCount: 30,
-      packageType: 'Carton',
-      netWeight: 2200,
-      grossWeight: '',
-      weight: '', // 일부러 중량 누락 테스트용
-      measurement: '3.5 CBM',
-      shippingMarks: 'INCHON TECH / SHANGHAI / C/T NO. 1-30',
-
-      // 5. 운송 정보
-      loadPort: '부산항',
-      dischargePort: '상하이항',
-      departureDate: '2026-07-01',
-      arrivalDate: '2026-07-05',
-      vesselOrFlight: 'KMTC BUSAN V.2501',
-      carrier: 'KMTC',
-
-      // 선하증권 운송 세부 정보
-      placeOfReceipt: 'Busan, Korea',
-      placeOfDelivery: 'Shanghai, China',
-      finalDestination: 'Shanghai, China',
-      voyageNo: '2501E',
-      flag: 'Korea',
-
-      // 6. 컨테이너 정보
-      containerNo: 'TCLU1234567',
-      sealNo: 'SEAL987654',
-
-      // 7. 거래 조건 / 운임 정보
-      incoterms: 'FOB',
-      paymentTerms: 'T/T in advance',
-      reasonForExport: 'Sale of goods',
-      freightTerms: 'Prepaid',
-      freightCharges: 'Prepaid',
-      freightPrepaidAt: 'Busan, Korea',
-      freightPayableAt: '',
-
-      // 8. 수출자 / 판매자 / Shipper 정보
-      companyName: '인천테크',
-      companyAddress: '인천광역시 연수구 송도동',
-      companyCountry: '대한민국',
-      contact: '010-1234-5678',
-      taxNo: '123-45-67890',
-      businessRegistrationNo: '123-45-67890', // 일부러 검증 오류 테스트 가능
-
-      // 9. 수입자 / 수하인 / Consignee 정보
-      partnerName: '상하이 수입상사 (Shanghai Import Co.)',
-      partnerAddress: 'Pudong New Area, Shanghai, China',
-      partnerCountry: '중국',
-      partnerContact: '+86-21-0000-0000',
-
-      // 10. 구매자 / Bill To 정보
-      buyerName: 'Shanghai Import Co.',
-      buyerAddress: 'Pudong New Area, Shanghai, China',
-      buyerCountry: '중국',
-
-      // 11. Notify Party 정보
-      notifyPartyName: 'Shanghai Import Co.',
-      notifyPartyAddress: 'Pudong New Area, Shanghai, China',
-      notifyPartyContact: '+86-21-0000-0000',
-
-      // 12. 서명 정보
-      signedBy: '김지민',
-      signerName: 'Kim Jimin',
-      signerPosition: 'Export Manager'
-    });
-  } else {
-    setProfile({
-      ...emptyProfile,
-
-      // 1. 기본 거래 / 문서 정보
-      tradeType: 'import',
-      documentNo: 'DOC-20260715-001',
-      invoiceNo: 'INV-20260715-001',
-      invoiceDate: '2026-07-15',
-      referenceNo: 'REF-GLOBAL-001',
-
-      // 선하증권 Bill of Lading 정보
-      blNo: 'BL-20260715-001',
-      issuePlace: 'Los Angeles, USA',
-      issueDate: '2026-07-15',
-
-      // 2. 상품 정보
-      itemName: 'IT 원자재',
-      hsCode: '8517-62-1010',
-      countryOfOrigin: '미국',
-      quantity: 800,
-      unit: 'EA',
-
-      // 3. 가격 / 금액 정보
-      currency: 'USD',
-      unitPrice: 150,
-      totalAmount: 120000,
-      invoiceAmount: 120000,
-
-      // 4. 포장 / 중량 / 부피 정보
-      packageCount: 20,
-      packageType: 'Pallet',
-      netWeight: 2200,
-      grossWeight: 2400,
-      weight: 2400,
-      measurement: '5.2 CBM',
-      shippingMarks: 'GLOBAL LOGISTICS / INCHEON / P/L NO. 1-20',
-
-      // 5. 운송 정보
-      loadPort: '로스앤젤레스항',
-      dischargePort: '인천항',
-      departureDate: '2026-07-15',
-      arrivalDate: '2026-07-30',
-      vesselOrFlight: 'MAERSK LA V.3302',
-      carrier: 'Maersk',
-
-      // 선하증권 운송 세부 정보
-      placeOfReceipt: 'Los Angeles, USA',
-      placeOfDelivery: 'Incheon, Korea',
-      finalDestination: 'Incheon, Korea',
-      voyageNo: '3302W',
-      flag: 'USA',
-
-      // 6. 컨테이너 정보
-      containerNo: 'MSCU7654321',
-      sealNo: 'SEAL123456',
-
-      // 7. 거래 조건 / 운임 정보
-      incoterms: 'CIF',
-      insuranceConfirmed: true, // CIF 필수 서류인 적하보험증권 준비 완료 상태 ("모든 규정 정상 통과" 시나리오)
-      paymentTerms: 'T/T 30 days',
-      reasonForExport: 'Commercial transaction',
-      freightTerms: 'Collect',
-      freightCharges: 'Collect',
-      freightPrepaidAt: '',
-      freightPayableAt: 'Incheon, Korea',
-
-      // 8. 수출자 / 판매자 / Shipper 정보
-      companyName: '글로벌 물류지원',
-      companyAddress: '서울특별시 중구 세종대로',
-      companyCountry: '대한민국',
-      contact: '02-123-4567',
-      taxNo: '124-81-00998',
-      businessRegistrationNo: '124-81-00998',
-
-      // 9. 수입자 / 수하인 / Consignee 정보
-      partnerName: '캘리포니아 엑스포트 (California Export Co.)',
-      partnerAddress: 'Los Angeles, CA, USA',
-      partnerCountry: '미국',
-      partnerContact: '+1-213-000-0000',
-
-      // 10. 구매자 / Bill To 정보
-      buyerName: '글로벌 물류지원',
-      buyerAddress: '서울특별시 중구 세종대로',
-      buyerCountry: '대한민국',
-
-      // 11. Notify Party 정보
-      notifyPartyName: '글로벌 물류지원',
-      notifyPartyAddress: '서울특별시 중구 세종대로',
-      notifyPartyContact: '02-123-4567',
-
-      // 12. 서명 정보
-      signedBy: '홍길동',
-      signerName: 'Hong Gil Dong',
-      signerPosition: 'Import Manager'
-    });
-  }
-};
-
   const handleInputChange = (field: keyof TradeProfile, value: string | number) => {
     setProfile(prev => ({
       ...prev,
@@ -591,8 +398,30 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
     }));
   };
 
+  const handleFillPerfectTestData = () => {
+    if (!IS_DEV_TEST_ENABLED || isProcessing) return;
+    setProfile((current) => createPerfectTestProfile(current));
+    setDevTestMode('perfect');
+    setDevTestMessage('완성형 테스트 데이터가 입력되었습니다. 내용을 확인한 뒤 필요 서류 자동생성을 직접 눌러주세요.');
+  };
+
+  const handleFillRevisionTestData = () => {
+    if (!IS_DEV_TEST_ENABLED || isProcessing) return;
+    setProfile((current) => createRevisionTestProfile(current));
+    setDevTestMode('needs_revision');
+    setDevTestMessage('수정이 필요한 테스트 데이터가 입력되었습니다. 내용을 수정한 뒤 필요 서류 자동생성을 직접 눌러주세요.');
+  };
+
+  const handleDisableDevTestMode = () => {
+    setDevTestMode(null);
+    setProfile((current) => removeDevOnlyFields(current));
+    setDevTestMessage('테스트 모드가 해제되었습니다. 거래 입력값은 유지되며 테스트 전용 표시가 제거되고 일반 검증 규칙이 적용됩니다.');
+  };
+
   const handleReset = () => {
   startNewDraft();
+  setDevTestMode(null);
+  setDevTestMessage('');
  setProfile({
    ...emptyProfile,
    ...(userProfile ? userProfileToTradeDefaults(userProfile) : {}),
@@ -604,6 +433,7 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   setHtmlTemplates({});
   setHsCandidates([]);
   currentTradeIdRef.current = null;
+  setCurrentTradeStatus(null);
   isSubmittingTradeRef.current = false;
   hasSubmittedTradeRef.current = false;
   setAiFeedback('');
@@ -615,15 +445,21 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   // Run the multi-agent pipeline simulator
   const handleGenerateDocuments = async () => {
     if (isProcessing) return;
-
-    if (isProcessing) return; // 빠른 더블클릭으로 파이프라인이 중복 실행되는 것 방지
+    const writeMode = decideGeneratedTradeWrite(currentTradeIdRef.current, currentTradeStatus);
+    if (hasSubmittedTradeRef.current || writeMode === 'blocked_submitted') {
+      alert('이미 최종 제출된 거래입니다. 수정하려면 신규 거래 복사를 이용해주세요.');
+      return;
+    }
     setIsProcessing(true);
     setShowConsole(true);
     setConsoleLogs([]);
 
     try {
+      // 테스트/일반 입력 모두 같은 문서번호 규칙을 사용하며 레거시 DEV/TEST 식별자는 저장하지 않습니다.
+      const generationProfile = createNormalDocumentIdentifiers(profile);
+      setProfile(generationProfile);
       const orchestrator = new OrchestratorAgent();
-      const result = await orchestrator.run({ profile, useLLM: getSettings().useLLM });
+      const result = await orchestrator.run({ profile: generationProfile, useLLM: getSettings().useLLM });
 
       // Simulate terminal printing for all logs chronologically
       for (let i = 0; i < result.logs.length; i++) {
@@ -649,23 +485,33 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
       // 생성 이력 자동 저장 → [문서 관리] 메뉴에서 조회/복원
       try {
-        const savedTrade = await saveTrade(
-          { ...profile, hsCode: profile.hsCode || result.hs?.topCode || '' },
-          result.documents?.documents || [],
-          result.issues?.issues || [],
-          { htmlTemplates: result.documents?.htmlTemplates || {} },
-          {
-            tradeId: currentTradeIdRef.current,
-            status: 'generated',
-          }
-        );
-        currentTradeIdRef.current = savedTrade.id;
+        const generatedTradeData = {
+          profile: { ...generationProfile, hsCode: generationProfile.hsCode || result.hs?.topCode || '' },
+          documents: result.documents?.documents || [],
+          issues: result.issues?.issues || [],
+          generatedDocs: { htmlTemplates: result.documents?.htmlTemplates || {} },
+        };
+        if (writeMode === 'insert') {
+          const createdTrade = await createGeneratedTrade(generatedTradeData);
+          currentTradeIdRef.current = createdTrade.id;
+          alert('필요 서류가 생성되고 새로운 거래가 저장되었습니다.');
+        } else {
+          const currentTradeId = currentTradeIdRef.current;
+          if (!currentTradeId) throw new Error('현재 거래 ID가 없습니다.');
+          const updatedTrade = await updateGeneratedTrade(currentTradeId, generatedTradeData);
+          if (updatedTrade.id !== currentTradeId) throw new Error('재생성된 거래 ID가 현재 거래와 일치하지 않습니다.');
+          alert('수정된 내용으로 필요 서류가 다시 생성되었으며 기존 거래가 업데이트되었습니다.');
+        }
+        setCurrentTradeStatus('generated');
         hasSubmittedTradeRef.current = false;
         await completeDraft().catch((error) => {
           console.warn('[Trade Draft] 거래 저장 후 초안 정리 실패:', error);
         });
       } catch (err) {
-        console.warn('생성 이력 저장 실패 (기능에는 영향 없음):', err);
+        console.error('[Trade Generation] generated trade persistence failed:', err);
+        alert(writeMode === 'update'
+          ? '필요 서류는 생성되었지만 기존 거래 업데이트에 실패했습니다. 다시 시도해주세요.'
+          : '필요 서류는 생성되었지만 새로운 거래 저장에 실패했습니다. 다시 시도해주세요.');
       }
     } catch (error) {
       console.error(error);
@@ -678,6 +524,11 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
   // [문서 관리]에서 저장 이력 복원
   const handleLoadSavedTrade = (t: SavedTrade) => {
     pauseDraftSaving();
+    setDevTestMode(null);
+    setDevTestMessage('');
+    currentTradeIdRef.current = t.id;
+    setCurrentTradeStatus('submitted');
+    hasSubmittedTradeRef.current = true;
     setProfile(t.profile);
     setDocuments(t.documents);
     setIssues(t.issues);
@@ -685,6 +536,24 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
     setAiFeedback('');
     setHsCandidates([]);
     setHasGenerated(true);
+    setActiveMenu('dashboard');
+  };
+
+  const handleCopySavedTrade = (t: SavedTrade) => {
+    startNewDraft();
+    setProfile(createProfileForNewTrade(t.profile));
+    setDocuments([]);
+    setIssues([]);
+    setHtmlTemplates({});
+    setAiFeedback('');
+    setHsCandidates([]);
+    setHasGenerated(false);
+    setDevTestMode(null);
+    setDevTestMessage('');
+    currentTradeIdRef.current = null;
+    setCurrentTradeStatus(null);
+    isSubmittingTradeRef.current = false;
+    hasSubmittedTradeRef.current = false;
     setActiveMenu('dashboard');
   };
 
@@ -844,21 +713,38 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
     const tradeId = currentTradeIdRef.current;
     if (!tradeId) {
-      alert('저장된 생성 거래를 찾을 수 없습니다. 필요서류 자동생성을 먼저 완료한 뒤 다시 전송해 주세요.');
+      alert('먼저 필요 서류 자동생성을 실행해 거래를 생성해주세요.');
       return;
     }
+
+    const hasBlockingErrors = issues.some((issue) => issue.severity !== 'info');
+    const canBypassValidation = IS_DEV_TEST_ENABLED && devTestMode !== null;
+    if (hasBlockingErrors && !canBypassValidation) return;
 
     isSubmittingTradeRef.current = true;
 
     try {
+      const validationErrorCount = issues.filter((issue) => issue.severity === 'error').length;
+      const generatedDocs = devTestMode && canBypassValidation
+        ? { htmlTemplates, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
+        : { htmlTemplates };
       await markTradeAsSubmitted(tradeId, {
         profile,
         documents,
         issues,
-        generatedDocs: { htmlTemplates },
+        generatedDocs,
       });
+      setCurrentTradeStatus('submitted');
       hasSubmittedTradeRef.current = true;
-      alert('모든 통관 문서 정보 보완이 완료되었습니다. 관세청 통관 시스템으로 제출합니다.');
+      if (devTestMode === 'needs_revision' && hasBlockingErrors) {
+        alert('검증 오류를 포함한 테스트 문서가 제출되었습니다.');
+      } else if (devTestMode) {
+        alert('테스트 문서가 정상적으로 제출되었습니다.');
+      } else {
+        alert('모든 통관 문서 정보 보완이 완료되었습니다. 관세청 통관 시스템으로 제출합니다.');
+      }
+      setDevTestMode(null);
+      setDevTestMessage('');
     } catch (error) {
       console.error('[Trade Submission] Failed to submit generated trade:', error);
       alert('전체 문서 전송 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
@@ -907,6 +793,18 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
     }
     return '';
   })();
+
+  const handleDeleteAccount = async () => {
+    if (!user) throw new Error('missing_user');
+    const deletedUserId = await deleteCurrentAccount();
+    removeDraftFromLocal(deletedUserId);
+    localStorage.removeItem('portai_user_session');
+    localStorage.removeItem('portai_saved_trades');
+    pauseDraftSaving();
+    currentTradeIdRef.current = null;
+    setUser(null);
+    handleReset();
+  };
 
   if (isAuthLoading) {
     return (
@@ -1237,10 +1135,10 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
 
         <main className="content-body">
           <div className="workspace-area">
-            {activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} />
+            {activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
             : activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'analysis' ? <DataAnalysisPanel />
-            : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} />
+            : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
             : <>
             {/* Page Title & Subtitle */}
             <div className="page-heading">
@@ -1248,26 +1146,26 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
               <p className="page-subtitle">AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.</p>
             </div>
 
-            {/* Quick test scenario filler — 설정의 데모 모드가 켜져 있을 때만 노출 */}
-            {!hasGenerated && demoMode && (
-              <div className="quick-fill-container">
-                <button className="btn-pill" onClick={() => handleQuickFill('export_error')}>
-                  ⚡ 테스트 시나리오 A 불러오기 (수출 - 중량 누락 & HS코드 오류)
-                </button>
-                <button className="btn-pill" onClick={() => handleQuickFill('import_valid')}>
-                  ⚡ 테스트 시나리오 B 불러오기 (수입 - 모든 규정 정상 통과)
-                </button>
-              </div>
-            )}
-
             {!hasGenerated ? (
               /* --- 거래 정보 입력 모드 --- */
               <div className="dashboard-grid">
                 <div className="form-card" data-doctab={docTab} ref={formCardRef}>
-                  <div className="card-header-icon-title">
-                    <FileSignature size={20} className="text-primary" />
-                    <h2 className="card-title">거래 정보 입력</h2>
+                  <div className="trade-section-header">
+                    <div className="trade-section-title">
+                      <FileSignature size={20} className="text-primary" />
+                      <h2 className="card-title">거래 정보 입력</h2>
+                    </div>
+                    {IS_DEV_TEST_ENABLED && (
+                      <div className="dev-test-actions">
+                        <span className="dev-badge">DEV</span>
+                        <button type="button" className="dev-test-button dev-test-button-perfect" onClick={handleFillPerfectTestData} disabled={isProcessing}>완벽 테스트</button>
+                        <button type="button" className="dev-test-button dev-test-button-revision" onClick={handleFillRevisionTestData} disabled={isProcessing}>수정 필요 테스트</button>
+                        {devTestMode && <button type="button" className="dev-test-disable" onClick={handleDisableDevTestMode}>테스트 모드 해제</button>}
+                      </div>
+                    )}
                   </div>
+                  {devTestMode && <div className="dev-test-mode-label" role="status">DEV · {devTestMode === 'perfect' ? '완벽 테스트 모드' : '수정 필요 테스트 모드'}</div>}
+                  {devTestMessage && <div className="form-message info" role="status">{devTestMessage}</div>}
                   {draftSaveLabel && (
                     <div className={`draft-save-status ${draftSaveStatus}`} role="status" aria-live="polite">
                       <span className="draft-save-dot" />
@@ -2461,8 +2359,8 @@ const handleQuickFill = (type: 'export_error' | 'import_valid') => {
                       <button
                         className="btn btn-primary"
                         onClick={handleSubmitAll}
-                        disabled={blockingIssuesCount > 0}
-                        style={{ flex: 1, opacity: blockingIssuesCount > 0 ? 0.6 : 1, cursor: blockingIssuesCount > 0 ? 'not-allowed' : 'pointer' }}
+                        disabled={blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null)}
+                        style={{ flex: 1, opacity: blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null) ? 0.6 : 1, cursor: blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null) ? 'not-allowed' : 'pointer' }}
                       >
                         전체 문서 전송
                       </button>

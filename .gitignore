@@ -32,3 +32,6 @@ desktop.ini
 수상작/
 hwp/
 .env
+
+# Supabase CLI temporary files
+supabase/.temp/

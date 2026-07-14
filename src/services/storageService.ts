@@ -76,55 +76,59 @@ export function getSavedTrades(): SavedTrade[] {
   }
 }
 
-export async function saveTrade(
-  profile: TradeProfile,
-  documents: DocumentStatus[],
-  issues: ValidationIssue[],
-  generatedDocs?: GeneratedDocuments,
-  options?: {
-    tradeId?: string | null;
-    status?: TradeStatus;
-  }
-): Promise<SavedTrade> {
-  // [EDIT: Trade Persistence] 현재 로그인한 사용자의 id만 서버 세션에서 읽어 trades.user_id에 사용합니다.
-  const userId = await getRequiredUserId();
+export interface GeneratedTradeData {
+  profile: TradeProfile;
+  documents: DocumentStatus[];
+  issues: ValidationIssue[];
+  generatedDocs?: GeneratedDocuments;
+}
 
-  const now = new Date().toISOString();
-  
-  // [EDIT: Trade Persistence] 같은 거래에서 다시 생성하면 새 row를 만들지 않고 기존 row를 업데이트합니다.
-  const payload = {
-      user_id: userId,
-      profile,
-      documents,
-      generated_docs: generatedDocs,
-      issues,
-      status: options?.status ?? 'generated',
-      generated_at: now,
-      submitted_at: null,
+function generatedTradePayload(data: GeneratedTradeData) {
+  return {
+    profile: data.profile,
+    documents: data.documents,
+    generated_docs: data.generatedDocs,
+    issues: data.issues,
+    status: 'generated' as const,
+    generated_at: new Date().toISOString(),
+    submitted_at: null,
   };
+}
 
-  const query = options?.tradeId
-    ? supabase
-        .from('trades')
-        .update(payload)
-        .eq('id', options.tradeId)
-        .eq('user_id', userId)
-        .select()
-        .single()
-    : supabase
-        .from('trades')
-        .insert(payload)
-        .select()
-        .single();
-
-  const { data, error } = await query;
+/** 최초 필요서류 생성: 현재 로그인 사용자의 새 generated 행을 INSERT한다. */
+export async function createGeneratedTrade(data: GeneratedTradeData): Promise<SavedTrade> {
+  const userId = await getRequiredUserId();
+  const { data: row, error } = await supabase
+    .from('trades')
+    .insert({ user_id: userId, ...generatedTradePayload(data) })
+    .select()
+    .single();
 
   if (error) {
-    console.error('Supabase 저장 실패:', error);
+    console.error('Supabase 거래 생성 실패:', error);
     throw error;
   }
+  return mapTradeRow(row);
+}
 
-  return mapTradeRow(data);
+/** 필요서류 재생성: 본인의 아직 제출되지 않은 동일 행만 UPDATE한다. */
+export async function updateGeneratedTrade(tradeId: string, data: GeneratedTradeData): Promise<SavedTrade> {
+  const userId = await getRequiredUserId();
+  const { data: row, error } = await supabase
+    .from('trades')
+    .update(generatedTradePayload(data))
+    .eq('id', tradeId)
+    .eq('user_id', userId)
+    .eq('status', 'generated')
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error('Supabase 거래 재생성 업데이트 실패:', error);
+    throw error;
+  }
+  if (!row) throw new Error('이미 최종 제출되었거나 수정할 수 없는 거래입니다.');
+  return mapTradeRow(row);
 }
 
 // [EDIT: Trade Persistence] 캐시에 남은 currentTradeId가 실제 DB에 존재하는지 현재 사용자 범위에서 확인합니다.
@@ -167,13 +171,16 @@ export async function markTradeAsSubmitted(
     })
     .eq('id', tradeId)
     .eq('user_id', userId)
+    .eq('status', 'generated')
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error('Supabase 전송 상태 업데이트 실패:', error);
     throw error;
   }
+
+  if (!data) throw new Error('이미 최종 제출되었거나 제출할 수 없는 거래입니다.');
 
   return mapTradeRow(data);
 }
@@ -237,19 +244,16 @@ export interface AppSettings {
   companyAddress: string;
   claudeApiKey: string;
   useLLM: boolean;
-  demoMode: boolean;
 }
 
 // useLLM 기본값 true: 키가 등록돼 있으면 LLM 기능이 바로 동작하는 기존 동작을 유지하고,
 // 설정 페이지에서 끌 수 있게 한다 (API 비용 절약 옵션).
-// demoMode 기본값 false: 테스트 시나리오 버튼은 시연·발표 때만 설정에서 켠다.
 const DEFAULT_SETTINGS: AppSettings = {
   userName: '',
   companyName: '',
   companyAddress: '',
   claudeApiKey: '',
   useLLM: true,
-  demoMode: false,
 };
 
 export function getSettings(): AppSettings {
@@ -267,7 +271,7 @@ export function saveSettings(settings: Partial<AppSettings>): void {
   const updated = { ...current, ...settings };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
 
-  // 같은 탭의 다른 컴포넌트(예: 데모 모드에 반응하는 App)가 즉시 갱신되도록 알림
+  // 같은 탭의 다른 컴포넌트가 설정 변경을 즉시 반영할 수 있도록 알림
   window.dispatchEvent(new CustomEvent('portai-settings-changed'));
   
   // API 키가 변경되면 claudeService에도 동기화
