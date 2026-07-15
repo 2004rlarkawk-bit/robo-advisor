@@ -26,6 +26,10 @@ jobs:
         run: npm ci
 
       - name: Build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_ENABLE_TEST_SUBMISSION: 'false'
         run: npm run build
 
       - name: Deploy to GitHub Pages
