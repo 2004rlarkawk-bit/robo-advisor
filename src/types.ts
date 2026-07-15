@@ -24,6 +24,7 @@ export interface TradeProfile {
   arrivalDate: string;
   companyName: string;
   contact: string;
+  contactName?: string;
 
   partnerName?: string;
   currency?: string;
@@ -111,6 +112,8 @@ export type DocumentStatusType =
   | 'completed'
   | 'review_required'
   | 'not_needed';
+
+export type TradeStatus = 'draft' | 'generated' | 'submitted';
 
 export interface DocumentStatus {
   id: string;
@@ -238,7 +241,10 @@ export interface SavedTrade {
   profile: TradeProfile;
   documents: DocumentStatus[];
   issues: ValidationIssue[];
-  status?: string;
+  status?: TradeStatus;
+  generatedDocs?: GeneratedDocuments;
+  generatedAt?: string | null;
+  submittedAt?: string | null;
   createdAt: string;
   updatedAt?: string;
 
