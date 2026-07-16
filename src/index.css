@@ -601,20 +601,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  height: 100%;
-}
-
-.info-visual {
-  height: 180px;
-  background: linear-gradient(135deg, #e0f2fe, #dbeafe);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  position: relative;
-  overflow: hidden;
+  align-self: start; /* 내용 높이만큼만 차지 — 세로 빈 공간 제거 */
 }
 
 .visual-ship {
@@ -623,23 +610,140 @@ body {
   animation: float 4s ease-in-out infinite;
 }
 
+.visual-ship-sm {
+  font-size: 40px;
+}
+
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
 }
 
-.visual-dots {
+/* 입력 대기 상태 */
+.info-idle {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  text-align: center;
+  gap: 12px;
+  padding: 8px 4px;
+}
+
+/* 진행 상태 — 입력 → 검증 → 생성 스텝 인디케이터 */
+.info-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.info-steps {
+  display: flex;
+  align-items: flex-start;
+}
+
+.info-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  position: relative;
+}
+
+.info-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: calc(50% + 18px);
+  right: calc(-50% + 18px);
+  height: 2px;
+  background-color: var(--border-color);
+}
+
+.info-step.done:not(:last-child)::after {
+  background-color: var(--primary-color);
+}
+
+.info-step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background-color: #f1f5f9;
+  color: var(--text-light);
+  border: 1.5px solid var(--border-color);
+  z-index: 1;
+}
+
+.info-step.active .info-step-dot {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #ffffff;
+  box-shadow: 0 0 0 4px var(--primary-light);
+}
+
+.info-step.done .info-step-dot {
+  background-color: var(--success-bg);
+  border-color: var(--success-color);
+  color: var(--success-color);
+}
+
+.info-step-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-light);
+}
+
+.info-step.active .info-step-label {
   color: var(--primary-color);
 }
 
-.info-text-section {
+/* 완료 상태 — 검증 요약 + 문서 목록 */
+.info-result {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 12px;
+}
+
+.info-result-line {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.info-result-line.ok {
+  background-color: var(--success-bg);
+  color: var(--success-color);
+}
+
+.info-result-line.warn {
+  background-color: var(--warning-bg);
+  color: var(--warning-color);
+}
+
+.info-doc-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-doc-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.info-doc-name {
+  color: var(--text-dark);
 }
 
 .info-title {

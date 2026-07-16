@@ -1977,20 +1977,59 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                   </div>
                 </div>
 
-                {/* Right Guide Card */}
+                {/* Right Guide Card — 입력 대기 / 진행 / 완료 3-상태 */}
                 <div className="info-card">
-                  <div className="info-visual">
-                    <span className="visual-ship">🚢</span>
-                    <div className="visual-dots">
-                      <span>•</span>
-                      <span>•</span>
-                      <span>✓</span>
+                  {isProcessing ? (
+                    (() => {
+                      // 마지막 에이전트 로그로 현재 단계 추정: 검증(HS·규정) → 생성(문서·피드백)
+                      const last = consoleLogs[consoleLogs.length - 1];
+                      const step = !last ? 1
+                        : /Document|Feedback/i.test(last.agentName) ? 2
+                        : 1;
+                      return (
+                        <div className="info-progress">
+                          <div className="info-steps">
+                            {['입력', '검증', '생성'].map((label, i) => (
+                              <div key={label} className={`info-step ${i < step ? 'done' : ''} ${i === step ? 'active' : ''}`}>
+                                <span className="info-step-dot">{i < step ? '✓' : i + 1}</span>
+                                <span className="info-step-label">{label}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="info-desc">AI 에이전트가 입력을 검증하고 문서를 생성하는 중입니다...</p>
+                        </div>
+                      );
+                    })()
+                  ) : documents.some(d => d.status !== 'not_started') ? (
+                    <div className="info-result">
+                      <h3 className="info-title">최근 생성 결과</h3>
+                      <div className={`info-result-line ${blockingIssuesCount > 0 ? 'warn' : 'ok'}`}>
+                        {blockingIssuesCount > 0 ? `⚠ 보완 필요 ${blockingIssuesCount}건` : '✓ 검증 통과'} · 생성 완료 {completedDocsCount}건
+                      </div>
+                      <ul className="info-doc-list">
+                        {documents.filter(d => d.status !== 'not_started').map(d => {
+                          let badgeClass = 'status-not-started';
+                          if (d.status === 'completed') badgeClass = 'status-completed';
+                          else if (d.status === 'review_required') badgeClass = 'status-review-required';
+                          else if (d.status === 'not_needed') badgeClass = 'status-not-needed';
+                          return (
+                            <li key={d.id}>
+                              <span className="info-doc-name">{d.name}</span>
+                              <span className={`status-badge ${badgeClass}`}>{d.statusText}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setHasGenerated(true)}>
+                        결과 화면 다시 보기
+                      </button>
                     </div>
-                  </div>
-                  <div className="info-text-section">
-                    <h3 className="info-title">안내</h3>
-                    <p className="info-desc">입력된 정보를 바탕으로 통관 및 선적 관련 필수 문서를 자동으로 생성하고 검증 규칙을 돌려 오류를 잡아냅니다.</p>
-                  </div>
+                  ) : (
+                    <div className="info-idle">
+                      <span className="visual-ship visual-ship-sm">🚢</span>
+                      <p className="info-desc">왼쪽에 거래 정보를 입력하고 [필요 서류 자동 생성]을 누르면 여기에 검증 결과와 생성된 문서가 표시됩니다.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
