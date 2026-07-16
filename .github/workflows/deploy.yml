@@ -24,12 +24,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
+# github Page에서 실행할 때는 , 테스트용 버튼 숨김 (실제 배포용이기 때문에)
       - name: Build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_ENABLE_TEST_SUBMISSION: 'true'
+          VITE_ENABLE_TEST_SUBMISSION: 'false'
         run: npm run build
 
       - name: Deploy to GitHub Pages
