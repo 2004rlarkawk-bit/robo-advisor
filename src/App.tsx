@@ -20,10 +20,14 @@ import {
   Edit3,
   PanelLeftClose,
   PanelLeftOpen,
+  BookOpen,
+  Anchor,
   UserRound
 } from 'lucide-react';
 import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade, TradeStatus } from './types';
 import SettingsPanel from './components/SettingsPanel';
+import GuidePanel from './components/GuidePanel';
+import AboutPanel from './components/AboutPanel';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
 import AuthPage from './components/AuthPage';
@@ -1026,6 +1030,15 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         <ul className="menu-list">
           <li>
             <div
+              className={`menu-item ${activeMenu === 'about' ? 'active' : ''}`}
+              onClick={() => setActiveMenu('about')}
+            >
+              <Anchor size={18} />
+              서비스 소개
+            </div>
+          </li>
+          <li>
+            <div
               className={`menu-item ${activeMenu === 'dashboard' ? 'active' : ''}`}
               onClick={() => setActiveMenu('dashboard')}
             >
@@ -1077,6 +1090,15 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
           </li>
           <li>
             <div
+              className={`menu-item ${activeMenu === 'guide' ? 'active' : ''}`}
+              onClick={() => setActiveMenu('guide')}
+            >
+              <BookOpen size={18} />
+              사용 안내
+            </div>
+          </li>
+          <li>
+            <div
               className={`menu-item ${activeMenu === 'settings' ? 'active' : ''}`}
               onClick={() => setActiveMenu('settings')}
             >
@@ -1115,7 +1137,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               <Bell size={20} />
               <span className="badge-dot"></span>
             </button>
-            <button className="icon-btn">
+            <button className="icon-btn" onClick={() => setActiveMenu('guide')} title="사용 안내">
               <HelpCircle size={20} />
             </button>
             <div className="user-info-section">
@@ -1135,7 +1157,9 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
         <main className="content-body">
           <div className="workspace-area">
-            {activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
+            {activeMenu === 'about' ? <AboutPanel onStart={() => setActiveMenu('dashboard')} />
+            : activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
+            : activeMenu === 'guide' ? <GuidePanel />
             : activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'analysis' ? <DataAnalysisPanel />
             : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
