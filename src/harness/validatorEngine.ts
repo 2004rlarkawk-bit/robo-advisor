@@ -6,9 +6,11 @@ import { getRelatedLawForIssue } from '../services/lawService';
 
 /**
  * 거래정보 입력값 검증 (팀원 Python 스펙 "거래정보 입력값 검증 모듈" 포팅)
- * 1) 필수 항목 누락 체크
- * 2) 숫자 항목(수량·중량)은 0보다 커야 함
- * 3) 도착예정일이 출발일보다 빠르면 오류
+ * 1) 필수 항목 누락 체크 (단가·금액·송장 작성일 포함)
+ * 2) 숫자 항목(수량·중량·단가·금액)은 0보다 커야 함
+ * 3) 계산 검증 — 수량 × 단가 = 금액이 맞는지
+ * 4) 도착예정일이 출발일보다 빠르면 오류
+ * 5) 송장 작성일이 출발일(선적일)보다 늦으면 오류
  *
  * 중량 누락·항구 누락·HS코드는 기존 룰(validateTradeDocuments/HSCodeAgent)이
  * 전담하므로 여기서 중복 발행하지 않는다.
@@ -26,6 +28,9 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
     { field: 'companyName', label: '업체명', docType: 'invoice' },
     { field: 'partnerName', label: '거래처명(Consignee)', docType: 'invoice' },
     { field: 'contact', label: '담당자 연락처', docType: 'invoice' },
+    { field: 'unitPrice', label: '단가', docType: 'invoice' },
+    { field: 'totalAmount', label: '금액(Total Amount)', docType: 'invoice' },
+    { field: 'invoiceDate', label: '송장 작성일', docType: 'invoice' },
   ];
 
   for (const { field, label, docType } of required) {
@@ -42,9 +47,11 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
   }
 
   // 2) 숫자 항목은 0보다 커야 함 (입력된 경우에만 — 누락은 위/기존 룰이 처리)
-  const numericChecks: { field: 'quantity' | 'weight'; label: string; docType: ValidationIssue['docType'] }[] = [
+  const numericChecks: { field: 'quantity' | 'weight' | 'unitPrice' | 'totalAmount'; label: string; docType: ValidationIssue['docType'] }[] = [
     { field: 'quantity', label: '화물 수량', docType: 'packing_list' },
     { field: 'weight', label: '중량(kg)', docType: 'packing_list' },
+    { field: 'unitPrice', label: '단가', docType: 'invoice' },
+    { field: 'totalAmount', label: '금액(Total Amount)', docType: 'invoice' },
   ];
 
   for (const { field, label, docType } of numericChecks) {
@@ -71,7 +78,32 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
     }
   }
 
-  // 3) 날짜 순서 확인 (도착예정일이 출발일보다 빠르면 오류)
+  // 3) 계산 검증 — 수량 × 단가 = 금액 (셋 다 유효한 양수로 입력된 경우에만)
+  //    셋 중 하나라도 누락·비정상이면 위의 필수/숫자 검사가 이미 잡으므로 여기선 중복 발행하지 않는다.
+  const qty = Number(profile.quantity);
+  const price = Number(profile.unitPrice);
+  const total = Number(profile.totalAmount);
+  const allAmountsValid =
+    profile.quantity !== '' && profile.unitPrice !== '' && profile.totalAmount !== '' &&
+    profile.quantity !== undefined && profile.unitPrice !== undefined && profile.totalAmount !== undefined &&
+    !Number.isNaN(qty) && !Number.isNaN(price) && !Number.isNaN(total) &&
+    qty > 0 && price > 0 && total > 0;
+  if (allAmountsValid) {
+    const expected = qty * price;
+    // 단가·수량 반올림에서 오는 미세 오차(≤1%)는 허용하고, 자릿수 실수 등 실제 불일치만 잡는다.
+    const tolerance = Math.max(0.01, expected * 0.01);
+    if (Math.abs(expected - total) > tolerance) {
+      issues.push({
+        id: 'amount-calc-mismatch',
+        docType: 'invoice',
+        severity: 'error',
+        message: `금액 계산 불일치: 수량(${qty.toLocaleString()}) × 단가(${price.toLocaleString()}) = ${expected.toLocaleString()} 이지만, 입력된 금액은 ${total.toLocaleString()} 입니다. 값을 확인해 주세요.`,
+        field: 'totalAmount'
+      });
+    }
+  }
+
+  // 4) 날짜 순서 확인 (도착예정일이 출발일보다 빠르면 오류)
   if (profile.departureDate && profile.arrivalDate && profile.departureDate > profile.arrivalDate) {
     issues.push({
       id: 'input-date-order',
@@ -79,6 +111,17 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
       severity: 'error',
       message: '도착예정일이 출발일보다 빠를 수 없습니다.',
       field: 'arrivalDate'
+    });
+  }
+
+  // 5) 송장 작성일은 출발일(선적일)보다 늦을 수 없음 (둘 다 입력된 경우에만)
+  if (profile.invoiceDate && profile.departureDate && profile.invoiceDate > profile.departureDate) {
+    issues.push({
+      id: 'invoice-date-after-shipment',
+      docType: 'invoice',
+      severity: 'error',
+      message: '송장 작성일이 출발일(선적일)보다 늦을 수 없습니다. 날짜를 확인해 주세요.',
+      field: 'invoiceDate'
     });
   }
 

@@ -310,7 +310,10 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     departureDate: '2026-07-01',
     arrivalDate: '2026-07-05',
     companyName: '인천테크',
-    contact: '010-1234-5678'
+    contact: '010-1234-5678',
+    unitPrice: 10,
+    totalAmount: 15000, // 1500 × 10 = 15000 (계산 일치)
+    invoiceDate: '2026-06-25' // 출발일(2026-07-01) 이전
   };
 
   it('외화(USD) 인보이스 입력 시 원화 과세가격 환산 info 이슈가 추가된다', async () => {
@@ -438,5 +441,62 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(dateIssue).toBeDefined();
     expect(dateIssue?.severity).toBe('error');
     expect(dateIssue?.message).toContain('도착예정일이 출발일보다 빠를 수 없습니다');
+  });
+
+  it('단가·금액·송장 작성일 누락 시 각각 필수 항목 error가 발생한다', () => {
+    const missingAmountProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp',
+      unitPrice: '',
+      totalAmount: '',
+      invoiceDate: ''
+    };
+    const issues = validateRequiredInputs(missingAmountProfile);
+    expect(issues.find(i => i.id === 'input-missing-unitPrice')?.severity).toBe('error');
+    expect(issues.find(i => i.id === 'input-missing-totalAmount')?.severity).toBe('error');
+    expect(issues.find(i => i.id === 'input-missing-invoiceDate')?.severity).toBe('error');
+  });
+
+  it('수량 × 단가 ≠ 금액이면 계산 불일치 error가 발생한다', () => {
+    const wrongTotalProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp',
+      quantity: 1500,
+      unitPrice: 10,
+      totalAmount: 12000 // 올바른 값은 15000
+    };
+    const issues = validateRequiredInputs(wrongTotalProfile);
+    const calcIssue = issues.find(i => i.id === 'amount-calc-mismatch');
+    expect(calcIssue).toBeDefined();
+    expect(calcIssue?.severity).toBe('error');
+    expect(calcIssue?.message).toContain('15,000');
+    expect(calcIssue?.message).toContain('12,000');
+  });
+
+  it('수량 × 단가 = 금액이 맞으면 계산 불일치 error가 없다', () => {
+    const okTotalProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp',
+      quantity: 200,
+      unitPrice: 12.5,
+      totalAmount: 2500 // 200 × 12.5 = 2500
+    };
+    const issues = validateRequiredInputs(okTotalProfile);
+    expect(issues.find(i => i.id === 'amount-calc-mismatch')).toBeUndefined();
+  });
+
+  it('송장 작성일이 출발일(선적일)보다 늦으면 error가 발생한다', () => {
+    const lateInvoiceProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp',
+      invoiceDate: '2026-07-10',
+      departureDate: '2026-07-01',
+      arrivalDate: '2026-07-20'
+    };
+    const issues = validateRequiredInputs(lateInvoiceProfile);
+    const issue = issues.find(i => i.id === 'invoice-date-after-shipment');
+    expect(issue).toBeDefined();
+    expect(issue?.severity).toBe('error');
+    expect(issue?.message).toContain('출발일');
   });
 });
