@@ -32,7 +32,7 @@ export function renderPackingListHTML(data: PackingListData): string {
         <td style="${B} padding:9px 8px; text-align:center; vertical-align:top;">${marks}</td>
         <td style="${B} padding:9px 8px; vertical-align:top;">${pkg}</td>
         <td style="${B} padding:9px 8px; vertical-align:top;">${esc(item.description)}${hs}</td>
-        <td style="${B} padding:9px 8px; text-align:right; vertical-align:top;">${esc((item.quantity ?? 0).toLocaleString())} ${esc(item.unit || 'EA')}<br><span style="color:#666;">N.W ${esc((item.netWeight ?? 0).toFixed(1))} KG</span></td>
+        <td style="${B} padding:9px 8px; text-align:right; vertical-align:top;">${esc((item.quantity ?? 0).toLocaleString())} ${esc(item.unit || 'EA')}${item.netWeight ? `<br><span style="color:#666;">N.W ${esc(item.netWeight.toFixed(1))} KG</span>` : ''}</td>
         <td style="${B} padding:9px 8px; text-align:right; vertical-align:top;">${esc((item.grossWeight ?? 0).toFixed(1))} KG</td>
         <td style="${B} padding:9px 8px; text-align:right; vertical-align:top;">${fb(item.dimensions || data.measurement)}</td>
       </tr>`;
@@ -135,7 +135,7 @@ export function renderPackingListHTML(data: PackingListData): string {
       <div style="margin-top:26px; display:flex; justify-content:flex-end;">
         <div style="width:300px;">
           <div style="${label}">⑯ Signed by</div>
-          <div style="border-bottom:1px solid #000; font-family:'Times New Roman',serif; font-style:italic; font-size:15px; padding:18px 4px 4px; color:#000;">${esc(data.signedBy || seller.name || '')}</div>
+          <div style="border-bottom:1px solid #000; font-family:'Times New Roman','Nanum Myeongjo','Malgun Gothic',serif; font-style:italic; font-size:15px; padding:18px 4px 4px; color:#000;">${esc(data.signedBy || seller.name || '')}</div>
         </div>
       </div>
     </div>

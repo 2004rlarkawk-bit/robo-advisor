@@ -51,8 +51,6 @@ import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from './constants/portOptio
 import { calculateReadiness } from './harness/rulesEngine';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import {
   createGeneratedTrade,
   markTradeAsSubmitted,
@@ -663,57 +661,68 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     return `${docTypeLabel}_${company}_${dateStr}.pdf`;
   };
 
-  const handleDownloadDoc = async (docId: string) => {
+  const handleDownloadDoc = (docId: string) => {
     const htmlContent = htmlTemplates[docId];
     if (!htmlContent) {
       alert('문서 양식 템플릿이 생성되지 않았습니다.');
       return;
     }
 
-    setIsProcessing(true);
-    
-    const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    container.style.top = '-9999px';
-    container.style.width = '800px';
-    container.style.backgroundColor = '#ffffff';
-    container.innerHTML = htmlContent;
-    document.body.appendChild(container);
+    // 벡터(텍스트 레이어 유지) PDF 출력 — 브라우저 네이티브 인쇄("PDF로 저장").
+    // html2canvas 래스터와 달리 텍스트 선택·추출 가능 + 한글 폰트 벡터 임베딩 + 기존 HTML 그대로.
+    // 저장 전 안내: 브라우저 기본 머리글/바닥글(URL·날짜)은 코드로 강제 제거할 수 없어(사용자 인쇄 설정),
+    // 인쇄 대화상자에서 직접 해제하도록 안내한다.
+    alert(
+      'PDF 저장 창이 열립니다.\n\n' +
+      '· 대상(프린터): "PDF로 저장" 선택\n' +
+      '· 문서에 URL/날짜가 찍히지 않게 하려면 → "옵션 더보기 → 머리글 및 바닥글" 체크 해제'
+    );
 
-    try {
-      const canvas = await html2canvas(container, {
-        scale: 2,
-        useCORS: true
-      });
-      const imgData = canvas.toDataURL('image/png');
-      
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210;
-      const pageHeight = 297; // A4 세로 (mm)
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const title = getDocFileName(docId).replace(/\.pdf$/i, '').replace(/[<>"'&]/g, '');
 
-      // A4 한 장을 넘는 문서는 페이지를 나눠 이어 붙인다 (하단 잘림 방지)
-      let heightLeft = imgHeight;
-      let position = 0;
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-      while (heightLeft > 0) {
-        position -= pageHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
+    // 새 창(window.open) 대신 숨김 iframe — 팝업 차단을 회피한다.
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:fixed; right:0; bottom:0; width:0; height:0; border:0;';
+    document.body.appendChild(iframe);
 
-      const fileName = getDocFileName(docId);
-      pdf.save(fileName);
-    } catch (error) {
-      console.error('PDF Generation Error:', error);
-      alert('PDF 다운로드 처리 중 오류가 발생했습니다.');
-    } finally {
-      document.body.removeChild(container);
-      setIsProcessing(false);
+    const idoc = iframe.contentWindow?.document;
+    if (!idoc) {
+      document.body.removeChild(iframe);
+      alert('인쇄 창 생성에 실패했습니다. 다시 시도해 주세요.');
+      return;
     }
+
+    // htmlContent는 템플릿에서 이미 escapeHtml 처리된 안전한 문자열이다.
+    idoc.open();
+    idoc.write(
+      '<!doctype html><html lang="ko"><head><meta charset="utf-8">' +
+      '<title>' + title + '</title><style>' +
+      '@page { size: A4; margin: 10mm; }' +
+      'html, body { margin: 0; padding: 0; background: #fff; }' +
+      '* { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }' +
+      // 미리보기 820px 고정폭 → A4 인쇄영역(210 − 좌우 10mm = 190mm) mm 고정폭으로 안정화(% 확장 대신).
+      'body > div { width: 190mm !important; max-width: 190mm !important; margin: 0 !important; }' +
+      '</style></head><body>' + htmlContent + '</body></html>'
+    );
+    idoc.close();
+
+    const win = iframe.contentWindow!;
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      if (iframe.parentNode) document.body.removeChild(iframe);
+    };
+    const doPrint = () => {
+      win.onafterprint = cleanup;
+      win.focus();
+      win.print();
+      // onafterprint 미발화 브라우저 대비 — 인쇄 대화상자 동안 iframe이 살아있게 넉넉히 지연 후 정리
+      setTimeout(cleanup, 60000);
+    };
+    // 폰트·레이아웃 렌더 후 인쇄
+    setTimeout(doPrint, 350);
   };
 
   const handleSubmitAll = async () => {
@@ -2210,7 +2219,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                     </button>
                                     <button
                                       className="action-btn-circle"
-                                      title="다운로드"
+                                      title="PDF 저장 (텍스트)"
                                       onClick={() => handleDownloadDoc(doc.id)}
                                     >
                                       <Download size={14} />
@@ -2597,7 +2606,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                PDF 다운로드
+                PDF 저장 (텍스트)
               </button>
             </div>
           </div>

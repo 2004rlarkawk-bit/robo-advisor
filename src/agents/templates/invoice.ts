@@ -153,7 +153,7 @@ export function renderInvoiceHTML(data: InvoiceData): string {
       <div style="margin-top:26px; display:flex; justify-content:flex-end;">
         <div style="width:300px; text-align:center;">
           <div style="${label} text-align:left;">⑱ Signed by</div>
-          <div style="border-bottom:1px solid #000; font-family:'Times New Roman',serif; font-style:italic; font-size:15px; padding:18px 4px 4px; color:#000;">${esc(data.signedBy || data.seller?.name || '')}</div>
+          <div style="border-bottom:1px solid #000; font-family:'Times New Roman','Nanum Myeongjo','Malgun Gothic',serif; font-style:italic; font-size:15px; padding:18px 4px 4px; color:#000;">${esc(data.signedBy || data.seller?.name || '')}</div>
         </div>
       </div>
     </div>

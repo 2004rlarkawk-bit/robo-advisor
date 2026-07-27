@@ -96,7 +96,7 @@ export function renderInsuranceHTML(data: InsuranceData): string {
           </td>
           <td style="width:45%; text-align:center; vertical-align:bottom;">
             <div style="${label}">⑲ Authorized Signatory</div>
-            <div style="border-bottom:1px solid #000; font-family:'Times New Roman',serif; font-style:italic; font-size:14px; padding:18px 4px 4px; color:#000;">${esc(data.signedBy || (d.company as string) || '')}</div>
+            <div style="border-bottom:1px solid #000; font-family:'Times New Roman','Nanum Myeongjo','Malgun Gothic',serif; font-style:italic; font-size:14px; padding:18px 4px 4px; color:#000;">${esc(data.signedBy || (d.company as string) || '')}</div>
           </td>
         </tr>
       </table>

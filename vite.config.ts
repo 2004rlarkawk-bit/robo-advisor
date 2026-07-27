@@ -8,11 +8,10 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // 880kB 단일 청크를 용도별로 분리 — PDF 라이브러리처럼 초기 화면에
-        // 불필요한 코드를 별도 청크로 나눠 첫 로딩과 캐싱 효율을 개선한다
+        // 단일 청크를 용도별로 분리해 첫 로딩과 캐싱 효율을 개선한다.
+        // PDF 출력은 브라우저 네이티브 인쇄(벡터)로 전환 — jspdf/html2canvas 제거됨.
         manualChunks: {
           react: ['react', 'react-dom'],
-          pdf: ['jspdf', 'html2canvas'],
           icons: ['lucide-react'],
         },
       },

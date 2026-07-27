@@ -63,11 +63,14 @@ describe('DocumentAgent — 인보이스·패킹리스트 중량 일관성', () 
     expect(invoice.items[0].netWeight).toBe(2200);
   });
 
-  it('순중량 미입력 시에만 총중량 × 0.9 추정치를 사용한다', async () => {
+  it('순중량 미입력 시 추정하지 않고 0으로 둔다 (실측 신고값 — 총중량×0.9 금지)', async () => {
     const result = await runAgent({ grossWeight: 2400, netWeight: '' });
 
     const packingList = result.generatedDocs.packingList!;
-    expect(packingList.netWeight).toBe(2160); // 2400 × 0.9
+    expect(packingList.netWeight).toBe(0);
+    expect(packingList.totalNetWeight).toBe(0);
+    // 총중량은 그대로 유지(순중량 추정과 무관)
+    expect(packingList.grossWeight).toBe(2400);
   });
 });
 
@@ -90,13 +93,48 @@ describe('DocumentAgent — 인보이스 금액 일관성', () => {
     expect(invoice.items[0].amount).toBe(6000);
   });
 
-  it('단가·총액 미입력 시 추정 단가로 금액을 일관 계산한다', async () => {
+  it('단가·총액 미입력 시 가격을 지어내지 않고 0으로 둔다 (추정 단가 금지)', async () => {
+    // 통관 문서에 가짜 단가를 넣지 않는다 — 미입력은 0, 누락은 validatorEngine이 막는다.
     const result = await runAgent({ unitPrice: '', totalAmount: '' });
 
     const invoice = result.generatedDocs.invoice!;
-    const expectedUnitPrice = Math.round((2400 * 2.5) / 100 * 100) / 100; // 60
-    expect(invoice.items[0].unitPrice).toBe(expectedUnitPrice);
-    expect(invoice.totalAmount).toBe(expectedUnitPrice * 100);
+    expect(invoice.items[0].unitPrice).toBe(0);
+    expect(invoice.items[0].amount).toBe(0);
+    expect(invoice.totalAmount).toBe(0);
+  });
+});
+
+describe('DocumentAgent — 문서번호 건(shipment) 단위 파생·안정성', () => {
+  const shipProfile: Partial<TradeProfile> = {
+    tradeType: 'export',
+    incoterms: 'CIF',
+    documentNo: 'DOC-20260727-123456',
+    countryOfOrigin: 'REPUBLIC OF KOREA',
+  };
+
+  it('모든 서류번호가 documentNo 시퀀스(2026-123456)에서 파생된다', async () => {
+    const r = await runAgent(shipProfile);
+    const inv = r.generatedDocs.invoice! as any;
+    const pl = r.generatedDocs.packingList! as any;
+    const co = r.generatedDocs.certificateOfOrigin! as any;
+    const ins = r.generatedDocs.insurance! as any;
+
+    expect(inv.invoiceNo).toBe('INV-2026-123456');
+    expect(pl.plNo).toBe('PL-2026-123456');
+    expect(co.coNo).toBe('CO-2026-123456');
+    expect(co.certNo).toBe('CO-2026-123456');
+    expect(ins.certNo).toBe('INS-2026-123456');
+    // 교차참조도 같은 invoiceNo를 가리킨다
+    expect(pl.invoiceNo).toBe(inv.invoiceNo);
+  });
+
+  it('같은 documentNo로 재생성해도 모든 번호가 유지된다', async () => {
+    const a = await runAgent(shipProfile);
+    const b = await runAgent(shipProfile);
+    expect((b.generatedDocs.invoice as any).invoiceNo).toBe((a.generatedDocs.invoice as any).invoiceNo);
+    expect((b.generatedDocs.packingList as any).plNo).toBe((a.generatedDocs.packingList as any).plNo);
+    expect((b.generatedDocs.certificateOfOrigin as any).certNo).toBe((a.generatedDocs.certificateOfOrigin as any).certNo);
+    expect((b.generatedDocs.insurance as any).certNo).toBe((a.generatedDocs.insurance as any).certNo);
   });
 });
 
