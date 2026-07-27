@@ -2,7 +2,6 @@ import { Agent, DocumentResult, HSCodeResult, AgentLog, createLog } from './type
 import { TradeProfile, GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, InsuranceData } from '../types';
 import { determineRequiredDocuments } from '../harness/rulesEngine';
 import { autoFillDocumentFields } from '../services/claudeService';
-import { renderInvoiceHTML } from './templates/invoice';
 import { renderPackingListHTML } from './templates/packingList';
 import { renderCertificateOfOriginHTML } from './templates/co';
 import { renderInsuranceHTML } from './templates/insurance';
@@ -264,10 +263,9 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     }
 
     // HTML 템플릿 렌더링 적용
+    // 상업송장은 고정 docx 템플릿(invoiceDocxService)에서 생성·미리보기하므로 HTML을 만들지 않는다.
+    // (미리보기 = 다운로드 docx 단일 소스. generatedDocs.invoice 구조 데이터만 넘긴다.)
     const htmlTemplates: Record<string, string> = {};
-    if (generatedDocs.invoice) {
-      htmlTemplates.invoice = renderInvoiceHTML(generatedDocs.invoice);
-    }
    if (generatedDocs.packingList) {
   htmlTemplates.packing_list = renderPackingListHTML(generatedDocs.packingList);
 }

@@ -147,26 +147,24 @@ describe('문서 템플릿 XSS 방어', () => {
     expect(escapeHtml(1234)).toBe('1234');
   });
 
-  it('품목명에 스크립트를 넣어도 생성된 HTML에서 이스케이프된다', async () => {
+  // 상업송장은 고정 docx 템플릿(docxtemplater가 XML 이스케이프)으로 생성되므로 HTML XSS 대상이 아님.
+  // 여기서는 여전히 HTML로 렌더되는 패킹리스트로 이스케이프를 검증한다.
+  it('품목명에 스크립트를 넣어도 생성된 HTML(패킹리스트)에서 이스케이프된다', async () => {
     const result = await runAgent({ itemName: '<script>alert("xss")</script>' });
 
-    const html = result.htmlTemplates?.invoice ?? '';
+    const html = result.htmlTemplates?.packing_list ?? '';
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
   });
 
-  it('회사명·주소에 HTML 태그를 넣어도 이스케이프된다', async () => {
+  it('회사명·주소에 HTML 태그를 넣어도 이스케이프된다(패킹리스트)', async () => {
     const result = await runAgent({
       companyName: '<img src=x onerror=alert(1)>테크',
       companyAddress: '"서울" & <부산>'
     });
 
-    const invoiceHtml = result.htmlTemplates?.invoice ?? '';
     const plHtml = result.htmlTemplates?.packing_list ?? '';
-
-    for (const html of [invoiceHtml, plHtml]) {
-      expect(html).not.toContain('<img src=x');
-      expect(html).toContain('&lt;img src=x');
-    }
+    expect(plHtml).not.toContain('<img src=x');
+    expect(plHtml).toContain('&lt;img src=x');
   });
 });

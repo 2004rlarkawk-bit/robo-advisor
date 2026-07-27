@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -24,7 +24,8 @@ import {
   Anchor,
   UserRound
 } from 'lucide-react';
-import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade, TradeStatus } from './types';
+import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade, TradeStatus, InvoiceData } from './types';
+import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
 import SettingsPanel from './components/SettingsPanel';
 import GuidePanel from './components/GuidePanel';
 import AboutPanel from './components/AboutPanel';
@@ -353,6 +354,43 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const [aiFeedback, setAiFeedback] = useState<string>('');
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [htmlTemplates, setHtmlTemplates] = useState<Record<string, string>>({});
+  // 상업송장은 고정 docx 템플릿에서 생성한다. 구조 데이터를 보관하고, 생성된 Blob을 캐시해
+  // 미리보기와 다운로드가 "동일 바이너리"를 쓰게 한다.
+  const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
+  const invoiceDocxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
+  const docxPreviewRef = useRef<HTMLDivElement | null>(null);
+
+  // 같은 InvoiceData면 같은 Blob 반환(캐시) → 화면 미리보기와 다운로드 파일이 동일 바이너리.
+  const getInvoiceBlob = async (): Promise<Blob | null> => {
+    if (!invoiceData) return null;
+    const sig = JSON.stringify(invoiceData);
+    if (invoiceDocxCacheRef.current?.sig === sig) return invoiceDocxCacheRef.current.blob;
+    const blob = await buildInvoiceDocx(invoiceData);
+    invoiceDocxCacheRef.current = { sig, blob };
+    return blob;
+  };
+
+  // 문서 생성 여부: 상업송장은 invoiceData, 나머지는 htmlTemplates로 판정
+  const hasDoc = (id: string) => (id === 'invoice' ? !!invoiceData : !!htmlTemplates[id]);
+
+  // 미리보기 모달에서 상업송장은 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
+  useEffect(() => {
+    if (previewDocId !== 'invoice' || !invoiceData) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = await getInvoiceBlob();
+        const host = docxPreviewRef.current;
+        if (!blob || cancelled || !host) return;
+        await renderInvoiceDocxPreview(blob, host);
+      } catch {
+        const host = docxPreviewRef.current;
+        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">상업송장 미리보기 생성에 실패했습니다.</p>';
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewDocId, invoiceData]);
 
   // Mobile simulator inputs
   const [mobileWeight, setMobileWeight] = useState('');
@@ -489,6 +527,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       }));
       setDocuments(result.documents?.documents || []);
       setHtmlTemplates(result.documents?.htmlTemplates || {});
+      setInvoiceData(result.documents?.generatedDocs?.invoice || null);
+      invoiceDocxCacheRef.current = null;
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
       setHsCandidates(result.hs?.candidates || []);
@@ -500,7 +540,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
           profile: { ...generationProfile, hsCode: generationProfile.hsCode || result.hs?.topCode || '' },
           documents: result.documents?.documents || [],
           issues: result.issues?.issues || [],
-          generatedDocs: { htmlTemplates: result.documents?.htmlTemplates || {} },
+          generatedDocs: { htmlTemplates: result.documents?.htmlTemplates || {}, invoice: result.documents?.generatedDocs?.invoice },
         };
         if (writeMode === 'insert') {
           const createdTrade = await createGeneratedTrade(generatedTradeData);
@@ -544,6 +584,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setDocuments(t.documents);
     setIssues(t.issues);
     setHtmlTemplates((t.generatedDocs?.htmlTemplates as Record<string, string>) || {});
+    setInvoiceData((t.generatedDocs?.invoice as InvoiceData) || null);
+    invoiceDocxCacheRef.current = null;
     setAiFeedback('');
     setHsCandidates([]);
     setHasGenerated(true);
@@ -587,6 +629,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
       setDocuments(result.documents?.documents || []);
       setHtmlTemplates(result.documents?.htmlTemplates || {});
+      setInvoiceData(result.documents?.generatedDocs?.invoice || null);
+      invoiceDocxCacheRef.current = null;
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
       setHsCandidates(result.hs?.candidates || []);
@@ -661,14 +705,32 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     return `${docTypeLabel}_${company}_${dateStr}.pdf`;
   };
 
-  const handleDownloadDoc = (docId: string) => {
+  const handleDownloadDoc = async (docId: string) => {
+    // 상업송장: 고정 docx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 바이너리).
+    if (docId === 'invoice') {
+      const blob = await getInvoiceBlob();
+      if (!blob) {
+        alert('상업송장 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = getDocFileName('invoice').replace(/\.pdf$/i, '.docx');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+
     const htmlContent = htmlTemplates[docId];
     if (!htmlContent) {
       alert('문서 양식 템플릿이 생성되지 않았습니다.');
       return;
     }
 
-    // 벡터(텍스트 레이어 유지) PDF 출력 — 브라우저 네이티브 인쇄("PDF로 저장").
+    // 그 외 문서: 벡터(텍스트 레이어 유지) PDF 출력 — 브라우저 네이티브 인쇄("PDF로 저장").
     // html2canvas 래스터와 달리 텍스트 선택·추출 가능 + 한글 폰트 벡터 임베딩 + 기존 HTML 그대로.
     // 저장 전 안내: 브라우저 기본 머리글/바닥글(URL·날짜)은 코드로 강제 제거할 수 없어(사용자 인쇄 설정),
     // 인쇄 대화상자에서 직접 해제하도록 안내한다.
@@ -748,8 +810,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     try {
       const validationErrorCount = issues.filter((issue) => issue.severity === 'error').length;
       const generatedDocs = devTestMode && canBypassValidation
-        ? { htmlTemplates, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
-        : { htmlTemplates };
+        ? { htmlTemplates, invoice: invoiceData ?? undefined, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
+        : { htmlTemplates, invoice: invoiceData ?? undefined };
       await markTradeAsSubmitted(tradeId, {
         profile,
         documents,
@@ -788,7 +850,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const completedDocsCount = documents.filter(d => d.status === 'completed').length;
   // 결과 상단 통계 바 — 생성 대상인데 자동 생성 양식이 아직 없는 서류(= '양식 준비 중' 카드) 개수
   const pendingTemplateCount = documents.filter(
-    d => d.status !== 'not_needed' && d.status !== 'not_started' && !htmlTemplates[d.id]
+    d => d.status !== 'not_needed' && d.status !== 'not_started' && !hasDoc(d.id)
   ).length;
   const blockingIssuesCount = issues.filter(i => i.severity !== 'info').length;
   const reviewDocsCount = blockingIssuesCount;
@@ -2208,7 +2270,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               </div>
                               
                               <div className="preview-actions">
-                                {htmlTemplates[doc.id] ? (
+                                {hasDoc(doc.id) ? (
                                   <>
                                     <button
                                       className="action-btn-circle"
@@ -2219,7 +2281,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                     </button>
                                     <button
                                       className="action-btn-circle"
-                                      title="PDF 저장 (텍스트)"
+                                      title={doc.id === 'invoice' ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
                                       onClick={() => handleDownloadDoc(doc.id)}
                                     >
                                       <Download size={14} />
@@ -2285,8 +2347,34 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       )}
 
                       <div className="mobile-fix-list">
-                        {issues.map((issue) => (
-                          <div className="mobile-fix-card" key={issue.id}>
+                        {(() => {
+                          // 심각도별로 묶어 표시 — 오류(제출 차단) → 보완 권장 → 참고 안내 순.
+                          // 성격이 다른 이슈를 문서 순서로 섞지 않고 그룹 헤더로 구분한다.
+                          const order: Record<string, number> = { error: 0, warning: 1, info: 2 };
+                          const sorted = [...issues].sort(
+                            (a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9)
+                          );
+                          const sevMeta: Record<string, { label: string; hint: string; cls: string }> = {
+                            error: { label: '반드시 수정', hint: '제출 차단 · 먼저 해결', cls: 'sev-error' },
+                            warning: { label: '보완 권장', hint: '해소 권장', cls: 'sev-warning' },
+                            info: { label: '참고 안내', hint: '', cls: 'sev-info' },
+                          };
+                          let lastSev: string | null = null;
+                          return sorted.map((issue) => {
+                            const showHeader = issue.severity !== lastSev;
+                            lastSev = issue.severity;
+                            const meta = sevMeta[issue.severity] ?? sevMeta.warning;
+                            const count = sorted.filter((i) => i.severity === issue.severity).length;
+                            return (
+                              <Fragment key={issue.id}>
+                                {showHeader && (
+                                  <div className={`sev-section-header ${meta.cls}`}>
+                                    <span className="sev-section-label">{meta.label}</span>
+                                    <span className="sev-section-count">{count}</span>
+                                    {meta.hint && <span className="sev-section-hint">{meta.hint}</span>}
+                                  </div>
+                                )}
+                          <div className="mobile-fix-card">
                             <div className="mobile-fix-header">
                               <div className="mobile-fix-info">
                                 <span className="mobile-fix-name">
@@ -2422,7 +2510,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               </button>
                             )}
                           </div>
-                        ))}
+                              </Fragment>
+                            );
+                          });
+                        })()}
 
                         {issues.length === 0 && (
                           <div className="warning-item info">
@@ -2579,10 +2670,15 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               justifyContent: 'center',
               backgroundColor: '#f1f5f9'
             }}>
-              <div 
-                style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
-                dangerouslySetInnerHTML={{ __html: htmlTemplates[previewDocId] || '<p>문서 양식이 생성되지 않았습니다.</p>' }}
-              />
+              {previewDocId === 'invoice' ? (
+                // 상업송장: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
+                <div ref={docxPreviewRef} style={{ width: '100%' }} />
+              ) : (
+                <div
+                  style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
+                  dangerouslySetInnerHTML={{ __html: htmlTemplates[previewDocId] || '<p>문서 양식이 생성되지 않았습니다.</p>' }}
+                />
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -2601,12 +2697,12 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               >
                 닫기
               </button>
-              <button 
+              <button
                 className="btn btn-primary"
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                PDF 저장 (텍스트)
+                {previewDocId === 'invoice' ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
             </div>
           </div>
