@@ -1,5 +1,6 @@
 import type { Incoterms, TradeProfile, TradeType } from '../types';
 import { supabase } from '../lib/supabase';
+import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from '../constants/portOptions';
 
 export const TRADE_PURPOSE_OPTIONS = [
   { value: 'export', label: '수출' },
@@ -72,6 +73,19 @@ export function userProfileToTradeDefaults(profile: UserProfile): Partial<TradeP
     : '';
   const tradeType: TradeType = profile.trade_purpose === 'import' ? 'import' : 'export';
 
+  // 기본 항구는 수출 방향(국내 → 해외) 기준으로 저장돼 있다고 보고,
+  // 수입 거래면 방향을 뒤집는다 (예: 부산 → 상하이 저장 시, 수입은 상하이 → 부산).
+  // 단, 뒤집은 값이 상대 선택지 목록에 없는 항구면 그대로 둔다.
+  let loadPort = profile.default_load_port ?? '';
+  let dischargePort = profile.default_discharge_port ?? '';
+  if (
+    tradeType === 'import' && loadPort && dischargePort &&
+    LOAD_PORT_OPTIONS.some(p => p.value === dischargePort) &&
+    DISCHARGE_PORT_OPTIONS.some(p => p.value === loadPort)
+  ) {
+    [loadPort, dischargePort] = [dischargePort, loadPort];
+  }
+
   return {
     tradeType,
     companyName: profile.company_name ?? '',
@@ -81,8 +95,8 @@ export function userProfileToTradeDefaults(profile: UserProfile): Partial<TradeP
     contactName: profile.contact_name ?? '',
     companyCountry: profile.country ?? '',
     signedBy: profile.contact_name ?? '',
-    loadPort: profile.default_load_port ?? '',
-    dischargePort: profile.default_discharge_port ?? '',
+    loadPort,
+    dischargePort,
     incoterms,
   };
 }

@@ -10,22 +10,50 @@ interface Props {
   onStart: () => void; // CTA 클릭 → 통관 작업실로 이동
 }
 
-/** 진입 시 0 → end 카운트업 (ease-out, 1.5초) */
-function CountUpValue({ end, started }: { end: number; started: boolean }) {
+/**
+ * 진입 시 0 → end 카운트업 (ease-out, 1.5초).
+ * 스스로 화면 진입을 감지한다 — 마운트 시점에 이미 보이면 즉시 시작하고,
+ * 감지에 실패해도 3초 후엔 반드시 최종 숫자를 채운다 (0으로 남는 일 방지).
+ */
+function CountUpValue({ end }: { end: number }) {
   const [value, setValue] = useState(0);
+  const spanRef = useRef<HTMLSpanElement>(null);
+  const startedRef = useRef(false);
+
   useEffect(() => {
-    if (!started) return;
-    const t0 = performance.now();
     let raf = 0;
-    const tick = (t: number) => {
-      const p = Math.min((t - t0) / 1500, 1);
-      setValue(Math.round(end * (1 - Math.pow(1 - p, 3))));
-      if (p < 1) raf = requestAnimationFrame(tick);
+    const start = () => {
+      if (startedRef.current) return;
+      startedRef.current = true;
+      const t0 = performance.now();
+      const tick = (t: number) => {
+        const p = Math.min((t - t0) / 1500, 1);
+        setValue(Math.round(end * (1 - Math.pow(1 - p, 3))));
+        if (p < 1) raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [started, end]);
-  return <>{value.toLocaleString()}</>;
+
+    const el = spanRef.current;
+    let io: IntersectionObserver | null = null;
+    if (el && typeof IntersectionObserver !== 'undefined') {
+      const rect = el.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {
+        start(); // 마운트 시점에 이미 화면 안
+      } else {
+        io = new IntersectionObserver(entries => {
+          if (entries.some(e => e.isIntersecting)) { start(); io?.disconnect(); }
+        }, { threshold: 0.1 });
+        io.observe(el);
+      }
+    } else {
+      start();
+    }
+    const safety = window.setTimeout(start, 3000); // 어떤 경우에도 숫자가 0으로 남지 않게
+    return () => { cancelAnimationFrame(raf); io?.disconnect(); clearTimeout(safety); };
+  }, [end]);
+
+  return <span ref={spanRef}>{value.toLocaleString()}</span>;
 }
 
 const STEPS = [
@@ -45,9 +73,10 @@ const DOCS = [
 
 export default function AboutPanel({ onStart }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [counterStarted, setCounterStarted] = useState(false);
 
   useEffect(() => {
+    // 랜딩은 항상 첫 화면(히어로)부터 — 다른 탭에서 스크롤된 상태로 진입해도 리셋
+    window.scrollTo(0, 0);
     const root = rootRef.current;
     if (!root) return;
     const io = new IntersectionObserver(
@@ -55,13 +84,17 @@ export default function AboutPanel({ onStart }: Props) {
         entries.forEach(entry => {
           if (!entry.isIntersecting) return;
           entry.target.classList.add('in-view');
-          if ((entry.target as HTMLElement).dataset.counter) setCounterStarted(true);
           io.unobserve(entry.target);
         });
       },
-      { threshold: 0.2 }
+      { threshold: 0.15 }
     );
-    root.querySelectorAll('.about-reveal').forEach(el => io.observe(el));
+    root.querySelectorAll('.about-reveal').forEach(el => {
+      // 마운트 시점에 이미 화면 안에 있는 요소는 관찰 없이 즉시 표시
+      const rect = el.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) el.classList.add('in-view');
+      else io.observe(el);
+    });
     return () => io.disconnect();
   }, []);
 
@@ -83,13 +116,13 @@ export default function AboutPanel({ onStart }: Props) {
       </section>
 
       {/* 2. 숫자 카운터 */}
-      <section className="about-counters about-reveal" data-counter="true">
+      <section className="about-counters about-reveal">
         <div className="about-counter">
-          <div className="about-counter-value"><CountUpValue end={12469} started={counterStarted} />개</div>
+          <div className="about-counter-value"><CountUpValue end={12469} />개</div>
           <div className="about-counter-label">실제 관세청 HS코드</div>
         </div>
         <div className="about-counter">
-          <div className="about-counter-value"><CountUpValue end={6} started={counterStarted} />종</div>
+          <div className="about-counter-value"><CountUpValue end={6} />종</div>
           <div className="about-counter-label">자동 생성 문서</div>
         </div>
         <div className="about-counter">

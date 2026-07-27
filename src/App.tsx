@@ -396,10 +396,19 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   }, [issues]);
 
   const handleInputChange = (field: keyof TradeProfile, value: string | number) => {
-    setProfile(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setProfile(prev => {
+      // 수출↔수입 전환 시 선적항·도착항 방향도 자연스럽게 뒤집는다
+      // (예: 수출 부산 → 상하이를 수입으로 바꾸면 상하이 → 부산).
+      if (field === 'tradeType' && value !== prev.tradeType && prev.loadPort && prev.dischargePort) {
+        const swappable =
+          LOAD_PORT_OPTIONS.some(p => p.value === prev.dischargePort) &&
+          DISCHARGE_PORT_OPTIONS.some(p => p.value === prev.loadPort);
+        if (swappable) {
+          return { ...prev, tradeType: value as TradeProfile['tradeType'], loadPort: prev.dischargePort, dischargePort: prev.loadPort };
+        }
+      }
+      return { ...prev, [field]: value };
+    });
   };
 
   const handleFillPerfectTestData = () => {
@@ -2100,7 +2109,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 {/* 실제 제출 전 준비도 바 */}
                 <div className="readiness-card">
                   <div className="readiness-card-header">
-                    <span className="readiness-card-title">수출 준비도</span>
+                    <span className="readiness-card-title">{profile.tradeType === 'import' ? '수입' : '수출'} 준비도</span>
                     <span className="readiness-card-percent">{readiness.percent}%</span>
                   </div>
                   <div className="readiness-bar-track">

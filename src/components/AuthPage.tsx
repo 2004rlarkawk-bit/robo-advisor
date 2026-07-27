@@ -52,8 +52,14 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
     }
 
     setEmailCheckStatus('checking');
+    // 서버(엣지 함수)가 잠들어 있으면 첫 호출이 수 초 걸릴 수 있어 대기 안내를 먼저 보여준다
+    setMessageType('success');
+    setMessage('이메일을 확인하고 있어요 — 첫 확인은 서버 준비로 몇 초 걸릴 수 있습니다.');
     try {
-      const exists = await checkEmailExists(normalizedEmail);
+      const exists = await Promise.race([
+        checkEmailExists(normalizedEmail),
+        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('timeout')), 15000)),
+      ]);
       setCheckedEmail(normalizedEmail);
       setEmailCheckStatus(exists ? 'duplicate' : 'available');
       setMessageType(exists ? 'error' : 'success');
@@ -63,7 +69,11 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
       setEmailCheckStatus('error');
       setCheckedEmail('');
       setMessageType('error');
-      setMessage('이메일 중복확인에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      setMessage(
+        error instanceof Error && error.message === 'timeout'
+          ? '확인이 지연되고 있습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.'
+          : '이메일 중복확인에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+      );
     }
   };
 

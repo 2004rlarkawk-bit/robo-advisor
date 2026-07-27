@@ -15,10 +15,17 @@ describe('user_profiles 온보딩 판정', () => {
 
 describe('거래 프로필 기본값 변환', () => {
   it('user_profiles를 새 거래의 TradeProfile 기본값으로 변환한다', () => {
+    // 기본 항구는 수출 방향 기준 저장이므로, 수입 거래면 선적항·도착항이 반전된다
     expect(userProfileToTradeDefaults(profile)).toMatchObject({
       tradeType: 'import', companyName: '인천테크', contact: '010-1234-5678',
-      loadPort: '인천항', dischargePort: '상하이항', incoterms: 'CIF',
+      loadPort: '상하이항', dischargePort: '인천항', incoterms: 'CIF',
       businessRegistrationNo: '123-45-67890', contactName: '김지민', signedBy: '김지민',
+    });
+  });
+
+  it('수출 거래면 기본 항구를 그대로 사용한다', () => {
+    expect(userProfileToTradeDefaults({ ...profile, trade_purpose: 'export' })).toMatchObject({
+      tradeType: 'export', loadPort: '인천항', dischargePort: '상하이항',
     });
   });
 
