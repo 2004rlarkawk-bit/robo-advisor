@@ -35,3 +35,5 @@ hwp/
 
 # Supabase CLI temporary files
 supabase/.temp/
+# 무역서류 템플릿(docx)은 값 주입용 고정 자산 — 추적
+!templates/commercial_invoice_template.docx
