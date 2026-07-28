@@ -1,9 +1,23 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// 이 테스트는 시뮬레이션(무-API) 경로를 검증한다. 팀원이 배포한 실제 Edge Function을
+// 라이브로 호출하지 않도록 supabase.functions.invoke를 목킹해, 관세환율·사업자조회가
+// 항상 시뮬레이션 폴백을 타게 한다(결정적). 목이 error를 주면 각 서비스가 시뮬레이션으로 폴백.
+const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
+vi.mock('../lib/supabase', () => ({
+  supabase: { functions: { invoke: invokeMock } },
+}));
+
 import { determineRequiredDocuments, calculateReadiness } from './rulesEngine';
 import { validateTradeDocuments, validateTradeDocumentsAsync, validateRequiredInputs } from './validatorEngine';
 import { OrchestratorAgent } from '../agents/OrchestratorAgent';
 import { HSCodeAgent } from '../agents/HSCodeAgent';
 import { TradeProfile } from '../types';
+
+beforeEach(() => {
+  invokeMock.mockReset();
+  invokeMock.mockResolvedValue({ data: null, error: new Error('edge disabled in test') });
+});
 
 describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테스트', () => {
   

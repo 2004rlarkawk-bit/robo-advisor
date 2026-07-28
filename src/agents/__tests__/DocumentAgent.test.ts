@@ -4,6 +4,7 @@ import { escapeHtml } from '../templates/escapeHtml';
 import { HSCodeResult, AgentLog } from '../types';
 import { TradeProfile } from '../../types';
 import { mapPackingListToSchema, renderPackingListPreviewHtml } from '../../services/packingListXlsxService';
+import { mapInvoiceToSchema } from '../../services/invoiceDocxService';
 
 const hsResult: HSCodeResult = {
   topCode: '8471.30',
@@ -179,7 +180,9 @@ describe('DocumentAgent — Buyer 영문 국가 연결', () => {
     });
 
     expect(result.generatedDocs.invoice?.buyer?.country).toBe('United States');
-    expect(result.htmlTemplates?.invoice).toContain('United States');
+    // 인보이스는 docx(고정 템플릿)라 htmlTemplates.invoice가 없다 — 국가가 docx 스키마로 흘러가는지로 검증.
+    const schema = mapInvoiceToSchema(result.generatedDocs.invoice!);
+    expect(schema.buyer_address3).toBe('United States');
   });
 });
 

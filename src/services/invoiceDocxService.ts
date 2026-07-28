@@ -57,7 +57,7 @@ export function mapInvoiceToSchema(inv: InvoiceData): InvoiceSchema {
   const currency = inv.currency || '';
   const seller = inv.seller || { name: '', address: '', contact: '' };
   const consignee = inv.consignee || { name: '', address: '', contact: '' };
-  const buyer = d.buyer as { name?: string; address?: string; contact?: string } | undefined;
+  const buyer = d.buyer as { name?: string; address?: string; contact?: string; country?: string } | undefined;
   const marks = splitLines(d.shippingMarks, 5);
 
   return {
@@ -72,7 +72,7 @@ export function mapInvoiceToSchema(inv: InvoiceData): InvoiceSchema {
     buyer_name: buyer?.name || '',
     buyer_address1: buyer?.address || '',
     buyer_address2: tel(buyer?.contact),
-    buyer_address3: '',
+    buyer_address3: buyer?.country || '', // Buyer 국가 — 인보이스 docx에 표기
     invoice_no: inv.invoiceNo || '',
     invoice_date: inv.invoiceDate || '',
     lc_no_and_date: d.lcNo || '',
