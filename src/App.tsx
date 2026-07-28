@@ -351,6 +351,15 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   
   const [documents, setDocuments] = useState<DocumentStatus[]>([]);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
+  // 정책 연결: error만 차단(overridable면 사유 입력 시 우회), warning은 배지.
+  const [overrides, setOverrides] = useState<Record<string, string>>({}); // issueKey → 사유
+  const [overrideTarget, setOverrideTarget] = useState<ValidationIssue | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const blockedGenRef = useRef<{ result: any; generationProfile: TradeProfile; writeMode: ReturnType<typeof decideGeneratedTradeWrite> } | null>(null);
+  const issueKey = (i: ValidationIssue) => `${i.id}::${String(i.field)}`;
+  // 미해결 차단 이슈 = error 중 (overridable+사유입력)으로 우회되지 않은 것
+  const unresolvedBlockers = (list: ValidationIssue[], ov: Record<string, string>) =>
+    list.filter(i => i.severity === 'error' && !(i.overridable && ov[issueKey(i)]));
   const [aiFeedback, setAiFeedback] = useState<string>('');
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [htmlTemplates, setHtmlTemplates] = useState<Record<string, string>>({});
@@ -492,6 +501,82 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 };
 
   // Run the multi-agent pipeline simulator
+  // 차단 없음(또는 override 완료) 시 문서 공개 + 저장. override 사유를 결과에 기록.
+  const finalizeGeneration = async (
+    result: any,
+    generationProfile: TradeProfile,
+    writeMode: ReturnType<typeof decideGeneratedTradeWrite>,
+    ov: Record<string, string>
+  ) => {
+    setHtmlTemplates(result.documents?.htmlTemplates || {});
+    setInvoiceData(result.documents?.generatedDocs?.invoice || null);
+    invoiceDocxCacheRef.current = null;
+    setHasGenerated(true);
+    blockedGenRef.current = null;
+
+    const issuesList: ValidationIssue[] = result.issues?.issues || [];
+    const overrideRecords = issuesList
+      .filter(i => i.severity === 'error' && i.overridable && ov[issueKey(i)])
+      .map(i => ({ id: i.id, field: String(i.field), reason: ov[issueKey(i)] }));
+
+    try {
+      const generatedTradeData = {
+        profile: { ...generationProfile, hsCode: generationProfile.hsCode || result.hs?.topCode || '' },
+        documents: result.documents?.documents || [],
+        issues: issuesList,
+        generatedDocs: {
+          htmlTemplates: result.documents?.htmlTemplates || {},
+          invoice: result.documents?.generatedDocs?.invoice,
+          overrides: ov,
+          overrideRecords,
+        },
+      };
+      if (writeMode === 'insert') {
+        const createdTrade = await createGeneratedTrade(generatedTradeData);
+        currentTradeIdRef.current = createdTrade.id;
+        alert(overrideRecords.length > 0
+          ? `필요 서류가 생성·저장되었습니다. (차단 오류 ${overrideRecords.length}건이 사유 입력으로 override됨)`
+          : '필요 서류가 생성되고 새로운 거래가 저장되었습니다.');
+      } else {
+        const currentTradeId = currentTradeIdRef.current;
+        if (!currentTradeId) throw new Error('현재 거래 ID가 없습니다.');
+        const updatedTrade = await updateGeneratedTrade(currentTradeId, generatedTradeData);
+        if (updatedTrade.id !== currentTradeId) throw new Error('재생성된 거래 ID가 현재 거래와 일치하지 않습니다.');
+        alert(overrideRecords.length > 0
+          ? `필요 서류가 다시 생성되었습니다. (차단 오류 ${overrideRecords.length}건 사유 override됨)`
+          : '수정된 내용으로 필요 서류가 다시 생성되었으며 기존 거래가 업데이트되었습니다.');
+      }
+      setCurrentTradeStatus('generated');
+      hasSubmittedTradeRef.current = false;
+      await completeDraft().catch((error) => {
+        console.warn('[Trade Draft] 거래 저장 후 초안 정리 실패:', error);
+      });
+    } catch (err) {
+      console.error('[Trade Generation] generated trade persistence failed:', err);
+      alert(writeMode === 'update'
+        ? '필요 서류는 생성되었지만 기존 거래 업데이트에 실패했습니다. 다시 시도해주세요.'
+        : '필요 서류는 생성되었지만 새로운 거래 저장에 실패했습니다. 다시 시도해주세요.');
+    }
+  };
+
+  // override 사유 확정 → 기록. 생성이 차단 상태였고 남은 차단이 없으면 자동으로 생성 확정.
+  const confirmOverride = () => {
+    if (!overrideTarget) return;
+    const reason = overrideReason.trim();
+    if (!reason) { alert('override 사유를 입력하세요.'); return; }
+    const nextOv = { ...overrides, [issueKey(overrideTarget)]: reason };
+    setOverrides(nextOv);
+    setOverrideTarget(null);
+    setOverrideReason('');
+    const blocked = blockedGenRef.current;
+    if (blocked) {
+      const remaining = unresolvedBlockers(blocked.result.issues?.issues || [], nextOv);
+      if (remaining.length === 0) {
+        void finalizeGeneration(blocked.result, blocked.generationProfile, blocked.writeMode, nextOv);
+      }
+    }
+  };
+
   const handleGenerateDocuments = async () => {
     if (isProcessing) return;
     const writeMode = decideGeneratedTradeWrite(currentTradeIdRef.current, currentTradeStatus);
@@ -502,6 +587,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setIsProcessing(true);
     setShowConsole(true);
     setConsoleLogs([]);
+    setOverrides({});           // 재생성 = 새 검증. 이전 override 초기화.
+    blockedGenRef.current = null;
 
     try {
       // 테스트/일반 입력 모두 같은 문서번호 규칙을 사용하며 레거시 DEV/TEST 식별자는 저장하지 않습니다.
@@ -526,44 +613,28 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         hsCode: prev.hsCode || result.hs?.topCode || ''
       }));
       setDocuments(result.documents?.documents || []);
-      setHtmlTemplates(result.documents?.htmlTemplates || {});
-      setInvoiceData(result.documents?.generatedDocs?.invoice || null);
-      invoiceDocxCacheRef.current = null;
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
       setHsCandidates(result.hs?.candidates || []);
-      setHasGenerated(true);
 
-      // 생성 이력 자동 저장 → [문서 관리] 메뉴에서 조회/복원
-      try {
-        const generatedTradeData = {
-          profile: { ...generationProfile, hsCode: generationProfile.hsCode || result.hs?.topCode || '' },
-          documents: result.documents?.documents || [],
-          issues: result.issues?.issues || [],
-          generatedDocs: { htmlTemplates: result.documents?.htmlTemplates || {}, invoice: result.documents?.generatedDocs?.invoice },
-        };
-        if (writeMode === 'insert') {
-          const createdTrade = await createGeneratedTrade(generatedTradeData);
-          currentTradeIdRef.current = createdTrade.id;
-          alert('필요 서류가 생성되고 새로운 거래가 저장되었습니다.');
-        } else {
-          const currentTradeId = currentTradeIdRef.current;
-          if (!currentTradeId) throw new Error('현재 거래 ID가 없습니다.');
-          const updatedTrade = await updateGeneratedTrade(currentTradeId, generatedTradeData);
-          if (updatedTrade.id !== currentTradeId) throw new Error('재생성된 거래 ID가 현재 거래와 일치하지 않습니다.');
-          alert('수정된 내용으로 필요 서류가 다시 생성되었으며 기존 거래가 업데이트되었습니다.');
-        }
-        setCurrentTradeStatus('generated');
-        hasSubmittedTradeRef.current = false;
-        await completeDraft().catch((error) => {
-          console.warn('[Trade Draft] 거래 저장 후 초안 정리 실패:', error);
-        });
-      } catch (err) {
-        console.error('[Trade Generation] generated trade persistence failed:', err);
-        alert(writeMode === 'update'
-          ? '필요 서류는 생성되었지만 기존 거래 업데이트에 실패했습니다. 다시 시도해주세요.'
-          : '필요 서류는 생성되었지만 새로운 거래 저장에 실패했습니다. 다시 시도해주세요.');
+      // 정책: error(미해결)만 생성 차단. warning은 통과(배지). 사유 override된 error는 우회.
+      const issuesList: ValidationIssue[] = result.issues?.issues || [];
+      const canBypass = IS_DEV_TEST_ENABLED && devTestMode !== null;
+      const blockers = unresolvedBlockers(issuesList, overrides);
+      if (blockers.length > 0 && !canBypass) {
+        // 차단: 문서 미공개·미저장(htmlTemplates 비움). 단 검증 결과 패널은 보여야 override 가능하므로
+        // hasGenerated는 true로 둔다(문서 없음 상태로 이슈+override UI 노출).
+        setHtmlTemplates({});
+        setInvoiceData(null);
+        invoiceDocxCacheRef.current = null;
+        setHasGenerated(true);
+        blockedGenRef.current = { result, generationProfile, writeMode };
+        const overridable = blockers.filter(b => b.overridable).length;
+        alert(`생성이 차단되었습니다 — 해결해야 할 오류 ${blockers.length}건.` +
+          (overridable > 0 ? `\n(그중 ${overridable}건은 아래 검증 결과에서 "사유 입력 후 override"로 진행 가능)` : ''));
+        return;
       }
+      await finalizeGeneration(result, generationProfile, writeMode, overrides);
     } catch (error) {
       console.error(error);
       alert('에이전트 파이프라인 처리 중 오류가 발생했습니다.');
@@ -586,6 +657,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setHtmlTemplates((t.generatedDocs?.htmlTemplates as Record<string, string>) || {});
     setInvoiceData((t.generatedDocs?.invoice as InvoiceData) || null);
     invoiceDocxCacheRef.current = null;
+    setOverrides((t.generatedDocs?.overrides as Record<string, string>) || {});
+    blockedGenRef.current = null;
     setAiFeedback('');
     setHsCandidates([]);
     setHasGenerated(true);
@@ -801,7 +874,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       return;
     }
 
-    const hasBlockingErrors = issues.some((issue) => issue.severity !== 'info');
+    // 정책: 제출 차단도 error(미해결)만. warning은 통과.
+    const hasBlockingErrors = unresolvedBlockers(issues, overrides).length > 0;
     const canBypassValidation = IS_DEV_TEST_ENABLED && devTestMode !== null;
     if (hasBlockingErrors && !canBypassValidation) return;
 
@@ -810,8 +884,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     try {
       const validationErrorCount = issues.filter((issue) => issue.severity === 'error').length;
       const generatedDocs = devTestMode && canBypassValidation
-        ? { htmlTemplates, invoice: invoiceData ?? undefined, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
-        : { htmlTemplates, invoice: invoiceData ?? undefined };
+        ? { htmlTemplates, invoice: invoiceData ?? undefined, overrides, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
+        : { htmlTemplates, invoice: invoiceData ?? undefined, overrides };
       await markTradeAsSubmitted(tradeId, {
         profile,
         documents,
@@ -852,8 +926,9 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const pendingTemplateCount = documents.filter(
     d => d.status !== 'not_needed' && d.status !== 'not_started' && !hasDoc(d.id)
   ).length;
-  const blockingIssuesCount = issues.filter(i => i.severity !== 'info').length;
-  const reviewDocsCount = blockingIssuesCount;
+  // 차단(제출/생성 게이트) = 미해결 error만. 표시용 보완필요 = error+warning 총계.
+  const blockingIssuesCount = unresolvedBlockers(issues, overrides).length;
+  const reviewDocsCount = issues.filter(i => i.severity !== 'info').length;
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 
@@ -2499,6 +2574,19 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               </div>
                             )}
 
+                            {/* overridable error: 사유 입력 후 override(진행) / override됨 배지 */}
+                            {issue.severity === 'error' && issue.overridable && (
+                              overrides[issueKey(issue)] ? (
+                                <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(16,185,129,0.12)', color: '#065f46', fontSize: 12, fontWeight: 600 }}>
+                                  ✅ 사유 포함 override됨 — {overrides[issueKey(issue)]}
+                                </div>
+                              ) : (
+                                <button className="mobile-btn mobile-btn-secondary" onClick={() => { setOverrideTarget(issue); setOverrideReason(''); }}>
+                                  사유 입력 후 override (생성 진행)
+                                </button>
+                              )
+                            )}
+
                             {/* 전용 보완 입력이 없는 이슈는 입력 화면으로 돌아가 수정 */}
                             {issue.severity !== 'info' &&
                               issue.field !== 'weight' &&
@@ -2704,6 +2792,33 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 <Download size={16} />
                 {previewDocId === 'invoice' ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* override 사유 입력 모달 */}
+      {overrideTarget && (
+        <div
+          onClick={() => { setOverrideTarget(null); setOverrideReason(''); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(520px, 92vw)', background: '#fff', borderRadius: 14, padding: '22px 24px', boxShadow: '0 12px 40px rgba(0,0,0,0.25)' }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>오류 override — 사유 입력</h3>
+            <p style={{ margin: '0 0 4px', fontSize: 12, color: '#64748b' }}>이 오류를 우회하고 생성을 진행합니다. 사유는 검증 결과에 기록됩니다.</p>
+            <div style={{ margin: '10px 0 12px', padding: '10px 12px', borderRadius: 8, background: '#fef2f2', color: '#991b1b', fontSize: 13 }}>
+              <strong>[{overrideTarget.id}]</strong> {overrideTarget.message}
+            </div>
+            <textarea
+              autoFocus
+              value={overrideReason}
+              onChange={(e) => setOverrideReason(e.target.value)}
+              placeholder="예: 보세운송 건으로 동일국가 항구가 정상입니다."
+              style={{ width: '100%', minHeight: 88, padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+              <button className="btn btn-secondary" onClick={() => { setOverrideTarget(null); setOverrideReason(''); }}>취소</button>
+              <button className="btn btn-primary" onClick={confirmOverride}>사유 기록 후 override</button>
             </div>
           </div>
         </div>
