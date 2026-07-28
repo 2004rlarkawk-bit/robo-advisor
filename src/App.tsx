@@ -17,7 +17,6 @@ import {
   Terminal,
   Download,
   Eye,
-  Edit3,
   PanelLeftClose,
   PanelLeftOpen,
   UserRound,
@@ -1070,10 +1069,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
   // Calculate statistics — info 수준 이슈는 안내일 뿐 제출을 막지 않음
   const completedDocsCount = documents.filter(d => d.status === 'completed').length;
-  // 결과 상단 통계 바 — 생성 대상인데 자동 생성 양식이 아직 없는 서류(= '양식 준비 중' 카드) 개수
-  const pendingTemplateCount = documents.filter(
-    d => d.status !== 'not_needed' && d.status !== 'not_started' && !hasDoc(d.id)
-  ).length;
   // 차단(제출/생성 게이트) = 미해결 error만. 표시용 보완필요 = error+warning 총계.
   const blockingIssuesCount = unresolvedBlockers(issues, overrides).length;
   const reviewDocsCount = issues.filter(i => i.severity !== 'info').length;
@@ -2386,187 +2381,86 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               </div>
             ) : (
               /* --- 결과 리포트 대시보드 모드 --- */
-              <div className="workspace-area">
-                <div className="result-header-summary">
-                  <div className="summary-badge-list">
-                    <div className="summary-badge">
-                      <span className="summary-badge-icon">🏷️</span>
-                      수출입 구분: {profile.tradeType === 'export' ? '수출' : '수입'}
-                    </div>
-                    {profile.itemName && (
-                      <div className="summary-badge">
-                        <span className="summary-badge-icon">📦</span>
-                        품목명: {profile.itemName}
-                      </div>
-                    )}
-                    {profile.loadPort && (
-                      <div className="summary-badge">
-                        <span className="summary-badge-icon">⚓</span>
-                        선적항: {profile.loadPort}
-                      </div>
-                    )}
-                    {profile.dischargePort && (
-                      <div className="summary-badge">
-                        <span className="summary-badge-icon">🏁</span>
-                        도착항: {profile.dischargePort}
-                      </div>
-                    )}
-                    {profile.incoterms && (
-                      <div className="summary-badge">
-                        <span className="summary-badge-icon">📄</span>
-                        거래조건: {profile.incoterms}
-                      </div>
-                    )}
+              <div className="workspace-area result-view">
+                {/* 1. 상단: 거래 요약 + 로그 */}
+                <div className="rv-topline">
+                  <div className="rv-summary">
+                    <span className={`trade-type-badge ${profile.tradeType}`}>{profile.tradeType === 'export' ? '수출' : '수입'}</span>
+                    <span className="rv-summary-text">
+                      {profile.itemName || '(품목명 없음)'}
+                      {(profile.loadPort || profile.dischargePort) && (
+                        <span className="rv-dim"> · {profile.loadPort || '-'} → {profile.dischargePort || '-'}</span>
+                      )}
+                      {profile.incoterms && <span className="rv-dim"> · {profile.incoterms}</span>}
+                    </span>
                   </div>
-
-                  <button className="btn btn-secondary btn-sm" onClick={() => setShowConsole(true)}>
-                    <Terminal size={14} />
-                    에이전트 실행 로그 확인
+                  <button className="rv-log-btn" onClick={() => setShowConsole(true)}>
+                    <Terminal size={14} /> 에이전트 실행 로그
                   </button>
                 </div>
 
-                {/* 실제 제출 전 준비도 바 */}
-                <div className="readiness-card">
-                  <div className="readiness-card-header">
-                    <span className="readiness-card-title">{profile.tradeType === 'import' ? '수입' : '수출'} 준비도</span>
-                    <span className="readiness-card-percent">{readiness.percent}%</span>
-                  </div>
-                  <div className="readiness-bar-track">
-                    <div className="readiness-bar-fill" style={{ width: `${readiness.percent}%` }} />
+                {/* 2. 준비도 히어로 */}
+                <div className="rv-hero">
+                  <div className="rv-hero-lab">{profile.tradeType === 'import' ? '수입' : '수출'} 준비도</div>
+                  <div className="rv-hero-pct">{readiness.percent}<small>%</small></div>
+                  <div className="rv-track"><div className="rv-track-fill" style={{ width: `${readiness.percent}%` }} /></div>
+                  <div className="rv-hero-msg">
+                    서류 <b>{completedDocsCount}/{documents.length}</b> 생성 완료
+                    {blockingIssuesCount > 0
+                      ? <> — 아래 <b>{blockingIssuesCount}건</b>만 처리하면 제출할 수 있어요.</>
+                      : <> — 제출 준비가 끝났어요.</>}
                   </div>
                   {readiness.nextStepLabel && (
-                    <p className="readiness-next-step">다음 단계: {readiness.nextStepLabel}</p>
+                    <p className="rv-hero-next">다음 단계 · {readiness.nextStepLabel}</p>
                   )}
                 </div>
 
-                {/* 결과 요약 통계 바 */}
-                <div className="result-stats-grid">
-                  <div className="result-stat-card">
-                    <span className="result-stat-label">필요 서류</span>
-                    <span className="result-stat-value">{documents.length}</span>
-                  </div>
-                  <div className="result-stat-card">
-                    <span className="result-stat-label">생성 완료</span>
-                    <span className="result-stat-value">{completedDocsCount}</span>
-                  </div>
-                  <div className="result-stat-card">
-                    <span className="result-stat-label">양식 준비 중</span>
-                    <span className="result-stat-value">{pendingTemplateCount}</span>
-                  </div>
-                  <div className="result-stat-card">
-                    <span className="result-stat-label">보완 필요</span>
-                    <span className="result-stat-value">{reviewDocsCount}</span>
-                  </div>
-                </div>
-
-                <div className="result-columns-layout">
-                  {/* Column 1: 필요 서류 목록 */}
-                  <div className="result-column">
-                    <div className="col-header">
-                      <div className="col-number">1</div>
-                      <h3 className="col-title">필요 서류 목록</h3>
-                    </div>
-
-                    <div className="doc-item-list">
-                      {documents.map((doc) => {
-                        let badgeClass = 'status-not-started';
-                        if (doc.status === 'completed') badgeClass = 'status-completed';
-                        else if (doc.status === 'review_required') badgeClass = 'status-review-required';
-                        else if (doc.status === 'not_needed') badgeClass = 'status-not-needed';
-
-                        return (
-                          <div className="doc-item-card" key={doc.id}>
-                            <div className="doc-item-left">
-                              <FileText size={16} className="text-light" />
-                              {doc.name}
-                            </div>
-                            <span className={`status-badge ${badgeClass}`}>
-                              {doc.statusText}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Column 2: 문서 생성 결과 프리뷰 */}
-                  <div className="result-column">
-                    <div className="col-header">
-                      <div className="col-number">2</div>
-                      <h3 className="col-title">문서 생성 결과</h3>
-                    </div>
-
-                    <div className="doc-preview-list">
-                      {documents
-                        .filter(d => d.status !== 'not_needed' && d.status !== 'not_started')
-                        .map((doc) => (
-                          <div 
-                            className={`preview-card ${doc.status === 'completed' ? 'success-border' : 'warning-border'}`}
-                            key={doc.id}
-                          >
-                            <div className="preview-header">
-                              <div className="preview-title-sec">
-                                <div className={`doc-icon-box doc-icon-${doc.id}`}>
-                                  {doc.id === 'invoice' ? 'INV' : doc.id === 'packing_list' ? 'PKL' : doc.id === 'bl' ? 'B/L' : 'DOC'}
-                                </div>
-                                <div className="preview-details">
-                                  <span className="preview-name">{doc.name}</span>
-                                  {doc.lastReviewed && (
-                                    <span className="preview-time">마지막 검토: {doc.lastReviewed}</span>
-                                  )}
-                                </div>
-                              </div>
-                              
-                              <div className="preview-actions">
-                                {hasDoc(doc.id) ? (
-                                  <>
-                                    <button
-                                      className="action-btn-circle"
-                                      title="미리보기"
-                                      onClick={() => setPreviewDocId(doc.id)}
-                                    >
-                                      <Eye size={14} />
-                                    </button>
-                                    <button
-                                      className="action-btn-circle"
-                                      title={doc.id === 'invoice' ? 'DOCX 다운로드' : doc.id === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장 (텍스트)'}
-                                      onClick={() => handleDownloadDoc(doc.id)}
-                                    >
-                                      <Download size={14} />
-                                    </button>
-                                    <button className="action-btn-circle" title="편집">
-                                      <Edit3 size={14} />
-                                    </button>
-                                  </>
-                                ) : (
-                                  <span
-                                    title="이 서류의 자동 생성 양식은 준비 중입니다"
-                                    style={{ fontSize: '11px', color: 'var(--text-light)', padding: '4px 8px', border: '1px dashed var(--border-color)', borderRadius: '10px' }}
-                                  >
-                                    양식 준비 중
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      
-                      {documents.filter(d => d.status !== 'not_needed' && d.status !== 'not_started').length === 0 && (
-                        <div className="mobile-empty-state">
-                          <span className="mobile-empty-icon">📁</span>
-                          <span className="mobile-empty-text">생성된 문서 없음</span>
-                          <span className="mobile-empty-sub">아래 검토 안내에 따라 입력을 보완해 주세요.</span>
+                {/* 3. 서류 현황 — 한 줄 = 한 서류 (상태 + 완료 시 보기·다운로드) */}
+                <div className="rv-panel">
+                  <div className="rv-panel-head">서류 현황 · {documents.length}건</div>
+                  {documents.map((doc) => {
+                    const abbr = doc.id === 'invoice' ? 'INV'
+                      : doc.id === 'packing_list' ? 'PKL'
+                      : doc.id === 'bl' ? 'B/L'
+                      : doc.id === 'customs_dec' ? '신고'
+                      : doc.id === 'co' ? 'C/O'
+                      : doc.id === 'insurance' ? '보험' : 'DOC';
+                    const sbClass = doc.status === 'completed' ? 'ok'
+                      : doc.status === 'review_required' ? 'rev' : 'na';
+                    const isCompleted = doc.status === 'completed';
+                    return (
+                      <div className="rv-row" key={doc.id}>
+                        <span className={`rv-abbr ${isCompleted ? '' : 'gray'}`}>{abbr}</span>
+                        <span className="rv-nm">{doc.name}</span>
+                        <span className={`rv-sb rv-sb-${sbClass}`}>{doc.statusText}</span>
+                        <div className="rv-act">
+                          {isCompleted && hasDoc(doc.id) && (
+                            <>
+                              <button className="rv-view" onClick={() => setPreviewDocId(doc.id)}>
+                                <Eye size={15} /> 보기
+                              </button>
+                              <button
+                                className="rv-ib"
+                                title={doc.id === 'invoice' ? 'DOCX 다운로드' : doc.id === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장'}
+                                onClick={() => handleDownloadDoc(doc.id)}
+                              >
+                                <Download size={17} />
+                              </button>
+                            </>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Section 3: AI 검토 및 보완 워크스페이스 — 스크롤 하단 전체 폭 */}
                 <div className="result-column result-review-full">
-                    <div className="col-header">
-                      <div className="col-number">3</div>
-                      <h3 className="col-title">검토 및 입력 보완 안내</h3>
+                    <div className="rv-fixes-head">
+                      <h3 className="rv-fixes-title">{blockingIssuesCount > 0 ? '해결하면 제출할 수 있어요' : '검토 결과'}</h3>
+                      {blockingIssuesCount > 0 && (
+                        <p className="rv-fixes-sub">아래 항목을 처리하면 준비도가 100%에 가까워집니다.</p>
+                      )}
                     </div>
 
                     <div className="review-summary-line">
