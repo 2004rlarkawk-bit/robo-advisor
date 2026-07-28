@@ -1,15 +1,15 @@
 /**
- * Claude API 서비스
+ * OpenAI (ChatGPT) API 서비스
  * 
  * 프로토타입 버전: 사용자가 Settings 페이지에서 API 키를 입력하면
- * 클라이언트에서 직접 Claude API를 호출합니다.
+ * 클라이언트에서 직접 OpenAI API를 호출합니다.
  * 
  * CORS 제한 때문에 브라우저에서 직접 호출이 불가할 수 있으므로,
  * 프록시 서버를 통하거나, 데모용 시뮬레이션 모드를 제공합니다.
  */
 
-const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-20250514';
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+const MODEL = 'gpt-4o-mini';
 
 function getApiKey(): string | null {
   return localStorage.getItem('portai_claude_api_key');
@@ -48,8 +48,8 @@ export function extractJson(text: string): string {
   return (fenced ? fenced[1] : text).trim();
 }
 
-/** Claude API 직접 호출 (프록시 필요 시 URL 교체) */
-async function callClaude(systemPrompt: string, userMessage: string): Promise<string> {
+/** OpenAI Chat Completions 직접 호출 (프록시 필요 시 URL 교체) */
+async function callLLM(systemPrompt: string, userMessage: string): Promise<string> {
   const apiKey = getApiKey();
   
   if (!apiKey) {
@@ -57,19 +57,17 @@ async function callClaude(systemPrompt: string, userMessage: string): Promise<st
   }
 
   try {
-    const response = await fetch(CLAUDE_API_URL, {
+    const response = await fetch(OPENAI_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 2048,
-        system: systemPrompt,
         messages: [
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage }
         ]
       })
@@ -77,15 +75,15 @@ async function callClaude(systemPrompt: string, userMessage: string): Promise<st
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Claude API 오류 (${response.status}): ${JSON.stringify(errorData)}`);
+      throw new Error(`OpenAI API 오류 (${response.status}): ${JSON.stringify(errorData)}`);
     }
 
     const data = await response.json();
-    return data.content?.[0]?.text || '응답을 받지 못했습니다.';
+    return data.choices?.[0]?.message?.content || '응답을 받지 못했습니다.';
   } catch (error) {
     if (error instanceof TypeError && error.message.includes('fetch')) {
       // CORS or network error - fall back to simulation
-      console.warn('Claude API 직접 호출 실패 (CORS). 시뮬레이션 모드로 전환합니다.');
+      console.warn('OpenAI API 직접 호출 실패 (CORS/네트워크). 시뮬레이션 모드로 전환합니다.');
       throw new Error('CORS_ERROR');
     }
     throw error;
@@ -120,7 +118,7 @@ export async function suggestHSCode(itemName: string): Promise<HSCodeSuggestion[
 
   let response: string;
   try {
-    response = await callClaude(systemPrompt, userMessage);
+    response = await callLLM(systemPrompt, userMessage);
   } catch (error) {
     if (error instanceof Error && error.message === 'CORS_ERROR') {
       return getSimulatedHSCodeSuggestions(itemName);
@@ -161,7 +159,7 @@ ${issueMessages.map((m, i) => `${i + 1}. ${m}`).join('\n')}
 위 문제들에 대해 실무적 관점에서 종합적인 피드백을 제공해 주세요.`;
 
   try {
-    return await callClaude(systemPrompt, userMessage);
+    return await callLLM(systemPrompt, userMessage);
   } catch (error) {
     if (error instanceof Error && error.message === 'CORS_ERROR') {
       return getSimulatedFeedback(profile, issueMessages);
@@ -190,7 +188,7 @@ export async function autoFillDocumentFields(
 거래유형: ${profile.tradeType === 'export' ? '수출' : '수입'}`;
 
   try {
-    const response = await callClaude(systemPrompt, userMessage);
+    const response = await callLLM(systemPrompt, userMessage);
     return JSON.parse(extractJson(response));
   } catch (err) {
     if (err instanceof Error && err.message === 'CORS_ERROR') {
