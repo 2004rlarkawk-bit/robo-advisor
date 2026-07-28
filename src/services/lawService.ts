@@ -1,13 +1,9 @@
 /**
- * 법제처 국가법령정보 Open API (law.go.kr DRF)
+ * 법제처 국가법령정보 서비스
  *
- * 승인 항목 (2026-07-02): 현행법령·행정규칙·판례·법령해석례·행정심판례 (JSON)
- *  + 지능형 검색 + 관련법령
- *
- * 인증: OC=<law.go.kr 가입 ID> — 키가 아니라 사용자 ID.
- *  발급 시 등록한 도메인/IP에서만 호출 허용될 수 있음 (사용자 검증).
- *
- * CORS 미확인 → 로컬 개발은 vite '/law-api' 프록시 경유, 실패 시 시뮬레이션 폴백.
+ * 프론트는 Supabase Edge Function law-search를 호출한다.
+ * 법제처 OC는 서버 Secret에서 관리되며 프론트에는 노출되지 않는다.
+ * Edge Function 호출 실패 시 시뮬레이션 데이터로 폴백한다.
  *
  * 활용처:
  *  - 검증 이슈에 근거 법령 링크 (예: HS 오류 → 관세법 제241조)
@@ -16,33 +12,10 @@
  */
 
 import type { DataSource } from './customsApiService';
+import { supabase } from '../lib/supabase';
 
-const storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> =
-  typeof localStorage !== 'undefined'
-    ? localStorage
-    : { getItem: () => null, setItem: () => {}, removeItem: () => {} };
-
-const KEY_LAW_OC = 'portai_law_oc';
-
-export function setLawOC(oc: string): void {
-  storage.setItem(KEY_LAW_OC, oc);
-}
-export function getLawOC(): string | null {
-  return storage.getItem(KEY_LAW_OC);
-}
-export function hasLawOC(): boolean {
-  const v = getLawOC();
-  return !!v && v.length >= 2;
-}
-export function clearLawOC(): void {
-  storage.removeItem(KEY_LAW_OC);
-}
-
-function baseUrl(): string {
-  const isDev =
-    typeof import.meta !== 'undefined' &&
-    (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
-  return isDev ? '/law-api/DRF' : 'https://www.law.go.kr/DRF';
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 // ===== 법령 검색 =====
@@ -59,37 +32,48 @@ export interface LawSearchResult {
 
 /** 현행법령 키워드 검색 (예: "관세법") */
 export async function searchLaw(query: string, limit = 10): Promise<LawSearchResult[]> {
-  const oc = getLawOC();
   const q = query.trim();
   if (!q) return [];
 
-  if (oc) {
-    try {
-      const url =
-        `${baseUrl()}/lawSearch.do?OC=${encodeURIComponent(oc)}` +
-        `&target=law&type=JSON&display=${limit}&query=${encodeURIComponent(q)}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`법령검색 API 오류 (${res.status})`);
-      const data = await res.json();
-      // 인증 실패 응답도 200으로 옴 → result 필드 존재 시 오류로 간주
-      if (data?.result && !data?.LawSearch) throw new Error(String(data.result));
-      const rows = data?.LawSearch?.law;
-      const list = Array.isArray(rows) ? rows : rows ? [rows] : [];
-      if (list.length > 0) {
-        return list.map((r: Record<string, string>) => ({
-          lawId: r.법령ID || r.lawId || '',
-          lawName: r.법령명한글 || r.법령명 || '',
-          lawType: r.법종구분명 || '',
-          department: r.소관부처명 || '',
-          effectiveDate: r.시행일자 || '',
-          detailUrl: r.법령상세링크 ? `https://www.law.go.kr${r.법령상세링크}` : `https://www.law.go.kr/법령/${encodeURIComponent(r.법령명한글 || q)}`,
-          source: 'api' as DataSource,
-        }));
-      }
-      return [];
-    } catch (err) {
-      console.warn('법제처 법령검색 실패, 시뮬레이션 폴백:', err);
+  try {
+    const { data, error } = await supabase.functions.invoke('law-search', {
+      body: { query: q, limit },
+    });
+    if (error) throw error;
+    if (!isRecord(data) || data.success !== true || !Array.isArray(data.laws)) {
+      throw new Error(
+        isRecord(data) && typeof data.error === 'string'
+          ? data.error
+          : '법령검색 Edge Function 응답이 올바르지 않습니다.'
+      );
     }
+
+    return data.laws.flatMap((value): LawSearchResult[] => {
+      if (
+        !isRecord(value) ||
+        typeof value.lawId !== 'string' ||
+        typeof value.lawName !== 'string' ||
+        typeof value.lawType !== 'string' ||
+        typeof value.department !== 'string' ||
+        typeof value.effectiveDate !== 'string' ||
+        typeof value.detailUrl !== 'string' ||
+        value.source !== 'api' ||
+        (!value.lawName && !value.detailUrl)
+      ) {
+        return [];
+      }
+      return [{
+        lawId: value.lawId,
+        lawName: value.lawName,
+        lawType: value.lawType,
+        department: value.department,
+        effectiveDate: value.effectiveDate,
+        detailUrl: value.detailUrl,
+        source: 'api' as DataSource,
+      }];
+    });
+  } catch (err) {
+    console.warn('법제처 법령검색 Edge Function 호출 실패, 시뮬레이션 폴백:', err);
   }
 
   return simulatedLawSearch(q);
@@ -112,7 +96,7 @@ function simulatedLawSearch(query: string): LawSearchResult[] {
     if (query.includes(k)) return table[k];
   }
   return [
-    { lawId: '', lawName: `${query} 관련 법령 (시뮬레이션 — OC 설정 후 실검색 가능)`, lawType: '', department: '', effectiveDate: '', detailUrl: `https://www.law.go.kr/법령/${encodeURIComponent(query)}`, source: 'simulation' },
+    { lawId: '', lawName: `${query} 관련 법령 (시뮬레이션)`, lawType: '', department: '', effectiveDate: '', detailUrl: `https://www.law.go.kr/법령/${encodeURIComponent(query)}`, source: 'simulation' },
   ];
 }
 

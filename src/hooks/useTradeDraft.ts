@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import type { TradeProfile } from '../types';
+import type { TradeProfile, TradeRole, TradeType } from '../types';
 import {
   deleteTradeDraft,
   loadDraftFromLocal,
@@ -17,12 +17,14 @@ export type DraftSaveStatus = 'idle' | 'local' | 'saving' | 'saved' | 'error';
 interface UseTradeDraftInput {
   userId: string | null;
   enabled: boolean;
+  tradeDirection: TradeType;
+  tradeRole: TradeRole;
   profile: TradeProfile;
   defaultProfile: TradeProfile;
   setProfile: Dispatch<SetStateAction<TradeProfile>>;
 }
 
-export function useTradeDraft({ userId, enabled, profile, defaultProfile, setProfile }: UseTradeDraftInput) {
+export function useTradeDraft({ userId, enabled, tradeDirection, tradeRole, profile, defaultProfile, setProfile }: UseTradeDraftInput) {
   const [isDraftLoading, setIsDraftLoading] = useState(false);
   const [isDraftRestored, setIsDraftRestored] = useState(false);
   const [saveStatus, setSaveStatus] = useState<DraftSaveStatus>('idle');
@@ -34,11 +36,15 @@ export function useTradeDraft({ userId, enabled, profile, defaultProfile, setPro
   const profileRef = useRef(profile);
   const enabledRef = useRef(enabled);
   const userIdRef = useRef(userId);
+  const tradeDirectionRef = useRef(tradeDirection);
+  const tradeRoleRef = useRef(tradeRole);
   const saveInFlightRef = useRef<Promise<void> | null>(null);
 
   profileRef.current = profile;
   enabledRef.current = enabled;
   userIdRef.current = userId;
+  tradeDirectionRef.current = tradeDirection;
+  tradeRoleRef.current = tradeRole;
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -57,7 +63,7 @@ export function useTradeDraft({ userId, enabled, profile, defaultProfile, setPro
     const savePromise = (async () => {
       setSaveStatus('saving');
       try {
-        const result = await saveTradeDraft(currentUserId, profileToSave);
+        const result = await saveTradeDraft(currentUserId, profileToSave, tradeRoleRef.current);
         if (userIdRef.current !== currentUserId) return;
         setLastSavedAt(result.updatedAt);
         setSaveStatus('saved');
@@ -86,43 +92,56 @@ export function useTradeDraft({ userId, enabled, profile, defaultProfile, setPro
     setSaveStatus('idle');
 
     if (!userId || !enabled) {
+      // 초안 기능을 사용하지 않는 화면(현재 수입 플로우 포함)은 DB 복원을 기다리지 않습니다.
+      // 해당 화면의 React state/localStorage를 그대로 사용해 즉시 렌더링합니다.
+      restoredRef.current = true;
+      setIsDraftRestored(true);
       setIsDraftLoading(false);
       return;
     }
 
     setIsDraftLoading(true);
-    const localDraft = loadDraftFromLocal(userId);
+    const localDraft = loadDraftFromLocal(userId, tradeDirection, tradeRole);
 
-    void loadTradeDraft(userId)
-      .catch((error) => {
+    void (async () => {
+      let databaseDraft = null;
+      try {
+        databaseDraft = await loadTradeDraft(userId, tradeDirection, tradeRole);
+      } catch (error) {
         console.error('[Trade Draft] Supabase 초안 조회 실패:', error);
-        return null;
-      })
-      .then((databaseDraft) => {
-        if (restoreSequenceRef.current !== sequence) return;
+        // DB 스키마가 아직 준비되지 않았거나 네트워크 오류가 있어도 로컬 초안/기본값으로 계속합니다.
+      }
+
+      if (restoreSequenceRef.current !== sequence) return;
+      try {
         const newest = selectNewestDraft(localDraft, databaseDraft);
         setProfile(newest ? { ...defaultProfile, ...newest.profile } : defaultProfile);
         if (newest) {
           setLastSavedAt(newest.updatedAt);
           setSaveStatus(newest.source === 'database' ? 'saved' : 'local');
         }
+      } catch (error) {
+        console.error('[Trade Draft] 초안 fallback 적용 실패, 기본 입력값을 사용합니다:', error);
+        setProfile(defaultProfile);
+      } finally {
         restoredRef.current = true;
         setIsDraftRestored(true);
         setIsDraftLoading(false);
-      });
+      }
+    })();
 
     return () => {
       clearTimer();
       if (restoreSequenceRef.current === sequence) restoreSequenceRef.current += 1;
     };
-  }, [clearTimer, enabled, setProfile, userId]);
+  }, [clearTimer, enabled, setProfile, tradeDirection, tradeRole, userId]);
 
   useEffect(() => {
     clearTimer();
     if (!userId || !enabled || !isDraftRestored || !activeRef.current) return;
 
     try {
-      saveDraftToLocal(userId, profile);
+      saveDraftToLocal(userId, profile, tradeRole);
       setSaveStatus('local');
     } catch (error) {
       console.error('[Trade Draft] localStorage 저장 실패:', error);
@@ -134,7 +153,7 @@ export function useTradeDraft({ userId, enabled, profile, defaultProfile, setPro
     }, DATABASE_SAVE_DELAY_MS);
 
     return clearTimer;
-  }, [clearTimer, enabled, flushDraft, isDraftRestored, profile, userId]);
+  }, [clearTimer, enabled, flushDraft, isDraftRestored, profile, tradeRole, userId]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -151,7 +170,7 @@ export function useTradeDraft({ userId, enabled, profile, defaultProfile, setPro
     if (!currentUserId || !activeRef.current) return;
     activeRef.current = false;
     clearTimer();
-    removeDraftFromLocal(currentUserId);
+    removeDraftFromLocal(currentUserId, tradeDirectionRef.current, tradeRoleRef.current);
     if (saveInFlightRef.current) {
       try {
         await saveInFlightRef.current;
@@ -160,7 +179,7 @@ export function useTradeDraft({ userId, enabled, profile, defaultProfile, setPro
       }
     }
     try {
-      await deleteTradeDraft(currentUserId);
+      await deleteTradeDraft(currentUserId, tradeDirectionRef.current, tradeRoleRef.current);
       setSaveStatus('idle');
       setLastSavedAt(null);
     } catch (error) {

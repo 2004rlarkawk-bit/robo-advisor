@@ -1,63 +1,73 @@
-import type { Incoterms, TradeProfile, TradeType } from '../types';
+import type { Incoterms, TradeProfile } from '../types';
 import { supabase } from '../lib/supabase';
-
-export const TRADE_PURPOSE_OPTIONS = [
-  { value: 'export', label: '수출' },
-  { value: 'import', label: '수입' },
-  { value: 'integrated', label: '통합' },
-] as const;
-
-export const INDUSTRY_OPTIONS = [
-  { value: 'manufacturing', label: '제조업' },
-  { value: 'trading', label: '무역' },
-  { value: 'forwarding', label: '포워딩' },
-  { value: 'logistics', label: '물류' },
-  { value: 'ecommerce', label: '전자상거래' },
-  { value: 'other', label: '기타' },
-] as const;
+import { normalizeCountryValue } from '../constants/countries';
+import { normalizePortValue } from '../constants/ports';
 
 export const INCOTERM_OPTIONS: Exclude<Incoterms, ''>[] = [
   'FOB', 'CIF', 'EXW', 'DDP', 'DAP', 'FCA',
 ];
 
+// 2026-07-23 편의성 업그레이드: 회원 서비스 역할 타입 및 프로필 저장 구조 추가
+export type ServiceRole =
+  | 'shipper'
+  | 'forwarder'
+  | 'integrated';
+
 export interface UserProfile {
   id: string;
   email: string;
   company_name: string | null;
+  company_address: string | null;
   business_number: string | null;
+  customs_clearance_code: string | null;
   contact_name: string | null;
   phone: string | null;
   country: string | null;
-  industry: string | null;
-  trade_purpose: string | null;
   default_load_port: string | null;
   default_discharge_port: string | null;
   default_incoterm: string | null;
+  service_role: ServiceRole;
   role: string;
   created_at?: string;
   updated_at?: string;
 }
 
-export type UserProfileUpdate = Pick<
+export type UserProfileUpdate = Partial<Pick<
   UserProfile,
   | 'company_name'
+  | 'company_address'
   | 'business_number'
+  | 'customs_clearance_code'
   | 'contact_name'
   | 'phone'
   | 'country'
-  | 'industry'
-  | 'trade_purpose'
   | 'default_load_port'
   | 'default_discharge_port'
   | 'default_incoterm'
->;
+  | 'service_role'
+>>;
 
-const REQUIRED_PROFILE_FIELDS: (keyof UserProfile)[] = [
-  'company_name', 'trade_purpose', 'industry',
-];
+type UserProfileRow = Omit<UserProfile, 'service_role' | 'customs_clearance_code'> & {
+  service_role?: ServiceRole | null;
+  customs_clearance_code?: string | null;
+};
+
+const REQUIRED_PROFILE_FIELDS: (keyof UserProfile)[] = ['company_name'];
 
 function hasText(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+export function normalizeUserProfile(profile: UserProfileRow): UserProfile {
+  return {
+    ...profile,
+    company_address: profile.company_address ?? null,
+    customs_clearance_code: profile.customs_clearance_code ?? null,
+    country: normalizeCountryValue(profile.country) || null,
+    default_load_port: normalizePortValue(profile.default_load_port) || null,
+    default_discharge_port: normalizePortValue(profile.default_discharge_port) || null,
+    service_role: profile.service_role ?? 'integrated',
+  };
 }
 
 export function isUserProfileComplete(profile: UserProfile | null): boolean {
@@ -70,19 +80,17 @@ export function userProfileToTradeDefaults(profile: UserProfile): Partial<TradeP
   const incoterms = allowedIncoterms.includes(profile.default_incoterm as Incoterms)
     ? (profile.default_incoterm as Incoterms)
     : '';
-  const tradeType: TradeType = profile.trade_purpose === 'import' ? 'import' : 'export';
-
   return {
-    tradeType,
     companyName: profile.company_name ?? '',
+    companyAddress: profile.company_address ?? '',
     businessRegistrationNo: profile.business_number ?? '',
     taxNo: profile.business_number ?? '',
     contact: profile.phone ?? '',
     contactName: profile.contact_name ?? '',
-    companyCountry: profile.country ?? '',
+    companyCountry: normalizeCountryValue(profile.country),
     signedBy: profile.contact_name ?? '',
-    loadPort: profile.default_load_port ?? '',
-    dischargePort: profile.default_discharge_port ?? '',
+    loadPort: normalizePortValue(profile.default_load_port),
+    dischargePort: normalizePortValue(profile.default_discharge_port),
     incoterms,
   };
 }
@@ -95,7 +103,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     .maybeSingle();
 
   if (error) throw error;
-  return data as UserProfile | null;
+  return data ? normalizeUserProfile(data as UserProfileRow) : null;
 }
 
 /** 회원가입 트리거가 만든 현재 사용자의 행만 갱신하며 INSERT/upsert하지 않는다. */
@@ -118,5 +126,5 @@ export async function updateUserProfile(
   if (!data) {
     throw new Error('회원 프로필 행을 찾을 수 없습니다. 회원가입 프로필 생성 트리거를 확인해 주세요.');
   }
-  return data as UserProfile;
+  return normalizeUserProfile(data as UserProfileRow);
 }

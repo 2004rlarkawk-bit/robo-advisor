@@ -1,5 +1,5 @@
 import { Agent, HSCodeResult, AgentLog, createLog } from './types';
-import { suggestHSCode, hasApiKey } from '../services/claudeService';
+import { suggestHSCode } from '../services/claudeService';
 import { findHSCodesByItemName } from './hsCodeDict';
 import { searchHSByKeyword, lookupHSByCode, loadHSData } from '../services/hsDataService';
 
@@ -38,9 +38,9 @@ export class HSCodeAgent implements Agent<{ itemName: string; hsCode?: string; u
     if (itemName) {
       logs.push(createLog(this.name, `추천 분석할 품목명: "${itemName}" (AI 활용 여부: ${useLLM ? '예' : '아니오'})`, 'info'));
       try {
-        // 폴백 체인: Claude(키 있을 때만, 의미 검색) → 관세청 로컬 사전(정확 매칭) → 내장 dict
-        if (useLLM && hasApiKey()) {
-          // LLM 호출만 별도 try — 잘못된 키(401) 등 API 오류가 나도 사전 검색은 계속돼야 한다
+        // 폴백 체인: OpenAI(Edge Function) → 관세청 로컬 사전(정확 매칭) → 내장 dict
+        if (useLLM) {
+          // LLM 호출만 별도 try — API 오류가 나도 사전 검색은 계속돼야 한다
           try {
             const suggestions = await suggestHSCode(itemName);
             candidates = suggestions.map(c => ({
@@ -49,10 +49,10 @@ export class HSCodeAgent implements Agent<{ itemName: string; hsCode?: string; u
               confidence: c.confidence,
               reasoning: c.reasoning
             }));
-            logs.push(createLog(this.name, `Claude LLM 기반 후보 ${candidates.length}건 수신`, 'success'));
+            logs.push(createLog(this.name, `OpenAI 기반 후보 ${candidates.length}건 수신`, 'success'));
           } catch (llmError) {
             const msg = llmError instanceof Error ? llmError.message : String(llmError);
-            logs.push(createLog(this.name, `Claude 추천 실패(${msg}) — 관세청 HS 사전 검색으로 대체합니다.`, 'warning'));
+            logs.push(createLog(this.name, `OpenAI 추천 실패(${msg}) — 관세청 HS 사전 검색으로 대체합니다.`, 'warning'));
           }
         }
 

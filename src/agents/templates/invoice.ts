@@ -31,7 +31,15 @@ export function renderInvoiceHTML(data: InvoiceData): string {
   }).join('');
 
   const originRef = d.countryOfOrigin || data.items?.[0]?.countryOfOrigin;
-  const buyer = d.buyer?.name ? esc(d.buyer.name) : '<span style="color:#94a3b8;">SAME AS CONSIGNEE</span>';
+  const buyerAddress = String(d.buyer?.address || '').trim();
+  const buyerCountry = String(d.buyer?.country || '').trim();
+  const buyer = d.buyer?.name
+    ? [
+        d.buyer.name,
+        buyerAddress,
+        buyerCountry && !buyerAddress.toLowerCase().includes(buyerCountry.toLowerCase()) ? buyerCountry : '',
+      ].filter(Boolean).map((value) => esc(value)).join('<br>')
+    : '<span style="color:#94a3b8;">SAME AS CONSIGNEE</span>';
   const sellerTax = d.sellerTaxNo || d.businessRegistrationNo || d.taxNo;
 
   return `

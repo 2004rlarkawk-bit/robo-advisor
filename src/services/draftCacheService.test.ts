@@ -49,6 +49,25 @@ describe('사용자별 거래 초안 localStorage', () => {
     expect(loadDraftFromLocal('legacy')?.updatedAt).toBe('2026-07-01T00:00:00.000Z');
   });
 
+  it('기존 초안의 삭제된 업무설정 키는 복원 및 신규 저장에서 제외한다', () => {
+    const legacyProfile = {
+      ...profile,
+      industry: 'manufacturing',
+      tradePurpose: 'export',
+      trade_purpose: 'export',
+    } as TradeProfile;
+
+    saveDraftToLocal('legacy-fields', legacyProfile);
+    const raw = JSON.parse(localStorage.getItem(getTradeDraftCacheKey('legacy-fields')) || '{}');
+    const restored = loadDraftFromLocal('legacy-fields')?.profile as TradeProfile & Record<string, unknown>;
+
+    expect(raw.profile).not.toHaveProperty('industry');
+    expect(raw.profile).not.toHaveProperty('tradePurpose');
+    expect(raw.profile).not.toHaveProperty('trade_purpose');
+    expect(restored).not.toHaveProperty('industry');
+    expect(restored.itemName).toBe(profile.itemName);
+  });
+
   it('손상된 JSON은 화면을 깨뜨리지 않고 null을 반환한다', () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     localStorage.setItem(getTradeDraftCacheKey('broken'), '{bad json');

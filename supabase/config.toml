@@ -1,0 +1,94 @@
+
+[functions.customs-exchange-rate]
+enabled = true
+verify_jwt = false
+import_map = "./functions/customs-exchange-rate/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/customs-exchange-rate/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/customs-exchange-rate/*.html" ]
+
+[functions.unipass-tariff-basic]
+enabled = true
+verify_jwt = false
+import_map = "./functions/unipass-tariff-basic/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/unipass-tariff-basic/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/unipass-tariff-basic/*.html" ]
+
+[functions.unipass-requirement-approval]
+enabled = true
+verify_jwt = false
+import_map = "./functions/unipass-requirement-approval/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/unipass-requirement-approval/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/unipass-requirement-approval/*.html" ]
+
+[functions.unipass-cargo-clearance]
+enabled = true
+verify_jwt = false
+import_map = "./functions/unipass-cargo-clearance/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/unipass-cargo-clearance/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/unipass-cargo-clearance/*.html" ]
+
+[functions.unipass-export-fulfillment]
+enabled = true
+verify_jwt = false
+import_map = "./functions/unipass-export-fulfillment/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/unipass-export-fulfillment/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/unipass-export-fulfillment/*.html" ]
+
+[functions.nts-business]
+enabled = true
+verify_jwt = false
+import_map = "./functions/nts-business/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/nts-business/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/nts-business/*.html" ]
+
+[functions.openai-assistant]
+enabled = true
+verify_jwt = false
+import_map = "./functions/openai-assistant/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/openai-assistant/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/openai-assistant/*.html" ]
+
+[functions.import-document-analysis]
+enabled = true
+verify_jwt = true
+import_map = "./functions/import-document-analysis/deno.json"
+entrypoint = "./functions/import-document-analysis/index.ts"
+
+[functions.law-search]
+enabled = true
+verify_jwt = false
+import_map = "./functions/law-search/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/law-search/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/law-search/*.html" ]

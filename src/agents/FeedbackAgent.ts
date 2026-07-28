@@ -1,6 +1,6 @@
 import { Agent, FeedbackResult, AgentLog, createLog } from './types';
 import { TradeProfile, ValidationIssue } from '../types';
-import { generateContextualFeedback, hasApiKey } from '../services/claudeService';
+import { generateContextualFeedback } from '../services/claudeService';
 
 export class FeedbackAgent implements Agent<{ profile: TradeProfile; issues: ValidationIssue[]; useLLM?: boolean; logs: AgentLog[] }, FeedbackResult> {
   readonly name = 'Feedback Agent';
@@ -17,8 +17,8 @@ export class FeedbackAgent implements Agent<{ profile: TradeProfile; issues: Val
       return { message };
     }
 
-    if (useLLM && hasApiKey()) {
-      logs.push(createLog(this.name, 'Claude AI에 문맥 기반 피드백 생성 요청 중...', 'info'));
+    if (useLLM) {
+      logs.push(createLog(this.name, 'OpenAI에 문맥 기반 피드백 생성 요청 중...', 'info'));
       try {
         message = await generateContextualFeedback(
           {

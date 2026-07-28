@@ -18,7 +18,7 @@ export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
     setIsLoading(true);
     setError('');
     try {
-      setTrades(await fetchSavedTrades('submitted'));
+      setTrades(await fetchSavedTrades(['submitted', 'in_progress']));
     } catch (caught) {
       console.error('[Document Manager] submitted trades query failed:', caught);
       setError('제출된 문서를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
@@ -40,7 +40,7 @@ export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
   };
 
   const handleClearAll = async () => {
-    if (!window.confirm('제출된 문서를 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
+    if (!window.confirm('제출·완료된 거래를 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
     try {
       await clearSavedTrades();
       setTrades([]);
@@ -54,7 +54,7 @@ export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
     <div>
       <div className="page-heading">
         <h1 className="page-title document-manager-title"><FolderKanban size={26} /> 문서 관리</h1>
-        <p className="page-subtitle">최종 전송이 완료된 문서를 조회하거나 신규 거래로 복사할 수 있습니다.</p>
+        <p className="page-subtitle">진행 중이거나 최종 전송이 완료된 거래를 조회하고 신규 거래로 복사할 수 있습니다.</p>
       </div>
 
       {error && <div className="form-message error" role="alert">{error}</div>}
@@ -75,7 +75,7 @@ export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
             const errorCount = trade.issues.filter((issue) => issue.severity === 'error').length;
             const doneCount = trade.documents.filter((document) => document.status === 'completed').length;
             const testMeta = getTestSubmissionMeta(trade.generatedDocs);
-            const created = new Date(trade.submittedAt ?? trade.createdAt);
+            const created = new Date(trade.flowCompletedAt ?? trade.submittedAt ?? trade.createdAt);
             const dateLabel = Number.isNaN(created.getTime())
               ? trade.createdAt
               : `${created.getFullYear()}.${String(created.getMonth() + 1).padStart(2, '0')}.${String(created.getDate()).padStart(2, '0')} ${String(created.getHours()).padStart(2, '0')}:${String(created.getMinutes()).padStart(2, '0')}`;
@@ -85,7 +85,9 @@ export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
                 <div className="document-trade-row">
                   <div className="document-trade-summary">
                     <div className="document-trade-heading">
-                      <span className={`trade-type-badge ${trade.profile.tradeType}`}>{trade.profile.tradeType === 'export' ? '수출' : '수입'}</span>
+                      <span className={`trade-type-badge ${trade.tradeDirection ?? trade.profile.tradeType}`}>{(trade.tradeDirection ?? trade.profile.tradeType) === 'export' ? '수출' : '수입'}</span>
+                      {trade.tradeRole && <span className="trade-role-badge">{trade.tradeRole === 'shipper' ? '화주' : '포워더'}</span>}
+                      <span className={`trade-status-badge ${trade.status}`}>{trade.status === 'in_progress' ? '진행 중' : trade.status === 'submitted' ? '제출 완료' : trade.status}</span>
                       {testMeta && <span className="test-trade-badge">테스트 문서</span>}
                       {testMeta?.submissionMode === 'perfect' && <span className="perfect-test-badge">완벽 테스트</span>}
                       {testMeta?.submissionMode === 'needs_revision' && <span className="needs-revision-badge">수정 필요</span>}
@@ -93,7 +95,7 @@ export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
                       <span className="document-trade-name">{trade.profile.itemName || '(품목명 없음)'}</span>
                       {trade.profile.hsCode && <span className="document-hs-code">HS {trade.profile.hsCode}</span>}
                     </div>
-                    <div className="document-trade-meta">{trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'} · {dateLabel}</div>
+                    <div className="document-trade-meta">{trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'} · B/L {trade.profile.blNo || '-'} · {dateLabel}</div>
                   </div>
 
                   <div className="document-trade-counts">

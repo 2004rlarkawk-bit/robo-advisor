@@ -1,8 +1,10 @@
 export type TradeType = 'export' | 'import';
+export type TradeRole = 'shipper' | 'forwarder';
 
 export type Incoterms =
   | ''
   | 'FOB'
+  | 'CFR'
   | 'CIF'
   | 'EXW'
   | 'DDP'
@@ -10,6 +12,25 @@ export type Incoterms =
   | 'FCA';
 
 export type NumericInput = number | '';
+
+// 2026-07-23 편의성 업그레이드: 화주용 통관 입력 폼 확장
+export type ShipperItemUnit = 'EA' | 'PCS' | 'SET' | 'CTN' | 'BOX' | 'KG' | 'TON' | 'M' | 'M2' | 'M3' | 'L';
+export type ShipperCurrency = 'USD' | 'EUR' | 'JPY' | 'CNY' | 'KRW' | 'GBP';
+
+export interface ShipperItem {
+  id: string;
+  itemName: string;
+  hsCode: string;
+  quantity: NumericInput;
+  unit: ShipperItemUnit;
+  unitPrice: NumericInput;
+  currency: ShipperCurrency;
+}
+
+// 2026-07-23 편의성 업그레이드: 포워더용 선적 및 부킹 입력 폼 추가
+export type BookingStatus = 'requested' | 'confirmed' | 'cancelled';
+export type ForwarderLoadingMode = 'FCL' | 'LCL';
+export type ContainerSize = '20GP' | '40GP' | '40HC' | '45HC';
 
 export interface TradeProfile {
   tradeType: TradeType;
@@ -113,7 +134,14 @@ export type DocumentStatusType =
   | 'review_required'
   | 'not_needed';
 
-export type TradeStatus = 'draft' | 'generated' | 'submitted';
+export type TradeStatus =
+  | 'draft'
+  | 'generating'
+  | 'generated'
+  | 'submitting'
+  | 'in_progress'
+  | 'submitted'
+  | 'failed';
 
 export interface DocumentStatus {
   id: string;
@@ -137,6 +165,7 @@ export interface PartyInfo {
   name: string;
   address: string;
   contact: string;
+  country?: string;
 }
 
 export interface InvoiceItem {
@@ -239,12 +268,19 @@ export interface GeneratedDocuments {
 export interface SavedTrade {
   id: string;
   profile: TradeProfile;
+  tradeDirection?: TradeType;
+  tradeRole?: TradeRole;
+  arrivalNotice?: Record<string, unknown> | null;
+  analysisResult?: Record<string, unknown>;
+  riskSummary?: unknown[];
+  customsProgress?: Record<string, unknown>;
   documents: DocumentStatus[];
   issues: ValidationIssue[];
   status?: TradeStatus;
   generatedDocs?: GeneratedDocuments;
   generatedAt?: string | null;
   submittedAt?: string | null;
+  flowCompletedAt?: string | null;
   createdAt: string;
   updatedAt?: string;
 
