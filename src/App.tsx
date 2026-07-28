@@ -39,6 +39,7 @@ import GuidePanel from './components/GuidePanel';
 import AboutPanel from './components/AboutPanel';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
+import TradeManagerPanel from './components/TradeManagerPanel';
 import AuthPage from './components/AuthPage';
 import OnboardingPage from './components/OnboardingPage';
 import ProfileSettingsPage from './components/ProfileSettingsPage';
@@ -1295,11 +1296,13 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             </div>
           </li>
           {/* 미구현 메뉴 — 구현 완료 시 onClick 연결 후 disabled/배지 제거 */}
-          <li>
-            <div className="menu-item disabled" title="준비 중인 기능입니다">
+                    <li>
+            <div
+              className={`menu-item ${activeMenu === 'trades' ? 'active' : ''}`}
+              onClick={() => setActiveMenu('trades')}
+            >
               <Layers size={18} />
               거래 관리
-              <span className="badge-soon">준비중</span>
             </div>
           </li>
           <li>
@@ -1407,6 +1410,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             : activeMenu === 'guide' ? <GuidePanel />
             : activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'analysis' ? <DataAnalysisPanel />
+            : activeMenu === 'trades' ? <TradeManagerPanel onLoad={handleLoadSavedTrade} />   
             : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
             : <>
             {/* Page Title & Subtitle */}
