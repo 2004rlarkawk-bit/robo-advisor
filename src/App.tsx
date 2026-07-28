@@ -74,7 +74,7 @@ type DocTabId = typeof DOC_TABS[number]['id'];
 const IS_DEV_TEST_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
 
 export default function App() {
-  const [activeMenu, setActiveMenu] = useState('dashboard');
+  const [activeMenu, setActiveMenu] = useState('about');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [docTab, setDocTab] = useState<DocTabId>('all');
   const formCardRef = useRef<HTMLDivElement>(null);
