@@ -159,6 +159,11 @@ export interface ValidationIssue {
   field: keyof TradeProfile | string;
   message: string;
   severity: ValidationSeverity;
+  /**
+   * error 정책 이슈가 "사유 입력 시 생성 우회"를 허용하는지.
+   * severity==='error'일 때만 의미. warning/info는 undefined(생성 차단 안 함).
+   */
+  overridable?: boolean;
 }
 
 export interface PartyInfo {

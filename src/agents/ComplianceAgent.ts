@@ -2,6 +2,7 @@ import { Agent, ComplianceResult, AgentLog, createLog, HSCodeResult } from './ty
 import { TradeProfile, DocumentStatus, ValidationIssue } from '../types';
 import { validateTradeDocumentsAsync } from '../harness/validatorEngine';
 import { getRelatedLawForIssue } from '../services/lawService';
+import { runComplianceRules } from './complianceRules';
 
 export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents: DocumentStatus[]; hsResult?: HSCodeResult; logs: AgentLog[] }, ComplianceResult> {
   readonly name = 'Compliance Agent';
@@ -13,6 +14,10 @@ export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents
 
     // 룰 기반 검증 엔진 실행 (공통 비즈니스 규칙 + 환율·사업자 공공 API 검증)
     const issues: ValidationIssue[] = await validateTradeDocumentsAsync(profile);
+
+    // R1~R8 통관 검증 룰 (원산지·품명충분성·Incoterms↔항구·운송수단·동일국가항구·HS단위·한글필드·금액산술)
+    // 정책은 RULE_POLICY로 타입 강제(error=차단/overridable, warning=배지).
+    issues.push(...runComplianceRules(profile, logs));
 
     // HSCodeAgent의 검증 결과를 통합
     if (hsResult) {

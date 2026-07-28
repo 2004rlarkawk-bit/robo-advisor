@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -24,8 +24,19 @@ import {
   Anchor,
   BookOpen
 } from 'lucide-react';
-import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade, TradeStatus, type ShipperItem } from './types';
+import {
+  TradeProfile,
+  DocumentStatus,
+  ValidationIssue,
+  SavedTrade,
+  TradeStatus,
+  InvoiceData,
+  type ShipperItem,
+} from './types';
+import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
 import SettingsPanel from './components/SettingsPanel';
+import GuidePanel from './components/GuidePanel';
+import AboutPanel from './components/AboutPanel';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
 import AuthPage from './components/AuthPage';
@@ -33,8 +44,6 @@ import OnboardingPage from './components/OnboardingPage';
 import ProfileSettingsPage from './components/ProfileSettingsPage';
 import ForwarderWorkspaceForm from './components/ForwarderWorkspaceForm';
 import ShipperWorkspaceForm from './components/ShipperWorkspaceForm';
-import AboutPanel from './components/AboutPanel';
-import GuidePanel from './components/GuidePanel';
 import TradeDirectionSelector from './components/trade/TradeDirectionSelector';
 import TradeRoleSelector from './components/trade/TradeRoleSelector';
 import ImportShipperFlow from './components/import/ImportShipperFlow';
@@ -59,8 +68,6 @@ import CountrySelect from './components/CountrySelect';
 import { calculateReadiness } from './harness/rulesEngine';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import {
   createGeneratedTrade,
   createCompletedImportTrade,
@@ -81,7 +88,7 @@ import { createEmptyForwarderFormState, type ForwarderFormState } from './utils/
 const IS_DEV_TEST_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
 
 export default function App() {
-  const [activeMenu, setActiveMenu] = useState('dashboard');
+  const [activeMenu, setActiveMenu] = useState('about');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [integratedWorkspaceRole, setIntegratedWorkspaceRole] = useState<WorkspaceRole>('shipper');
   const [tradeDirection, setTradeDirection] = useState<TradeDirection>('export');
@@ -260,7 +267,7 @@ const emptyProfile: TradeProfile = {
   quantity: '',
   unit: 'EA',
 
-  currency: 'KRW',
+  currency: 'USD',
   unitPrice: '',
   totalAmount: '',
   invoiceAmount: '',
@@ -370,9 +377,55 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   
   const [documents, setDocuments] = useState<DocumentStatus[]>([]);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
+  // 정책 연결: error만 차단(overridable면 사유 입력 시 우회), warning은 배지.
+  const [overrides, setOverrides] = useState<Record<string, string>>({}); // issueKey → 사유
+  const [overrideTarget, setOverrideTarget] = useState<ValidationIssue | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+  const blockedGenRef = useRef<{ result: any; generationProfile: TradeProfile; writeMode: ReturnType<typeof decideGeneratedTradeWrite> } | null>(null);
+  const issueKey = (i: ValidationIssue) => `${i.id}::${String(i.field)}`;
+  // 미해결 차단 이슈 = error 중 (overridable+사유입력)으로 우회되지 않은 것
+  const unresolvedBlockers = (list: ValidationIssue[], ov: Record<string, string>) =>
+    list.filter(i => i.severity === 'error' && !(i.overridable && ov[issueKey(i)]));
   const [aiFeedback, setAiFeedback] = useState<string>('');
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [htmlTemplates, setHtmlTemplates] = useState<Record<string, string>>({});
+  // 상업송장은 고정 docx 템플릿에서 생성한다. 구조 데이터를 보관하고, 생성된 Blob을 캐시해
+  // 미리보기와 다운로드가 "동일 바이너리"를 쓰게 한다.
+  const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
+  const invoiceDocxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
+  const docxPreviewRef = useRef<HTMLDivElement | null>(null);
+
+  // 같은 InvoiceData면 같은 Blob 반환(캐시) → 화면 미리보기와 다운로드 파일이 동일 바이너리.
+  const getInvoiceBlob = async (): Promise<Blob | null> => {
+    if (!invoiceData) return null;
+    const sig = JSON.stringify(invoiceData);
+    if (invoiceDocxCacheRef.current?.sig === sig) return invoiceDocxCacheRef.current.blob;
+    const blob = await buildInvoiceDocx(invoiceData);
+    invoiceDocxCacheRef.current = { sig, blob };
+    return blob;
+  };
+
+  // 문서 생성 여부: 상업송장은 invoiceData, 나머지는 htmlTemplates로 판정
+  const hasDoc = (id: string) => (id === 'invoice' ? !!invoiceData : !!htmlTemplates[id]);
+
+  // 미리보기 모달에서 상업송장은 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
+  useEffect(() => {
+    if (previewDocId !== 'invoice' || !invoiceData) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = await getInvoiceBlob();
+        const host = docxPreviewRef.current;
+        if (!blob || cancelled || !host) return;
+        await renderInvoiceDocxPreview(blob, host);
+      } catch {
+        const host = docxPreviewRef.current;
+        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">상업송장 미리보기 생성에 실패했습니다.</p>';
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewDocId, invoiceData]);
 
   // Mobile simulator inputs
   const [mobileWeight, setMobileWeight] = useState('');
@@ -414,10 +467,19 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   }, [issues]);
 
   const handleInputChange = (field: keyof TradeProfile, value: string | number) => {
-    setProfile(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setProfile(prev => {
+      // 수출↔수입 전환 시 선적항·도착항 방향도 자연스럽게 뒤집는다
+      // (예: 수출 부산 → 상하이를 수입으로 바꾸면 상하이 → 부산).
+      if (field === 'tradeType' && value !== prev.tradeType && prev.loadPort && prev.dischargePort) {
+        const swappable =
+          LOAD_PORT_OPTIONS.some(p => p.value === prev.dischargePort) &&
+          DISCHARGE_PORT_OPTIONS.some(p => p.value === prev.loadPort);
+        if (swappable) {
+          return { ...prev, tradeType: value as TradeProfile['tradeType'], loadPort: prev.dischargePort, dischargePort: prev.loadPort };
+        }
+      }
+      return { ...prev, [field]: value };
+    });
   };
 
   const shipperItems = [tradeProfileToPrimaryShipperItem(profile), ...additionalShipperItems];
@@ -464,6 +526,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   setIssues([]);
   setConsoleLogs([]);
   setHtmlTemplates({});
+  setInvoiceData(null);
+  invoiceDocxCacheRef.current = null;
   setHsCandidates([]);
   currentTradeIdRef.current = null;
   setCurrentTradeStatus(null);
@@ -476,6 +540,84 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 };
 
   // Run the multi-agent pipeline simulator
+  // 차단 없음(또는 override 완료) 시 문서 공개 + 저장. override 사유를 결과에 기록.
+  const finalizeGeneration = async (
+    result: any,
+    generationProfile: TradeProfile,
+    writeMode: ReturnType<typeof decideGeneratedTradeWrite>,
+    ov: Record<string, string>
+  ) => {
+    setHtmlTemplates(result.documents?.htmlTemplates || {});
+    setInvoiceData(result.documents?.generatedDocs?.invoice || null);
+    invoiceDocxCacheRef.current = null;
+    setHasGenerated(true);
+    blockedGenRef.current = null;
+
+    const issuesList: ValidationIssue[] = result.issues?.issues || [];
+    const overrideRecords = issuesList
+      .filter(i => i.severity === 'error' && i.overridable && ov[issueKey(i)])
+      .map(i => ({ id: i.id, field: String(i.field), reason: ov[issueKey(i)] }));
+
+    try {
+      const generatedTradeData = {
+        profile: { ...generationProfile, hsCode: generationProfile.hsCode || result.hs?.topCode || '' },
+        tradeDirection: 'export' as const,
+        tradeRole: workspaceRole,
+        documents: result.documents?.documents || [],
+        issues: issuesList,
+        generatedDocs: {
+          htmlTemplates: result.documents?.htmlTemplates || {},
+          invoice: result.documents?.generatedDocs?.invoice,
+          overrides: ov,
+          overrideRecords,
+        },
+      };
+      if (writeMode === 'insert') {
+        const createdTrade = await createGeneratedTrade(generatedTradeData);
+        currentTradeIdRef.current = createdTrade.id;
+        alert(overrideRecords.length > 0
+          ? `필요 서류가 생성·저장되었습니다. (차단 오류 ${overrideRecords.length}건이 사유 입력으로 override됨)`
+          : '필요 서류가 생성되고 새로운 거래가 저장되었습니다.');
+      } else {
+        const currentTradeId = currentTradeIdRef.current;
+        if (!currentTradeId) throw new Error('현재 거래 ID가 없습니다.');
+        const updatedTrade = await updateGeneratedTrade(currentTradeId, generatedTradeData);
+        if (updatedTrade.id !== currentTradeId) throw new Error('재생성된 거래 ID가 현재 거래와 일치하지 않습니다.');
+        alert(overrideRecords.length > 0
+          ? `필요 서류가 다시 생성되었습니다. (차단 오류 ${overrideRecords.length}건 사유 override됨)`
+          : '수정된 내용으로 필요 서류가 다시 생성되었으며 기존 거래가 업데이트되었습니다.');
+      }
+      setCurrentTradeStatus('generated');
+      hasSubmittedTradeRef.current = false;
+      await completeDraft().catch((error) => {
+        console.warn('[Trade Draft] 거래 저장 후 초안 정리 실패:', error);
+      });
+    } catch (err) {
+      console.error('[Trade Generation] generated trade persistence failed:', err);
+      alert(writeMode === 'update'
+        ? '필요 서류는 생성되었지만 기존 거래 업데이트에 실패했습니다. 다시 시도해주세요.'
+        : '필요 서류는 생성되었지만 새로운 거래 저장에 실패했습니다. 다시 시도해주세요.');
+    }
+  };
+
+  // override 사유 확정 → 기록. 생성이 차단 상태였고 남은 차단이 없으면 자동으로 생성 확정.
+  const confirmOverride = () => {
+    if (!overrideTarget) return;
+    const reason = overrideReason.trim();
+    if (!reason) { alert('override 사유를 입력하세요.'); return; }
+    const nextOv = { ...overrides, [issueKey(overrideTarget)]: reason };
+    setOverrides(nextOv);
+    setOverrideTarget(null);
+    setOverrideReason('');
+    const blocked = blockedGenRef.current;
+    if (blocked) {
+      const remaining = unresolvedBlockers(blocked.result.issues?.issues || [], nextOv);
+      if (remaining.length === 0) {
+        void finalizeGeneration(blocked.result, blocked.generationProfile, blocked.writeMode, nextOv);
+      }
+    }
+  };
+
   const handleGenerateDocuments = async () => {
     if (isProcessing) return;
     const writeMode = decideGeneratedTradeWrite(currentTradeIdRef.current, currentTradeStatus);
@@ -486,6 +628,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setIsProcessing(true);
     setShowConsole(true);
     setConsoleLogs([]);
+    setOverrides({});           // 재생성 = 새 검증. 이전 override 초기화.
+    blockedGenRef.current = null;
 
     try {
       // 테스트/일반 입력 모두 같은 문서번호 규칙을 사용하며 레거시 DEV/TEST 식별자는 저장하지 않습니다.
@@ -510,44 +654,32 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         hsCode: prev.hsCode || result.hs?.topCode || ''
       }));
       setDocuments(result.documents?.documents || []);
-      setHtmlTemplates(result.documents?.htmlTemplates || {});
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
       setHsCandidates(result.hs?.candidates || []);
-      setHasGenerated(true);
 
-      // 생성 이력 자동 저장 → [문서 관리] 메뉴에서 조회/복원
-      try {
-        const generatedTradeData = {
-          profile: { ...generationProfile, hsCode: generationProfile.hsCode || result.hs?.topCode || '' },
-          tradeDirection: 'export' as const,
-          tradeRole: workspaceRole,
-          documents: result.documents?.documents || [],
-          issues: result.issues?.issues || [],
-          generatedDocs: { htmlTemplates: result.documents?.htmlTemplates || {} },
-        };
-        if (writeMode === 'insert') {
-          const createdTrade = await createGeneratedTrade(generatedTradeData);
-          currentTradeIdRef.current = createdTrade.id;
-          alert('필요 서류가 생성되고 새로운 거래가 저장되었습니다.');
-        } else {
-          const currentTradeId = currentTradeIdRef.current;
-          if (!currentTradeId) throw new Error('현재 거래 ID가 없습니다.');
-          const updatedTrade = await updateGeneratedTrade(currentTradeId, generatedTradeData);
-          if (updatedTrade.id !== currentTradeId) throw new Error('재생성된 거래 ID가 현재 거래와 일치하지 않습니다.');
-          alert('수정된 내용으로 필요 서류가 다시 생성되었으며 기존 거래가 업데이트되었습니다.');
-        }
-        setCurrentTradeStatus('generated');
-        hasSubmittedTradeRef.current = false;
-        await completeDraft().catch((error) => {
-          console.warn('[Trade Draft] 거래 저장 후 초안 정리 실패:', error);
-        });
-      } catch (err) {
-        console.error('[Trade Generation] generated trade persistence failed:', err);
-        alert(writeMode === 'update'
-          ? '필요 서류는 생성되었지만 기존 거래 업데이트에 실패했습니다. 다시 시도해주세요.'
-          : '필요 서류는 생성되었지만 새로운 거래 저장에 실패했습니다. 다시 시도해주세요.');
+      // 정책: error(미해결)만 생성 차단. warning은 통과(배지). 사유 override된 error는 우회.
+      const issuesList: ValidationIssue[] = result.issues?.issues || [];
+      const canBypass = IS_DEV_TEST_ENABLED && devTestMode !== null;
+      const blockers = unresolvedBlockers(issuesList, overrides);
+      if (blockers.length > 0 && !canBypass) {
+        // 차단 중에도 검증 결과와 override UI는 보여준다. 문서 자체는 공개·저장하지 않는다.
+        setHtmlTemplates({});
+        setInvoiceData(null);
+        invoiceDocxCacheRef.current = null;
+        setHasGenerated(true);
+        blockedGenRef.current = { result, generationProfile, writeMode };
+        const overridable = blockers.filter((blocker) => blocker.overridable).length;
+        alert(
+          `생성이 차단되었습니다 — 해결해야 할 오류 ${blockers.length}건.` +
+          (overridable > 0
+            ? `\n(그중 ${overridable}건은 아래 검증 결과에서 "사유 입력 후 override"로 진행 가능)`
+            : '')
+        );
+        return;
       }
+
+      await finalizeGeneration(result, generationProfile, writeMode, overrides);
     } catch (error) {
       console.error(error);
       alert('에이전트 파이프라인 처리 중 오류가 발생했습니다.');
@@ -592,6 +724,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setDocuments(t.documents);
     setIssues(t.issues);
     setHtmlTemplates((t.generatedDocs?.htmlTemplates as Record<string, string>) || {});
+    setInvoiceData((t.generatedDocs?.invoice as InvoiceData) || null);
+    invoiceDocxCacheRef.current = null;
+    setOverrides((t.generatedDocs?.overrides as Record<string, string>) || {});
+    blockedGenRef.current = null;
     setAiFeedback('');
     setHsCandidates([]);
     setHasGenerated(true);
@@ -627,6 +763,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setDocuments([]);
     setIssues([]);
     setHtmlTemplates({});
+    setInvoiceData(null);
+    invoiceDocxCacheRef.current = null;
     setAiFeedback('');
     setHsCandidates([]);
     setHasGenerated(false);
@@ -658,6 +796,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
       setDocuments(result.documents?.documents || []);
       setHtmlTemplates(result.documents?.htmlTemplates || {});
+      setInvoiceData(result.documents?.generatedDocs?.invoice || null);
+      invoiceDocxCacheRef.current = null;
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
       setHsCandidates(result.hs?.candidates || []);
@@ -733,56 +873,85 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   };
 
   const handleDownloadDoc = async (docId: string) => {
+    // 상업송장: 고정 docx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 바이너리).
+    if (docId === 'invoice') {
+      const blob = await getInvoiceBlob();
+      if (!blob) {
+        alert('상업송장 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = getDocFileName('invoice').replace(/\.pdf$/i, '.docx');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+
     const htmlContent = htmlTemplates[docId];
     if (!htmlContent) {
       alert('문서 양식 템플릿이 생성되지 않았습니다.');
       return;
     }
 
-    setIsProcessing(true);
-    
-    const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    container.style.top = '-9999px';
-    container.style.width = '800px';
-    container.style.backgroundColor = '#ffffff';
-    container.innerHTML = htmlContent;
-    document.body.appendChild(container);
+    // 그 외 문서: 벡터(텍스트 레이어 유지) PDF 출력 — 브라우저 네이티브 인쇄("PDF로 저장").
+    // html2canvas 래스터와 달리 텍스트 선택·추출 가능 + 한글 폰트 벡터 임베딩 + 기존 HTML 그대로.
+    // 저장 전 안내: 브라우저 기본 머리글/바닥글(URL·날짜)은 코드로 강제 제거할 수 없어(사용자 인쇄 설정),
+    // 인쇄 대화상자에서 직접 해제하도록 안내한다.
+    alert(
+      'PDF 저장 창이 열립니다.\n\n' +
+      '· 대상(프린터): "PDF로 저장" 선택\n' +
+      '· 문서에 URL/날짜가 찍히지 않게 하려면 → "옵션 더보기 → 머리글 및 바닥글" 체크 해제'
+    );
 
-    try {
-      const canvas = await html2canvas(container, {
-        scale: 2,
-        useCORS: true
-      });
-      const imgData = canvas.toDataURL('image/png');
-      
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210;
-      const pageHeight = 297; // A4 세로 (mm)
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const title = getDocFileName(docId).replace(/\.pdf$/i, '').replace(/[<>"'&]/g, '');
 
-      // A4 한 장을 넘는 문서는 페이지를 나눠 이어 붙인다 (하단 잘림 방지)
-      let heightLeft = imgHeight;
-      let position = 0;
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-      while (heightLeft > 0) {
-        position -= pageHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
+    // 새 창(window.open) 대신 숨김 iframe — 팝업 차단을 회피한다.
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:fixed; right:0; bottom:0; width:0; height:0; border:0;';
+    document.body.appendChild(iframe);
 
-      const fileName = getDocFileName(docId);
-      pdf.save(fileName);
-    } catch (error) {
-      console.error('PDF Generation Error:', error);
-      alert('PDF 다운로드 처리 중 오류가 발생했습니다.');
-    } finally {
-      document.body.removeChild(container);
-      setIsProcessing(false);
+    const idoc = iframe.contentWindow?.document;
+    if (!idoc) {
+      document.body.removeChild(iframe);
+      alert('인쇄 창 생성에 실패했습니다. 다시 시도해 주세요.');
+      return;
     }
+
+    // htmlContent는 템플릿에서 이미 escapeHtml 처리된 안전한 문자열이다.
+    idoc.open();
+    idoc.write(
+      '<!doctype html><html lang="ko"><head><meta charset="utf-8">' +
+      '<title>' + title + '</title><style>' +
+      '@page { size: A4; margin: 10mm; }' +
+      'html, body { margin: 0; padding: 0; background: #fff; }' +
+      '* { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }' +
+      // 미리보기 820px 고정폭 → A4 인쇄영역(210 − 좌우 10mm = 190mm) mm 고정폭으로 안정화(% 확장 대신).
+      'body > div { width: 190mm !important; max-width: 190mm !important; margin: 0 !important; }' +
+      '</style></head><body>' + htmlContent + '</body></html>'
+    );
+    idoc.close();
+
+    const win = iframe.contentWindow!;
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
+      if (iframe.parentNode) document.body.removeChild(iframe);
+    };
+    const doPrint = () => {
+      win.onafterprint = cleanup;
+      win.focus();
+      win.print();
+      // onafterprint 미발화 브라우저 대비 — 인쇄 대화상자 동안 iframe이 살아있게 넉넉히 지연 후 정리
+      setTimeout(cleanup, 60000);
+    };
+    // 폰트·레이아웃 렌더 후 인쇄
+    setTimeout(doPrint, 350);
   };
 
   const handleSubmitAll = async () => {
@@ -799,7 +968,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       return;
     }
 
-    const hasBlockingErrors = issues.some((issue) => issue.severity !== 'info');
+    // 정책: 제출 차단도 error(미해결)만. warning은 통과.
+    const hasBlockingErrors = unresolvedBlockers(issues, overrides).length > 0;
     const canBypassValidation = IS_DEV_TEST_ENABLED && devTestMode !== null;
     if (hasBlockingErrors && !canBypassValidation) return;
 
@@ -808,8 +978,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     try {
       const validationErrorCount = issues.filter((issue) => issue.severity === 'error').length;
       const generatedDocs = devTestMode && canBypassValidation
-        ? { htmlTemplates, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
-        : { htmlTemplates };
+        ? { htmlTemplates, invoice: invoiceData ?? undefined, overrides, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
+        : { htmlTemplates, invoice: invoiceData ?? undefined, overrides };
       await markTradeAsSubmitted(tradeId, {
         profile,
         documents,
@@ -848,10 +1018,11 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const completedDocsCount = documents.filter(d => d.status === 'completed').length;
   // 결과 상단 통계 바 — 생성 대상인데 자동 생성 양식이 아직 없는 서류(= '양식 준비 중' 카드) 개수
   const pendingTemplateCount = documents.filter(
-    d => d.status !== 'not_needed' && d.status !== 'not_started' && !htmlTemplates[d.id]
+    d => d.status !== 'not_needed' && d.status !== 'not_started' && !hasDoc(d.id)
   ).length;
-  const blockingIssuesCount = issues.filter(i => i.severity !== 'info').length;
-  const reviewDocsCount = blockingIssuesCount;
+  // 차단(제출/생성 게이트) = 미해결 error만. 표시용 보완필요 = error+warning 총계.
+  const blockingIssuesCount = unresolvedBlockers(issues, overrides).length;
+  const reviewDocsCount = issues.filter(i => i.severity !== 'info').length;
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 
@@ -1205,7 +1376,13 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               <Bell size={20} />
               <span className="badge-dot"></span>
             </button>
-            <button className="icon-btn" type="button" onClick={() => setActiveMenu('guide')} title="사용 안내" aria-label="사용 안내 페이지로 이동">
+            <button
+              className="icon-btn"
+              type="button"
+              onClick={() => setActiveMenu('guide')}
+              title="사용 안내"
+              aria-label="사용 안내 페이지로 이동"
+            >
               <HelpCircle size={20} />
             </button>
             <div className="user-info-section">
@@ -1225,10 +1402,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
         <main className="content-body">
           <div className="workspace-area">
-            {activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
-            : activeMenu === 'settings' ? <SettingsPanel />
-            : activeMenu === 'about' ? <AboutPanel onStart={() => setActiveMenu('dashboard')} />
+            {activeMenu === 'about' ? <AboutPanel onStart={() => setActiveMenu('dashboard')} />
+            : activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
             : activeMenu === 'guide' ? <GuidePanel />
+            : activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'analysis' ? <DataAnalysisPanel />
             : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
             : <>
@@ -1595,11 +1772,11 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         <label className="form-label">결제 통화</label>
                         <select
                           className="form-input"
-                          value={profile.currency || 'KRW'}
+                          value={profile.currency || 'USD'}
                           onChange={(e) => handleInputChange('currency', e.target.value)}
                         >
-                          <option value="KRW">KRW (원화)</option>
                           <option value="USD">USD (미국 달러)</option>
+                          <option value="KRW">KRW (원화)</option>
                           <option value="EUR">EUR (유로)</option>
                           <option value="JPY">JPY (일본 엔)</option>
                           <option value="CNY">CNY (중국 위안)</option>
@@ -1616,7 +1793,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                             value={profile.invoiceAmount ?? ''}
                             onChange={(e) => handleInputChange('invoiceAmount', e.target.value ? Number(e.target.value) : '')}
                           />
-                          <span className="suffix-text">{profile.currency || 'KRW'}</span>
+                          <span className="suffix-text">{profile.currency || 'USD'}</span>
                         </div>
                       </div>
                     </div>
@@ -2095,20 +2272,59 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 </div>
                 )}
 
-                {/* Right Guide Card */}
+                {/* Right Guide Card — 입력 대기 / 진행 / 완료 3-상태 */}
                 <div className="info-card">
-                  <div className="info-visual">
-                    <span className="visual-ship">🚢</span>
-                    <div className="visual-dots">
-                      <span>•</span>
-                      <span>•</span>
-                      <span>✓</span>
+                  {isProcessing ? (
+                    (() => {
+                      // 마지막 에이전트 로그로 현재 단계 추정: 검증(HS·규정) → 생성(문서·피드백)
+                      const last = consoleLogs[consoleLogs.length - 1];
+                      const step = !last ? 1
+                        : /Document|Feedback/i.test(last.agentName) ? 2
+                        : 1;
+                      return (
+                        <div className="info-progress">
+                          <div className="info-steps">
+                            {['입력', '검증', '생성'].map((label, i) => (
+                              <div key={label} className={`info-step ${i < step ? 'done' : ''} ${i === step ? 'active' : ''}`}>
+                                <span className="info-step-dot">{i < step ? '✓' : i + 1}</span>
+                                <span className="info-step-label">{label}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="info-desc">AI 에이전트가 입력을 검증하고 문서를 생성하는 중입니다...</p>
+                        </div>
+                      );
+                    })()
+                  ) : documents.some(d => d.status !== 'not_started') ? (
+                    <div className="info-result">
+                      <h3 className="info-title">최근 생성 결과</h3>
+                      <div className={`info-result-line ${blockingIssuesCount > 0 ? 'warn' : 'ok'}`}>
+                        {blockingIssuesCount > 0 ? `⚠ 보완 필요 ${blockingIssuesCount}건` : '✓ 검증 통과'} · 생성 완료 {completedDocsCount}건
+                      </div>
+                      <ul className="info-doc-list">
+                        {documents.filter(d => d.status !== 'not_started').map(d => {
+                          let badgeClass = 'status-not-started';
+                          if (d.status === 'completed') badgeClass = 'status-completed';
+                          else if (d.status === 'review_required') badgeClass = 'status-review-required';
+                          else if (d.status === 'not_needed') badgeClass = 'status-not-needed';
+                          return (
+                            <li key={d.id}>
+                              <span className="info-doc-name">{d.name}</span>
+                              <span className={`status-badge ${badgeClass}`}>{d.statusText}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setHasGenerated(true)}>
+                        결과 화면 다시 보기
+                      </button>
                     </div>
-                  </div>
-                  <div className="info-text-section">
-                    <h3 className="info-title">안내</h3>
-                    <p className="info-desc">입력된 정보를 바탕으로 통관 및 선적 관련 필수 문서를 자동으로 생성하고 검증 규칙을 돌려 오류를 잡아냅니다.</p>
-                  </div>
+                  ) : (
+                    <div className="info-idle">
+                      <span className="visual-ship visual-ship-sm">🚢</span>
+                      <p className="info-desc">왼쪽에 거래 정보를 입력하고 [필요 서류 자동 생성]을 누르면 여기에 검증 결과와 생성된 문서가 표시됩니다.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -2155,7 +2371,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 {/* 실제 제출 전 준비도 바 */}
                 <div className="readiness-card">
                   <div className="readiness-card-header">
-                    <span className="readiness-card-title">수출 준비도</span>
+                    <span className="readiness-card-title">{profile.tradeType === 'import' ? '수입' : '수출'} 준비도</span>
                     <span className="readiness-card-percent">{readiness.percent}%</span>
                   </div>
                   <div className="readiness-bar-track">
@@ -2245,7 +2461,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               </div>
                               
                               <div className="preview-actions">
-                                {htmlTemplates[doc.id] ? (
+                                {hasDoc(doc.id) ? (
                                   <>
                                     <button
                                       className="action-btn-circle"
@@ -2256,7 +2472,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                     </button>
                                     <button
                                       className="action-btn-circle"
-                                      title="다운로드"
+                                      title={doc.id === 'invoice' ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
                                       onClick={() => handleDownloadDoc(doc.id)}
                                     >
                                       <Download size={14} />
@@ -2322,8 +2538,34 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       )}
 
                       <div className="mobile-fix-list">
-                        {issues.map((issue) => (
-                          <div className="mobile-fix-card" key={issue.id}>
+                        {(() => {
+                          // 심각도별로 묶어 표시 — 오류(제출 차단) → 보완 권장 → 참고 안내 순.
+                          // 성격이 다른 이슈를 문서 순서로 섞지 않고 그룹 헤더로 구분한다.
+                          const order: Record<string, number> = { error: 0, warning: 1, info: 2 };
+                          const sorted = [...issues].sort(
+                            (a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9)
+                          );
+                          const sevMeta: Record<string, { label: string; hint: string; cls: string }> = {
+                            error: { label: '반드시 수정', hint: '제출 차단 · 먼저 해결', cls: 'sev-error' },
+                            warning: { label: '보완 권장', hint: '해소 권장', cls: 'sev-warning' },
+                            info: { label: '참고 안내', hint: '', cls: 'sev-info' },
+                          };
+                          let lastSev: string | null = null;
+                          return sorted.map((issue) => {
+                            const showHeader = issue.severity !== lastSev;
+                            lastSev = issue.severity;
+                            const meta = sevMeta[issue.severity] ?? sevMeta.warning;
+                            const count = sorted.filter((i) => i.severity === issue.severity).length;
+                            return (
+                              <Fragment key={issue.id}>
+                                {showHeader && (
+                                  <div className={`sev-section-header ${meta.cls}`}>
+                                    <span className="sev-section-label">{meta.label}</span>
+                                    <span className="sev-section-count">{count}</span>
+                                    {meta.hint && <span className="sev-section-hint">{meta.hint}</span>}
+                                  </div>
+                                )}
+                          <div className="mobile-fix-card">
                             <div className="mobile-fix-header">
                               <div className="mobile-fix-info">
                                 <span className="mobile-fix-name">
@@ -2444,6 +2686,19 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               </div>
                             )}
 
+                            {/* overridable error: 사유 입력 후 override(진행) / override됨 배지 */}
+                            {issue.severity === 'error' && issue.overridable && (
+                              overrides[issueKey(issue)] ? (
+                                <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(16,185,129,0.12)', color: '#065f46', fontSize: 12, fontWeight: 600 }}>
+                                  ✅ 사유 포함 override됨 — {overrides[issueKey(issue)]}
+                                </div>
+                              ) : (
+                                <button className="mobile-btn mobile-btn-secondary" onClick={() => { setOverrideTarget(issue); setOverrideReason(''); }}>
+                                  사유 입력 후 override (생성 진행)
+                                </button>
+                              )
+                            )}
+
                             {/* 전용 보완 입력이 없는 이슈는 입력 화면으로 돌아가 수정 */}
                             {issue.severity !== 'info' &&
                               issue.field !== 'weight' &&
@@ -2455,7 +2710,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               </button>
                             )}
                           </div>
-                        ))}
+                              </Fragment>
+                            );
+                          });
+                        })()}
 
                         {issues.length === 0 && (
                           <div className="warning-item info">
@@ -2612,10 +2870,15 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               justifyContent: 'center',
               backgroundColor: '#f1f5f9'
             }}>
-              <div 
-                style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
-                dangerouslySetInnerHTML={{ __html: htmlTemplates[previewDocId] || '<p>문서 양식이 생성되지 않았습니다.</p>' }}
-              />
+              {previewDocId === 'invoice' ? (
+                // 상업송장: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
+                <div ref={docxPreviewRef} style={{ width: '100%' }} />
+              ) : (
+                <div
+                  style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
+                  dangerouslySetInnerHTML={{ __html: htmlTemplates[previewDocId] || '<p>문서 양식이 생성되지 않았습니다.</p>' }}
+                />
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -2634,13 +2897,40 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               >
                 닫기
               </button>
-              <button 
+              <button
                 className="btn btn-primary"
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                PDF 다운로드
+                {previewDocId === 'invoice' ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* override 사유 입력 모달 */}
+      {overrideTarget && (
+        <div
+          onClick={() => { setOverrideTarget(null); setOverrideReason(''); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(520px, 92vw)', background: '#fff', borderRadius: 14, padding: '22px 24px', boxShadow: '0 12px 40px rgba(0,0,0,0.25)' }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>오류 override — 사유 입력</h3>
+            <p style={{ margin: '0 0 4px', fontSize: 12, color: '#64748b' }}>이 오류를 우회하고 생성을 진행합니다. 사유는 검증 결과에 기록됩니다.</p>
+            <div style={{ margin: '10px 0 12px', padding: '10px 12px', borderRadius: 8, background: '#fef2f2', color: '#991b1b', fontSize: 13 }}>
+              <strong>[{overrideTarget.id}]</strong> {overrideTarget.message}
+            </div>
+            <textarea
+              autoFocus
+              value={overrideReason}
+              onChange={(e) => setOverrideReason(e.target.value)}
+              placeholder="예: 보세운송 건으로 동일국가 항구가 정상입니다."
+              style={{ width: '100%', minHeight: 88, padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+              <button className="btn btn-secondary" onClick={() => { setOverrideTarget(null); setOverrideReason(''); }}>취소</button>
+              <button className="btn btn-primary" onClick={confirmOverride}>사유 기록 후 override</button>
             </div>
           </div>
         </div>
