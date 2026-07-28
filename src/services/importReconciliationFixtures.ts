@@ -1,9 +1,9 @@
 /**
- * 수입 서류 대사 데모 픽스처 (OpenAI 없이 결정론적 시연용)
+ * 수입 서류 대조 데모 픽스처 (OpenAI 없이 결정론적 시연용)
  *
  * OCR(엣지함수)은 키 의존 + 폴백이 없어 로컬/심사장에서 서류를 실제로 못 읽는다.
  * 이 픽스처는 문서별 추출 결과(ImportReconciliationInput)와 화면 표시용 analysis를
- * 코드로 심어, "데모 데이터" 버튼 한 번에 대사 화면이 동일하게 재현되도록 한다.
+ * 코드로 심어, "데모 데이터" 버튼 한 번에 대조 화면이 동일하게 재현되도록 한다.
  *
  * 시나리오: 무선 블루투스 이어폰 수입 (베트남 → 한국).
  *  - MISMATCH: 수량·총중량·품명·HS에 오류를 의도적으로 심음 (error 2 + warning 2 + pass 6)
@@ -25,7 +25,7 @@ export interface ImportDemoScenario {
   documents: ImportDocumentMeta[];
   /** 화면 표시용(추출 요약·원본 비교표·AI 참고 의견). 판정에는 쓰지 않는다. */
   analysis: ImportAnalysisResult;
-  /** 대사 엔진 입력(판정의 근거). */
+  /** 대조 엔진 입력(판정의 근거). */
   input: ImportReconciliationInput;
 }
 
@@ -65,7 +65,7 @@ function baseExtracted(overrides: Partial<ImportAnalysisResult['extracted']>): I
   };
 }
 
-// ===== 시나리오 1: 오류를 심은 대사 (MISMATCH) =====
+// ===== 시나리오 1: 오류를 심은 대조 (MISMATCH) =====
 
 const MISMATCH_COMPARISON: ImportComparisonRow[] = [
   { field: '품명', invoice: 'Wireless Earphone', packingList: 'Wireless Earphone (Bluetooth)', billOfLading: 'Bluetooth Headset', matches: false, detail: '표기 상이 — 동일 물품 여부 확인' },
@@ -88,7 +88,7 @@ export const IMPORT_DEMO_MISMATCH: ImportDemoScenario = {
   analysis: {
     extracted: baseExtracted({}),
     validations: [
-      // AI 참고 채널 예시 (판정 아님 — 코드 대사와 별도 표기됨)
+      // AI 참고 채널 예시 (판정 아님 — 코드 대조와 별도 표기됨)
       { id: 'ai-desc', field: '품명', message: 'C/I와 B/L의 품명 표기가 달라 동일 물품 여부 확인이 필요합니다.', severity: 'warning', documents: ['commercial_invoice', 'bill_of_lading'] },
     ],
     comparison: MISMATCH_COMPARISON,
@@ -118,7 +118,7 @@ export const IMPORT_DEMO_MISMATCH: ImportDemoScenario = {
   },
 };
 
-// ===== 시나리오 2: 정상 대사 (CLEAN) =====
+// ===== 시나리오 2: 정상 대조 (CLEAN) =====
 
 const CLEAN_COMPARISON: ImportComparisonRow[] = [
   { field: '품명', invoice: 'Wireless Bluetooth Earphone', packingList: 'Wireless Bluetooth Earphone', billOfLading: 'Wireless Bluetooth Earphone', matches: true, detail: '' },
@@ -136,7 +136,7 @@ const CLEAN_COMPARISON: ImportComparisonRow[] = [
 export const IMPORT_DEMO_CLEAN: ImportDemoScenario = {
   id: 'earphone-clean',
   label: '데모: 이어폰 수입 (정상)',
-  description: '동일 이어폰 수입 — 모든 항목이 일치하는 정상 대사 세트',
+  description: '동일 이어폰 수입 — 모든 항목이 일치하는 정상 대조 세트',
   documents: demoDocuments(),
   analysis: {
     extracted: baseExtracted({ productDescription: 'Wireless Bluetooth Earphone' }),

@@ -32,7 +32,7 @@ export default function ImportDocumentComparison({ results, rows = [] }: Props) 
   return (
     <section className="form-card import-card">
       <div className="import-card-heading">
-        <div><h2>문서 간 대사 (對査)</h2></div>
+        <div><h2>문서 간 대조 (對照)</h2></div>
         <p>C/I·P/L·B/L 추출값을 IR1~IR10 규칙으로 교차검증합니다. (판정은 코드 기준 · 재현 가능)</p>
       </div>
 
@@ -64,7 +64,7 @@ export default function ImportDocumentComparison({ results, rows = [] }: Props) 
           ? <div className="form-message info">{gate.message}</div>
           : summary.warnings > 0
             ? <div className="form-message info">차단·필수 오류는 없습니다. 주의 항목을 확인한 뒤 진행할 수 있습니다.</div>
-            : <div className="form-message success">모든 대사 항목을 통과했습니다.</div>}
+            : <div className="form-message success">모든 대조 항목을 통과했습니다.</div>}
 
       {rows.length > 0 && (
         <details className="reconcile-raw">

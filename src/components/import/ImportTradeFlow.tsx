@@ -11,7 +11,7 @@ import { assessImportRisks } from '../../services/importRiskService';
 import { reconcileFromAnalysis, runImportReconciliation, evaluateReconciliationGate } from '../../services/importReconciliationEngine';
 import { IMPORT_DEMO_SCENARIOS, type ImportDemoScenario } from '../../services/importReconciliationFixtures';
 
-// 데모 데이터 버튼 노출 플래그 (OpenAI 없이 대사 화면 재현용).
+// 데모 데이터 버튼 노출 플래그 (OpenAI 없이 대조 화면 재현용).
 // 팀 기존 플래그 재사용하되 DEV 게이트는 빼서 빌드/심사장에서도 사용 가능.
 const IMPORT_DEMO_ENABLED = import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
 import { generateImportDeclarationRequest, downloadImportDeclarationRequest } from '../../services/importDeclarationService';
@@ -104,7 +104,7 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
           const classification = result.classifications.find((item) => item.id === document.id);
           return classification ? { ...document, type: classification.type, status: 'ready' as const } : document;
         });
-        // 결정론적 대사 엔진으로 판정(코드) — LLM validations는 AI 참고 채널로만 전달.
+        // 결정론적 대조 엔진으로 판정(코드) — LLM validations는 AI 참고 채널로만 전달.
         const reconciliation = reconcileFromAnalysis(result.analysis, documents.map((document) => document.type));
         return {
           ...current,
@@ -276,14 +276,14 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
       <div className="import-flow-header">
         <div>
           <h2>수입 {role === 'shipper' ? '화주' : '포워더'} 업무</h2>
-          <p>{role === 'shipper' ? '수입신고 준비부터 예상 관세와 리스크까지 확인합니다.' : '수령한 서류를 대사하고 UNI-PASS 통관 진행을 추적합니다.'}</p>
+          <p>{role === 'shipper' ? '수입신고 준비부터 예상 관세와 리스크까지 확인합니다.' : '수령한 서류를 대조하고 UNI-PASS 통관 진행을 추적합니다.'}</p>
         </div>
         <button type="button" className="btn btn-secondary" onClick={reset}><RefreshCw size={15} /> 단계 초기화</button>
       </div>
 
       <ImportStepIndicator
         current={state.step}
-        labels={role === 'shipper' ? ['서류 업로드', 'AI 분석 확인', '통합 처리', '완료'] : ['서류 업로드', '서류 대사', '통관 처리', '완료']}
+        labels={role === 'shipper' ? ['서류 업로드', 'AI 분석 확인', '통합 처리', '완료'] : ['서류 업로드', '서류 대조', '통관 처리', '완료']}
         onMove={(step) => setState((current) => ({ ...current, step }))}
       />
       {message && <div className="form-message error" role="alert">{message}</div>}
@@ -310,7 +310,7 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
           <div className="import-actions"><button className="btn btn-primary" disabled={busy} onClick={() => void analyze()}>{busy ? 'AI 분석 중…' : 'AI 분석 시작'}</button></div>
           {IMPORT_DEMO_ENABLED && role === 'forwarder' && (
             <div className="import-demo-bar">
-              <span className="import-demo-label">데모 데이터 (OpenAI 없이 대사 시연)</span>
+              <span className="import-demo-label">데모 데이터 (OpenAI 없이 대조 시연)</span>
               <div className="import-demo-buttons">
                 {IMPORT_DEMO_SCENARIOS.map((scenario) => (
                   <button key={scenario.id} type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => loadDemoScenario(scenario)} title={scenario.description}>
@@ -388,8 +388,11 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
       {overrideOpen && gate && gate.overridable.length > 0 && (
         <div className="import-modal-overlay" role="dialog" aria-modal="true" aria-label="진행 사유 입력">
           <div className="import-modal">
-            <h3>확인 필요 오류 — 진행 사유 입력</h3>
-            <p className="import-modal-desc">아래 불일치를 검토했고, 사유를 남기면 통관 처리 단계로 진행합니다. (필수 서류 누락은 사유로도 진행할 수 없습니다.)</p>
+            <div className="import-modal-header">
+              <h3>확인 필요 오류</h3>
+              <span className="import-modal-subtitle">진행 사유 입력</span>
+            </div>
+            <p className="import-modal-desc">아래 불일치를 검토했고, 사유를 남기면 통관 처리 단계로 진행합니다.</p>
             <ul className="import-modal-list">
               {gate.overridable.map((result) => (
                 <li key={result.ruleId}><strong>{result.ruleId}. {result.label}</strong><span>{result.evidence}</span></li>
@@ -402,6 +405,7 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
               onChange={(event) => setOverrideReason(event.target.value)}
               placeholder="예: 수출자에 수량·중량 확인 요청함. 원본 P/L 재발행 예정."
             />
+            <p className="import-modal-note">필수 서류 누락은 사유로도 진행할 수 없습니다.</p>
             <div className="import-modal-actions">
               <button className="btn btn-secondary" onClick={() => { setOverrideOpen(false); setOverrideReason(''); }}>취소</button>
               <button className="btn btn-primary" disabled={busy} onClick={() => void confirmOverride()}>사유 확인 후 진행</button>

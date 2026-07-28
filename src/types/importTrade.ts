@@ -75,7 +75,7 @@ export interface ImportAnalysisResult {
 }
 
 /**
- * 문서별(per-document) 추출 필드 — 대사(對査) 룰 엔진의 입력 단위.
+ * 문서별(per-document) 추출 필드 — 대조(對照) 룰 엔진의 입력 단위.
  * OCR/LLM이 추출하든 데모 픽스처가 주입하든, 엔진은 이 구조만 소비한다.
  * (엣지함수 analysis.extracted는 문서 구분 없는 머지 객체라 교차검증 불가.)
  */
@@ -97,7 +97,7 @@ export type ImportReconciliationInput = Partial<Record<ImportDocumentType, Impor
 
 export type ReconciliationStatus = 'pass' | 'fail' | 'skip';
 
-/** 대사 룰 1건 실행 결과. passed = (status === 'pass'). */
+/** 대조 룰 1건 실행 결과. passed = (status === 'pass'). */
 export interface ReconciliationRuleResult {
   ruleId: string;              // 'IR1' ~ 'IR10'
   label: string;               // 룰 이름 (품명 일치 등)
@@ -187,7 +187,7 @@ export interface ImportTradeSnapshot {
   documents: ImportDocumentMeta[];
   arrivalNotice?: ArrivalNoticeMeta;
   analysis: ImportAnalysisResult;
-  /** 대사 overridable 오류를 사유로 우회한 기록 (ruleId → 사유). 없으면 생략. */
+  /** 대조 overridable 오류를 사유로 우회한 기록 (ruleId → 사유). 없으면 생략. */
   reconciliationOverrides?: Record<string, string>;
   selectedHSCode?: ImportHSCodeSuggestion;
   duty?: ImportDutyEstimate;

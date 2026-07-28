@@ -14,9 +14,9 @@ const DOC_LABEL: Record<ImportDocumentType, string> = {
 };
 
 /**
- * 종합 리스크 = 결정론적 대사 엔진 결과(authoritative) + AI 참고 의견(별도 채널).
+ * 종합 리스크 = 결정론적 대조 엔진 결과(authoritative) + AI 참고 의견(별도 채널).
  *
- * - 대사 fail(error→high, warning→medium)이 리스크의 1차 근거.
+ * - 대조 fail(error→high, warning→medium)이 리스크의 1차 근거.
  * - LLM validations는 코드 룰이 못 잡는 정성적 의견이므로 'AI 참고'(level low)로만
  *   보조 표기한다. 더 이상 analysis.validations를 리스크로 직접 승격하지 않는다.
  */
@@ -40,14 +40,14 @@ export function assessImportRisks(
     });
   }
 
-  // AI 참고 채널 — 코드 대사가 다루지 않는 LLM 정성 의견. 요약(medium/high)에는 끼지 않는다.
+  // AI 참고 채널 — 코드 대조가 다루지 않는 LLM 정성 의견. 요약(medium/high)에는 끼지 않는다.
   for (const validation of aiValidations) {
     risks.push({
       id: `ai-${validation.id}`,
       level: 'low',
       item: `AI 참고 · ${validation.field}`,
       cause: validation.message,
-      recommendation: 'AI가 제시한 참고 의견입니다. 코드 대사 결과와 함께 검토하세요.',
+      recommendation: 'AI가 제시한 참고 의견입니다. 코드 대조 결과와 함께 검토하세요.',
       relatedDocuments: validation.documents.map((doc) => DOC_LABEL[doc] ?? doc),
       status: 'AI 참고',
     });
@@ -58,7 +58,7 @@ export function assessImportRisks(
       id: 'reference',
       level: 'low',
       item: '분석 참고',
-      cause: '대사 결과 차단성 불일치가 발견되지 않았습니다.',
+      cause: '대조 결과 차단성 불일치가 발견되지 않았습니다.',
       recommendation: '최종 신고 전 원본과 다시 대조해 주세요.',
       relatedDocuments: [],
       status: '양호',

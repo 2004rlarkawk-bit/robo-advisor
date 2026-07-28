@@ -21,7 +21,7 @@ export default function TradeRoleSelector({ value, allowedRoles, onChange }: Pro
             onClick={() => onChange(role)}
           >
             <strong>{role === 'shipper' ? '화주' : '포워더'}</strong>
-            <span>{role === 'shipper' ? '수입 신고 준비 및 관세 검토' : '서류 대사 및 통관 진행 추적'}</span>
+            <span>{role === 'shipper' ? '수입 신고 준비 및 관세 검토' : '서류 대조 및 통관 진행 추적'}</span>
           </button>
         ))}
       </div>

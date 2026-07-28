@@ -2422,7 +2422,7 @@ body {
 .match-badge.match { background: #dcfce7; color: #166534; }
 .match-badge.mismatch { background: #fee2e2; color: #991b1b; }
 
-/* 대사(對査) 엔진 결과 표시 */
+/* 대조(對照) 엔진 결과 표시 */
 .reconcile-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .reconcile-chip { display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .reconcile-chip.pass { background: #dcfce7; color: #166534; }
@@ -2446,7 +2446,7 @@ body {
 .reconcile-raw { margin-top: 14px; }
 .reconcile-raw > summary { cursor: pointer; font-size: 12.5px; color: var(--text-light); padding: 6px 0; }
 
-/* 데모 데이터 바 (수입 대사 시연) */
+/* 데모 데이터 바 (수입 대조 시연) */
 .import-demo-bar { margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--border-color); border-radius: 10px; background: #f8fafc; }
 .import-demo-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-light); margin-bottom: 8px; }
 .import-demo-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -2454,8 +2454,12 @@ body {
 /* 진행 사유 override 모달 */
 .import-modal-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, 0.45); }
 .import-modal { width: 100%; max-width: 480px; background: #fff; border-radius: 14px; padding: 22px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
-.import-modal h3 { margin: 0 0 8px; font-size: 16px; }
+.import-modal-header { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; }
+.import-modal-header h3 { margin: 0; font-size: 16px; }
+.import-modal-subtitle { font-size: 12px; color: var(--text-light); font-weight: 600; }
 .import-modal-desc { margin: 0 0 14px; font-size: 13px; color: var(--text-light); line-height: 1.5; }
+.import-modal-note { margin: 12px 0 0; font-size: 11.5px; color: var(--text-light); line-height: 1.5; }
+.import-modal-note::before { content: "※ "; }
 .import-modal-list { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .import-modal-list li { padding: 10px 12px; border-radius: 8px; background: #fef7f7; border: 1px solid #fecaca; display: flex; flex-direction: column; gap: 3px; }
 .import-modal-list strong { font-size: 13px; }

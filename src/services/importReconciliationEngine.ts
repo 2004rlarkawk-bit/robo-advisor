@@ -1,5 +1,5 @@
 /**
- * 수입 서류 대사(對査) 엔진 — 결정론적 룰 실행기.
+ * 수입 서류 대조(對照) 엔진 — 결정론적 룰 실행기.
  *
  * runImportReconciliation: 문서별 추출필드 입력 → IR1~IR10 실행 → 결과 배열.
  * buildReconciliationInput: 실 OCR(엣지함수 analysis)에서 문서별 입력을 복원하는
@@ -17,7 +17,7 @@ import type {
 } from '../types/importTrade';
 import { IMPORT_RECONCILIATION_RULES } from './importReconciliationRules';
 
-/** 룰 전체를 순서대로 실행. 항상 10건(대사 체크리스트 전체)을 반환한다. */
+/** 룰 전체를 순서대로 실행. 항상 10건(대조 체크리스트 전체)을 반환한다. */
 export function runImportReconciliation(input: ImportReconciliationInput): ReconciliationRuleResult[] {
   return IMPORT_RECONCILIATION_RULES.map((rule) => {
     const outcome = rule.evaluate(input);
@@ -68,7 +68,7 @@ export function evaluateReconciliationGate(
   return { status: 'clear', blocking, overridable: [], message: '' };
 }
 
-/** 대사 요약: 미해결(error·fail) 개수 등 — 상위 차단 판단용 */
+/** 대조 요약: 미해결(error·fail) 개수 등 — 상위 차단 판단용 */
 export function summarizeReconciliation(results: ReconciliationRuleResult[]) {
   const failed = results.filter((r) => r.status === 'fail');
   return {
@@ -114,7 +114,7 @@ function fieldKeyFor(label: string): keyof ImportDocFields | null {
 }
 
 /**
- * 엣지함수 analysis + 업로드된 문서 종류 목록 → 대사 입력.
+ * 엣지함수 analysis + 업로드된 문서 종류 목록 → 대조 입력.
  * presentTypes에 있는 문서만 키를 세팅(IR10 필수서류 판정 근거).
  */
 export function buildReconciliationInput(
@@ -151,7 +151,7 @@ export function buildReconciliationInput(
   return input;
 }
 
-/** 실 OCR analysis를 바로 대사 결과로 변환하는 편의 함수 */
+/** 실 OCR analysis를 바로 대조 결과로 변환하는 편의 함수 */
 export function reconcileFromAnalysis(
   analysis: ImportAnalysisResult,
   presentTypes: ImportDocumentType[],

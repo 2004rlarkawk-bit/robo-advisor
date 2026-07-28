@@ -1,12 +1,12 @@
 /**
- * 수입 서류 대사(對査) 룰 정의 — IR1 ~ IR10
+ * 수입 서류 대조(對照) 룰 정의 — IR1 ~ IR10
  *
  * 수출 검증(validatorEngine)의 룰-엔진 패턴을 문서 간 교차검증으로 확장한다.
  * 판정 로직은 결정론적(코드)이며, 입력(추출필드)이 실 OCR에서 오든 데모
  * 픽스처에서 오든 동일하게 동작한다. LLM은 필드 추출만 담당하고 판정은 여기서.
  *
  * 각 룰은 evaluate(input) → { status, evidence } 를 반환한다.
- *  - pass : 대사 통과(일치)
+ *  - pass : 대조 통과(일치)
  *  - fail : 불일치 (severity에 따라 error/warning)
  *  - skip : 판정에 필요한 값이 없음(확인불가) — 오탐 방지를 위해 실패로 치지 않는다
  *
@@ -22,7 +22,7 @@ import type { ValidationSeverity } from '../types';
 
 // ===== 허용오차 파라미터 (룰 정의값 — 하드코딩 금지) =====
 
-/** IR3 총중량 대사: ±0.5% 또는 ±1kg 중 큰 쪽까지 허용 */
+/** IR3 총중량 대조: ±0.5% 또는 ±1kg 중 큰 쪽까지 허용 */
 export const WEIGHT_TOLERANCE = { pct: 0.005, abs: 1 } as const;
 /** IR6 금액 정합: 단가·수량 반올림 오차 흡수 (±1 또는 ±1%) */
 export const AMOUNT_TOLERANCE = { pct: 0.01, abs: 1 } as const;
@@ -118,7 +118,7 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
       const entries = [CI, PL, BL]
         .map((type) => ({ type, desc: (get(input, type)?.productDescription ?? '').trim() }))
         .filter((e) => e.desc !== '');
-      if (entries.length < 2) return { status: 'skip', evidence: '품명이 있는 서류가 2건 미만이라 대사할 수 없습니다.' };
+      if (entries.length < 2) return { status: 'skip', evidence: '품명이 있는 서류가 2건 미만이라 대조할 수 없습니다.' };
 
       let minOverlap = 1;
       for (let i = 0; i < entries.length; i += 1) {
@@ -143,7 +143,7 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
     evaluate: (input) => {
       const ci = parseNumeric(get(input, CI)?.quantity);
       const pl = parseNumeric(get(input, PL)?.quantity);
-      if (ci == null || pl == null) return { status: 'skip', evidence: 'C/I 또는 P/L 수량 값이 없어 대사할 수 없습니다.' };
+      if (ci == null || pl == null) return { status: 'skip', evidence: 'C/I 또는 P/L 수량 값이 없어 대조할 수 없습니다.' };
       if (ci === pl) return { status: 'pass', evidence: `수량 일치: C/I·P/L 모두 ${n(ci)}.` };
       return { status: 'fail', evidence: `C/I 수량 ${n(ci)} vs P/L 수량 ${n(pl)} → ${n(Math.abs(ci - pl))} 차이.` };
     },
@@ -156,7 +156,7 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
     evaluate: (input) => {
       const pl = parseNumeric(get(input, PL)?.grossWeight);
       const bl = parseNumeric(get(input, BL)?.grossWeight);
-      if (pl == null || bl == null) return { status: 'skip', evidence: 'P/L 또는 B/L 총중량 값이 없어 대사할 수 없습니다.' };
+      if (pl == null || bl == null) return { status: 'skip', evidence: 'P/L 또는 B/L 총중량 값이 없어 대조할 수 없습니다.' };
       const diff = Math.abs(pl - bl);
       const allowed = Math.max(WEIGHT_TOLERANCE.abs, WEIGHT_TOLERANCE.pct * Math.max(pl, bl));
       if (diff <= allowed) return { status: 'pass', evidence: `총중량 일치: P/L ${n(pl)}kg, B/L ${n(bl)}kg (허용오차 ±${n(Math.round(allowed * 100) / 100)}kg 이내).` };
@@ -171,7 +171,7 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
     evaluate: (input) => {
       const net = parseNumeric(get(input, PL)?.netWeight);
       const gross = parseNumeric(get(input, PL)?.grossWeight);
-      if (net == null || gross == null) return { status: 'skip', evidence: 'P/L 순중량 또는 총중량 값이 없어 대사할 수 없습니다.' };
+      if (net == null || gross == null) return { status: 'skip', evidence: 'P/L 순중량 또는 총중량 값이 없어 대조할 수 없습니다.' };
       if (net <= gross) return { status: 'pass', evidence: `순중량(${n(net)}kg) ≤ 총중량(${n(gross)}kg).` };
       return { status: 'fail', evidence: `순중량 ${n(net)}kg 이 총중량 ${n(gross)}kg 보다 큽니다 → 중량 오기재.` };
     },
@@ -184,7 +184,7 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
     evaluate: (input) => {
       const pl = parseNumeric(get(input, PL)?.packageCount);
       const bl = parseNumeric(get(input, BL)?.packageCount);
-      if (pl == null || bl == null) return { status: 'skip', evidence: 'P/L 또는 B/L 포장 수량 값이 없어 대사할 수 없습니다.' };
+      if (pl == null || bl == null) return { status: 'skip', evidence: 'P/L 또는 B/L 포장 수량 값이 없어 대조할 수 없습니다.' };
       if (pl === bl) return { status: 'pass', evidence: `포장 수량 일치: ${n(pl)}.` };
       return { status: 'fail', evidence: `포장 수량 불일치: P/L ${n(pl)} vs B/L ${n(bl)}.` };
     },
@@ -199,7 +199,7 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
       const price = parseNumeric(ci?.unitPrice);
       const qty = parseNumeric(ci?.quantity);
       const total = parseNumeric(ci?.totalAmount);
-      if (price == null || qty == null || total == null) return { status: 'skip', evidence: 'C/I 단가·수량·총액 중 값이 없어 대사할 수 없습니다.' };
+      if (price == null || qty == null || total == null) return { status: 'skip', evidence: 'C/I 단가·수량·총액 중 값이 없어 대조할 수 없습니다.' };
       const expected = price * qty;
       const allowed = Math.max(AMOUNT_TOLERANCE.abs, AMOUNT_TOLERANCE.pct * expected);
       if (Math.abs(expected - total) <= allowed) return { status: 'pass', evidence: `금액 정합: 단가 ${n(price)} × 수량 ${n(qty)} = ${n(expected)} ≈ 총액 ${n(total)}.` };
@@ -226,7 +226,7 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
     documents: [CI],
     evaluate: (input) => {
       // HS 유효성은 "존재 + 형식" 완전성 검사. 수입신고에 HS가 필수이므로
-      // 미기재는 확인불가(skip)가 아니라 경고(fail)로 다룬다. 단 대사할 C/I 자체가
+      // 미기재는 확인불가(skip)가 아니라 경고(fail)로 다룬다. 단 대조할 C/I 자체가
       // 없으면 판단 근거가 없어 skip.
       const raw = [CI, PL, BL].map((type) => get(input, type)?.hsCode).find((v) => v && v.trim() !== '');
       if (raw) {
