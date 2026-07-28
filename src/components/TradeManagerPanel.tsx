@@ -313,7 +313,7 @@ function DetailModal({ trade, memo, onClose, onLoad }: { trade: SavedTrade; memo
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {trade.issues.map((i, idx) => (
                 <div key={idx} style={{ fontSize: 12.5, color: '#475569', display: 'flex', gap: 7 }}>
-                  <span style={{ color: i.severity === 'error' ? '#b91c1c' : i.severity === 'warning' ? '#b45309' : '#64748b', fontWeight: 700 }}>
+                  <span style={{ color: i.severity === 'error' ? '#b91c1c' : i.severity === 'warning' ? '#b45309' : '#64748b', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {i.severity === 'error' ? '오류' : i.severity === 'warning' ? '경고' : '안내'}
                   </span>
                   <span>{i.message}</span>
