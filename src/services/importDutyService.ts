@@ -9,7 +9,10 @@ export async function calculateEstimatedImportDuty(input: {
 }): Promise<ImportDutyEstimate> {
   const rates = await getTariffRates(input.hsCode);
   const basic = pickBasicRate(rates);
-  const basicRate = basic?.rate ?? 8;
+  if (!basic) {
+    throw new Error('조회된 기본 관세율이 없습니다.');
+  }
+  const basicRate = basic.rate;
   const basicDuty = Math.round(input.customsValue * basicRate / 100);
   const hasCandidateFta = Boolean(input.originCountry);
   const ftaRate = hasCandidateFta ? 0 : basicRate;
@@ -25,6 +28,6 @@ export async function calculateEstimatedImportDuty(input: {
     estimatedSavings: Math.max(0, basicDuty - ftaDuty),
     vat,
     totalTax: ftaDuty + vat,
-    source: basic?.source ?? 'simulation',
+    source: basic.source,
   };
 }

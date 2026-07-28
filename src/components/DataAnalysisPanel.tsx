@@ -9,7 +9,7 @@
  * 차트는 외부 라이브러리 없이 SVG 직접 렌더.
  * 시리즈 색은 항상 수출=파랑, 수입=청록 고정 (차트 간 동일 엔티티 동일 색).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BarChart3, Loader2, Search } from 'lucide-react';
 import {
   getTotalTradeStats,
@@ -25,14 +25,26 @@ const COLOR_IMPORT = '#1baf7a'; // 수입
 const INK_MUTED = '#898781';
 const GRID = '#e1e0d9';
 
-/** 직전 완료월 기준 최근 n개월 범위 (관세청 통계는 약 1개월 지연) */
-function recentRange(n: number): { start: string; end: string } {
-  const d = new Date();
-  d.setDate(1);
-  d.setMonth(d.getMonth() - 1); // 지난달 = 마지막 완료월
-  const end = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
-  d.setMonth(d.getMonth() - (n - 1));
-  const start = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+/** 한국시간 직전 완료월 기준 최근 n개월 범위 */
+export function recentRange(n: number, now = new Date()): { start: string; end: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(now);
+  const year = Number(parts.find((part) => part.type === 'year')?.value);
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const endDate = new Date(Date.UTC(year, month - 2, 1));
+  const startDate = new Date(Date.UTC(
+    endDate.getUTCFullYear(),
+    endDate.getUTCMonth() - (n - 1),
+    1,
+  ));
+  const format = (date: Date) =>
+    `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+  const end = format(endDate);
+  const start = format(startDate);
   return { start, end };
 }
 
@@ -43,18 +55,33 @@ function fmtUsd(v: number): string {
   return `$${v.toLocaleString()}`;
 }
 
-function SourceBadge({ source }: { source: 'api' | 'simulation' }) {
-  const api = source === 'api';
+function SourceBadge({ source }: { source: 'api' }) {
   return (
     <span
+      title={`source: ${source}`}
       style={{
         fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 999,
-        background: api ? '#f0fdf4' : '#fffbeb',
-        color: api ? '#15803d' : '#b45309',
-        border: `1px solid ${api ? '#bbf7d0' : '#fde68a'}`,
+        background: '#f0fdf4',
+        color: '#15803d',
+        border: '1px solid #bbf7d0',
       }}
     >
-      {api ? '관세청 실데이터' : '시뮬레이션 — 설정에서 API 키 등록 시 실데이터'}
+      관세청 원데이터
+    </span>
+  );
+}
+
+function formatPeriod(period: string): string {
+  return /^\d{6}$/.test(period)
+    ? `${period.slice(0, 4)}.${period.slice(4)}`
+    : period;
+}
+
+function LatestPeriod({ period }: { period: string | null }) {
+  if (!period) return null;
+  return (
+    <span style={{ fontSize: 12, color: '#64748b', marginRight: 12 }}>
+      최신 기준: {period.slice(0, 4)}년 {Number(period.slice(4))}월
     </span>
   );
 }
@@ -116,7 +143,7 @@ function DualLineChart({ points, height = 220 }: { points: LinePoint[]; height?:
         ))}
         {points.map((p, i) => (
           <text key={p.label} x={x(i)} y={height - 8} textAnchor="middle" fontSize={10} fill={INK_MUTED}>
-            {p.label.slice(5)}월
+            {p.label.slice(-2)}월
           </text>
         ))}
         {hover !== null && (
@@ -152,7 +179,7 @@ function DualLineChart({ points, height = 220 }: { points: LinePoint[]; height?:
             fontSize: 12, pointerEvents: 'none', whiteSpace: 'nowrap',
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>{points[hover].label}</div>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>{formatPeriod(points[hover].label)}</div>
           <div style={{ color: '#52514e' }}>
             <span style={{ color: COLOR_EXPORT }}>●</span> 수출 {fmtUsd(points[hover].exp)}
           </div>
@@ -249,47 +276,149 @@ function ChartCard({ title, badge, right, children }: {
 
 // ===== 메인 패널 =====
 
+type LoadStatus = 'idle' | 'loading' | 'success' | 'empty' | 'error';
+
+interface LoadState<T> {
+  status: LoadStatus;
+  records: T[];
+  source: 'api' | null;
+  latestPeriod: string | null;
+  error: string | null;
+}
+
+function idleState<T>(): LoadState<T> {
+  return { status: 'idle', records: [], source: null, latestPeriod: null, error: null };
+}
+
+function LoadingState() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 13 }}>
+      <Loader2 size={14} className="animate-spin" /> 불러오는 중…
+    </div>
+  );
+}
+
+function EmptyState() {
+  return <p style={{ fontSize: 13, color: '#64748b' }}>선택한 기간에 조회된 관세청 데이터가 없습니다.</p>;
+}
+
+function ErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div role="alert" style={{ padding: '14px 16px', border: '1px solid #fecaca', borderRadius: 8, background: '#fef2f2' }}>
+      <p style={{ margin: '0 0 10px', color: '#b91c1c', fontSize: 13 }}>
+        관세청 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.
+      </p>
+      <button type="button" className="btn-secondary" onClick={onRetry}>재시도</button>
+    </div>
+  );
+}
+
 export default function DataAnalysisPanel() {
   const range = useMemo(() => recentRange(6), []);
-
-  const [total, setTotal] = useState<TotalTradeStat[] | null>(null);
-  const [country, setCountry] = useState<CountryTradeStat[] | null>(null);
-  const [item, setItem] = useState<ItemTradeStat[] | null>(null);
+  const [totalState, setTotalState] = useState<LoadState<TotalTradeStat>>(idleState);
+  const [countryState, setCountryState] = useState<LoadState<CountryTradeStat>>(idleState);
+  const [itemState, setItemState] = useState<LoadState<ItemTradeStat>>(idleState);
   const [hsInput, setHsInput] = useState('8517621010');
   const [hsQuery, setHsQuery] = useState('8517621010');
-  const [loadingItem, setLoadingItem] = useState(false);
 
-  useEffect(() => {
-    getTotalTradeStats(range.start, range.end).then(setTotal).catch(() => setTotal([]));
-    getCountryTradeStats(range.start, range.end).then(setCountry).catch(() => setCountry([]));
+  const loadTotal = useCallback(async () => {
+    setTotalState({ status: 'loading', records: [], source: null, latestPeriod: null, error: null });
+    try {
+      const result = await getTotalTradeStats(range.start, range.end);
+      setTotalState({
+        status: result.records.length === 0 ? 'empty' : 'success',
+        records: result.records,
+        source: result.source,
+        latestPeriod: result.latestPeriod,
+        error: null,
+      });
+    } catch {
+      setTotalState({
+        status: 'error',
+        records: [],
+        source: null,
+        latestPeriod: null,
+        error: 'CUSTOMS_API_ERROR',
+      });
+    }
+  }, [range]);
+
+  const loadCountry = useCallback(async () => {
+    setCountryState({ status: 'loading', records: [], source: null, latestPeriod: null, error: null });
+    try {
+      const result = await getCountryTradeStats(range.start, range.end);
+      setCountryState({
+        status: result.records.length === 0 ? 'empty' : 'success',
+        records: result.records,
+        source: result.source,
+        latestPeriod: result.latestPeriod,
+        error: null,
+      });
+    } catch {
+      setCountryState({
+        status: 'error',
+        records: [],
+        source: null,
+        latestPeriod: null,
+        error: 'CUSTOMS_API_ERROR',
+      });
+    }
+  }, [range]);
+
+  const loadItem = useCallback(async (query: string) => {
+    setItemState({ status: 'loading', records: [], source: null, latestPeriod: null, error: null });
+    try {
+      const result = await getItemTradeStats(query, range.start, range.end);
+      setItemState({
+        status: result.records.length === 0 ? 'empty' : 'success',
+        records: result.records,
+        source: result.source,
+        latestPeriod: result.latestPeriod,
+        error: null,
+      });
+    } catch {
+      setItemState({
+        status: 'error',
+        records: [],
+        source: null,
+        latestPeriod: null,
+        error: 'CUSTOMS_API_ERROR',
+      });
+    }
   }, [range]);
 
   useEffect(() => {
-    setLoadingItem(true);
-    getItemTradeStats(hsQuery, range.start, range.end)
-      .then(setItem)
-      .catch(() => setItem([]))
-      .finally(() => setLoadingItem(false));
-  }, [hsQuery, range]);
+    void loadTotal();
+    void loadCountry();
+  }, [loadCountry, loadTotal]);
 
-  const totalPoints: LinePoint[] = (total ?? []).map((t) => ({ label: t.period, exp: t.exportAmount, imp: t.importAmount }));
-  const latest = total && total.length > 0 ? total[total.length - 1] : null;
+  useEffect(() => {
+    void loadItem(hsQuery);
+  }, [hsQuery, loadItem]);
+
+  const totalPoints: LinePoint[] = totalState.records.map((t) => ({ label: t.period, exp: t.exportAmount, imp: t.importAmount }));
+  const latest = totalState.records.length > 0 ? totalState.records[totalState.records.length - 1] : null;
 
   const countryRows = useMemo(() => {
-    if (!country) return [];
     const byCountry = new Map<string, { name: string; exp: number; imp: number }>();
-    for (const c of country) {
+    for (const c of countryState.records) {
       const cur = byCountry.get(c.countryCode) ?? { name: c.countryName || c.countryCode, exp: 0, imp: 0 };
       cur.exp += c.exportAmount;
       cur.imp += c.importAmount;
       byCountry.set(c.countryCode, cur);
     }
     return [...byCountry.values()].sort((a, b) => b.exp - a.exp).slice(0, 8);
-  }, [country]);
+  }, [countryState.records]);
 
-  const itemPoints: LinePoint[] = (item ?? []).map((t) => ({ label: t.period, exp: t.exportAmount, imp: t.importAmount }));
+  const itemPoints: LinePoint[] = itemState.records.map((t) => ({ label: t.period, exp: t.exportAmount, imp: t.importAmount }));
 
   const rangeLabel = `${range.start.slice(0, 4)}.${range.start.slice(4)} ~ ${range.end.slice(0, 4)}.${range.end.slice(4)}`;
+  const loadingItem = itemState.status === 'loading';
+  const submitItem = () => {
+    const cleaned = hsInput.replace(/[^0-9]/g, '');
+    if (cleaned === hsQuery) void loadItem(cleaned);
+    else setHsQuery(cleaned);
+  };
 
   return (
     <div>
@@ -304,9 +433,9 @@ export default function DataAnalysisPanel() {
       {latest && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 20 }}>
           {[
-            { label: `${latest.period} 수출`, value: latest.exportAmount, color: COLOR_EXPORT },
-            { label: `${latest.period} 수입`, value: latest.importAmount, color: COLOR_IMPORT },
-            { label: `${latest.period} 무역수지`, value: latest.balance, color: latest.balance >= 0 ? '#006300' : '#d03b3b' },
+            { label: `${formatPeriod(latest.period)} 수출`, value: latest.exportAmount, color: COLOR_EXPORT },
+            { label: `${formatPeriod(latest.period)} 수입`, value: latest.importAmount, color: COLOR_IMPORT },
+            { label: `${formatPeriod(latest.period)} 무역수지`, value: latest.balance, color: latest.balance >= 0 ? '#006300' : '#d03b3b' },
           ].map((t) => (
             <div key={t.label} className="form-card" style={{ padding: '18px 22px' }}>
               <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>{t.label}</div>
@@ -318,19 +447,18 @@ export default function DataAnalysisPanel() {
 
       <ChartCard
         title="월별 수출입 총괄"
-        badge={total && total[0] ? <SourceBadge source={total[0].source} /> : undefined}
-        right={<Legend />}
+        badge={totalState.source ? <SourceBadge source={totalState.source} /> : undefined}
+        right={<><LatestPeriod period={totalState.latestPeriod} /><Legend /></>}
       >
-        {total === null ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 13 }}>
-            <Loader2 size={14} className="animate-spin" /> 불러오는 중…
-          </div>
-        ) : (
+        {totalState.status === 'idle' || totalState.status === 'loading' ? <LoadingState />
+          : totalState.status === 'error' ? <ErrorState onRetry={() => void loadTotal()} />
+          : totalState.status === 'empty' ? <EmptyState />
+          : (
           <>
             <DualLineChart points={totalPoints} />
             <DataTable
               head={['기간', '수출', '수입', '무역수지']}
-              rows={(total ?? []).map((t) => [t.period, t.exportAmount, t.importAmount, t.balance])}
+              rows={totalState.records.map((t) => [formatPeriod(t.period), t.exportAmount, t.importAmount, t.balance])}
             />
           </>
         )}
@@ -338,14 +466,13 @@ export default function DataAnalysisPanel() {
 
       <ChartCard
         title="국가별 수출입 (수출액 상위)"
-        badge={country && country[0] ? <SourceBadge source={country[0].source} /> : undefined}
-        right={<Legend />}
+        badge={countryState.source ? <SourceBadge source={countryState.source} /> : undefined}
+        right={<><LatestPeriod period={countryState.latestPeriod} /><Legend /></>}
       >
-        {country === null ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 13 }}>
-            <Loader2 size={14} className="animate-spin" /> 불러오는 중…
-          </div>
-        ) : (
+        {countryState.status === 'idle' || countryState.status === 'loading' ? <LoadingState />
+          : countryState.status === 'error' ? <ErrorState onRetry={() => void loadCountry()} />
+          : countryState.status === 'empty' ? <EmptyState />
+          : (
           <>
             <CountryBars rows={countryRows} />
             <DataTable
@@ -358,8 +485,8 @@ export default function DataAnalysisPanel() {
 
       <ChartCard
         title="품목별 수출입 트렌드 (HS코드)"
-        badge={item && item[0] ? <SourceBadge source={item[0].source} /> : undefined}
-        right={<Legend />}
+        badge={itemState.source ? <SourceBadge source={itemState.source} /> : undefined}
+        right={<><LatestPeriod period={itemState.latestPeriod} /><Legend /></>}
       >
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <input
@@ -368,29 +495,26 @@ export default function DataAnalysisPanel() {
             value={hsInput}
             placeholder="HS코드 (6~10자리)"
             onChange={(e) => setHsInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && setHsQuery(hsInput.trim())}
+            onKeyDown={(e) => e.key === 'Enter' && submitItem()}
           />
           <button
             className="btn-primary"
-            onClick={() => setHsQuery(hsInput.trim())}
+            onClick={submitItem}
             disabled={loadingItem || hsInput.trim().replace(/[^0-9]/g, '').length < 6}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             {loadingItem ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} 조회
           </button>
         </div>
-        {item === null || loadingItem ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 13 }}>
-            <Loader2 size={14} className="animate-spin" /> 불러오는 중…
-          </div>
-        ) : itemPoints.length === 0 ? (
-          <p style={{ fontSize: 13, color: '#64748b' }}>해당 HS코드의 실적 데이터가 없습니다.</p>
-        ) : (
+        {itemState.status === 'idle' || itemState.status === 'loading' ? <LoadingState />
+          : itemState.status === 'error' ? <ErrorState onRetry={() => void loadItem(hsQuery)} />
+          : itemState.status === 'empty' ? <EmptyState />
+          : (
           <>
             <DualLineChart points={itemPoints} />
             <DataTable
               head={['기간', '수출', '수입', '무역수지']}
-              rows={(item ?? []).map((t) => [t.period, t.exportAmount, t.importAmount, t.balance])}
+              rows={itemState.records.map((t) => [formatPeriod(t.period), t.exportAmount, t.importAmount, t.balance])}
             />
           </>
         )}
