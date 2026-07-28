@@ -2805,3 +2805,86 @@ body {
   left: 0;
   font-size: 12px;
 }
+
+/* ============================================================
+   결과 화면(result-view) v8 — 거래 라인 · 준비도 히어로 · 서류 현황 · 해결
+   기존 테마 색을 그대로 사용. 여백을 넉넉히, 표처럼 열 정렬.
+   ============================================================ */
+.result-view { max-width: 900px; }
+
+/* 1) 상단 거래 라인 */
+.rv-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rv-summary { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; min-width: 0; }
+.rv-summary-text { font-size: 14px; font-weight: 500; color: var(--text-dark); }
+.rv-dim { color: var(--text-light); }
+.rv-log-btn {
+  background: none; border: none;
+  font-size: 13px; color: var(--text-light); font-weight: 600;
+  cursor: pointer; text-decoration: underline;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.rv-log-btn:hover { color: var(--text-dark); }
+
+/* 2) 준비도 히어로 */
+.rv-hero {
+  background: #f4f8fd; border: 1px solid #d5e3f5; border-radius: 16px; padding: 24px 28px;
+}
+.rv-hero-lab { font-size: 13px; font-weight: 700; color: var(--primary-color); margin-bottom: 10px; }
+.rv-hero-pct { font-size: 38px; font-weight: 800; color: var(--primary-color); line-height: 1; margin-bottom: 14px; }
+.rv-hero-pct small { font-size: 15px; color: var(--text-light); font-weight: 600; margin-left: 4px; }
+.rv-track { height: 9px; border-radius: 999px; background: #dce8f7; margin-bottom: 14px; overflow: hidden; }
+.rv-track-fill { height: 100%; border-radius: 999px; background: var(--primary-color); transition: width 0.3s ease; }
+.rv-hero-msg { font-size: 14px; color: var(--text-dark); font-weight: 500; }
+.rv-hero-msg b { color: var(--primary-color); }
+.rv-hero-next { margin: 10px 0 0; font-size: 12.5px; color: var(--text-light); }
+
+/* 3) 서류 현황 — 표처럼 4열 고정 정렬 */
+.rv-panel {
+  background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 8px 24px 14px;
+}
+.rv-panel-head { font-size: 15px; font-weight: 700; padding: 16px 0 10px; border-bottom: 1px solid #eef2f7; }
+.rv-row {
+  display: grid; grid-template-columns: 50px 1fr 78px 128px; align-items: center; gap: 16px;
+  padding: 15px 0; border-top: 1px solid #f2f5f9;
+}
+.rv-row:first-of-type { border-top: none; }
+.rv-abbr {
+  width: 50px; height: 38px; font-size: 11px; font-weight: 800;
+  color: var(--primary-color); background: var(--primary-light); border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.rv-abbr.gray { color: var(--text-light); background: #f1f5f9; }
+.rv-nm { font-size: 14.5px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-sb { font-size: 11.5px; font-weight: 700; padding: 5px 0; border-radius: 7px; text-align: center; width: 100%; }
+.rv-sb-ok { background: var(--success-bg); color: var(--success-color); }
+.rv-sb-rev { background: var(--warning-bg); color: var(--warning-color); }
+.rv-sb-na { background: #f1f5f9; color: var(--text-light); }
+.rv-act { display: flex; gap: 8px; align-items: center; justify-content: flex-end; }
+.rv-view {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--primary-color); color: var(--primary-color); background: #fff;
+  border-radius: 9px; padding: 8px 14px; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.rv-view:hover { background: var(--primary-light); }
+.rv-ib {
+  width: 36px; height: 36px; flex-shrink: 0;
+  border: 1px solid var(--border-color); border-radius: 9px; background: #fff; color: var(--text-light);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.rv-ib:hover { background: #f8fafc; color: var(--text-dark); }
+
+/* 4) 해결하면 제출 — 헤더만 정리 (내부 보완 입력은 기존 스타일 유지) */
+.rv-fixes-head { padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid #eef2f7; }
+.rv-fixes-title { font-size: 15px; font-weight: 700; color: #0f172a; margin: 0; }
+.rv-fixes-sub { margin: 5px 0 0; font-size: 12.5px; color: var(--text-light); }
+
+@media (max-width: 640px) {
+  .rv-row { grid-template-columns: 44px 1fr auto; }
+  .rv-view { padding: 8px 11px; }
+}
