@@ -53,7 +53,7 @@ export default function ForwarderWorkspaceForm({ state, onChange }: Props) {
         </div>
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section">
         <summary className="form-section-summary">2. 선적의뢰 S/R 정보</summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">Shipper 회사명</label><input className="form-input" value={state.companyName} onChange={(e) => patch({ companyName: e.target.value })} placeholder="ABC Trading Co., Ltd." /></div>
@@ -64,7 +64,7 @@ export default function ForwarderWorkspaceForm({ state, onChange }: Props) {
         </div>
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section">
         <summary className="form-section-summary">3. 선복예약 및 스케줄</summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">Carrier</label><input className="form-input" value={state.carrier} onChange={(e) => patch({ carrier: e.target.value })} /></div>
@@ -78,7 +78,7 @@ export default function ForwarderWorkspaceForm({ state, onChange }: Props) {
         {invalidSchedule && <div className="form-message error" role="alert">ETA는 ETD보다 빠를 수 없습니다.</div>}
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section">
         <summary className="form-section-summary">4. 부킹 정보</summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">부킹 상태</label><select className="form-input" value={state.bookingStatus} onChange={(e) => patch({ bookingStatus: e.target.value as BookingStatus })}>{BOOKING_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
@@ -88,7 +88,7 @@ export default function ForwarderWorkspaceForm({ state, onChange }: Props) {
         {state.bookingStatus === 'cancelled' && <div className="form-message info" role="status">취소된 부킹입니다. 입력값은 삭제되지 않습니다.</div>}
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section">
         <summary className="form-section-summary">5. B/L 발급 정보</summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">Notify Party</label><input className="form-input" value={state.notifyPartyName} onChange={(e) => patch({ notifyPartyName: e.target.value })} /></div>
@@ -104,7 +104,7 @@ export default function ForwarderWorkspaceForm({ state, onChange }: Props) {
         </div>
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section">
         <summary className="form-section-summary">6. 화물명세</summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">Description of Goods</label><input className="form-input" value={state.itemName} onChange={(e) => patch({ itemName: e.target.value })} placeholder="Women's 100% cotton T-shirts, black" /></div>

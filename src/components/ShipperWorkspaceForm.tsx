@@ -136,7 +136,7 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section">
         <summary className="form-section-summary">2. 거래처 정보</summary>
         <div className="form-message info">저장된 거래처 없음 · 아래에서 직접 입력해 주세요.</div>
         <div className="shipper-checkbox-row">
@@ -155,7 +155,7 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section">
         <summary className="form-section-summary">3. 품목 정보 · {items.length}개</summary>
         <div className="shipper-item-list">
           {items.map((item, index) => (
@@ -181,7 +181,7 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section">
         <summary className="form-section-summary">4. 거래 조건</summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">Incoterms</label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
@@ -190,7 +190,7 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section">
         <summary className="form-section-summary">5. 포장 정보</summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">포장 수량</label><input type="number" min="0" className="form-input" value={profile.packageCount ?? ''} onChange={(e) => onProfilePatch({ packageCount: numericValue(e.target.value) })} /></div>
@@ -202,7 +202,7 @@ export default function ShipperWorkspaceForm({
         {hasInvalidWeight && <div className="form-message error" role="alert">총중량 G.W.은 순중량 N.W.보다 작을 수 없습니다.</div>}
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section">
         <summary className="form-section-summary">6. 항만 및 일정</summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">선적항 POL</label><select className="form-input" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })}><option value="">선적항을 선택하세요</option>{LOAD_PORT_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}</select></div>
@@ -211,7 +211,7 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section">
         <summary className="form-section-summary">7. 원산지 및 요건서류</summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">원산지 국가</label><CountrySelect className="form-input" value={profile.countryOfOrigin ?? ''} onChange={(value) => onProfilePatch({ countryOfOrigin: value })} /></div>
