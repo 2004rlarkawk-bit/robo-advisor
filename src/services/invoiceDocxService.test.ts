@@ -32,7 +32,8 @@ describe('invoiceDocxService — mapInvoiceToSchema', () => {
     expect(s.shipper_address2).toBe('TEL: 02-123-4567');
     expect(s.consignee_name).toBe('OSAKA INC.');
     expect(s.invoice_no).toBe('INV-2026-123456');
-    expect(s.terms_of_delivery).toBe('CIF 광양항');
+    // 도착지 조건(CIF)은 인도조건 뒤에 도착항을 명기한다 (과거 버그: 선적항 '광양항' 사용)
+    expect(s.terms_of_delivery).toBe('CIF 오사카항');
     expect(s.from_port).toBe('광양항');
     expect(s.to_port).toBe('오사카항');
     expect(s.country_of_origin).toBe('REPUBLIC OF KOREA');
@@ -70,6 +71,11 @@ describe('invoiceDocxService — mapInvoiceToSchema', () => {
     expect(s.net_weight).toBe('');
     expect(s.unit_price).toBe('');
     expect(s.terms_of_delivery).toBe('');
+  });
+
+  it('선적지 조건(FOB)은 인도조건 뒤에 선적항을 명기한다', () => {
+    const s = mapInvoiceToSchema(makeInvoice({ incoterms: 'FOB' }));
+    expect(s.terms_of_delivery).toBe('FOB 광양항');
   });
 
   it('화인(shippingMarks)은 최대 5줄로 분해된다', () => {

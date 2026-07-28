@@ -43,6 +43,10 @@ function splitLines(s: string | undefined, max: number): string[] {
 
 const tel = (c?: string) => (c && c.trim() ? `TEL: ${c.trim()}` : '');
 
+// 도착지 지칭 Incoterms — 인도조건 뒤에는 도착항(⑥To)을 명기해야 한다.
+// (선적지 지칭 FOB/EXW 등은 선적항. 과거 버그: 조건 무관하게 항상 선적항을 붙여 "CIF 광양"이 나왔음.)
+const DEST_INCOTERMS = new Set(['CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP']);
+
 /**
  * DocumentAgent가 조립한 InvoiceData → 템플릿 스키마 매핑.
  * DocumentAgent가 이미 미입력을 빈 값으로 두므로 여기서도 빈칸을 그대로 전달한다("N/A" 금지).
@@ -77,7 +81,10 @@ export function mapInvoiceToSchema(inv: InvoiceData): InvoiceSchema {
     vessel_flight: d.vessel || '',
     from_port: inv.loadPort || '',
     to_port: inv.dischargePort || '',
-    terms_of_delivery: [inv.incoterms, inv.loadPort].filter(Boolean).join(' '),
+    terms_of_delivery: [
+      inv.incoterms,
+      DEST_INCOTERMS.has((inv.incoterms || '').toUpperCase()) ? inv.dischargePort : inv.loadPort,
+    ].filter(Boolean).join(' '),
     terms_of_payment: d.paymentTerms || '',
     marks_line1: marks[0], marks_line2: marks[1], marks_line3: marks[2],
     marks_line4: marks[3], marks_line5: marks[4],

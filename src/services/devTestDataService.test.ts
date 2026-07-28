@@ -54,7 +54,9 @@ describe('개발 테스트 데이터', () => {
       profile: createPerfectTestProfile(emptyProfile, new Date('2026-07-14T00:00:00.000Z')),
       useLLM: false,
     });
-    expect(result.issues?.issues.filter((issue) => issue.severity !== 'info')).toEqual([]);
+    // 정책: error만 생성 차단. 완벽 프로필은 차단(error) 이슈가 없어야 한다.
+    // (한글 항구/주소 등은 R7 warning으로 배지만 표시 — 차단 아님)
+    expect(result.issues?.issues.filter((issue) => issue.severity === 'error')).toEqual([]);
   });
 
   it('수정 필요 프로필은 실제 문서 생성 파이프라인을 완료하면서 차단 이슈를 유지한다', async () => {

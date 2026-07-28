@@ -23,7 +23,7 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
     { field: 'itemName', label: '품목명', docType: 'invoice' },
     { field: 'incoterms', label: '거래조건(Incoterms)', docType: 'invoice' },
     { field: 'quantity', label: '화물 수량', docType: 'packing_list' },
-    { field: 'departureDate', label: '출발일', docType: 'bl' },
+    // 선적일(departureDate)은 R2에서 warning으로 처리(인보이스는 선적 전 발행이 흔함) — 여기서 error로 잡지 않음
     { field: 'arrivalDate', label: '도착예정일', docType: 'bl' },
     { field: 'companyName', label: '업체명', docType: 'invoice' },
     { field: 'partnerName', label: '거래처명(Consignee)', docType: 'invoice' },
