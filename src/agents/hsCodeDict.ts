@@ -111,6 +111,44 @@ export const hsCodeDict: HSCodeDictEntry[] = [
   }
 ];
 
+// 어류(어종) — 보존상태에 따라 HS 류가 갈린다: 신선·냉장→0302, 냉동→0303, 건조·염장·훈제→0305.
+const FISH_SPECIES = [
+  '갈치', 'hairtail', '고등어', 'mackerel', '명태', 'pollock', 'pollack', '참치', 'tuna',
+  '연어', 'salmon', '대구', 'cod', '청어', 'herring', '멸치', 'anchovy', '삼치',
+  '방어', 'yellowtail', '조기', 'croaker', '광어', '넙치', 'flatfish', 'flounder',
+  '가자미', 'sole', '임연수', '전갱이', 'horse mackerel', '장어', 'eel', '붕장어', 'conger',
+  '정어리', 'sardine', '도미', 'sea bream', '민어', '옥돔', '아귀', '메로', 'toothfish',
+];
+
+export function isFishSpecies(name: string): boolean {
+  const n = (name || '').toLowerCase();
+  return FISH_SPECIES.some(f => n.includes(f));
+}
+
+/**
+ * 어종이면 보존상태로 HS를 분기해 반환. 상태가 없으면 기본값으로 추정하지 않고 "상태 요구" 후보를 준다.
+ * 어종이 아니면 null.
+ */
+export function classifyFishHS(name: string): HSCodeDictEntry[] | null {
+  if (!isFishSpecies(name)) return null;
+  const n = (name || '').toLowerCase();
+  if (/냉동|frozen/.test(n)) {
+    return [{ keywords: [], code: '0303.89-0000', description: '냉동 어류 (기타)', confidence: '높음',
+      reasoning: '냉동 상태 어류 → HS 0303. 세부 소호(0303.1~0303.8)는 어종에 따라 확정하세요.' }];
+  }
+  if (/신선|생물|활어|냉장|fresh|chilled|live/.test(n)) {
+    return [{ keywords: [], code: '0302.89-0000', description: '신선·냉장 어류 (기타)', confidence: '높음',
+      reasoning: '신선/냉장 상태 어류 → HS 0302.' }];
+  }
+  if (/건조|말린|dried|염장|소금|salted|훈제|smoked/.test(n)) {
+    return [{ keywords: [], code: '0305.59-0000', description: '건조·염장·훈제 어류 (기타)', confidence: '보통',
+      reasoning: '건조/염장/훈제 어류 → HS 0305 (건조 0305.5 / 염장 0305.6 / 훈제 0305.4로 세분).' }];
+  }
+  // 보존상태 미기재 → 추정 금지, 상태 요구
+  return [{ keywords: [], code: '', description: '어류 — 보존상태 미정 (분류 불가)', confidence: '낮음 (확인 필요)',
+    reasoning: '어종은 보존상태에 따라 HS가 갈립니다: 신선/냉장→0302, 냉동→0303, 건조·염장·훈제→0305. 품명에 보존상태를 포함하세요(예: FROZEN HAIRTAIL).' }];
+}
+
 export function findHSCodesByItemName(itemName: string): HSCodeDictEntry[] {
   const cleanName = itemName.toLowerCase().trim();
   if (!cleanName) return [];

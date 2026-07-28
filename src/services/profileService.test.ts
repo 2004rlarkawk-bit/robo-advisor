@@ -5,7 +5,7 @@ const profile: UserProfile = {
   id: 'user-1', email: 'member@example.com', role: 'user', company_name: '인천테크',
   business_number: '123-45-67890', contact_name: '김지민', phone: '010-1234-5678',
   country: '대한민국', industry: 'manufacturing', trade_purpose: 'import',
-  default_load_port: '인천항', default_discharge_port: '상하이항', default_incoterm: 'CIF',
+  default_load_port: 'INCHEON, KOREA', default_discharge_port: 'SHANGHAI, CHINA', default_incoterm: 'CIF',
 };
 
 describe('user_profiles 온보딩 판정', () => {
@@ -18,14 +18,14 @@ describe('거래 프로필 기본값 변환', () => {
     // 기본 항구는 수출 방향 기준 저장이므로, 수입 거래면 선적항·도착항이 반전된다
     expect(userProfileToTradeDefaults(profile)).toMatchObject({
       tradeType: 'import', companyName: '인천테크', contact: '010-1234-5678',
-      loadPort: '상하이항', dischargePort: '인천항', incoterms: 'CIF',
+      loadPort: 'SHANGHAI, CHINA', dischargePort: 'INCHEON, KOREA', incoterms: 'CIF',
       businessRegistrationNo: '123-45-67890', contactName: '김지민', signedBy: '김지민',
     });
   });
 
   it('수출 거래면 기본 항구를 그대로 사용한다', () => {
     expect(userProfileToTradeDefaults({ ...profile, trade_purpose: 'export' })).toMatchObject({
-      tradeType: 'export', loadPort: '인천항', dischargePort: '상하이항',
+      tradeType: 'export', loadPort: 'INCHEON, KOREA', dischargePort: 'SHANGHAI, CHINA',
     });
   });
 

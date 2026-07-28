@@ -196,7 +196,7 @@ export async function autoFillDocumentFields(
     if (err instanceof Error && err.message === 'CORS_ERROR') {
       console.warn('LLM 인보이스 필드 추천 CORS 차단 — 기본값 폴백');
       return {
-        itemDescription: `${profile.itemName} (commercial goods)`,
+        itemDescription: profile.itemName,
         paymentTerms: 'T/T in advance',
         currency: 'USD'
       };

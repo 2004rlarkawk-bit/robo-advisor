@@ -33,7 +33,7 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     // 기본값은 지어내지 않는다 — 품목 설명은 사용자 입력(itemName) 그대로, 통화는 UI 셀렉터 기본(KRW)과 일치.
     let itemDescription = profile.itemName;
     let paymentTerms = profile.paymentTerms || '';
-    let currency = 'KRW';
+    let currency = 'USD';
 
     if (useLLM && profile.itemName) {
       logs.push(createLog(this.name, 'Claude AI에 품목 설명 및 거래 조건 자동 생성 요청 중...', 'info'));

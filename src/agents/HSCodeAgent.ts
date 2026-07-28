@@ -1,6 +1,6 @@
 import { Agent, HSCodeResult, AgentLog, createLog } from './types';
 import { suggestHSCode, hasApiKey } from '../services/claudeService';
-import { findHSCodesByItemName } from './hsCodeDict';
+import { findHSCodesByItemName, classifyFishHS } from './hsCodeDict';
 import { searchHSByKeyword, lookupHSByCode, loadHSData } from '../services/hsDataService';
 
 /** 검색 점수를 신뢰도 라벨로 변환 */
@@ -38,8 +38,15 @@ export class HSCodeAgent implements Agent<{ itemName: string; hsCode?: string; u
     if (itemName) {
       logs.push(createLog(this.name, `추천 분석할 품목명: "${itemName}" (AI 활용 여부: ${useLLM ? '예' : '아니오'})`, 'info'));
       try {
+        // 어종은 보존상태(신선/냉동/건조·염장) 기준으로 우선 분류한다(0302/0303/0305). 기본값 추정 없음.
+        const fishHS = classifyFishHS(itemName);
+        if (fishHS) {
+          candidates = fishHS.map(c => ({ code: c.code, description: c.description, confidence: c.confidence, reasoning: c.reasoning }));
+          logs.push(createLog(this.name, '어종 감지 — 보존상태 기준 HS(0302/0303/0305) 분류 적용', 'info'));
+        }
+
         // 폴백 체인: Claude(키 있을 때만, 의미 검색) → 관세청 로컬 사전(정확 매칭) → 내장 dict
-        if (useLLM && hasApiKey()) {
+        if (candidates.length === 0 && useLLM && hasApiKey()) {
           // LLM 호출만 별도 try — 잘못된 키(401) 등 API 오류가 나도 사전 검색은 계속돼야 한다
           try {
             const suggestions = await suggestHSCode(itemName);

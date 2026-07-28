@@ -245,7 +245,7 @@ const emptyProfile: TradeProfile = {
   quantity: '',
   unit: 'EA',
 
-  currency: 'KRW',
+  currency: 'USD',
   unitPrice: '',
   totalAmount: '',
   invoiceAmount: '',
@@ -1657,11 +1657,11 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         <label className="form-label">결제 통화</label>
                         <select
                           className="form-input"
-                          value={profile.currency || 'KRW'}
+                          value={profile.currency || 'USD'}
                           onChange={(e) => handleInputChange('currency', e.target.value)}
                         >
-                          <option value="KRW">KRW (원화)</option>
                           <option value="USD">USD (미국 달러)</option>
+                          <option value="KRW">KRW (원화)</option>
                           <option value="EUR">EUR (유로)</option>
                           <option value="JPY">JPY (일본 엔)</option>
                           <option value="CNY">CNY (중국 위안)</option>
@@ -1678,7 +1678,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                             value={profile.invoiceAmount ?? ''}
                             onChange={(e) => handleInputChange('invoiceAmount', e.target.value ? Number(e.target.value) : '')}
                           />
-                          <span className="suffix-text">{profile.currency || 'KRW'}</span>
+                          <span className="suffix-text">{profile.currency || 'USD'}</span>
                         </div>
                       </div>
                     </div>
