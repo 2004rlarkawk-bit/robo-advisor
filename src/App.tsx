@@ -31,9 +31,11 @@ import {
   SavedTrade,
   TradeStatus,
   InvoiceData,
+  PackingListData,
   type ShipperItem,
 } from './types';
 import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
+import { buildPackingListXlsx, mapPackingListToSchema, renderPackingListPreviewHtml } from './services/packingListXlsxService';
 import SettingsPanel from './components/SettingsPanel';
 import GuidePanel from './components/GuidePanel';
 import AboutPanel from './components/AboutPanel';
@@ -396,6 +398,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const invoiceDocxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
   const docxPreviewRef = useRef<HTMLDivElement | null>(null);
 
+  // 패킹리스트도 고정 xlsx 템플릿에서 생성 — 미리보기/다운로드가 같은 스키마를 쓰게 한다.
+  const [packingListData, setPackingListData] = useState<PackingListData | null>(null);
+  const packingXlsxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
+
   // 같은 InvoiceData면 같은 Blob 반환(캐시) → 화면 미리보기와 다운로드 파일이 동일 바이너리.
   const getInvoiceBlob = async (): Promise<Blob | null> => {
     if (!invoiceData) return null;
@@ -406,8 +412,19 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     return blob;
   };
 
-  // 문서 생성 여부: 상업송장은 invoiceData, 나머지는 htmlTemplates로 판정
-  const hasDoc = (id: string) => (id === 'invoice' ? !!invoiceData : !!htmlTemplates[id]);
+  // 같은 PackingListData면 같은 xlsx Blob 반환(캐시).
+  const getPackingListBlob = async (): Promise<Blob | null> => {
+    if (!packingListData) return null;
+    const sig = JSON.stringify(packingListData);
+    if (packingXlsxCacheRef.current?.sig === sig) return packingXlsxCacheRef.current.blob;
+    const blob = await buildPackingListXlsx(packingListData);
+    packingXlsxCacheRef.current = { sig, blob };
+    return blob;
+  };
+
+  // 문서 생성 여부: 상업송장=invoiceData, 패킹리스트=packingListData, 나머지=htmlTemplates로 판정
+  const hasDoc = (id: string) =>
+    id === 'invoice' ? !!invoiceData : id === 'packing_list' ? !!packingListData : !!htmlTemplates[id];
 
   // 미리보기 모달에서 상업송장은 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
   useEffect(() => {
@@ -529,6 +546,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   setHtmlTemplates({});
   setInvoiceData(null);
   invoiceDocxCacheRef.current = null;
+  setPackingListData(null);
+  packingXlsxCacheRef.current = null;
   setHsCandidates([]);
   currentTradeIdRef.current = null;
   setCurrentTradeStatus(null);
@@ -551,6 +570,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setHtmlTemplates(result.documents?.htmlTemplates || {});
     setInvoiceData(result.documents?.generatedDocs?.invoice || null);
     invoiceDocxCacheRef.current = null;
+    setPackingListData(result.documents?.generatedDocs?.packingList || null);
+    packingXlsxCacheRef.current = null;
     setHasGenerated(true);
     blockedGenRef.current = null;
 
@@ -668,6 +689,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         setHtmlTemplates({});
         setInvoiceData(null);
         invoiceDocxCacheRef.current = null;
+        setPackingListData(null);
+        packingXlsxCacheRef.current = null;
         setHasGenerated(true);
         blockedGenRef.current = { result, generationProfile, writeMode };
         const overridable = blockers.filter((blocker) => blocker.overridable).length;
@@ -727,6 +750,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setHtmlTemplates((t.generatedDocs?.htmlTemplates as Record<string, string>) || {});
     setInvoiceData((t.generatedDocs?.invoice as InvoiceData) || null);
     invoiceDocxCacheRef.current = null;
+    setPackingListData((t.generatedDocs?.packingList as PackingListData) || null);
+    packingXlsxCacheRef.current = null;
     setOverrides((t.generatedDocs?.overrides as Record<string, string>) || {});
     blockedGenRef.current = null;
     setAiFeedback('');
@@ -766,6 +791,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setHtmlTemplates({});
     setInvoiceData(null);
     invoiceDocxCacheRef.current = null;
+    setPackingListData(null);
+    packingXlsxCacheRef.current = null;
     setAiFeedback('');
     setHsCandidates([]);
     setHasGenerated(false);
@@ -799,6 +826,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       setHtmlTemplates(result.documents?.htmlTemplates || {});
       setInvoiceData(result.documents?.generatedDocs?.invoice || null);
       invoiceDocxCacheRef.current = null;
+      setPackingListData(result.documents?.generatedDocs?.packingList || null);
+      packingXlsxCacheRef.current = null;
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
       setHsCandidates(result.hs?.candidates || []);
@@ -885,6 +914,30 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       const a = document.createElement('a');
       a.href = url;
       a.download = getDocFileName('invoice').replace(/\.pdf$/i, '.docx');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+
+    // 패킹리스트: 고정 xlsx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 데이터).
+    if (docId === 'packing_list') {
+      let blob: Blob | null = null;
+      try {
+        blob = await getPackingListBlob();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : '패킹리스트 생성에 실패했습니다.');
+        return;
+      }
+      if (!blob) {
+        alert('패킹리스트 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = getDocFileName('packing_list').replace(/\.pdf$/i, '.xlsx');
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -979,8 +1032,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     try {
       const validationErrorCount = issues.filter((issue) => issue.severity === 'error').length;
       const generatedDocs = devTestMode && canBypassValidation
-        ? { htmlTemplates, invoice: invoiceData ?? undefined, overrides, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
-        : { htmlTemplates, invoice: invoiceData ?? undefined, overrides };
+        ? { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, overrides, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
+        : { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, overrides };
       await markTradeAsSubmitted(tradeId, {
         profile,
         documents,
@@ -2476,7 +2529,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                     </button>
                                     <button
                                       className="action-btn-circle"
-                                      title={doc.id === 'invoice' ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
+                                      title={doc.id === 'invoice' ? 'DOCX 다운로드' : doc.id === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장 (텍스트)'}
                                       onClick={() => handleDownloadDoc(doc.id)}
                                     >
                                       <Download size={14} />
@@ -2877,6 +2930,16 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               {previewDocId === 'invoice' ? (
                 // 상업송장: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
                 <div ref={docxPreviewRef} style={{ width: '100%' }} />
+              ) : previewDocId === 'packing_list' ? (
+                // 패킹리스트: 다운로드 xlsx와 같은 스키마로 표를 렌더(단일 소스). 합계는 템플릿 수식과 동일 규칙.
+                <div
+                  style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
+                  dangerouslySetInnerHTML={{
+                    __html: packingListData
+                      ? renderPackingListPreviewHtml(mapPackingListToSchema(packingListData))
+                      : '<p>문서 양식이 생성되지 않았습니다.</p>',
+                  }}
+                />
               ) : (
                 <div
                   style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
@@ -2906,7 +2969,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                {previewDocId === 'invoice' ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
+                {previewDocId === 'invoice' ? 'DOCX 다운로드' : previewDocId === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
             </div>
           </div>
