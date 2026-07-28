@@ -40,3 +40,10 @@ supabase/.temp/
 
 # 샘플 생성 스크립트 산출물(generate-packing-sample.ts) — 커밋 대상 아님
 packing_sample_*.xlsx
+
+# 로컬 도구 산출물 — 추적 금지(재발 방지, e8dfec2 사고 대응)
+.playwright-mcp/
+.claude/
+.codex/
+*.hwpx
+/*.png
