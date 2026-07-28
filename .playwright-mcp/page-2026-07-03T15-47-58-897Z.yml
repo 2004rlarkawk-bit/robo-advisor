@@ -1,0 +1,177 @@
+- generic [ref=f2e3]:
+  - complementary [ref=f2e25]:
+    - generic [ref=f2e26]:
+      - generic [ref=f2e27]: 🚢
+      - generic [ref=f2e28]:
+        - generic [ref=f2e29]: PortAI
+        - generic [ref=f2e30]: 스마트 물류 & 통관 자동화 플랫폼
+    - list [ref=f2e31]:
+      - listitem [ref=f2e32]:
+        - generic [ref=f2e33] [cursor=pointer]:
+          - img [ref=f2e34]
+          - text: 대시보드
+      - listitem [ref=f2e39]:
+        - generic [ref=f2e40] [cursor=pointer]:
+          - img [ref=f2e41]
+          - text: 문서 자동 생성
+      - listitem [ref=f2e44]:
+        - generic "준비 중인 기능입니다" [ref=f2e45]:
+          - img [ref=f2e46]
+          - text: 문서 관리
+          - generic [ref=f2e48]: 준비중
+      - listitem [ref=f2e49]:
+        - generic "준비 중인 기능입니다" [ref=f2e50]:
+          - img [ref=f2e51]
+          - text: 거래 관리
+          - generic [ref=f2e55]: 준비중
+      - listitem [ref=f2e56]:
+        - generic "준비 중인 기능입니다" [ref=f2e57]:
+          - img [ref=f2e58]
+          - text: 선적 일정 관리
+          - generic [ref=f2e62]: 준비중
+      - listitem [ref=f2e63]:
+        - generic "준비 중인 기능입니다" [ref=f2e64]:
+          - img [ref=f2e65]
+          - text: 통관 내역
+          - generic [ref=f2e69]: 준비중
+      - listitem [ref=f2e70]:
+        - generic "준비 중인 기능입니다" [ref=f2e71]:
+          - img [ref=f2e72]
+          - text: 데이터 분석
+          - generic [ref=f2e74]: 준비중
+      - listitem [ref=f2e75]:
+        - generic [ref=f2e76] [cursor=pointer]:
+          - img [ref=f2e77]
+          - text: 설정
+    - generic [ref=f2e80]:
+      - generic [ref=f2e81]:
+        - img [ref=f2e82]
+        - text: 고객지원센터
+      - generic [ref=f2e86]: 02-1234-5678
+      - generic [ref=f2e87]: 평일 09:00 - 18:00
+  - generic [ref=f2e5]:
+    - banner [ref=f2e88]:
+      - generic [ref=f2e90]: Mentoring Project 2026
+      - generic [ref=f2e91]:
+        - button [ref=f2e92] [cursor=pointer]:
+          - img [ref=f2e93]
+        - button [ref=f2e97] [cursor=pointer]:
+          - img [ref=f2e98]
+        - generic [ref=f2e101]:
+          - generic [ref=f2e102] [cursor=pointer]:
+            - generic [ref=f2e103]: 비
+            - generic [ref=f2e104]: 게스트 님
+            - generic [ref=f2e105]: 비회원
+          - button "로그아웃" [ref=f2e106] [cursor=pointer]
+    - main [ref=f2e107]:
+      - generic [ref=f2e215]:
+        - generic [ref=f2e216]:
+          - heading "설정" [level=1] [ref=f2e217]
+          - paragraph [ref=f2e218]: API 키를 등록하면 실데이터 기반으로 동작합니다. 미등록 시에도 모든 기능은 시뮬레이션 모드로 이용 가능합니다.
+        - generic [ref=f2e219]:
+          - generic [ref=f2e220]:
+            - img [ref=f2e221]
+            - heading "Claude API 키" [level=2] [ref=f2e224]
+            - generic [ref=f2e225]:
+              - img [ref=f2e226]
+              - text: 미설정
+          - paragraph [ref=f2e230]: LLM 기반 HS Code 추천, 자연어 피드백, 문서 필드 자동 채움에 사용됩니다. console.anthropic.com에서 발급.
+          - generic [ref=f2e231]:
+            - textbox "sk-ant-..." [ref=f2e232]
+            - button "저장" [disabled] [ref=f2e233]
+        - generic [ref=f2e234]:
+          - generic [ref=f2e235]:
+            - img [ref=f2e236]
+            - heading "공공데이터포털 키 (관세청 GW)" [level=2] [ref=f2e239]
+            - generic [ref=f2e240]:
+              - img [ref=f2e241]
+              - text: 미설정
+          - paragraph [ref=f2e245]: 관세환율(주간 적용환율)·품목별 수출입실적 조회에 사용됩니다. data.go.kr 마이페이지의 일반 인증키(Encoding 아닌 Decoding 키 권장).
+          - generic [ref=f2e246]:
+            - textbox "data.go.kr 인증키" [ref=f2e247]
+            - button "저장" [disabled] [ref=f2e248]
+        - generic [ref=f2e249]:
+          - generic [ref=f2e250]:
+            - img [ref=f2e251]
+            - heading "국세청 사업자등록 조회 키" [level=2] [ref=f2e254]
+            - generic [ref=f2e255]:
+              - img [ref=f2e256]
+              - text: 미설정
+          - paragraph [ref=f2e260]: 거래처 사업자등록번호 상태(계속/휴업/폐업) 확인에 사용됩니다. data.go.kr에서 발급한 국세청 서비스 키.
+          - generic [ref=f2e261]:
+            - textbox "data.go.kr 인증키" [ref=f2e262]
+            - button "저장" [disabled] [ref=f2e263]
+        - generic [ref=f2e264]:
+          - heading "UNI-PASS 키 (관세청 전자통관 — 서비스별 개별 키)" [level=2] [ref=f2e265]
+          - paragraph [ref=f2e266]: ⚠ UNI-PASS는 브라우저 보안정책(CORS) 제한으로 로컬 개발 환경(npm run dev)에서만 실데이터로 동작합니다. 배포 사이트에서는 시뮬레이션 값이 표시됩니다.
+        - generic [ref=f2e267]:
+          - generic [ref=f2e268]:
+            - img [ref=f2e269]
+            - heading "UNI-PASS 관세율기본조회 키" [level=2] [ref=f2e272]
+            - generic [ref=f2e273]:
+              - img [ref=f2e274]
+              - text: 미설정
+          - paragraph [ref=f2e278]: HSK 10자리 기준 기본세율/WTO/FTA 세율 조회 — 예상 관세액 계산에 사용됩니다.
+          - generic [ref=f2e279]:
+            - textbox "UNI-PASS 인증키 (crkyCn)" [ref=f2e280]
+            - button "저장" [disabled] [ref=f2e281]
+        - generic [ref=f2e282]:
+          - generic [ref=f2e283]:
+            - img [ref=f2e284]
+            - heading "UNI-PASS 수출입요건승인내역 키" [level=2] [ref=f2e287]
+            - generic [ref=f2e288]:
+              - img [ref=f2e289]
+              - text: 미설정
+          - paragraph [ref=f2e293]: 요건승인번호로 발급된 승인 내역(서식명·유효기간)을 확인합니다.
+          - generic [ref=f2e294]:
+            - textbox "UNI-PASS 인증키 (crkyCn)" [ref=f2e295]
+            - button "저장" [disabled] [ref=f2e296]
+        - generic [ref=f2e297]:
+          - generic [ref=f2e298]:
+            - img [ref=f2e299]
+            - heading "UNI-PASS 화물통관진행정보 키" [level=2] [ref=f2e302]
+            - generic [ref=f2e303]:
+              - img [ref=f2e304]
+              - text: 미설정
+          - paragraph [ref=f2e308]: B/L번호로 화물 통관 진행상태를 추적합니다.
+          - generic [ref=f2e309]:
+            - textbox "UNI-PASS 인증키 (crkyCn)" [ref=f2e310]
+            - button "저장" [disabled] [ref=f2e311]
+        - generic [ref=f2e312]:
+          - generic [ref=f2e313]:
+            - img [ref=f2e314]
+            - heading "UNI-PASS 수출이행내역 키" [level=2] [ref=f2e317]
+            - generic [ref=f2e318]:
+              - img [ref=f2e319]
+              - text: 미설정
+          - paragraph [ref=f2e323]: 수출신고번호로 선적 이행 여부·적재의무기한을 확인합니다.
+          - generic [ref=f2e324]:
+            - textbox "UNI-PASS 인증키 (crkyCn)" [ref=f2e325]
+            - button "저장" [disabled] [ref=f2e326]
+        - generic [ref=f2e327]:
+          - heading "법제처 국가법령정보" [level=2] [ref=f2e328]
+          - paragraph [ref=f2e329]: 현행법령·판례 검색 및 검증 결과의 근거 법령 연결에 사용됩니다. 키가 아니라 law.go.kr 가입 ID(OC)를 입력하세요. 발급 시 등록한 도메인에서만 호출이 허용될 수 있습니다.
+        - generic [ref=f2e330]:
+          - generic [ref=f2e331]:
+            - img [ref=f2e332]
+            - heading "법제처 OC (사용자 ID)" [level=2] [ref=f2e335]
+            - generic [ref=f2e336]:
+              - img [ref=f2e337]
+              - text: 미설정
+          - paragraph [ref=f2e341]: "open.law.go.kr에서 Open API 신청 시 사용한 가입 ID. 예: g4c 이메일이 abc@gmail.com이면 OC는 abc."
+          - generic [ref=f2e342]:
+            - textbox "law.go.kr 가입 ID" [ref=f2e343]
+            - button "저장" [disabled] [ref=f2e344]
+      - generic [ref=f2e199]:
+        - generic [ref=f2e200]:
+          - generic [ref=f2e201]: 12:25
+          - generic [ref=f2e202]:
+            - generic [ref=f2e203]: 📶
+            - generic [ref=f2e204]: 🔋
+        - generic [ref=f2e205]:
+          - img [ref=f2e206] [cursor=pointer]
+          - generic [ref=f2e208]: 문서 검토 결과
+        - generic [ref=f2e210]:
+          - img [ref=f2e211]
+          - generic [ref=f2e213]: 실시간 보완 대기 중
+          - generic [ref=f2e214]: 좌측 대시보드에서 [필요 서류 자동 생성]을 누르면 실시간 보완 및 피드백 기능이 활성화됩니다.

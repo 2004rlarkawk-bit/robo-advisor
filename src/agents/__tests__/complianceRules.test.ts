@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runComplianceRules, RULE_POLICY } from '../complianceRules';
+import { runComplianceRules, checkPackingInvoiceConsistency, RULE_POLICY } from '../complianceRules';
 import { TradeProfile } from '../../types';
 
 const base: TradeProfile = {
@@ -150,5 +150,79 @@ describe('재현 케이스 — INV-2026-123456', () => {
     // From/To 한글(R7 warning) + 품명 미달(R1 error)
     expect(list).toContain('r7-nonlatin');
     expect(list).toContain('r1-itemname-insufficient');
+  });
+});
+
+describe('R10 — 패킹리스트 ↔ 상업송장 교차 대조', () => {
+  const inv = (items: any[]): any => ({ items });
+  const pl = (items: any[]): any => ({ items });
+
+  it('박스 내역이 인보이스 수량과 다르면 수량 불일치 warning', () => {
+    const invoice = inv([{ description: 'FROZEN HAIRTAIL', quantity: 100 }]);
+    const packing = pl([{ description: 'FROZEN HAIRTAIL', boxes: 5, eaPerBox: 10 }]); // 50 ≠ 100
+    const issues = checkPackingInvoiceConsistency(invoice, packing);
+    const qty = issues.find(i => i.id === 'r10-packing-qty-mismatch')!;
+    expect(qty).toBeTruthy();
+    expect(qty.severity).toBe('warning');
+    expect(qty.overridable).toBeUndefined();
+  });
+
+  it('박스 내역 합계가 인보이스 수량과 같으면 통과', () => {
+    const invoice = inv([{ description: 'FROZEN HAIRTAIL', quantity: 50 }]);
+    const packing = pl([{ description: 'FROZEN HAIRTAIL', boxes: 5, eaPerBox: 10 }]); // 50 == 50
+    expect(checkPackingInvoiceConsistency(invoice, packing).map(i => i.id))
+      .not.toContain('r10-packing-qty-mismatch');
+  });
+
+  it('박스 내역이 없으면 억지 판정 대신 조용히 통과(오탐 방지)', () => {
+    const invoice = inv([{ description: 'FROZEN HAIRTAIL', quantity: 100 }]);
+    const packing = pl([{ description: 'FROZEN HAIRTAIL' }]); // boxes/eaPerBox 없음
+    expect(checkPackingInvoiceConsistency(invoice, packing)).toHaveLength(0);
+  });
+
+  it('같은 순번 품명이 다르면 품명 불일치 warning', () => {
+    const invoice = inv([{ description: 'FROZEN HAIRTAIL', quantity: 50 }]);
+    const packing = pl([{ description: 'FROZEN MACKEREL', boxes: 5, eaPerBox: 10 }]);
+    expect(checkPackingInvoiceConsistency(invoice, packing).map(i => i.id))
+      .toContain('r10-packing-desc-mismatch');
+  });
+
+  it('품명이 대소문자·공백만 다르면 일치로 본다', () => {
+    const invoice = inv([{ description: 'Frozen  Hairtail', quantity: 50 }]);
+    const packing = pl([{ description: 'FROZEN HAIRTAIL', boxes: 5, eaPerBox: 10 }]);
+    expect(checkPackingInvoiceConsistency(invoice, packing).map(i => i.id))
+      .not.toContain('r10-packing-desc-mismatch');
+  });
+});
+
+describe('R11 — 결제조건 ↔ L/C 필드 정합성', () => {
+  it('T/T 결제인데 L/C 번호가 있으면 모순 error(차단, override 가능) — 픽스처 T/T+LC-88-2026', () => {
+    const issue = find({ paymentTerms: 'T/T', lcNo: 'LC-88-2026' }, 'r11-payment-lc-conflict')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('error');
+    expect(issue.overridable).toBe(true);
+  });
+
+  it('L/C 은행/일자만 있어도(번호 없이) T/T와 함께면 모순으로 잡는다', () => {
+    expect(ids({ paymentTerms: 'T/T 30 DAYS', lcBank: 'KEB HANA BANK' }))
+      .toContain('r11-payment-lc-conflict');
+  });
+
+  it('L/C 결제인데 L/C 번호가 공란이면 warning', () => {
+    const issue = find({ paymentTerms: 'L/C AT SIGHT', lcNo: '' }, 'r11-lc-missing')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('warning');
+  });
+
+  it('L/C 결제 + L/C 번호 있으면 통과(모순·누락 아님)', () => {
+    const list = ids({ paymentTerms: 'L/C AT SIGHT', lcNo: 'LC-2026-0001' });
+    expect(list).not.toContain('r11-payment-lc-conflict');
+    expect(list).not.toContain('r11-lc-missing');
+  });
+
+  it('T/T 결제 + L/C 필드 전부 공란이면 R11 미발생', () => {
+    const list = ids({ paymentTerms: 'T/T', lcNo: '', lcBank: '', lcDate: '' });
+    expect(list).not.toContain('r11-payment-lc-conflict');
+    expect(list).not.toContain('r11-lc-missing');
   });
 });

@@ -3,6 +3,7 @@ import { DocumentAgent } from '../DocumentAgent';
 import { escapeHtml } from '../templates/escapeHtml';
 import { HSCodeResult, AgentLog } from '../types';
 import { TradeProfile } from '../../types';
+import { mapPackingListToSchema, renderPackingListPreviewHtml } from '../../services/packingListXlsxService';
 
 const hsResult: HSCodeResult = {
   topCode: '8471.30',
@@ -104,6 +105,37 @@ describe('DocumentAgent — 인보이스 금액 일관성', () => {
   });
 });
 
+describe('DocumentAgent — L/C 필드 파생 가드 + 주소 유추 금지', () => {
+  it('비신용장(T/T) 결제면 profile.lcNo가 있어도 인보이스·패킹 L/C를 강제 공란 처리한다', async () => {
+    const r = await runAgent({ paymentTerms: 'T/T', lcNo: 'LC-88-2026', lcBank: 'KEB HANA BANK', lcDate: '2026-07-15' });
+    const inv = r.generatedDocs.invoice! as any;
+    const pl = r.generatedDocs.packingList! as any;
+    expect(inv.lcNo).toBe('');
+    expect(pl.lcNo).toBe('');
+    expect(pl.lcBank).toBe('');
+    expect(pl.lcDate).toBe('');
+  });
+
+  it('L/C 결제면 profile.lcNo가 그대로 파생된다', async () => {
+    const r = await runAgent({ paymentTerms: 'L/C AT SIGHT', lcNo: 'LC-2026-0001', lcBank: 'WOORI BANK' });
+    const pl = r.generatedDocs.packingList! as any;
+    expect(pl.lcNo).toBe('LC-2026-0001');
+    expect(pl.lcBank).toBe('WOORI BANK');
+  });
+
+  it('consignee 주소는 입력값(partnerAddress)만 쓰고 도착항을 섞지 않는다', async () => {
+    const r = await runAgent({
+      tradeType: 'export',
+      dischargePort: 'OSAKA, JAPAN',
+      partnerName: 'TOKYO IMPORT LTD',
+      partnerAddress: '5-2 TSUKIJI, CHUO-KU, TOKYO',
+    });
+    const consignee = (r.generatedDocs.invoice as any).consignee;
+    expect(consignee.address).toBe('5-2 TSUKIJI, CHUO-KU, TOKYO');
+    expect(consignee.address).not.toContain('OSAKA'); // 도착항 유추 유입 없음
+  });
+});
+
 describe('DocumentAgent — 문서번호 건(shipment) 단위 파생·안정성', () => {
   const shipProfile: Partial<TradeProfile> = {
     tradeType: 'export',
@@ -147,23 +179,25 @@ describe('문서 템플릿 XSS 방어', () => {
     expect(escapeHtml(1234)).toBe('1234');
   });
 
-  // 상업송장은 고정 docx 템플릿(docxtemplater가 XML 이스케이프)으로 생성되므로 HTML XSS 대상이 아님.
-  // 여기서는 여전히 HTML로 렌더되는 패킹리스트로 이스케이프를 검증한다.
-  it('품목명에 스크립트를 넣어도 생성된 HTML(패킹리스트)에서 이스케이프된다', async () => {
+  // 상업송장(docx)·패킹리스트(xlsx)는 고정 템플릿이라 HTML XSS 대상이 아니다.
+  // 패킹리스트 미리보기 HTML은 다운로드 xlsx와 같은 스키마로 렌더되므로, 그 미리보기에서 이스케이프를 검증한다.
+  const packingPreview = (pl: any) => renderPackingListPreviewHtml(mapPackingListToSchema(pl));
+
+  it('품목명에 스크립트를 넣어도 패킹리스트 미리보기 HTML에서 이스케이프된다', async () => {
     const result = await runAgent({ itemName: '<script>alert("xss")</script>' });
 
-    const html = result.htmlTemplates?.packing_list ?? '';
+    const html = packingPreview(result.generatedDocs.packingList!);
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
   });
 
-  it('회사명·주소에 HTML 태그를 넣어도 이스케이프된다(패킹리스트)', async () => {
+  it('회사명·주소에 HTML 태그를 넣어도 패킹리스트 미리보기 HTML에서 이스케이프된다', async () => {
     const result = await runAgent({
       companyName: '<img src=x onerror=alert(1)>테크',
       companyAddress: '"서울" & <부산>'
     });
 
-    const plHtml = result.htmlTemplates?.packing_list ?? '';
+    const plHtml = packingPreview(result.generatedDocs.packingList!);
     expect(plHtml).not.toContain('<img src=x');
     expect(plHtml).toContain('&lt;img src=x');
   });

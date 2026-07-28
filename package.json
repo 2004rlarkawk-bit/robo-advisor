@@ -16,6 +16,7 @@
     "@supabase/supabase-js": "^2.110.1",
     "docx-preview": "^0.4.0",
     "docxtemplater": "^3.69.3",
+    "exceljs": "^4.4.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.395.0",
@@ -31,6 +32,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "gh-pages": "^6.3.0",
     "happy-dom": "^20.10.6",
+    "tsx": "^4.23.1",
     "typescript": "^5.2.2",
     "vite": "^5.3.1",
     "vitest": "^1.6.0"

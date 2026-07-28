@@ -1,0 +1,319 @@
+- generic [active] [ref=f12e1]:
+  - link "콘텐츠 바로가기" [ref=f12e3] [cursor=pointer]:
+    - /url: "#contents"
+  - generic [ref=f12e4]:
+    - banner [ref=f12e5]:
+      - list [ref=f12e7]:
+        - listitem [ref=f12e8]:
+          - img "eg(전자정부)" [ref=f12e9]
+          - text: 이 누리집은 대한민국 공식 전자정부 누리집입니다.
+      - generic [ref=f12e10]:
+        - heading "공공데이터포털" [level=1] [ref=f12e11]:
+          - link "공공데이터포털" [ref=f12e12] [cursor=pointer]:
+            - /url: /index.do
+        - generic [ref=f12e13]:
+          - generic [ref=f12e14]:
+            - generic [ref=f12e16]:
+              - link "로그아웃" [ref=f12e17] [cursor=pointer]:
+                - /url: javascript:window.location.href='/uim/login/actionLogout.do';
+              - link "마이페이지" [ref=f12e18] [cursor=pointer]:
+                - /url: "#"
+            - generic [ref=f12e19]:
+              - link "사이트맵" [ref=f12e20] [cursor=pointer]:
+                - /url: javascript:window.location.href='/cmm/cmm/siteMap.do';
+              - link "ENGLISH" [ref=f12e21] [cursor=pointer]:
+                - /url: /en/index.do
+          - navigation [ref=f12e22]:
+            - list [ref=f12e23]:
+              - listitem [ref=f12e24]:
+                - link "데이터찾기" [ref=f12e25] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f12e26]:
+                - link "국가데이터맵" [ref=f12e27] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f12e28]:
+                - link "데이터요청" [ref=f12e29] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f12e30]:
+                - link "기업 공공데이터 문제해결 지원센터" [ref=f12e31] [cursor=pointer]:
+                  - /url: "#"
+                  - text: 기업 공공데이터
+                  - text: 문제해결 지원센터
+              - listitem [ref=f12e32]:
+                - link "데이터활용" [ref=f12e33] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f12e34]:
+                - link "정보공유" [ref=f12e35] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f12e36]:
+                - link "이용안내" [ref=f12e37] [cursor=pointer]:
+                  - /url: "#"
+    - generic [ref=f12e39]:
+      - navigation [ref=f12e41]:
+        - paragraph [ref=f12e42]: 마이페이지
+        - list [ref=f12e43]:
+          - listitem [ref=f12e44]:
+            - link "데이터 활용" [ref=f12e45] [cursor=pointer]:
+              - /url: "#"
+          - listitem [ref=f12e46]:
+            - link "데이터 요청" [ref=f12e47] [cursor=pointer]:
+              - /url: "#"
+          - listitem [ref=f12e48]:
+            - link "나의 문의" [ref=f12e49] [cursor=pointer]:
+              - /url: "#"
+          - listitem [ref=f12e50]:
+            - link "회원정보 수정" [ref=f12e51] [cursor=pointer]:
+              - /url: "#"
+      - generic [ref=f12e53]:
+        - heading "활용신청 현황" [level=2] [ref=f12e54]
+        - generic [ref=f12e57]:
+          - generic [ref=f12e58]:
+            - generic [ref=f12e59]:
+              - generic [ref=f12e60]: 계정
+              - combobox "검색어 계정" [ref=f12e62]
+              - generic [ref=f12e63]: 신청일
+              - generic [ref=f12e67]:
+                - generic [ref=f12e68]:
+                  - textbox "검색 시작일" [ref=f12e69]
+                  - button "날짜 선택" [ref=f12e70] [cursor=pointer]
+                - emphasis [ref=f12e71]: ~
+                - generic [ref=f12e72]:
+                  - textbox "검색 종료일" [ref=f12e73]
+                  - button "날짜 선택" [ref=f12e74] [cursor=pointer]
+            - generic [ref=f12e75]:
+              - generic [ref=f12e76]: 신청유형
+              - combobox "검색어 신청유형" [ref=f12e78]
+              - generic [ref=f12e79]: 처리상태
+              - combobox "검색어 처리상태" [ref=f12e81]
+            - generic [ref=f12e82]:
+              - generic [ref=f12e83]: 데이터명
+              - textbox "검색어 데이터명" [ref=f12e85]
+          - generic [ref=f12e88]:
+            - button "초기화" [ref=f12e89] [cursor=pointer]
+            - button "검색" [ref=f12e90] [cursor=pointer]
+        - generic [ref=f12e92]:
+          - generic [ref=f12e93]:
+            - generic [ref=f12e94]:
+              - generic [ref=f12e95] [cursor=pointer]: 전체 7건
+              - generic [ref=f12e96] [cursor=pointer]: ">"
+            - paragraph [ref=f12e97]: 전체 API활용 신청 현황
+          - generic [ref=f12e98]:
+            - generic [ref=f12e99]:
+              - generic [ref=f12e100] [cursor=pointer]: 신청 0건
+              - generic [ref=f12e101] [cursor=pointer]: ">"
+            - paragraph [ref=f12e102]: 신청중인 단계
+            - generic [ref=f12e103]:
+              - generic [ref=f12e104]:
+                - heading "보류" [level=4] [ref=f12e106] [cursor=pointer]
+                - heading "0건" [level=4] [ref=f12e108] [cursor=pointer]
+              - generic [ref=f12e109]:
+                - heading "반려" [level=4] [ref=f12e111] [cursor=pointer]
+                - heading "0건" [level=4] [ref=f12e113] [cursor=pointer]
+          - generic [ref=f12e114]:
+            - generic [ref=f12e115]:
+              - generic [ref=f12e116] [cursor=pointer]: 활용 7건
+              - generic [ref=f12e117] [cursor=pointer]: ">"
+            - paragraph [ref=f12e118]: 승인되어 활용중인 단계
+            - generic [ref=f12e120]:
+              - heading "변경신청" [level=4] [ref=f12e122] [cursor=pointer]
+              - heading "0건" [level=4] [ref=f12e124] [cursor=pointer]
+          - generic [ref=f12e125]:
+            - generic [ref=f12e126]:
+              - generic [ref=f12e127] [cursor=pointer]: 만료·중지 0건
+              - generic [ref=f12e128] [cursor=pointer]: ">"
+            - paragraph [ref=f12e129]: 활용기간이 만료·중지된 단계
+            - generic [ref=f12e130]:
+              - generic [ref=f12e131]:
+                - heading "만료" [level=4] [ref=f12e133] [cursor=pointer]
+                - heading "0건" [level=4] [ref=f12e135] [cursor=pointer]
+              - generic [ref=f12e136]:
+                - heading "중지" [level=4] [ref=f12e138] [cursor=pointer]
+                - heading "0건" [level=4] [ref=f12e140] [cursor=pointer]
+            - paragraph [ref=f12e141]: ※만료된 경우 연장 신청 필요
+        - paragraph [ref=f12e144]:
+          - text: 총
+          - strong [ref=f12e145]: "7"
+          - text: 건
+        - generic [ref=f12e146]:
+          - list [ref=f12e147]:
+            - listitem [ref=f12e148]:
+              - paragraph [ref=f12e149]:
+                - generic [ref=f12e150]: 재정금융
+                - generic [ref=f12e151]: 국세청
+              - generic [ref=f12e152]:
+                - generic [ref=f12e153]: 활용신청
+                - link "[승인] 국세청_사업자등록정보 진위확인 및 상태조회 서비스" [ref=f12e154] [cursor=pointer]:
+                  - /url: javascript:fn_detail('uddi:cd05d81f-c717-48cf-a7d1-d7fb41ca8f0a','120128189','1','PR0027')
+                  - paragraph [ref=f12e155]: "[승인] 국세청_사업자등록정보 진위확인 및 상태조회 서비스"
+              - generic [ref=f12e156]:
+                - paragraph [ref=f12e157]:
+                  - generic [ref=f12e158]: 계정
+                  - generic [ref=f12e159]: 개발
+                - paragraph [ref=f12e160]:
+                  - generic [ref=f12e161]: 신청일
+                  - generic [ref=f12e162]: 2026-07-02
+            - listitem [ref=f12e163]:
+              - paragraph [ref=f12e164]:
+                - generic [ref=f12e165]: 재정금융
+                - generic [ref=f12e166]: 관세청
+              - generic [ref=f12e167]:
+                - generic [ref=f12e168]: 활용신청
+                - link "[승인] 관세청_성질별 수출입실적(GW)" [ref=f12e169] [cursor=pointer]:
+                  - /url: javascript:fn_detail('uddi:12f270a5-3f0b-4888-b8da-d38bde1f2742','120127996','0','PR0027')
+                  - paragraph [ref=f12e170]: "[승인] 관세청_성질별 수출입실적(GW)"
+              - generic [ref=f12e171]:
+                - paragraph [ref=f12e172]:
+                  - generic [ref=f12e173]: 계정
+                  - generic [ref=f12e174]: 개발
+                - paragraph [ref=f12e175]:
+                  - generic [ref=f12e176]: 신청일
+                  - generic [ref=f12e177]: 2026-07-02
+                - paragraph [ref=f12e178]:
+                  - generic [ref=f12e179]: 만료예정일
+                  - generic [ref=f12e180]: 2028-07-02
+            - listitem [ref=f12e181]:
+              - paragraph [ref=f12e182]:
+                - generic [ref=f12e183]: 재정금융
+                - generic [ref=f12e184]: 관세청
+              - generic [ref=f12e185]:
+                - generic [ref=f12e186]: 활용신청
+                - link "[승인] 관세청_수출입총괄(GW)" [ref=f12e187] [cursor=pointer]:
+                  - /url: javascript:fn_detail('uddi:6adf59e6-c302-4c2f-bc5f-d07add63449c_202207121715','120127684','0','PR0027')
+                  - paragraph [ref=f12e188]: "[승인] 관세청_수출입총괄(GW)"
+              - generic [ref=f12e189]:
+                - paragraph [ref=f12e190]:
+                  - generic [ref=f12e191]: 계정
+                  - generic [ref=f12e192]: 개발
+                - paragraph [ref=f12e193]:
+                  - generic [ref=f12e194]: 신청일
+                  - generic [ref=f12e195]: 2026-07-02
+                - paragraph [ref=f12e196]:
+                  - generic [ref=f12e197]: 만료예정일
+                  - generic [ref=f12e198]: 2028-07-02
+            - listitem [ref=f12e199]:
+              - paragraph [ref=f12e200]:
+                - generic [ref=f12e201]: 재정금융
+                - generic [ref=f12e202]: 관세청
+              - generic [ref=f12e203]:
+                - generic [ref=f12e204]: 활용신청
+                - link "[승인] 관세청_국가별 수출입실적(GW)" [ref=f12e205] [cursor=pointer]:
+                  - /url: javascript:fn_detail('uddi:3d53ae57-0f79-4ddf-86d6-c3a04039b007_202206271647','120127578','0','PR0027')
+                  - paragraph [ref=f12e206]: "[승인] 관세청_국가별 수출입실적(GW)"
+              - generic [ref=f12e207]:
+                - paragraph [ref=f12e208]:
+                  - generic [ref=f12e209]: 계정
+                  - generic [ref=f12e210]: 개발
+                - paragraph [ref=f12e211]:
+                  - generic [ref=f12e212]: 신청일
+                  - generic [ref=f12e213]: 2026-07-02
+                - paragraph [ref=f12e214]:
+                  - generic [ref=f12e215]: 만료예정일
+                  - generic [ref=f12e216]: 2028-07-02
+            - listitem [ref=f12e217]:
+              - paragraph [ref=f12e218]:
+                - generic [ref=f12e219]: 재정금융
+                - generic [ref=f12e220]: 관세청
+              - generic [ref=f12e221]:
+                - generic [ref=f12e222]: 활용신청
+                - link "[승인] 관세청_관세환율정보(GW)" [ref=f12e223] [cursor=pointer]:
+                  - /url: javascript:fn_detail('uddi:553003a6-f4cb-4ccb-aa8a-81efa84a3b29','119986134','0','PR0027')
+                  - paragraph [ref=f12e224]: "[승인] 관세청_관세환율정보(GW)"
+              - generic [ref=f12e225]:
+                - paragraph [ref=f12e226]:
+                  - generic [ref=f12e227]: 계정
+                  - generic [ref=f12e228]: 개발
+                - paragraph [ref=f12e229]:
+                  - generic [ref=f12e230]: 신청일
+                  - generic [ref=f12e231]: 2026-07-01
+                - paragraph [ref=f12e232]:
+                  - generic [ref=f12e233]: 만료예정일
+                  - generic [ref=f12e234]: 2028-07-01
+            - listitem [ref=f12e235]:
+              - paragraph [ref=f12e236]:
+                - generic [ref=f12e237]: 재정금융
+                - generic [ref=f12e238]: 관세청
+              - generic [ref=f12e239]:
+                - generic [ref=f12e240]: 활용신청
+                - link "[승인] 관세청_품목별 국가별 수출입실적(GW)" [ref=f12e241] [cursor=pointer]:
+                  - /url: javascript:fn_detail('uddi:de645b0e-dcde-4ff2-9f14-9ce47fa641b2_202205261542','119945837','0','PR0027')
+                  - paragraph [ref=f12e242]: "[승인] 관세청_품목별 국가별 수출입실적(GW)"
+              - generic [ref=f12e243]:
+                - paragraph [ref=f12e244]:
+                  - generic [ref=f12e245]: 계정
+                  - generic [ref=f12e246]: 개발
+                - paragraph [ref=f12e247]:
+                  - generic [ref=f12e248]: 신청일
+                  - generic [ref=f12e249]: 2026-06-30
+                - paragraph [ref=f12e250]:
+                  - generic [ref=f12e251]: 만료예정일
+                  - generic [ref=f12e252]: 2028-06-30
+            - listitem [ref=f12e253]:
+              - paragraph [ref=f12e254]:
+                - generic [ref=f12e255]: 재정금융
+                - generic [ref=f12e256]: 관세청
+              - generic [ref=f12e257]:
+                - generic [ref=f12e258]: 활용신청
+                - link "[승인] 관세청_품목별 수출입실적(GW)" [ref=f12e259] [cursor=pointer]:
+                  - /url: javascript:fn_detail('uddi:47372500-4b57-449b-8248-e4773d7ff2b1_202206271647','119886555','0','PR0027')
+                  - paragraph [ref=f12e260]: "[승인] 관세청_품목별 수출입실적(GW)"
+              - generic [ref=f12e261]:
+                - paragraph [ref=f12e262]:
+                  - generic [ref=f12e263]: 계정
+                  - generic [ref=f12e264]: 개발
+                - paragraph [ref=f12e265]:
+                  - generic [ref=f12e266]: 신청일
+                  - generic [ref=f12e267]: 2026-06-29
+                - paragraph [ref=f12e268]:
+                  - generic [ref=f12e269]: 만료예정일
+                  - generic [ref=f12e270]: 2028-06-29
+          - navigation [ref=f12e271]:
+            - strong [ref=f12e272]:
+              - text: "1"
+              - generic [ref=f12e273]: 현재 페이지
+    - complementary [ref=f12e274]:
+      - link "상단가기" [ref=f12e275] [cursor=pointer]:
+        - /url: "#top"
+    - contentinfo [ref=f12e276]:
+      - generic [ref=f12e277]:
+        - generic [ref=f12e278]:
+          - generic [ref=f12e279]:
+            - strong [ref=f12e281]: 공공데이터 개방문의
+            - link "1566-0025" [ref=f12e282] [cursor=pointer]:
+              - /url: tel:1566-0025
+          - link "운영자 메일상담" [ref=f12e284] [cursor=pointer]:
+            - /url: mailto:opendata_help@nia.or.kr
+            - text: 운영자 메일상담
+          - generic [ref=f12e286]:
+            - link "페이스북 공유" [ref=f12e287] [cursor=pointer]:
+              - /url: http://www.facebook.com/koreadataportal
+              - generic [ref=f12e288]: 페이스북 공유
+            - link "트위터 공유" [ref=f12e289] [cursor=pointer]:
+              - /url: https://twitter.com/koreadataportal
+              - generic [ref=f12e290]: 트위터 공유
+            - link "블로그 공유" [ref=f12e291] [cursor=pointer]:
+              - /url: http://blog.naver.com/nia_korea
+              - generic [ref=f12e292]: 블로그 공유
+        - generic [ref=f12e293]:
+          - list
+          - generic [ref=f12e294]:
+            - combobox "관련사이트 선택" [ref=f12e295]:
+              - option "행정안전부" [selected]
+              - option "공공데이터전략위원회"
+              - option "공공데이터분쟁조정위원회"
+              - option "오픈데이터포럼"
+              - option "오픈스퀘어-D"
+            - button "이동" [ref=f12e296] [cursor=pointer]
+        - generic:
+          - link "행정안전부" [ref=f12e298] [cursor=pointer]:
+            - /url: https://www.mois.go.kr/
+            - img "행정안전부" [ref=f12e299]
+          - generic [ref=f12e300]:
+            - generic [ref=f12e301]:
+              - paragraph [ref=f12e302]: (30112) 세종특별자치시 도움6로 42(어진동)
+              - paragraph [ref=f12e303]:
+                - text: "대표번호 :"
+                - link "1566-0025" [ref=f12e304] [cursor=pointer]:
+                  - /url: tel:1566-0025
+              - paragraph [ref=f12e305]: "문의시간 : 09:00~18:00 (월~금)"
+            - paragraph [ref=f12e307]: ⓒ행정안전부. All rights reserved.
+  - log [ref=f12e308]

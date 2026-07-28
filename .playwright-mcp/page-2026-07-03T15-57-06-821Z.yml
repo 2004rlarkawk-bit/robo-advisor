@@ -1,0 +1,313 @@
+- generic [active] [ref=f32e1]:
+  - generic:
+    - paragraph:
+      - link "주메뉴 바로가기" [ref=f32e2] [cursor=pointer]:
+        - /url: "#topmenu"
+    - paragraph:
+      - link "콘텐츠 바로가기" [ref=f32e3] [cursor=pointer]:
+        - /url: "#main"
+  - generic [ref=f32e4]:
+    - banner [ref=f32e5]:
+      - heading "UNI-PASS" [level=1] [ref=f32e6]:
+        - link "UNI-PASS" [ref=f32e7] [cursor=pointer]:
+          - /url: javascript:location.href='/csp/home.do';
+      - navigation [ref=f32e8]:
+        - list [ref=f32e9]:
+          - listitem [ref=f32e10]:
+            - link "전자신고" [ref=f32e11] [cursor=pointer]:
+              - /url: "#topmenu"
+              - generic [ref=f32e12]: 전자신고
+          - listitem [ref=f32e13]:
+            - link "전자납부" [ref=f32e14] [cursor=pointer]:
+              - /url: "#topmenu"
+              - generic [ref=f32e15]: 전자납부
+          - listitem [ref=f32e16]:
+            - link "업무지원" [ref=f32e17] [cursor=pointer]:
+              - /url: "#topmenu"
+              - generic [ref=f32e18]: 업무지원
+          - listitem [ref=f32e19]:
+            - link "정보조회" [ref=f32e20] [cursor=pointer]:
+              - /url: "#topmenu"
+              - generic [ref=f32e21]: 정보조회
+          - listitem [ref=f32e22]:
+            - link "고객센터" [ref=f32e23] [cursor=pointer]:
+              - /url: "#topmenu"
+              - generic [ref=f32e24]: 고객센터
+          - listitem [ref=f32e25]:
+            - link "통관단일창구" [ref=f32e26] [cursor=pointer]:
+              - /url: "#"
+              - generic [ref=f32e27]: 통관단일창구
+          - listitem [ref=f32e28]:
+            - link "AEO" [ref=f32e29] [cursor=pointer]:
+              - /url: "#"
+              - generic [ref=f32e30]: AEO
+      - complementary [ref=f32e31]:
+        - generic [ref=f32e32]:
+          - searchbox "메뉴검색" [ref=f32e33]
+          - button "검색" [ref=f32e34] [cursor=pointer]:
+            - generic: 검색
+        - generic [ref=f32e265]:
+          - link "[로그아웃 연장]" [ref=f32e1082] [cursor=pointer]:
+            - /url: "#"
+          - text: 59분 13초
+        - text: (W4_2)
+        - link "마이페이지" [ref=f32e35] [cursor=pointer]:
+          - /url: javascript:myc_f_moveMenu('MYC_MNU_00000189', '09', 'N');
+        - link "사이트맵" [ref=f32e36] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=f32e275]:
+      - generic [ref=f32e276]:
+        - heading "MY메뉴" [level=1] [ref=f32e739]
+        - navigation [ref=f32e279]:
+          - list [ref=f32e280]:
+            - listitem [ref=f32e740]:
+              - link "개인정보관리" [ref=f32e741] [cursor=pointer]:
+                - /url: "#topmenu"
+                - generic [ref=f32e742]: 개인정보관리
+            - listitem [ref=f32e743]:
+              - link "개인화관리" [ref=f32e744] [cursor=pointer]:
+                - /url: "#topmenu"
+                - generic [ref=f32e745]: 개인화관리
+            - listitem [ref=f32e746]:
+              - link "서비스관리" [ref=f32e747] [cursor=pointer]:
+                - /url: "#topmenu"
+                - generic [ref=f32e748]: 서비스관리
+              - list [ref=f32e749]:
+                - listitem [ref=f32e750]:
+                  - link "자사실적 권한 설정" [ref=f32e751] [cursor=pointer]:
+                    - /url: javascript:myc_f_prccMenu('MYC_MNU_00011102', 'Y');
+                    - generic [ref=f32e752]: 자사실적 권한 설정
+                - listitem [ref=f32e753]:
+                  - link "OpenAPI 사용관리" [ref=f32e754] [cursor=pointer]:
+                    - /url: javascript:myc_f_prccMenu('MYC_MNU_00000197', 'Y');
+                    - generic [ref=f32e755]: OpenAPI 사용관리
+                  - list [ref=f32e756]
+                - listitem [ref=f32e757]:
+                  - link "정보서비스 채널선택" [ref=f32e758] [cursor=pointer]:
+                    - /url: javascript:myc_f_prccMenu('MYC_MNU_00011140', 'Y');
+                    - generic [ref=f32e759]: 정보서비스 채널선택
+                - listitem [ref=f32e760]:
+                  - link "FTA 원산지증명서 수출자 서명 목록" [ref=f32e761] [cursor=pointer]:
+                    - /url: javascript:myc_f_prccMenu('MYC_MNU_00000067', 'Y');
+                    - generic [ref=f32e762]: FTA 원산지증명서 수출자 서명 목록
+                - listitem [ref=f32e763]:
+                  - link "비가공증명서 서명 목록" [ref=f32e764] [cursor=pointer]:
+                    - /url: javascript:myc_f_prccMenu('MYC_MNU_00740553', 'Y');
+                    - generic [ref=f32e765]: 비가공증명서 서명 목록
+            - listitem [ref=f32e766]:
+              - link "문서함관리" [ref=f32e767] [cursor=pointer]:
+                - /url: "#topmenu"
+                - generic [ref=f32e768]: 문서함관리
+        - link "왼쪽 메뉴영역 닫기" [ref=f32e310] [cursor=pointer]:
+          - /url: "#"
+          - generic: 왼쪽 메뉴영역 닫기
+      - generic [ref=f32e311]:
+        - generic [ref=f32e769]:
+          - heading "OpenAPI 사용관리" [level=1] [ref=f32e770]
+          - link [ref=f32e771] [cursor=pointer]:
+            - /url: "#"
+          - complementary [ref=f32e772]:
+            - list [ref=f32e773]:
+              - listitem [ref=f32e774]: Home
+              - listitem [ref=f32e775]: MY메뉴
+              - listitem [ref=f32e776]: 서비스관리
+              - listitem [ref=f32e777]: OpenAPI사용관리
+        - generic [ref=f32e778]:
+          - generic [ref=f32e780]:
+            - table "OpenAPI목록 조회조건" [ref=f32e782]:
+              - caption:
+                - strong: OpenAPI목록
+                - paragraph: 조회조건
+              - rowgroup [ref=f32e788]:
+                - row "신청기간 ~ 달력 당일 1개월 1년 전체" [ref=f32e789]:
+                  - rowheader "신청기간" [ref=f32e790]
+                  - cell "~ 달력 당일 1개월 1년 전체" [ref=f32e791]:
+                    - generic [ref=f32e792]:
+                      - textbox "신청 시작일을 연 네 자리, 월 두 자리, 일 두 자리 순으로 띄어쓰기 없이 입력하세요." [ref=f32e793]
+                      - text: ~
+                      - textbox "신청 종료일을 연 네 자리, 월 두 자리, 일 두 자리 순으로 띄어쓰기 없이 입력하세요." [ref=f32e794]
+                      - link "달력" [ref=f32e795] [cursor=pointer]:
+                        - /url: "#"
+                        - generic [ref=f32e796]: 달력
+                    - generic [ref=f32e797]:
+                      - button "당일" [ref=f32e798] [cursor=pointer]
+                      - button "1개월" [ref=f32e799] [cursor=pointer]
+                      - button "1년" [ref=f32e800] [cursor=pointer]
+                      - button "전체" [ref=f32e801] [cursor=pointer]
+                - row "서비스명 --전체-- 처리상태 승인" [ref=f32e1045]:
+                  - rowheader "서비스명" [ref=f32e803]
+                  - cell "--전체--" [ref=f32e804]:
+                    - combobox "서비스명" [ref=f32e805]:
+                      - option "--전체--" [selected]
+                      - option "HS CODE 내비게이션"
+                      - option "HS부호검색"
+                      - option "간이정액적용비적용업체조회"
+                      - option "간이정액환급율표조회"
+                      - option "검사검역내역조회"
+                      - option "관세사내역조회"
+                      - option "관세사목록조회"
+                      - option "관세율기본조회"
+                      - option "관세환율정보조회"
+                      - option "농림축산검역본부 동축산물 업체코드 조회"
+                      - option "담보해제 신청 처리현황 정보 제공"
+                      - option "보세구역별 외국물품 장치기간 정보"
+                      - option "보세운송 운송차량정보"
+                      - option "보세운송차량등록내역조회"
+                      - option "선박회사내역조회"
+                      - option "선박회사목록조회"
+                      - option "세관장확인대상물품조회"
+                      - option "수입 제세의 납부여부 및 납부일자 정보 제공"
+                      - option "수입물품 보세구역 반출신고 정보"
+                      - option "수입신고 개인통관고유부호 검증"
+                      - option "수입신고필증검증"
+                      - option "수출신고번호별수출이행내역조회"
+                      - option "수출신고필증검증"
+                      - option "수출이행기간단축대상품목조회"
+                      - option "수출이행내역차대번호조회"
+                      - option "수출입신고 첨부서류사후제출 유무"
+                      - option "수출입신고서 정정신청 처리상태 제공"
+                      - option "수출입요건승인내역조회"
+                      - option "우편물통관진행정보"
+                      - option "우편번호별 관할세관 정보조회"
+                      - option "입출항보고내역조회"
+                      - option "입항보고내역조회&#40;항공&#41;"
+                      - option "입항보고내역조회&#40;해상&#41;"
+                      - option "장치장정보조회"
+                      - option "재수입조건부수출잔량정보"
+                      - option "재수출 이행 완료보고 처리정보 제공"
+                      - option "재수출 조건부 수입의 수출이행 기한 정보제공"
+                      - option "재수출면세이행잔량조회"
+                      - option "적재지 검사정보 제공"
+                      - option "전자상거래수출적재이행정보"
+                      - option "전자상거래업체부호 유효성 검증"
+                      - option "출항허가항공 조회"
+                      - option "출항허가해상 조회"
+                      - option "컨테이너내역조회"
+                      - option "통계부호내역조회"
+                      - option "통관고유부호조회"
+                      - option "통관단일창구 처리이력조회"
+                      - option "하선신고목록조회"
+                      - option "항공사내역조회"
+                      - option "항공사목록조회"
+                      - option "해외공급자부호조회"
+                      - option "화물운송주선업자내역조회"
+                      - option "화물운송주선업자목록조회"
+                      - option "화물통관진행정보조회"
+                  - rowheader "처리상태" [ref=f32e806]
+                  - cell "승인" [ref=f32e1046]:
+                    - combobox "처리상태" [ref=f32e808]:
+                      - option "-- 전체 --"
+                      - option "신청"
+                      - option "승인" [selected]
+                      - option "사용정지"
+            - generic [ref=f32e809]:
+              - button "초기화" [ref=f32e811] [cursor=pointer]:
+                - generic [ref=f32e812]: 초기화
+              - button "조회" [ref=f32e813] [cursor=pointer]:
+                - generic [ref=f32e814]: 조회
+          - heading "OpenAPI 목록" [level=2] [ref=f32e815]
+          - generic [ref=f32e816]:
+            - complementary [ref=f32e817]:
+              - generic [ref=f32e818]:
+                - generic [ref=f32e819]:
+                  - text: 전체
+                  - strong [ref=f32e820]: "4"
+                  - text: 건
+                - generic [ref=f32e821]:
+                  - text: 페이지당
+                  - combobox "페이지당 보여지는 건수를 선택하세요" [ref=f32e822]:
+                    - option "10" [selected]
+                    - option "20"
+                    - option "30"
+                    - option "50"
+                    - option "100"
+                  - button "선택" [ref=f32e823] [cursor=pointer]
+            - table "OpenAPI 조회결과 목록" [ref=f32e825]:
+              - caption: OpenAPI 조회결과 목록
+              - rowgroup [ref=f32e832]:
+                - row "전체선택 서비스명 신청일자 처리상태 서비스상태" [ref=f32e833]:
+                  - columnheader "전체선택" [ref=f32e834]:
+                    - checkbox "전체선택" [ref=f32e835]
+                  - columnheader "서비스명" [ref=f32e836]
+                  - columnheader "신청일자" [ref=f32e837]
+                  - columnheader "처리상태" [ref=f32e838]
+                  - columnheader "서비스상태" [ref=f32e839]
+              - rowgroup [ref=f32e840]:
+                - row "선택 관세율기본조회 2026-07-02 승인 서비스중" [ref=f32e1047]:
+                  - cell "선택" [ref=f32e1048]:
+                    - checkbox "선택" [ref=f32e1049]
+                  - cell "관세율기본조회" [ref=f32e1050]
+                  - cell "2026-07-02" [ref=f32e1051]
+                  - cell "승인" [ref=f32e1052]
+                  - cell "서비스중" [ref=f32e1053]
+                - row "선택 수출신고번호별수출이행내역조회 2026-07-02 승인 서비스중" [ref=f32e1054]:
+                  - cell "선택" [ref=f32e1055]:
+                    - checkbox "선택" [ref=f32e1056]
+                  - cell "수출신고번호별수출이행내역조회" [ref=f32e1057]
+                  - cell "2026-07-02" [ref=f32e1058]
+                  - cell "승인" [ref=f32e1059]
+                  - cell "서비스중" [ref=f32e1060]
+                - row "선택 수출입요건승인내역조회 2026-07-02 승인 서비스중" [ref=f32e1061]:
+                  - cell "선택" [ref=f32e1062]:
+                    - checkbox "선택" [ref=f32e1063]
+                  - cell "수출입요건승인내역조회" [ref=f32e1064]
+                  - cell "2026-07-02" [ref=f32e1065]
+                  - cell "승인" [ref=f32e1066]
+                  - cell "서비스중" [ref=f32e1067]
+                - row "선택 화물통관진행정보조회 2026-07-02 승인 서비스중" [ref=f32e1068]:
+                  - cell "선택" [ref=f32e1069]:
+                    - checkbox "선택" [ref=f32e1070]
+                  - cell "화물통관진행정보조회" [ref=f32e1071]
+                  - cell "2026-07-02" [ref=f32e1072]
+                  - cell "승인" [ref=f32e1073]
+                  - cell "서비스중" [ref=f32e1074]
+            - list [ref=f32e1075]:
+              - listitem [ref=f32e1076]:
+                - strong [ref=f32e1077]: "1"
+          - generic [ref=f32e925]:
+            - button "연계가이드 다운로드" [ref=f32e926] [cursor=pointer]
+            - button "OPEN API 신청" [ref=f32e927] [cursor=pointer]
+          - heading "상세내역" [level=2] [ref=f32e928]
+          - table "OpenAPI 상세 상세내용" [ref=f32e930]:
+            - caption:
+              - strong: OpenAPI 상세
+              - paragraph: 상세내용
+            - rowgroup [ref=f32e936]:
+              - row "서비스ID API030 서비스명 관세율기본조회" [ref=f32e1083]:
+                - rowheader "서비스ID" [ref=f32e938]
+                - cell "API030" [ref=f32e1084]
+                - rowheader "서비스명" [ref=f32e940]
+                - cell "관세율기본조회" [ref=f32e1085]
+              - row "신청일자 2026-07-02 처리일자 2026-07-02" [ref=f32e1086]:
+                - rowheader "신청일자" [ref=f32e943]
+                - cell "2026-07-02" [ref=f32e1087]
+                - rowheader "처리일자" [ref=f32e945]
+                - cell "2026-07-02" [ref=f32e1088]
+              - row "처리상태 승인 인증키 p280k216f047m032l080j050f1" [ref=f32e1089]:
+                - rowheader "처리상태" [ref=f32e948]
+                - cell "승인" [ref=f32e1090]
+                - rowheader "인증키" [ref=f32e950]
+                - cell "p280k216f047m032l080j050f1" [ref=f32e1091]
+              - row "서비스설명 관세율기본을 조회한다." [ref=f32e1092]:
+                - rowheader "서비스설명" [ref=f32e953]
+                - cell "관세율기본을 조회한다." [ref=f32e1093]
+  - generic [ref=f32e251]:
+    - generic [ref=f32e252]:
+      - heading "MY CUSTOMS 바로가기" [level=1] [ref=f32e253]:
+        - link "MY CUSTOMS 바로가기" [ref=f32e254] [cursor=pointer]:
+          - /url: "#"
+      - link "퀵메뉴 영역 숨김" [ref=f32e255] [cursor=pointer]:
+        - /url: "#"
+    - article [ref=f32e256]:
+      - article [ref=f32e257]:
+        - generic [ref=f32e258]:
+          - heading [level=2]
+          - generic [ref=f32e259]:
+            - list
+            - button "SETTING" [ref=f32e260] [cursor=pointer]:
+              - generic: SETTING
+      - strong [ref=f32e261]:
+        - link "LOG OUT" [ref=f32e262] [cursor=pointer]:
+          - /url: "#"
+          - generic [ref=f32e263]: LOG OUT
+        - paragraph [ref=f32e264]: 로그아웃

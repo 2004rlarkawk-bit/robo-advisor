@@ -2,7 +2,7 @@ import { Agent, DocumentResult, HSCodeResult, AgentLog, createLog } from './type
 import { TradeProfile, GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, InsuranceData } from '../types';
 import { determineRequiredDocuments } from '../harness/rulesEngine';
 import { autoFillDocumentFields } from '../services/claudeService';
-import { renderPackingListHTML } from './templates/packingList';
+import { isLcPayment } from './paymentTerms';
 import { renderCertificateOfOriginHTML } from './templates/co';
 import { renderInsuranceHTML } from './templates/insurance';
 
@@ -51,6 +51,14 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
         logs.push(createLog(this.name, `AI 호출 실패, 기본값 사용: ${e instanceof Error ? e.message : '알 수 없는 오류'}`, 'warning'));
       }
     }
+
+    // L/C 필드 파생 — 결제조건이 신용장(L/C)이 아니면 강제 공란 처리한다.
+    // (근본 원인: L/C 정보를 결제방식과 무관하게 그대로 흘려보내면 T/T 거래에 lc_no/은행이 남는다.
+    //  파생 단계에서 결제조건을 기준으로 차단해, 두 문서(인보이스·패킹리스트)가 항상 일관되게 한다.)
+    const isLc = isLcPayment(paymentTerms);
+    const lcNo = isLc ? (profile.lcNo || '').trim() : '';
+    const lcDate = isLc ? (profile.lcDate || '').trim() : '';
+    const lcBank = isLc ? (profile.lcBank || '').trim() : '';
 
     // 3. Invoice 데이터 조립
     const invoiceDoc = requiredDocs.find(d => d.id === 'invoice');
@@ -110,6 +118,7 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
         loadPort: profile.loadPort,
         dischargePort: profile.dischargePort,
         paymentTerms,
+        lcNo, // 비신용장 결제면 위에서 이미 ''로 강제됨
         // 서명란은 사용자가 지정한 서명자만 표기 — 상호를 서명으로 흉내내지 않는다(공란 허용).
         signedBy: profile.signedBy || profile.signerName || '',
         // 무역협회 표준 서식 ①~⑱ 추가 필드
@@ -150,6 +159,16 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
         consignee: plConsignee,
         exporter: plSeller, // 템플릿 호환용 별칭
         importer: plConsignee, // 템플릿 호환용 별칭
+        // 상업송장과 공유하는 거래 데이터 — 패킹리스트 xlsx가 재입력 없이 여기서 가져온다.
+        invoiceDate: generatedDocs.invoice?.invoiceDate || profile.invoiceDate || '',
+        incoterms: profile.incoterms || '',
+        paymentTerms,
+        // L/C 필드는 파생 단계에서 결제조건 기준으로 이미 공란 처리됨(비신용장이면 '').
+        lcNo,
+        lcDate,
+        lcBank,
+        carrier: profile.carrier || profile.vesselOrFlight || '',
+        notifyPartyName: profile.notifyPartyName || '',
         // 화인(shipping marks) 미입력이면 빈 값 — 템플릿이 'N/M'(No Marks) 표기를 담당한다.
         shippingMarks: profile.shippingMarks || '',
         signedBy: profile.signedBy || profile.signerName || '',
@@ -265,10 +284,9 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     // HTML 템플릿 렌더링 적용
     // 상업송장은 고정 docx 템플릿(invoiceDocxService)에서 생성·미리보기하므로 HTML을 만들지 않는다.
     // (미리보기 = 다운로드 docx 단일 소스. generatedDocs.invoice 구조 데이터만 넘긴다.)
+    // 패킹리스트도 고정 xlsx 템플릿(packingListXlsxService)에서 생성·미리보기하므로 HTML을 만들지 않는다.
+    // (미리보기 = 다운로드 xlsx 단일 소스. generatedDocs.packingList 구조 데이터만 넘긴다.)
     const htmlTemplates: Record<string, string> = {};
-   if (generatedDocs.packingList) {
-  htmlTemplates.packing_list = renderPackingListHTML(generatedDocs.packingList);
-}
     if (generatedDocs.certificateOfOrigin) {
       htmlTemplates.co = renderCertificateOfOriginHTML(generatedDocs.certificateOfOrigin);
     }

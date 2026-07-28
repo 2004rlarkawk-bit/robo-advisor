@@ -1,0 +1,18 @@
+- generic [ref=f1e6]:
+  - generic [ref=f1e7]:
+    - generic [ref=f1e8]: 🚢
+    - generic [ref=f1e9]: PortAI
+    - generic [ref=f1e10]: 스마트 물류 & 통관 자동화 플랫폼
+  - generic [ref=f1e11]:
+    - generic [ref=f1e12]:
+      - generic [ref=f1e13]: 사용자 아이디 (이메일)
+      - textbox "demo@portai.com" [ref=f1e14]
+    - generic [ref=f1e15]:
+      - generic [ref=f1e16]: 비밀번호
+      - textbox "••••••••" [ref=f1e17]
+    - button "로그인" [ref=f1e18] [cursor=pointer]
+  - generic [ref=f1e19]:
+    - generic [ref=f1e20]: 💡 데모 계정으로 자동완성
+    - button "인천테크 (회원)" [ref=f1e22] [cursor=pointer]
+  - generic [ref=f1e23]: 또는
+  - button "비회원으로 시작하기 (체험)" [ref=f1e24] [cursor=pointer]

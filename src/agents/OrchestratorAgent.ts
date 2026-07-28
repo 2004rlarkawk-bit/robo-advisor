@@ -161,6 +161,7 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
             profile: updatedProfile,
             documents: docResult.documents,
             hsResult,
+            generatedDocs: docResult.generatedDocs,
             logs
           }),
           this.config.timeout!

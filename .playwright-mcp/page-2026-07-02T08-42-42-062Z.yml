@@ -1,0 +1,397 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - paragraph:
+      - link "주메뉴 바로가기" [ref=e2] [cursor=pointer]:
+        - /url: "#topmenu"
+    - paragraph:
+      - link "콘텐츠 바로가기" [ref=e3] [cursor=pointer]:
+        - /url: "#main"
+  - generic [ref=e4]:
+    - banner [ref=e5]:
+      - heading "UNI-PASS" [level=1] [ref=e6]:
+        - link "UNI-PASS" [ref=e7] [cursor=pointer]:
+          - /url: javascript:location.href='/csp/home.do';
+      - navigation [ref=e8]:
+        - list [ref=e9]:
+          - listitem [ref=e10]:
+            - link "전자신고" [ref=e11] [cursor=pointer]:
+              - /url: "#topmenu"
+              - generic [ref=e12]: 전자신고
+          - listitem [ref=e13]:
+            - link "전자납부" [ref=e14] [cursor=pointer]:
+              - /url: "#topmenu"
+              - generic [ref=e15]: 전자납부
+          - listitem [ref=e16]:
+            - link "업무지원" [ref=e17] [cursor=pointer]:
+              - /url: "#topmenu"
+              - generic [ref=e18]: 업무지원
+          - listitem [ref=e19]:
+            - link "정보조회" [ref=e20] [cursor=pointer]:
+              - /url: "#topmenu"
+              - generic [ref=e21]: 정보조회
+          - listitem [ref=e22]:
+            - link "고객센터" [ref=e23] [cursor=pointer]:
+              - /url: "#topmenu"
+              - generic [ref=e24]: 고객센터
+          - listitem [ref=e25]:
+            - link "통관단일창구" [ref=e26] [cursor=pointer]:
+              - /url: "#"
+              - generic [ref=e27]: 통관단일창구
+          - listitem [ref=e28]:
+            - link "AEO" [ref=e29] [cursor=pointer]:
+              - /url: "#"
+              - generic [ref=e30]: AEO
+      - complementary [ref=e31]:
+        - generic [ref=e32]:
+          - searchbox "메뉴검색" [ref=e33]
+          - button "검색" [ref=e34] [cursor=pointer]:
+            - generic: 검색
+        - text: (W4_1)
+        - link "마이페이지" [ref=e35] [cursor=pointer]:
+          - /url: javascript:myc_f_moveMenu('MYC_MNU_00000189', '', 'N');
+        - link "사이트맵" [ref=e36] [cursor=pointer]:
+          - /url: "#"
+    - generic [ref=e37]:
+      - generic [ref=e38]:
+        - article [ref=e39]:
+          - paragraph [ref=e41]:
+            - button "이전" [ref=e42] [cursor=pointer]
+            - button "정지" [ref=e43] [cursor=pointer]
+            - button "다음" [ref=e44] [cursor=pointer]
+          - list [ref=e45]:
+            - listitem [ref=e46]:
+              - link "전자상거래 등록 누리집" [ref=e47] [cursor=pointer]:
+                - /url: javascript:aLinkWindowOpen("https://unipass.customs.go.kr/ecb/index.do");
+                - img "전자상거래 등록 누리집" [ref=e48]
+          - list [ref=e49]:
+            - listitem [ref=e50] [cursor=pointer]:
+              - link "1번 배너" [ref=e51]:
+                - /url: "#"
+        - article [ref=e52]:
+          - generic [ref=e53]:
+            - generic [ref=e54]:
+              - heading "공지사항" [level=2] [ref=e55]
+              - list [ref=e56]:
+                - listitem [ref=e57]:
+                  - link "2026 적극행정‧규제합리화 아이디어 대국민 공모전 개최 안내 [2026-07-01]" [ref=e58] [cursor=pointer]:
+                    - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00000181', '/csp/myc/custsppt/cmmn/NtarBrkdMtCtr/openMYC0605014Q.do?ntarId=202607012943');
+                    - text: 2026 적극행정‧규제합리화 아이디어 대국민 공모전 개최 안내
+                    - generic [ref=e59]: "[2026-07-01]"
+                - listitem [ref=e60]:
+                  - link "보세판매장 화물관리시스템 개편 항목정의서 수정 배포 [2026-06-30]" [ref=e61] [cursor=pointer]:
+                    - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00000181', '/csp/myc/custsppt/cmmn/NtarBrkdMtCtr/openMYC0605014Q.do?ntarId=202606302942');
+                    - text: 보세판매장 화물관리시스템 개편 항목정의서 수정 배포
+                    - generic [ref=e62]: "[2026-06-30]"
+                - listitem [ref=e63]:
+                  - link "한-EU, 한-영국 FTA 연차별 협정세율 유니패스 반영 안내 [2026-06-30]" [ref=e64] [cursor=pointer]:
+                    - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00000181', '/csp/myc/custsppt/cmmn/NtarBrkdMtCtr/openMYC0605014Q.do?ntarId=202606302941');
+                    - text: 한-EU, 한-영국 FTA 연차별 협정세율 유니패스 반영 안내
+                    - generic [ref=e65]: "[2026-06-30]"
+                - listitem [ref=e66]:
+                  - link "지방행정체제 개편에 따른 전자문서 제출 안내 [2026-06-30]" [ref=e67] [cursor=pointer]:
+                    - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00000181', '/csp/myc/custsppt/cmmn/NtarBrkdMtCtr/openMYC0605014Q.do?ntarId=202606302940');
+                    - text: 지방행정체제 개편에 따른 전자문서 제출 안내
+                    - generic [ref=e68]: "[2026-06-30]"
+                - listitem [ref=e69]:
+                  - link "인천광역시 지방행정체제 개편에 따른 개인통관고유부호 배송지 주소 안내 [2026-06-29]" [ref=e70] [cursor=pointer]:
+                    - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00000181', '/csp/myc/custsppt/cmmn/NtarBrkdMtCtr/openMYC0605014Q.do?ntarId=202606292937');
+                    - text: 인천광역시 지방행정체제 개편에 따른 개인통관고유부호 배송지 주소 안내
+                    - generic [ref=e71]: "[2026-06-29]"
+              - link "공지사항 더보기" [ref=e73] [cursor=pointer]:
+                - /url: javascript:myc_f_openMenuDrt('MYC_MNU_00000181');
+                - img "공지사항 더보기" [ref=e74]
+            - generic [ref=e75]:
+              - heading "행정예고" [level=2] [ref=e76]
+              - list [ref=e77]:
+                - listitem [ref=e78]:
+                  - link "환적화물 처리절차에 관한 특례고시 [2026-06-18]" [ref=e79] [cursor=pointer]:
+                    - /url: javascript:f_popupUrl('https://unipass.customs.go.kr/clip/index.do?opnurl=/convcfnct/admnrulmkplpnot/openULS0502002Q.do?jdafCgePbanMtNo=20260131&opnMod=P', '1400', '700');
+                    - text: 환적화물 처리절차에 관한 특례고시
+                    - generic [ref=e80]: "[2026-06-18]"
+                - listitem [ref=e81]:
+                  - link "「관세사의 직무수행에 관한 고시」 일부개정(안) 행정예고 및 의견조회 [2026-06-16]" [ref=e82] [cursor=pointer]:
+                    - /url: javascript:f_popupUrl('https://unipass.customs.go.kr/clip/index.do?opnurl=/convcfnct/admnrulmkplpnot/openULS0502002Q.do?jdafCgePbanMtNo=20260128&opnMod=P', '1400', '700');
+                    - text: 「관세사의 직무수행에 관한 고시」 일부개정(안) 행정예고 및 의견조회
+                    - generic [ref=e83]: "[2026-06-16]"
+              - link "행정예고 더보기 새창 열림" [ref=e85] [cursor=pointer]:
+                - /url: javascript:aLinkWindowOpen('https://unipass.customs.go.kr/clip/index.do?opnurl=/convcfnct/admnrulmkplpnot/openULS0502001Q.do');
+                - img "행정예고 더보기 새창 열림" [ref=e86]
+          - generic [ref=e87]:
+            - generic [ref=e88]:
+              - heading "화물진행정보" [level=2] [ref=e89]
+              - group "화물진행정보 조회폼" [ref=e90]:
+                - generic: 화물진행정보 조회폼
+                - list [ref=e91]:
+                  - listitem [ref=e92]:
+                    - radio "화물관리번호" [checked] [ref=e93]
+                    - text: 화물관리번호
+                  - listitem [ref=e94]:
+                    - radio "M B/L - H B/L" [ref=e95]
+                    - text: M B/L - H B/L
+                - generic [ref=e96]:
+                  - textbox "화물진행정보 입력" [ref=e98]
+                  - button "조회" [ref=e99] [cursor=pointer]
+            - generic [ref=e100]:
+              - heading "수출이행내역" [level=2] [ref=e101]
+              - group "수출이행내역 조회폼" [ref=e102]:
+                - generic: 수출이행내역 조회폼
+                - list [ref=e103]:
+                  - listitem [ref=e104]:
+                    - radio "수출신고번호" [checked] [ref=e105]
+                    - text: 수출신고번호
+                  - listitem [ref=e106]:
+                    - radio "B/L" [ref=e107]
+                    - text: B/L
+                  - listitem [ref=e108]:
+                    - radio "목록변환(전자상거래 수출) 수출신고번호" [ref=e109]
+                    - text: 목록변환(전자상거래 수출) 수출신고번호
+                - generic [ref=e110]:
+                  - textbox "수출이행내역" [ref=e111]
+                  - button "조회" [ref=e112] [cursor=pointer]
+      - generic [ref=e113]:
+        - generic [ref=e114]:
+          - article:
+            - generic [ref=e115]:
+              - heading "환율정보 적용기간[26.06.28~26.07.04]" [level=2] [ref=e117]
+              - table "환율정보 국가별 수출, 수입 환율정보 테이블" [ref=e118]:
+                - caption:
+                  - strong: 환율정보
+                  - paragraph: 국가별 수출, 수입 환율정보 테이블
+                - rowgroup [ref=e123]:
+                  - row "국가(통화) 수출 수입" [ref=e124]:
+                    - columnheader "국가(통화)" [ref=e125]
+                    - columnheader "수출" [ref=e126]
+                    - columnheader "수입" [ref=e127]
+                - rowgroup [ref=e128]:
+                  - row "미국(USD) 1,538.3 1,538.3" [ref=e129]:
+                    - cell "미국(USD)" [ref=e130]:
+                      - strong [ref=e131]: 미국(USD)
+                    - cell "1,538.3" [ref=e132]
+                    - cell "1,538.3" [ref=e133]
+                  - row "일본(JPY) 9.5179 9.5179" [ref=e134]:
+                    - cell "일본(JPY)" [ref=e135]:
+                      - strong [ref=e136]: 일본(JPY)
+                    - cell "9.5179" [ref=e137]
+                    - cell "9.5179" [ref=e138]
+                  - row "유럽연합(EUR) 1,753.54 1,753.54" [ref=e139]:
+                    - cell "유럽연합(EUR)" [ref=e140]:
+                      - strong [ref=e141]: 유럽연합(EUR)
+                    - cell "1,753.54" [ref=e142]
+                    - cell "1,753.54" [ref=e143]
+                  - row "중국(CNY) 226.66 226.66" [ref=e144]:
+                    - cell "중국(CNY)" [ref=e145]:
+                      - strong [ref=e146]: 중국(CNY)
+                    - cell "226.66" [ref=e147]
+                    - cell "226.66" [ref=e148]
+                  - row "영국(GBP) 2,030.97 2,030.97" [ref=e149]:
+                    - cell "영국(GBP)" [ref=e150]:
+                      - strong [ref=e151]: 영국(GBP)
+                    - cell "2,030.97" [ref=e152]
+                    - cell "2,030.97" [ref=e153]
+              - link "환율정보더보기" [ref=e155] [cursor=pointer]:
+                - /url: javascript:myc_f_openMenuDrt('MYC_MNU_00000339');
+                - img "환율정보더보기" [ref=e156]
+          - article:
+            - generic [ref=e157]:
+              - heading "서비스 상태" [level=2] [ref=e158]
+              - img "원활" [ref=e160]
+        - generic [ref=e161]:
+          - article:
+            - generic [ref=e162]:
+              - list:
+                - listitem:
+                  - link "조회" [ref=e163] [cursor=pointer]:
+                    - /url: "#sm0"
+                    - img "조회" [ref=e164]
+                  - list [ref=e165]:
+                    - listitem [ref=e166]:
+                      - link "전자신고 처리현황" [ref=e167] [cursor=pointer]:
+                        - /url: javascript:myc_f_moveMenu('MYC_MNU_00000058', '', 'N');
+                        - paragraph [ref=e168]:
+                          - text: 전자신고
+                          - text: 처리현황
+                    - listitem [ref=e169]:
+                      - link "수신현황" [ref=e170] [cursor=pointer]:
+                        - /url: javascript:myc_f_moveMenu('MYC_MNU_00000966', '', 'N');
+                        - paragraph [ref=e171]: 수신현황
+                    - listitem [ref=e172]:
+                      - link "통지현황" [ref=e173] [cursor=pointer]:
+                        - /url: javascript:myc_f_moveMenu('MYC_MNU_00000059', '', 'N');
+                        - paragraph [ref=e174]: 통지현황
+                    - listitem [ref=e175]:
+                      - link "전자납부" [ref=e176] [cursor=pointer]:
+                        - /url: javascript:myc_f_moveMenu('MYC_MNU_00004212', '', 'N');
+                        - paragraph [ref=e177]: 전자납부
+                    - listitem [ref=e178]:
+                      - link "납부내역" [ref=e179] [cursor=pointer]:
+                        - /url: javascript:myc_f_moveMenu('MYC_MNU_00004283', '', 'N');
+                        - paragraph [ref=e180]: 납부내역
+                    - listitem [ref=e181]:
+                      - link "납세신고 도움정보" [ref=e182] [cursor=pointer]:
+                        - /url: javascript:myc_f_moveMenu('MYC_MNU_00011220', '', 'N');
+                        - paragraph [ref=e183]:
+                          - text: 납세신고
+                          - text: 도움정보
+                    - listitem [ref=e184]:
+                      - link "수입요건 승인내역" [ref=e185] [cursor=pointer]:
+                        - /url: javascript:myc_f_moveMenu('MYC_MNU_00000408', '', 'N');
+                        - paragraph [ref=e186]:
+                          - text: 수입요건
+                          - text: 승인내역
+                    - listitem [ref=e187]:
+                      - link "요건신청신청서 처리현황" [ref=e188] [cursor=pointer]:
+                        - /url: javascript:myc_f_moveMenu('MYC_MNU_00000075', '', 'N');
+                        - paragraph [ref=e189]:
+                          - text: 요건신청신청서
+                          - text: 처리현황
+                    - listitem [ref=e190]:
+                      - link "통관고유부호 조회/신청" [ref=e191] [cursor=pointer]:
+                        - /url: javascript:myc_f_moveMenu('MYC_MNU_00011077', '', 'N');
+                        - paragraph [ref=e192]:
+                          - text: 통관고유부호
+                          - text: 조회/신청
+                    - listitem [ref=e193]:
+                      - link "해외거래처 조회/신청" [ref=e194] [cursor=pointer]:
+                        - /url: javascript:myc_f_moveMenu('MYC_MNU_00011079', '', 'N');
+                        - paragraph [ref=e195]:
+                          - text: 해외거래처
+                          - text: 조회/신청
+                - listitem:
+                  - link "출력" [ref=e196] [cursor=pointer]:
+                    - /url: "#sm1"
+                    - img "출력" [ref=e197]
+                - listitem:
+                  - link "신청/신고" [ref=e198] [cursor=pointer]:
+                    - /url: "#sm2"
+                    - img "신청/신고" [ref=e199]
+          - article:
+            - table [ref=e201]:
+              - caption
+              - rowgroup:
+                - row "법령정보 바로가기 유통업체 유통이력신고 바로가기 개인통관고유부호 바로가기 관세행정사전안내 바로가기 여행자분실물검색 바로가기 국제우편문통관 바로가기 밀수신고 바로가기 공매물품조회 바로가기":
+                  - columnheader "법령정보 바로가기" [ref=e211]
+                  - columnheader "유통업체 유통이력신고 바로가기" [ref=e212]
+                  - columnheader "개인통관고유부호 바로가기" [ref=e213]
+                  - columnheader "관세행정사전안내 바로가기" [ref=e214]
+                  - columnheader "여행자분실물검색 바로가기" [ref=e215]
+                  - columnheader "국제우편문통관 바로가기" [ref=e216]
+                  - columnheader "밀수신고 바로가기" [ref=e217]
+                  - columnheader "공매물품조회 바로가기" [ref=e218]
+              - rowgroup [ref=e219]:
+                - row "법령정보 유통업체 유통이력신고 개인통관 고유부호 관세행정 사전안내 여행자 분실물검색 국제우편물 통관 밀수신고 공매물품조회" [ref=e220]:
+                  - cell "법령정보" [ref=e221] [cursor=pointer]:
+                    - link "법령정보":
+                      - /url: "#"
+                      - heading "법령정보" [level=3] [ref=e222]
+                  - cell "유통업체 유통이력신고" [ref=e223] [cursor=pointer]:
+                    - link "유통업체 유통이력신고":
+                      - /url: "#"
+                      - heading "유통업체 유통이력신고" [level=3] [ref=e224]:
+                        - text: 유통업체
+                        - text: 유통이력신고
+                  - cell "개인통관 고유부호" [ref=e225] [cursor=pointer]:
+                    - link "개인통관 고유부호":
+                      - /url: "#"
+                      - heading "개인통관 고유부호" [level=3] [ref=e226]:
+                        - text: 개인통관
+                        - text: 고유부호
+                  - cell "관세행정 사전안내" [ref=e227] [cursor=pointer]:
+                    - link "관세행정 사전안내":
+                      - /url: "#"
+                      - heading "관세행정 사전안내" [level=3] [ref=e228]:
+                        - text: 관세행정
+                        - text: 사전안내
+                  - cell "여행자 분실물검색" [ref=e229] [cursor=pointer]:
+                    - link "여행자 분실물검색":
+                      - /url: "#"
+                      - heading "여행자 분실물검색" [level=3] [ref=e230]:
+                        - text: 여행자
+                        - text: 분실물검색
+                  - cell "국제우편물 통관" [ref=e231] [cursor=pointer]:
+                    - link "국제우편물 통관":
+                      - /url: "#"
+                      - heading "국제우편물 통관" [level=3] [ref=e232]:
+                        - text: 국제우편물
+                        - text: 통관
+                  - cell "밀수신고" [ref=e233] [cursor=pointer]:
+                    - link "밀수신고":
+                      - /url: "#"
+                      - heading "밀수신고" [level=3] [ref=e234]
+                  - cell "공매물품조회" [ref=e235] [cursor=pointer]:
+                    - link "공매물품조회":
+                      - /url: "#"
+                      - heading "공매물품조회" [level=3] [ref=e236]
+      - article [ref=e238]:
+        - strong [ref=e239]:
+          - img "UNI-PASS" [ref=e240]
+        - list [ref=e241]:
+          - listitem [ref=e242]:
+            - link "개인정보처리방침" [ref=e243] [cursor=pointer]:
+              - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00000179', '/csp/myc/custsppt/usercomnmt/UserMtCtr/openMYC0502010Q.do?tabCls=3')
+          - listitem [ref=e244]:
+            - link "이용약관" [ref=e245] [cursor=pointer]:
+              - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00000179', '/csp/myc/custsppt/usercomnmt/UserMtCtr/openMYC0502010Q.do?tabCls=4')
+        - generic [ref=e246]:
+          - generic [ref=e247]: 35208 대전광역시 서구 청사로 189 정부대전청사 1동 ⓒ Korea Customs Service. All Rights Reserved.
+          - list [ref=e248]:
+            - listitem [ref=e249]: "기술지원센터 : 1544-1285(평일 09:00 ~ 19:00)"
+            - listitem [ref=e250]:
+              - link "원격지원상담" [ref=e251] [cursor=pointer]:
+                - /url: "#"
+            - listitem [ref=e252]:
+              - link "개선의견" [ref=e253] [cursor=pointer]:
+                - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00000184', 'Y');
+  - generic [ref=e254]:
+    - generic [ref=e255]:
+      - heading "MY CUSTOMS" [level=1] [ref=e256]
+      - link "퀵메뉴 영역 숨김" [ref=e257] [cursor=pointer]:
+        - /url: "#"
+    - generic [ref=e258]:
+      - article [ref=e259]:
+        - generic [ref=e260]:
+          - button "로그인" [ref=e261] [cursor=pointer]
+          - button "Any-ID 로그인" [ref=e262] [cursor=pointer]
+          - button "인증센터" [ref=e263] [cursor=pointer]
+          - generic [ref=e264]:
+            - link "ID 찾기" [ref=e265] [cursor=pointer]:
+              - /url: "#"
+            - link "PW 변경" [ref=e266] [cursor=pointer]:
+              - /url: "#"
+            - link "회원가입" [ref=e267] [cursor=pointer]:
+              - /url: "#"
+      - article [ref=e268]:
+        - list [ref=e269]:
+          - listitem [ref=e270]:
+            - link "원격지원 상담" [ref=e271] [cursor=pointer]:
+              - /url: "#"
+              - generic [ref=e272]:
+                - text: 원격지원
+                - text: 상담
+          - listitem [ref=e273]:
+            - link "인증서 등록/갱신" [ref=e274] [cursor=pointer]:
+              - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00011129', 'Y');
+              - generic [ref=e275]:
+                - text: 인증서
+                - text: 등록/갱신
+          - listitem [ref=e276]:
+            - link "개선의견" [ref=e277] [cursor=pointer]:
+              - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00000184', 'Y');
+          - listitem [ref=e278]:
+            - link "질의응답" [ref=e279] [cursor=pointer]:
+              - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00000182', 'Y');
+          - listitem [ref=e280]:
+            - link "자주묻는 질문" [ref=e281] [cursor=pointer]:
+              - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00000183', 'Y');
+              - generic [ref=e282]:
+                - text: 자주묻는
+                - text: 질문
+          - listitem [ref=e283]:
+            - link "나의 포틀릿" [ref=e284] [cursor=pointer]:
+              - /url: javascript:myc_f_createLeftMenuLst('MYC_MNU_00740542', 'Y');
+      - generic [ref=e285]:
+        - generic:
+          - generic [ref=e286]:
+            - heading "관련사이트" [level=2] [ref=e287]
+            - link "전체보기" [ref=e289] [cursor=pointer]:
+              - /url: "#self"
+          - img "챗봇상담" [ref=e291] [cursor=pointer]

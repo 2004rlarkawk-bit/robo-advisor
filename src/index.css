@@ -503,6 +503,13 @@ body {
   gap: 8px;
 }
 
+.form-hint {
+  font-size: 12px;
+  color: var(--text-light);
+  margin-top: -4px;
+  font-weight: 500;
+}
+
 .form-label {
   font-size: 13px;
   font-weight: 600;
@@ -1342,6 +1349,58 @@ body {
   background-color: #f1f5f9;
   color: #94a3b8;
   text-decoration: line-through;
+}
+
+/* 이슈 심각도 그룹 헤더 (검토 보완 안내) */
+.sev-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border-left: 4px solid transparent;
+  font-size: 13px;
+  font-weight: 700;
+}
+.sev-section-header:first-child {
+  margin-top: 4px;
+}
+.sev-section-label {
+  letter-spacing: -0.01em;
+}
+.sev-section-count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.7);
+}
+.sev-section-hint {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+.sev-section-header.sev-error {
+  background-color: var(--error-bg);
+  color: var(--error-color);
+  border-left-color: var(--error-color);
+}
+.sev-section-header.sev-warning {
+  background-color: var(--warning-bg);
+  color: var(--warning-color);
+  border-left-color: var(--warning-color);
+}
+.sev-section-header.sev-info {
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+  border-left-color: var(--primary-color);
 }
 
 /* Document Result Cards (Col 2) */

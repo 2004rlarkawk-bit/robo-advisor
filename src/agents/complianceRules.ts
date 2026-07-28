@@ -1,5 +1,6 @@
-import { TradeProfile, ValidationIssue, DocumentType } from '../types';
+import { TradeProfile, ValidationIssue, DocumentType, InvoiceData, PackingListData, InvoiceItem } from '../types';
 import { AgentLog, createLog } from './types';
+import { isLcPayment, isNonLcPayment } from './paymentTerms';
 
 /**
  * 검증 정책 (타입으로 강제)
@@ -26,6 +27,10 @@ export const RULE_POLICY = {
   'r7-nonlatin-lc':           { severity: 'error',   overridable: true },
   'r7-nonlatin':              { severity: 'warning', overridable: false },
   'r8-amount-arithmetic':     { severity: 'error',   overridable: false },
+  'r10-packing-qty-mismatch': { severity: 'warning', overridable: false },
+  'r10-packing-desc-mismatch':{ severity: 'warning', overridable: false },
+  'r11-payment-lc-conflict':  { severity: 'error',   overridable: true },
+  'r11-lc-missing':           { severity: 'warning', overridable: false },
 } as const satisfies Record<string, RulePolicy>;
 
 export type ComplianceRuleId = keyof typeof RULE_POLICY;
@@ -216,6 +221,18 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
         : '품명에 한글만 있습니다. 영문 품명을 작성하세요.'));
   }
 
+  // ── R11. 결제조건 ↔ L/C 필드 정합성 ─────────────────
+  // 비신용장(T/T 등) 결제인데 L/C 정보가 있으면 모순 → error(차단, 사유 override 가능).
+  // 반대로 L/C 결제인데 L/C 번호가 없으면 → warning.
+  const lcVals = [profile.lcNo, profile.lcBank, profile.lcDate].map(v => (v || '').trim()).filter(Boolean);
+  if (isNonLcPayment(profile.paymentTerms) && lcVals.length > 0) {
+    issues.push(mk('r11-payment-lc-conflict', 'invoice', 'paymentTerms',
+      `결제조건이 비신용장("${profile.paymentTerms}")인데 L/C 정보(${lcVals.join(', ')})가 입력되어 있습니다. 서로 모순이므로 결제조건 또는 L/C 필드를 정정하세요.`));
+  } else if (isLcPayment(profile.paymentTerms) && !(profile.lcNo || '').trim()) {
+    issues.push(mk('r11-lc-missing', 'invoice', 'lcNo',
+      `결제조건이 L/C인데 L/C 번호가 비어 있습니다. 신용장 번호(예: LC-2026-0001)를 입력하세요.`));
+  }
+
   // ── R8. 금액 산술 (error) ───────────────────────────
   // quantity × unit_price = amount (통화별 소수 자릿수로 반올림 후 비교).
   const qty = num(profile.quantity), price = num(profile.unitPrice), total = num(profile.totalAmount);
@@ -225,6 +242,60 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     if (roundTo(total, dp) !== expected) {
       issues.push(mk('r8-amount-arithmetic', 'invoice', 'totalAmount',
         `금액이 맞지 않습니다: 수량 ${qty} × 단가 ${price} = ${expected} 이어야 하는데 총액이 ${roundTo(total, dp)}입니다(통화 ${up(profile.currency) || 'USD'}, 소수 ${dp}자리).`));
+    }
+  }
+
+  return issues;
+}
+
+// ── R10. 패킹리스트 ↔ 상업송장 정합성 (warning) ─────────────────────
+// 세관·은행이 두 서류를 대조하므로 품명·수량이 어긋나면 경고한다.
+// 두 문서는 같은 거래 데이터에서 파생되어 보통 일치하지만, 패킹 고유 박스 내역
+// (박스수 × 박스당 수량)이 인보이스 수량과 안 맞으면 잡는다.
+// 대조 근거가 없으면(박스 내역 미입력 등) 억지 판정 대신 조용히 통과 + 로그(R5/R6와 동일 정책).
+const norm = (s?: string) => (s || '').toUpperCase().replace(/\s+/g, ' ').trim();
+
+/** 패킹 품목의 총 EA = Σ(박스수 × 박스당 수량). 박스 내역이 하나도 없으면 null(대조 불가). */
+function packingTotalEA(items: InvoiceItem[]): number | null {
+  let sum = 0, counted = 0;
+  for (const it of items) {
+    const r = it as Record<string, any>;
+    const boxes = num(r.boxes ?? r.packageCount);
+    const ea = num(r.eaPerBox);
+    if (boxes !== null && ea !== null && boxes > 0 && ea > 0) { sum += boxes * ea; counted++; }
+  }
+  return counted > 0 ? sum : null;
+}
+
+export function checkPackingInvoiceConsistency(
+  invoice: InvoiceData,
+  packingList: PackingListData,
+  logs?: AgentLog[],
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const skipLog = (msg: string) => { if (logs) logs.push(createLog('Compliance Agent', msg, 'info')); };
+
+  const invItems = invoice.items || [];
+  const plItems = packingList.items || [];
+
+  // 수량 대조: 패킹 박스 내역이 있을 때만.
+  const invQty = invItems.reduce((a, it) => a + (num((it as any).quantity) ?? 0), 0);
+  const plEA = packingTotalEA(plItems);
+  if (plEA === null) {
+    skipLog('R10 수량 대조 건너뜀 — 패킹리스트 박스 내역(박스수/박스당 수량) 미입력. 오탐 방지.');
+  } else if (invQty > 0 && plEA !== invQty) {
+    issues.push(mk('r10-packing-qty-mismatch', 'packing_list', 'quantity',
+      `패킹리스트 총 수량(박스 내역 합계 ${plEA.toLocaleString()})이 상업송장 수량(${invQty.toLocaleString()})과 다릅니다. 세관·은행 서류 대조 시 불일치로 걸릴 수 있으니 확인하세요.`));
+  }
+
+  // 품명 대조: 같은 순번 품목의 품명이 다르면 경고(둘 다 값이 있을 때만).
+  const n = Math.min(invItems.length, plItems.length);
+  for (let i = 0; i < n; i++) {
+    const a = norm((invItems[i] as any).description);
+    const b = norm((plItems[i] as any).description);
+    if (a && b && a !== b) {
+      issues.push(mk('r10-packing-desc-mismatch', 'packing_list', 'itemName',
+        `패킹리스트 품명("${(plItems[i] as any).description}")이 상업송장 품명("${(invItems[i] as any).description}")과 다릅니다. 두 서류의 품명은 일치해야 합니다.`));
     }
   }
 

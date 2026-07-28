@@ -66,6 +66,10 @@ export interface TradeProfile {
   sealNo?: string;
 
   paymentTerms?: string;
+  // 신용장(L/C) 정보 — 결제조건이 L/C일 때만 유효. 비신용장(T/T 등)이면 파생 단계에서 강제 공란 처리.
+  lcNo?: string;
+  lcDate?: string;
+  lcBank?: string;
   reasonForExport?: string;
   freightTerms?: string;
   freightCharges?: string;

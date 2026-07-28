@@ -1,0 +1,17 @@
+- generic [ref=f2e6]:
+  - generic [ref=f2e7]:
+    - generic [ref=f2e8]: 🚢
+    - generic [ref=f2e9]: PortAI
+    - generic [ref=f2e10]: 스마트 물류 & 통관 자동화 플랫폼
+  - generic [ref=f2e11]:
+    - generic [ref=f2e12]:
+      - generic [ref=f2e13]: 이메일
+      - textbox "이메일" [ref=f2e15]:
+        - /placeholder: name@example.com
+    - generic [ref=f2e16]:
+      - generic [ref=f2e17]: 비밀번호
+      - textbox "비밀번호" [ref=f2e18]:
+        - /placeholder: 6자 이상 비밀번호
+    - button "로그인" [ref=f2e19] [cursor=pointer]
+  - generic [ref=f2e20]: 처음 이용하시나요?
+  - button "이메일로 회원가입" [ref=f2e21] [cursor=pointer]

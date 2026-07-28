@@ -1,0 +1,187 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: 🚢
+      - generic [ref=e7]:
+        - generic [ref=e8]: PortAI
+        - generic [ref=e9]: 스마트 물류 & 통관 자동화 플랫폼
+    - list [ref=e10]:
+      - listitem [ref=e11]:
+        - generic [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+          - text: 대시보드
+      - listitem [ref=e18]:
+        - generic [ref=e19] [cursor=pointer]:
+          - img [ref=e20]
+          - text: 문서 자동 생성
+      - listitem [ref=e23]:
+        - generic "준비 중인 기능입니다" [ref=e24]:
+          - img [ref=e25]
+          - text: 문서 관리
+          - generic [ref=e27]: 준비중
+      - listitem [ref=e28]:
+        - generic "준비 중인 기능입니다" [ref=e29]:
+          - img [ref=e30]
+          - text: 거래 관리
+          - generic [ref=e34]: 준비중
+      - listitem [ref=e35]:
+        - generic "준비 중인 기능입니다" [ref=e36]:
+          - img [ref=e37]
+          - text: 선적 일정 관리
+          - generic [ref=e41]: 준비중
+      - listitem [ref=e42]:
+        - generic "준비 중인 기능입니다" [ref=e43]:
+          - img [ref=e44]
+          - text: 통관 내역
+          - generic [ref=e48]: 준비중
+      - listitem [ref=e49]:
+        - generic "준비 중인 기능입니다" [ref=e50]:
+          - img [ref=e51]
+          - text: 데이터 분석
+          - generic [ref=e53]: 준비중
+      - listitem [ref=e54]:
+        - generic [ref=e55] [cursor=pointer]:
+          - img [ref=e56]
+          - text: 설정
+    - generic [ref=e59]:
+      - generic [ref=e60]:
+        - img [ref=e61]
+        - text: 고객지원센터
+      - generic [ref=e65]: 02-1234-5678
+      - generic [ref=e66]: 평일 09:00 - 18:00
+  - generic [ref=e67]:
+    - banner [ref=e68]:
+      - generic [ref=e70]: Mentoring Project 2026
+      - generic [ref=e71]:
+        - button [ref=e72] [cursor=pointer]:
+          - img [ref=e73]
+        - button [ref=e77] [cursor=pointer]:
+          - img [ref=e78]
+        - generic [ref=e81]:
+          - generic [ref=e82] [cursor=pointer]:
+            - generic [ref=e83]: 비
+            - generic [ref=e84]: 게스트 님
+            - generic [ref=e85]: 비회원
+          - button "로그아웃" [ref=e86] [cursor=pointer]
+    - main [ref=e87]:
+      - generic [ref=e88]:
+        - generic [ref=e89]:
+          - heading "항만 수출입 문서 자동화 서비스" [level=1] [ref=e90]
+          - paragraph [ref=e91]: AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.
+        - generic [ref=e92]:
+          - button "⚡ 테스트 시나리오 A 불러오기 (수출 - 중량 누락 & HS코드 오류)" [ref=e93] [cursor=pointer]
+          - button "⚡ 테스트 시나리오 B 불러오기 (수입 - 모든 규정 정상 통과)" [ref=e94] [cursor=pointer]
+        - generic [ref=e95]:
+          - generic [ref=e96]:
+            - generic [ref=e97]:
+              - img [ref=e98]
+              - heading "거래 정보 입력" [level=2] [ref=e101]
+            - generic [ref=e102]:
+              - generic [ref=e103]:
+                - generic [ref=e104]: 수출입 구분
+                - combobox [ref=e105]:
+                  - option "수출" [selected]
+                  - option "수입"
+              - generic [ref=e106]:
+                - generic [ref=e107]: 품목명
+                - textbox "품목명을 입력하세요" [ref=e108]
+              - generic [ref=e109]:
+                - generic [ref=e110]: HS CODE
+                - textbox "HS CODE를 입력하세요" [ref=e111]
+              - generic [ref=e112]:
+                - generic [ref=e113]: 선적항
+                - combobox [ref=e114]:
+                  - option "선적항을 선택하세요" [selected]
+                  - option "부산항"
+                  - option "인천항"
+                  - option "광양항"
+                  - option "로스앤젤레스항 (미국)"
+                  - option "상하이항 (중국)"
+              - generic [ref=e115]:
+                - generic [ref=e116]: 도착항
+                - combobox [ref=e117]:
+                  - option "도착항을 선택하세요" [selected]
+                  - option "부산항"
+                  - option "인천항"
+                  - option "상하이항 (중국)"
+                  - option "로스앤젤레스항 (미국)"
+                  - option "로테르담항 (네덜란드)"
+              - generic [ref=e118]:
+                - generic [ref=e119]: 거래조건 (Incoterms)
+                - combobox [ref=e120]:
+                  - option "거래조건을 선택하세요" [selected]
+                  - option "FOB"
+                  - option "CIF"
+                  - option "EXW"
+                  - option "DDP"
+              - generic [ref=e121]:
+                - generic [ref=e122]: 화물 수량
+                - generic [ref=e123]:
+                  - spinbutton "숫자만 입력하세요" [ref=e124]
+                  - generic [ref=e125]: 개
+              - generic [ref=e126]:
+                - generic [ref=e127]: 중량(kg)
+                - generic [ref=e128]:
+                  - spinbutton "숫자만 입력하세요" [ref=e129]
+                  - generic [ref=e130]: kg
+              - generic [ref=e131]:
+                - generic [ref=e132]: 출발일
+                - textbox [ref=e133]
+              - generic [ref=e134]:
+                - generic [ref=e135]: 도착예정일
+                - textbox [ref=e136]
+              - generic [ref=e137]:
+                - generic [ref=e138]: 업체명
+                - textbox "업체명을 입력하세요" [ref=e139]
+              - generic [ref=e140]:
+                - generic [ref=e141]: 거래처명 (Consignee)
+                - textbox "상대방 업체명을 입력하세요" [ref=e142]
+              - generic [ref=e143]:
+                - generic [ref=e144]: 담당자 연락처
+                - textbox "010-0000-0000" [ref=e145]
+              - generic [ref=e146]:
+                - generic [ref=e147]: 결제 통화
+                - combobox [ref=e148]:
+                  - option "KRW (원화)" [selected]
+                  - option "USD (미국 달러)"
+                  - option "EUR (유로)"
+                  - option "JPY (일본 엔)"
+                  - option "CNY (중국 위안)"
+              - generic [ref=e149]:
+                - generic [ref=e150]: 인보이스 총액
+                - generic [ref=e151]:
+                  - spinbutton "외화 입력 시 과세가격 자동 환산" [ref=e152]
+                  - generic [ref=e153]: KRW
+              - generic [ref=e154]:
+                - generic [ref=e155]: 사업자등록번호
+                - textbox "000-00-00000 (입력 시 국세청 상태 검증)" [ref=e156]
+            - generic [ref=e157]:
+              - button "초기화" [ref=e158] [cursor=pointer]:
+                - img [ref=e159]
+                - text: 초기화
+              - button "필요 서류 자동 생성" [ref=e162] [cursor=pointer]:
+                - img [ref=e163]
+                - text: 필요 서류 자동 생성
+          - generic [ref=e166]:
+            - generic [ref=e167]:
+              - generic [ref=e168]: 🚢
+              - generic [ref=e169]:
+                - generic [ref=e170]: •
+                - generic [ref=e171]: •
+                - generic [ref=e172]: ✓
+            - generic [ref=e173]:
+              - heading "안내" [level=3] [ref=e174]
+              - paragraph [ref=e175]: 입력된 정보를 바탕으로 통관 및 선적 관련 필수 문서를 자동으로 생성하고 검증 규칙을 돌려 오류를 잡아냅니다.
+      - generic [ref=e179]:
+        - generic [ref=e180]:
+          - generic [ref=e181]: 12:25
+          - generic [ref=e182]:
+            - generic [ref=e183]: 📶
+            - generic [ref=e184]: 🔋
+        - generic [ref=e185]:
+          - img [ref=e186] [cursor=pointer]
+          - generic [ref=e188]: 문서 검토 결과
+        - generic [ref=e190]:
+          - img [ref=e191]
+          - generic [ref=e193]: 실시간 보완 대기 중
+          - generic [ref=e194]: 좌측 대시보드에서 [필요 서류 자동 생성]을 누르면 실시간 보완 및 피드백 기능이 활성화됩니다.

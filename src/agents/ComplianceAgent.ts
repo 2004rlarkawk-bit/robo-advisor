@@ -1,14 +1,14 @@
 import { Agent, ComplianceResult, AgentLog, createLog, HSCodeResult } from './types';
-import { TradeProfile, DocumentStatus, ValidationIssue } from '../types';
+import { TradeProfile, DocumentStatus, ValidationIssue, GeneratedDocuments } from '../types';
 import { validateTradeDocumentsAsync } from '../harness/validatorEngine';
 import { getRelatedLawForIssue } from '../services/lawService';
-import { runComplianceRules } from './complianceRules';
+import { runComplianceRules, checkPackingInvoiceConsistency } from './complianceRules';
 
-export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents: DocumentStatus[]; hsResult?: HSCodeResult; logs: AgentLog[] }, ComplianceResult> {
+export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents: DocumentStatus[]; hsResult?: HSCodeResult; generatedDocs?: GeneratedDocuments; logs: AgentLog[] }, ComplianceResult> {
   readonly name = 'Compliance Agent';
 
-  async run(input: { profile: TradeProfile; documents: DocumentStatus[]; hsResult?: HSCodeResult; logs: AgentLog[] }): Promise<ComplianceResult> {
-    const { profile, hsResult, logs } = input;
+  async run(input: { profile: TradeProfile; documents: DocumentStatus[]; hsResult?: HSCodeResult; generatedDocs?: GeneratedDocuments; logs: AgentLog[] }): Promise<ComplianceResult> {
+    const { profile, hsResult, generatedDocs, logs } = input;
 
     logs.push(createLog(this.name, '통관 서류 규정 및 필수 항목 검증 시작...', 'info'));
 
@@ -18,6 +18,11 @@ export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents
     // R1~R8 통관 검증 룰 (원산지·품명충분성·Incoterms↔항구·운송수단·동일국가항구·HS단위·한글필드·금액산술)
     // 정책은 RULE_POLICY로 타입 강제(error=차단/overridable, warning=배지).
     issues.push(...runComplianceRules(profile, logs));
+
+    // R10. 패킹리스트 ↔ 상업송장 교차 대조 (두 문서가 모두 생성된 경우에만)
+    if (generatedDocs?.invoice && generatedDocs?.packingList) {
+      issues.push(...checkPackingInvoiceConsistency(generatedDocs.invoice, generatedDocs.packingList, logs));
+    }
 
     // HSCodeAgent의 검증 결과를 통합
     if (hsResult) {
