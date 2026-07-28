@@ -182,11 +182,12 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
             <>
               <div className="login-input-group">
                 <label className="login-label" htmlFor="auth-company">회사명</label>
-                <input id="auth-company" type="text" className="login-input" placeholder="회사명을 입력해 주세요" value={companyName} onChange={(event) => setCompanyName(event.target.value)} />
+                <input id="auth-company" type="text" className="login-input" placeholder="ABC Logistics Co., Ltd." value={companyName} onChange={(event) => setCompanyName(event.target.value)} />
+                <span className="auth-helper-message">공식 영문 회사명을 입력하세요. AI가 임의 번역한 이름은 사용하지 않습니다.</span>
               </div>
               <div className="login-input-group">
                 <label className="login-label" htmlFor="auth-contact">담당자명</label>
-                <input id="auth-contact" type="text" className="login-input" placeholder="담당자명을 입력해 주세요" value={contactName} onChange={(event) => setContactName(event.target.value)} />
+                <input id="auth-contact" type="text" className="login-input" placeholder="Gildong Hong" value={contactName} onChange={(event) => setContactName(event.target.value)} />
               </div>
             </>
           )}

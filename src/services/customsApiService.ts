@@ -1,13 +1,13 @@
 /**
  * 공공 API 서비스 (관세청 GW / 국세청)
  *
- * 발급 완료 키 기준 (data.go.kr, 2026-07):
- *  - 관세청_관세환율정보(GW)            → getCustomsExchangeRate
+ * 공공 API 연결 기준 (2026-07):
+ *  - 관세청_관세환율정보(GW)            → Supabase Edge Function 경유
  *  - 국세청_사업자등록정보 진위확인/상태조회 → verifyBusinessRegistration
  *  - 관세청_품목별 수출입실적(GW)        → getItemTradeStats
  *  - 관세청_수출입총괄 / 국가별 / 품목별국가별 / 성질별 → (2차 확장 예정)
  *
- * claudeService.ts 패턴 답습:
+ * 수출입 통계 API 호출:
  *  - 키는 localStorage 보관 (Settings 페이지에서 입력)
  *  - 호출 실패(CORS/네트워크/키없음) 시 시뮬레이션 폴백 → 데모 항상 동작
  *
@@ -15,10 +15,11 @@
  * 차단 확인 시 백엔드 프록시(팀원4 Express) 경유로 전환.
  */
 
+import { supabase } from '../lib/supabase';
+
 // ===== 키 관리 =====
 
-const KEY_DATA_GO_KR = 'portai_data_go_kr_key'; // 관세청 GW 공통 (환율·통계)
-const KEY_NTS_BUSINESS = 'portai_nts_business_key'; // 국세청 사업자 진위확인
+const KEY_DATA_GO_KR = 'portai_data_go_kr_key'; // 관세청 GW 수출입 통계용
 
 /** 테스트(node) 환경에는 localStorage가 없음 → 키 없음으로 처리해 시뮬 폴백 유도 */
 const storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> =
@@ -40,24 +41,14 @@ export function clearDataGoKrKey(): void {
   storage.removeItem(KEY_DATA_GO_KR);
 }
 
-export function setNtsBusinessKey(key: string): void {
-  storage.setItem(KEY_NTS_BUSINESS, key);
-}
-export function getNtsBusinessKey(): string | null {
-  return storage.getItem(KEY_NTS_BUSINESS);
-}
-export function hasNtsBusinessKey(): boolean {
-  const k = getNtsBusinessKey();
-  return !!k && k.length > 10;
-}
-export function clearNtsBusinessKey(): void {
-  storage.removeItem(KEY_NTS_BUSINESS);
-}
-
 // ===== 공통 =====
 
 /** 데이터 소스 표시: 실 API 응답인지 시뮬레이션 폴백인지 UI에서 구분 */
 export type DataSource = 'api' | 'simulation';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 const BASE_1220000 = 'https://apis.data.go.kr/1220000';
 
@@ -67,13 +58,6 @@ function toYmd(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}${m}${day}`;
-}
-
-/** 해당 날짜가 속한 주의 시작일(일요일) yyyyMMdd */
-function toWeekStartYmd(d: Date): string {
-  const copy = new Date(d);
-  copy.setDate(copy.getDate() - copy.getDay());
-  return toYmd(copy);
 }
 
 /**
@@ -121,6 +105,17 @@ export interface ExchangeRate {
   source: DataSource;
 }
 
+interface CustomsExchangeRateFunctionResponse {
+  success?: boolean;
+  currency?: unknown;
+  currencyName?: unknown;
+  rate?: unknown;
+  effectiveDate?: unknown;
+  tradeType?: unknown;
+  source?: unknown;
+  error?: unknown;
+}
+
 /**
  * 관세청 주간 적용환율 조회.
  * 통관 과세가격 환산은 이 환율이 기준 (한국은행 매매기준율 아님).
@@ -130,43 +125,43 @@ export async function getCustomsExchangeRate(
   tradeType: 'export' | 'import' = 'import',
   date?: string
 ): Promise<ExchangeRate> {
-  const key = getDataGoKrKey();
   const aplyBgnDt = date ?? toYmd(new Date());
-  // 1: 수출(관세환급), 2: 수입(과세환율)
-  const tpcd = tradeType === 'export' ? '1' : '2';
 
-  if (key) {
-    try {
-      // 관세청 환율은 주 단위 고시 — 임의 날짜(평일)로 조회하면 빈 결과가 될 수 있어
-      // 해당 주의 시작일(일요일)로 한 번 더 시도한다. 명시 날짜가 오면 그 날짜만 조회.
-      const attempts = date
-        ? [date]
-        : [...new Set([aplyBgnDt, toWeekStartYmd(new Date())])];
+  try {
+    const { data, error } = await supabase.functions.invoke<CustomsExchangeRateFunctionResponse>(
+      'customs-exchange-rate',
+      { body: { currency, tradeType, date } }
+    );
 
-      for (const attemptDt of attempts) {
-        const url =
-          `${BASE_1220000}/retrieveTrifFxrtInfo/getRetrieveTrifFxrtInfo` +
-          `?serviceKey=${encodeURIComponent(key)}&aplyBgnDt=${attemptDt}&weekFxrtTpcd=${tpcd}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`환율 API 오류 (${res.status})`);
-        const items = xmlItems(await res.text());
-        const hit = items.find((i) => i.currSgn === currency.toUpperCase());
-        if (hit) {
-          const name = hit.mtryUtNm || hit.currKorNm || '';
-          return {
-            currency: hit.currSgn,
-            currencyName: name,
-            rate: parseFloat(hit.fxrt) / currencyUnitDivisor(hit.currSgn, name),
-            effectiveDate: hit.aplyBgnDt || attemptDt,
-            tradeType,
-            source: 'api',
-          };
-        }
-      }
-      throw new Error(`통화 ${currency} 미발견`);
-    } catch (err) {
-      console.warn('관세환율 API 실패, 시뮬레이션 폴백:', err);
+    if (error) throw error;
+    if (!data || data.success !== true) {
+      const message = typeof data?.error === 'string'
+        ? data.error
+        : 'Edge Function이 실패 응답을 반환했습니다.';
+      throw new Error(message);
     }
+    if (
+      typeof data.currency !== 'string' ||
+      typeof data.currencyName !== 'string' ||
+      typeof data.rate !== 'number' ||
+      !Number.isFinite(data.rate) ||
+      typeof data.effectiveDate !== 'string' ||
+      (data.tradeType !== 'export' && data.tradeType !== 'import') ||
+      data.source !== 'api'
+    ) {
+      throw new Error('관세환율 Edge Function 응답 형식이 올바르지 않습니다.');
+    }
+
+    return {
+      currency: data.currency,
+      currencyName: data.currencyName,
+      rate: data.rate,
+      effectiveDate: data.effectiveDate,
+      tradeType: data.tradeType,
+      source: 'api',
+    };
+  } catch (err) {
+    console.warn('관세환율 Edge Function 호출 실패, 시뮬레이션 폴백:', err);
   }
 
   return { ...simulatedRate(currency), tradeType, effectiveDate: aplyBgnDt };
@@ -199,12 +194,8 @@ export interface BusinessStatus {
   source: DataSource;
 }
 
-/**
- * 국세청 사업자등록 상태조회 (api.odcloud.kr — CORS 허용, POST JSON).
- * 진위확인(validate)은 대표자명·개업일 필요해서 상태조회(status)만 사용.
- */
+/** 국세청 사업자등록 상태조회. 브라우저는 nts-business Edge Function만 호출한다. */
 export async function verifyBusinessRegistration(bizNo: string): Promise<BusinessStatus> {
-  const key = getNtsBusinessKey();
   const cleaned = bizNo.replace(/[^0-9]/g, '');
 
   if (cleaned.length !== 10) {
@@ -216,34 +207,56 @@ export async function verifyBusinessRegistration(bizNo: string): Promise<Busines
     };
   }
 
-  if (key) {
-    try {
-      const url = `https://api.odcloud.kr/api/nts-businessman/v1/status?serviceKey=${encodeURIComponent(key)}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ b_no: [cleaned] }),
-      });
-      if (!res.ok) throw new Error(`사업자 API 오류 (${res.status})`);
-      const data = await res.json();
-      const item = data?.data?.[0];
-      if (item) {
-        const stt: string = item.b_stt || '';
-        return {
-          bizNo: cleaned,
-          valid: stt === '계속사업자',
-          statusText: stt || '국세청에 등록되지 않은 사업자등록번호입니다.',
-          taxType: item.tax_type,
-          source: 'api',
-        };
-      }
-      throw new Error('응답 데이터 없음');
-    } catch (err) {
-      console.warn('사업자 진위확인 API 실패, 시뮬레이션 폴백:', err);
+  try {
+    const { data, error } = await supabase.functions.invoke('nts-business', {
+      body: { action: 'status', bizNo: cleaned },
+    });
+    if (error) throw error;
+    if (!isRecord(data) || data.success !== true) {
+      throw new Error(
+        isRecord(data) && typeof data.error === 'string'
+          ? data.error
+          : '사업자 상태조회 Edge Function 호출에 실패했습니다.'
+      );
     }
+    if (data.action !== 'status' || typeof data.found !== 'boolean') {
+      throw new Error('사업자 상태조회 Edge Function 응답 형식이 올바르지 않습니다.');
+    }
+    if (!data.found || data.data === null) {
+      return {
+        bizNo: cleaned,
+        valid: false,
+        statusText: '국세청에 등록되지 않은 사업자등록번호입니다.',
+        source: 'api',
+      };
+    }
+    const value = data.data;
+    if (
+      !isRecord(value) ||
+      typeof value.bizNo !== 'string' ||
+      typeof value.valid !== 'boolean' ||
+      typeof value.statusText !== 'string' ||
+      typeof value.taxType !== 'string' ||
+      value.source !== 'api'
+    ) {
+      throw new Error('사업자 상태조회 Edge Function 응답 데이터가 올바르지 않습니다.');
+    }
+    return {
+      bizNo: value.bizNo,
+      valid: value.valid,
+      statusText: value.statusText,
+      taxType: value.taxType,
+      source: 'api',
+    };
+  } catch (err) {
+    console.warn('사업자 상태조회 Edge Function 호출 실패, 시뮬레이션 폴백:', err);
   }
 
-  // 시뮬레이션: 체크섬 검증만 수행 (국세청 사업자번호 검증 로직)
+  return simulatedBusinessStatus(cleaned);
+}
+
+/** 시뮬레이션: 체크섬 검증만 수행 (국세청 사업자번호 검증 로직) */
+function simulatedBusinessStatus(cleaned: string): BusinessStatus {
   const weights = [1, 3, 7, 1, 3, 7, 1, 3, 5];
   const digits = cleaned.split('').map(Number);
   let sum = 0;
@@ -256,7 +269,7 @@ export async function verifyBusinessRegistration(bizNo: string): Promise<Busines
     bizNo: cleaned,
     valid: checksumOk,
     statusText: checksumOk
-      ? '형식 유효 (시뮬레이션 — 실제 등록 여부는 API 키 설정 후 확인 가능)'
+      ? '형식 유효 (시뮬레이션 — 실제 등록 여부는 서버 조회 후 확인 가능)'
       : '유효하지 않은 사업자등록번호 형식입니다.',
     source: 'simulation',
   };
@@ -510,50 +523,80 @@ export async function validateBusinessRegistration(
   startDate: string, // yyyyMMdd
   representativeName: string
 ): Promise<BusinessValidity> {
-  const key = getNtsBusinessKey();
   const cleaned = bizNo.replace(/[^0-9]/g, '');
 
-  if (key && cleaned.length === 10) {
+  if (cleaned.length === 10) {
     try {
-      const url = `https://api.odcloud.kr/api/nts-businessman/v1/validate?serviceKey=${encodeURIComponent(key)}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          businesses: [{ b_no: cleaned, start_dt: startDate.replace(/[^0-9]/g, ''), p_nm: representativeName.trim() }],
-        }),
+      const { data, error } = await supabase.functions.invoke('nts-business', {
+        body: {
+          action: 'validate',
+          bizNo: cleaned,
+          startDate: startDate.replace(/[^0-9]/g, ''),
+          representativeName: representativeName.trim(),
+        },
       });
-      if (!res.ok) throw new Error(`진위확인 API 오류 (${res.status})`);
-      const data = await res.json();
-      const item = data?.data?.[0];
-      if (item) {
-        const matched = item.valid === '01';
+      if (error) throw error;
+      if (!isRecord(data) || data.success !== true) {
+        throw new Error(
+          isRecord(data) && typeof data.error === 'string'
+            ? data.error
+            : '사업자 진위확인 Edge Function 호출에 실패했습니다.'
+        );
+      }
+      if (data.action !== 'validate' || typeof data.found !== 'boolean') {
+        throw new Error('사업자 진위확인 Edge Function 응답 형식이 올바르지 않습니다.');
+      }
+      if (!data.found || data.data === null) {
         return {
           bizNo: cleaned,
-          valid: matched,
-          message: matched
-            ? '국세청 등록정보와 일치합니다.'
-            : `등록정보 불일치 (${item.valid_msg || '확인 불가'}) — 사업자번호·개업일·대표자명을 재확인하세요.`,
-          status: matched
-            ? {
-                bizNo: cleaned,
-                valid: item.status?.b_stt === '계속사업자',
-                statusText: item.status?.b_stt || '',
-                taxType: item.status?.tax_type,
-                source: 'api',
-              }
-            : undefined,
+          valid: false,
+          message: '국세청 등록정보와 일치하지 않습니다.',
           source: 'api',
         };
       }
-      throw new Error('응답 데이터 없음');
+      const value = data.data;
+      if (
+        !isRecord(value) ||
+        typeof value.bizNo !== 'string' ||
+        typeof value.valid !== 'boolean' ||
+        typeof value.message !== 'string' ||
+        value.source !== 'api'
+      ) {
+        throw new Error('사업자 진위확인 Edge Function 응답 데이터가 올바르지 않습니다.');
+      }
+
+      let status: BusinessStatus | undefined;
+      if (value.status !== null && value.status !== undefined) {
+        if (
+          !isRecord(value.status) ||
+          typeof value.status.valid !== 'boolean' ||
+          typeof value.status.statusText !== 'string' ||
+          typeof value.status.taxType !== 'string'
+        ) {
+          throw new Error('사업자 진위확인 상태 응답이 올바르지 않습니다.');
+        }
+        status = {
+          bizNo: value.bizNo,
+          valid: value.status.valid,
+          statusText: value.status.statusText,
+          taxType: value.status.taxType,
+          source: 'api',
+        };
+      }
+
+      return {
+        bizNo: value.bizNo,
+        valid: value.valid,
+        message: value.message,
+        status,
+        source: 'api',
+      };
     } catch (err) {
-      console.warn('사업자 진위확인 API 실패, 시뮬레이션 폴백:', err);
+      console.warn('사업자 진위확인 Edge Function 호출 실패, 시뮬레이션 폴백:', err);
     }
   }
 
-  // 시뮬레이션: 상태조회의 체크섬 검증 재사용
-  const statusResult = await verifyBusinessRegistration(cleaned);
+  const statusResult = simulatedBusinessStatus(cleaned);
   return {
     bizNo: cleaned,
     valid: statusResult.valid,

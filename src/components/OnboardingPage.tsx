@@ -15,7 +15,7 @@ export default function OnboardingPage({ profile, isSaving, onComplete }: Props)
           <div className={'onboarding-title'}>👋 거의 다 됐어요</div>
           <div className={'onboarding-subtitle'}>맞춤 문서와 빠른 거래 입력을 위해 회사 정보를 설정해 주세요.</div>
         </div>
-        <ProfileForm profile={profile} submitLabel={'설정 완료하고 시작하기'} isSaving={isSaving} onSubmit={onComplete} />
+        <ProfileForm profile={profile} submitLabel={'설정 완료하고 시작하기'} isSaving={isSaving} onSubmit={onComplete} requireExplicitServiceRole />
       </div>
     </div>
   );

@@ -20,23 +20,36 @@ import {
   Edit3,
   PanelLeftClose,
   PanelLeftOpen,
-  BookOpen,
+  UserRound,
   Anchor,
-  UserRound
+  BookOpen
 } from 'lucide-react';
-import { TradeProfile, DocumentStatus, ValidationIssue, SavedTrade, TradeStatus, InvoiceData, PackingListData } from './types';
+import {
+  TradeProfile,
+  DocumentStatus,
+  ValidationIssue,
+  SavedTrade,
+  TradeStatus,
+  InvoiceData,
+  type ShipperItem,
+} from './types';
 import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
-import { buildPackingListXlsx, mapPackingListToSchema, renderPackingListPreviewHtml } from './services/packingListXlsxService';
 import SettingsPanel from './components/SettingsPanel';
 import GuidePanel from './components/GuidePanel';
 import AboutPanel from './components/AboutPanel';
-import OnboardingTour from './components/OnboardingTour';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
 import AuthPage from './components/AuthPage';
 import OnboardingPage from './components/OnboardingPage';
 import ProfileSettingsPage from './components/ProfileSettingsPage';
-import { deleteCurrentAccount, getCurrentAuthUser, onAuthStateChange, signOutUser, type AuthSessionUser } from './services/authService';
+import ForwarderWorkspaceForm from './components/ForwarderWorkspaceForm';
+import ShipperWorkspaceForm from './components/ShipperWorkspaceForm';
+import TradeDirectionSelector from './components/trade/TradeDirectionSelector';
+import TradeRoleSelector from './components/trade/TradeRoleSelector';
+import ImportShipperFlow from './components/import/ImportShipperFlow';
+import ImportForwarderFlow from './components/import/ImportForwarderFlow';
+import type { ImportTradeSnapshot, TradeDirection } from './types/importTrade';
+import { deleteCurrentAccount, getCurrentAuthUser, markOnboardingCompleted, onAuthStateChange, signOutUser, type AuthSessionUser } from './services/authService';
 import { useUserProfile } from './hooks/useUserProfile';
 import { useTradeDraft } from './hooks/useTradeDraft';
 import { removeDraftFromLocal } from './services/draftCacheService';
@@ -50,44 +63,35 @@ import {
   removeDevOnlyFields,
   type DevTestMode,
 } from './services/devTestDataService';
-import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from './constants/portOptions';
+import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from './constants/ports';
+import CountrySelect from './components/CountrySelect';
 import { calculateReadiness } from './harness/rulesEngine';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
 import {
   createGeneratedTrade,
+  createCompletedImportTrade,
   markTradeAsSubmitted,
   updateGeneratedTrade,
   getSettings
 } from './services/storageService';
 import { decideGeneratedTradeWrite } from './services/tradePersistencePolicy';
+import { resolveWorkspaceRole, type WorkspaceRole } from './utils/workspaceRole';
+import {
+  EMPTY_SHIPPER_SUPPLEMENTAL_STATE,
+  primaryShipperItemToTradeProfile,
+  tradeProfileToPrimaryShipperItem,
+  type ShipperSupplementalState,
+} from './utils/shipperForm';
+import { createEmptyForwarderFormState, type ForwarderFormState } from './utils/forwarderForm';
 
-// 거래 정보 입력 폼의 서류 종류 라벨 탭 — 각 필드의 data-docs와 CSS 필터로 연동
-const DOC_TABS = [
-  { id: 'all', label: '전체' },
-  { id: 'invoice', label: '상업송장' },
-  { id: 'packing_list', label: '패킹리스트' },
-  { id: 'bl', label: '선하증권' },
-  { id: 'customs_dec', label: '수출입신고서' },
-  { id: 'co', label: '원산지증명서' },
-  { id: 'insurance', label: '적하보험증권' },
-] as const;
-type DocTabId = typeof DOC_TABS[number]['id'];
 const IS_DEV_TEST_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
 
 export default function App() {
   const [activeMenu, setActiveMenu] = useState('about');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [docTab, setDocTab] = useState<DocTabId>('all');
-  const formCardRef = useRef<HTMLDivElement>(null);
-
-  // 서류 탭 선택 시 관련 접이식 섹션을 자동으로 펼침 (필드 숨김 필터는 CSS가 처리)
-  useEffect(() => {
-    if (docTab === 'all') return;
-    formCardRef.current?.querySelectorAll<HTMLDetailsElement>('details.form-section').forEach(d => {
-      d.open = true;
-    });
-  }, [docTab]);
+  const [integratedWorkspaceRole, setIntegratedWorkspaceRole] = useState<WorkspaceRole>('shipper');
+  const [tradeDirection, setTradeDirection] = useState<TradeDirection>('export');
   
  // Auth states
 const [user, setUser] = useState<AuthSessionUser | null>(null);
@@ -102,6 +106,22 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     reload: reloadUserProfile,
     saveProfile: saveUserProfile,
   } = useUserProfile(user?.id ?? null);
+
+  useEffect(() => {
+    if (userProfile?.service_role === 'integrated') setIntegratedWorkspaceRole('shipper');
+  }, [user?.id, userProfile?.service_role]);
+
+  const workspaceRole = resolveWorkspaceRole(userProfile?.service_role, integratedWorkspaceRole);
+
+  const handleTradeDirectionChange = (direction: TradeDirection) => {
+    setTradeDirection(direction);
+    setProfile((current) => ({ ...current, tradeType: direction }));
+  };
+
+  const handleImportComplete = async (snapshot: ImportTradeSnapshot) => {
+    await createCompletedImportTrade(snapshot);
+    setActiveMenu('docs');
+  };
 /*
   // 첫 로그인 온보딩 (사용 목적·회사·업종) — 저장되면 다음 로그인부터 건너뜀
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -310,6 +330,9 @@ const emptyProfile: TradeProfile = {
 };
 
 const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
+  const [additionalShipperItems, setAdditionalShipperItems] = useState<ShipperItem[]>([]);
+  const [shipperSupplemental, setShipperSupplemental] = useState<ShipperSupplementalState>(EMPTY_SHIPPER_SUPPLEMENTAL_STATE);
+  const [forwarderForm, setForwarderForm] = useState<ForwarderFormState>(() => createEmptyForwarderFormState());
   const hydratedProfileUserRef = useRef<string | null>(null);
 
   // 로그인 직후에만 회사 프로필을 거래 입력 기본값으로 옮긴다.
@@ -319,7 +342,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       hydratedProfileUserRef.current = null;
       return;
     }
-    if (!userProfile || needsOnboarding || hydratedProfileUserRef.current === user.id) return;
+    if (!userProfile || needsOnboarding || user.onboardingPending || hydratedProfileUserRef.current === user.id) return;
     setProfile((current) => ({ ...current, ...userProfileToTradeDefaults(userProfile) }));
     hydratedProfileUserRef.current = user.id;
   }, [needsOnboarding, user, userProfile]);
@@ -329,7 +352,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     ...(userProfile ? userProfileToTradeDefaults(userProfile) : {}),
   };
   const {
-    isDraftRestored,
     saveStatus: draftSaveStatus,
     lastSavedAt: draftLastSavedAt,
     flushDraft: flushTradeDraft,
@@ -338,7 +360,9 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     pauseDraftSaving,
   } = useTradeDraft({
     userId: user?.id ?? null,
-    enabled: Boolean(user && userProfile && !needsOnboarding),
+    enabled: tradeDirection === 'export' && Boolean(user && userProfile && !needsOnboarding && !user.onboardingPending),
+    tradeDirection,
+    tradeRole: workspaceRole,
     profile,
     defaultProfile: tradeDraftDefaultProfile,
     setProfile,
@@ -371,10 +395,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const invoiceDocxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
   const docxPreviewRef = useRef<HTMLDivElement | null>(null);
 
-  // 패킹리스트도 고정 xlsx 템플릿에서 생성 — 미리보기/다운로드가 같은 스키마를 쓰게 한다.
-  const [packingListData, setPackingListData] = useState<PackingListData | null>(null);
-  const packingXlsxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
-
   // 같은 InvoiceData면 같은 Blob 반환(캐시) → 화면 미리보기와 다운로드 파일이 동일 바이너리.
   const getInvoiceBlob = async (): Promise<Blob | null> => {
     if (!invoiceData) return null;
@@ -385,19 +405,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     return blob;
   };
 
-  // 같은 PackingListData면 같은 xlsx Blob 반환(캐시).
-  const getPackingListBlob = async (): Promise<Blob | null> => {
-    if (!packingListData) return null;
-    const sig = JSON.stringify(packingListData);
-    if (packingXlsxCacheRef.current?.sig === sig) return packingXlsxCacheRef.current.blob;
-    const blob = await buildPackingListXlsx(packingListData);
-    packingXlsxCacheRef.current = { sig, blob };
-    return blob;
-  };
-
-  // 문서 생성 여부: 상업송장=invoiceData, 패킹리스트=packingListData, 나머지=htmlTemplates로 판정
-  const hasDoc = (id: string) =>
-    id === 'invoice' ? !!invoiceData : id === 'packing_list' ? !!packingListData : !!htmlTemplates[id];
+  // 문서 생성 여부: 상업송장은 invoiceData, 나머지는 htmlTemplates로 판정
+  const hasDoc = (id: string) => (id === 'invoice' ? !!invoiceData : !!htmlTemplates[id]);
 
   // 미리보기 모달에서 상업송장은 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
   useEffect(() => {
@@ -473,6 +482,14 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     });
   };
 
+  const shipperItems = [tradeProfileToPrimaryShipperItem(profile), ...additionalShipperItems];
+  const handleShipperItemsChange = (items: ShipperItem[]) => {
+    if (items.length === 0) return;
+    const [primaryItem, ...additionalItems] = items;
+    setProfile((current) => ({ ...current, ...primaryShipperItemToTradeProfile(primaryItem) }));
+    setAdditionalShipperItems(additionalItems);
+  };
+
   const handleFillPerfectTestData = () => {
     if (!IS_DEV_TEST_ENABLED || isProcessing) return;
     setProfile((current) => createPerfectTestProfile(current));
@@ -501,11 +518,16 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
    ...emptyProfile,
    ...(userProfile ? userProfileToTradeDefaults(userProfile) : {}),
  });
+  setAdditionalShipperItems([]);
+  setShipperSupplemental(EMPTY_SHIPPER_SUPPLEMENTAL_STATE);
+  setForwarderForm(createEmptyForwarderFormState());
   setHasGenerated(false);
   setDocuments([]);
   setIssues([]);
   setConsoleLogs([]);
   setHtmlTemplates({});
+  setInvoiceData(null);
+  invoiceDocxCacheRef.current = null;
   setHsCandidates([]);
   currentTradeIdRef.current = null;
   setCurrentTradeStatus(null);
@@ -528,8 +550,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setHtmlTemplates(result.documents?.htmlTemplates || {});
     setInvoiceData(result.documents?.generatedDocs?.invoice || null);
     invoiceDocxCacheRef.current = null;
-    setPackingListData(result.documents?.generatedDocs?.packingList || null);
-    packingXlsxCacheRef.current = null;
     setHasGenerated(true);
     blockedGenRef.current = null;
 
@@ -541,6 +561,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     try {
       const generatedTradeData = {
         profile: { ...generationProfile, hsCode: generationProfile.hsCode || result.hs?.topCode || '' },
+        tradeDirection: 'export' as const,
+        tradeRole: workspaceRole,
         documents: result.documents?.documents || [],
         issues: issuesList,
         generatedDocs: {
@@ -641,20 +663,22 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       const canBypass = IS_DEV_TEST_ENABLED && devTestMode !== null;
       const blockers = unresolvedBlockers(issuesList, overrides);
       if (blockers.length > 0 && !canBypass) {
-        // 차단: 문서 미공개·미저장(htmlTemplates 비움). 단 검증 결과 패널은 보여야 override 가능하므로
-        // hasGenerated는 true로 둔다(문서 없음 상태로 이슈+override UI 노출).
+        // 차단 중에도 검증 결과와 override UI는 보여준다. 문서 자체는 공개·저장하지 않는다.
         setHtmlTemplates({});
         setInvoiceData(null);
         invoiceDocxCacheRef.current = null;
-        setPackingListData(null);
-        packingXlsxCacheRef.current = null;
         setHasGenerated(true);
         blockedGenRef.current = { result, generationProfile, writeMode };
-        const overridable = blockers.filter(b => b.overridable).length;
-        alert(`생성이 차단되었습니다 — 해결해야 할 오류 ${blockers.length}건.` +
-          (overridable > 0 ? `\n(그중 ${overridable}건은 아래 검증 결과에서 "사유 입력 후 override"로 진행 가능)` : ''));
+        const overridable = blockers.filter((blocker) => blocker.overridable).length;
+        alert(
+          `생성이 차단되었습니다 — 해결해야 할 오류 ${blockers.length}건.` +
+          (overridable > 0
+            ? `\n(그중 ${overridable}건은 아래 검증 결과에서 "사유 입력 후 override"로 진행 가능)`
+            : '')
+        );
         return;
       }
+
       await finalizeGeneration(result, generationProfile, writeMode, overrides);
     } catch (error) {
       console.error(error);
@@ -666,6 +690,28 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
   // [문서 관리]에서 저장 이력 복원
   const handleLoadSavedTrade = (t: SavedTrade) => {
+    const importSnapshot = t.generatedDocs?.importTrade as ImportTradeSnapshot | undefined;
+    if ((t.tradeDirection ?? t.profile.tradeType) === 'import' && importSnapshot && user) {
+      setTradeDirection('import');
+      setIntegratedWorkspaceRole(importSnapshot.role);
+      localStorage.setItem(`portai_import_draft:${user.id}:${importSnapshot.role}`, JSON.stringify({
+        step: 3,
+        documents: importSnapshot.documents,
+        analysis: importSnapshot.analysis,
+        suggestions: importSnapshot.selectedHSCode ? [importSnapshot.selectedHSCode] : [],
+        selectedCode: importSnapshot.selectedHSCode?.code ?? '',
+        duty: importSnapshot.duty ?? null,
+        risks: importSnapshot.risks,
+        cargo: importSnapshot.cargo ?? null,
+        arrivalNotice: (t.arrivalNotice as import('./types/importTrade').ArrivalNoticeMeta | null) ?? importSnapshot.arrivalNotice ?? null,
+        generatedAt: importSnapshot.generatedAt ?? t.generatedAt ?? null,
+        tradeId: t.id,
+        existingStatus: t.status,
+      }));
+      setActiveMenu('dashboard');
+      return;
+    }
+    setTradeDirection('export');
     pauseDraftSaving();
     setDevTestMode(null);
     setDevTestMessage('');
@@ -673,13 +719,13 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setCurrentTradeStatus('submitted');
     hasSubmittedTradeRef.current = true;
     setProfile(t.profile);
+    setAdditionalShipperItems([]);
+    setShipperSupplemental(EMPTY_SHIPPER_SUPPLEMENTAL_STATE);
     setDocuments(t.documents);
     setIssues(t.issues);
     setHtmlTemplates((t.generatedDocs?.htmlTemplates as Record<string, string>) || {});
     setInvoiceData((t.generatedDocs?.invoice as InvoiceData) || null);
     invoiceDocxCacheRef.current = null;
-    setPackingListData((t.generatedDocs?.packingList as PackingListData) || null);
-    packingXlsxCacheRef.current = null;
     setOverrides((t.generatedDocs?.overrides as Record<string, string>) || {});
     blockedGenRef.current = null;
     setAiFeedback('');
@@ -689,11 +735,36 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   };
 
   const handleCopySavedTrade = (t: SavedTrade) => {
+    const importSnapshot = t.generatedDocs?.importTrade as ImportTradeSnapshot | undefined;
+    if ((t.tradeDirection ?? t.profile.tradeType) === 'import' && importSnapshot && user) {
+      const role = importSnapshot.role;
+      setTradeDirection('import');
+      setIntegratedWorkspaceRole(role);
+      localStorage.setItem(`portai_import_draft:${user.id}:${role}`, JSON.stringify({
+        step: 1,
+        documents: importSnapshot.documents,
+        analysis: null,
+        suggestions: [],
+        selectedCode: '',
+        duty: null,
+        risks: [],
+        cargo: null,
+        arrivalNotice: null,
+        generatedAt: null,
+      }));
+      setActiveMenu('dashboard');
+      return;
+    }
+    setTradeDirection('export');
     startNewDraft();
     setProfile(createProfileForNewTrade(t.profile));
+    setAdditionalShipperItems([]);
+    setShipperSupplemental(EMPTY_SHIPPER_SUPPLEMENTAL_STATE);
     setDocuments([]);
     setIssues([]);
     setHtmlTemplates({});
+    setInvoiceData(null);
+    invoiceDocxCacheRef.current = null;
     setAiFeedback('');
     setHsCandidates([]);
     setHasGenerated(false);
@@ -727,8 +798,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       setHtmlTemplates(result.documents?.htmlTemplates || {});
       setInvoiceData(result.documents?.generatedDocs?.invoice || null);
       invoiceDocxCacheRef.current = null;
-      setPackingListData(result.documents?.generatedDocs?.packingList || null);
-      packingXlsxCacheRef.current = null;
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
       setHsCandidates(result.hs?.candidates || []);
@@ -815,30 +884,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       const a = document.createElement('a');
       a.href = url;
       a.download = getDocFileName('invoice').replace(/\.pdf$/i, '.docx');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      return;
-    }
-
-    // 패킹리스트: 고정 xlsx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 데이터).
-    if (docId === 'packing_list') {
-      let blob: Blob | null = null;
-      try {
-        blob = await getPackingListBlob();
-      } catch (e) {
-        alert(e instanceof Error ? e.message : '패킹리스트 생성에 실패했습니다.');
-        return;
-      }
-      if (!blob) {
-        alert('패킹리스트 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = getDocFileName('packing_list').replace(/\.pdf$/i, '.xlsx');
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -933,8 +978,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     try {
       const validationErrorCount = issues.filter((issue) => issue.severity === 'error').length;
       const generatedDocs = devTestMode && canBypassValidation
-        ? { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, overrides, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
-        : { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, overrides };
+        ? { htmlTemplates, invoice: invoiceData ?? undefined, overrides, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
+        : { htmlTemplates, invoice: invoiceData ?? undefined, overrides };
       await markTradeAsSubmitted(tradeId, {
         profile,
         documents,
@@ -1066,31 +1111,21 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     );
   }
 
-  if (needsOnboarding) {
+  if (needsOnboarding || user.onboardingPending) {
     return (
       <OnboardingPage
         profile={userProfile}
         isSaving={isProfileSaving}
-        onComplete={async (values) => { await saveUserProfile(values); }}
+        onComplete={async (values) => {
+          await saveUserProfile(values);
+          const completedUser = await markOnboardingCompleted();
+          setActiveMenu('dashboard');
+          setUser(completedUser);
+        }}
       />
     );
   }
 
-  if (!isDraftRestored) {
-    return (
-      <div className="login-wrapper">
-        <div className="login-bg-decoration login-bg-decor1"></div>
-        <div className="login-bg-decoration login-bg-decor2"></div>
-        <div className="login-card">
-          <div className="login-header">
-            <div className="login-logo">🚢</div>
-            <div className="login-brand">PortAI</div>
-            <div className="login-subtitle">작성 중인 거래를 확인하는 중입니다</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 /*
   if (!user) {
     return (
@@ -1221,7 +1256,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 */
   return (
     <div className="app-container">
-            <OnboardingTour />
       {/* 1. Left Navigation Sidebar */}
       <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="logo-section">
@@ -1342,7 +1376,13 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               <Bell size={20} />
               <span className="badge-dot"></span>
             </button>
-            <button className="icon-btn" onClick={() => setActiveMenu('guide')} title="사용 안내">
+            <button
+              className="icon-btn"
+              type="button"
+              onClick={() => setActiveMenu('guide')}
+              title="사용 안내"
+              aria-label="사용 안내 페이지로 이동"
+            >
               <HelpCircle size={20} />
             </button>
             <div className="user-info-section">
@@ -1375,10 +1415,57 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               <p className="page-subtitle">AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.</p>
             </div>
 
-            {!hasGenerated ? (
+            <div className="trade-selector-panel">
+              <TradeDirectionSelector value={tradeDirection} onChange={handleTradeDirectionChange} />
+              <TradeRoleSelector
+                value={workspaceRole}
+                allowedRoles={userProfile.service_role === 'integrated' ? ['shipper', 'forwarder'] : [workspaceRole]}
+                onChange={setIntegratedWorkspaceRole}
+              />
+            </div>
+
+            {tradeDirection === 'import' ? (
+              workspaceRole === 'forwarder'
+                ? <ImportForwarderFlow userId={user.id} onComplete={handleImportComplete} />
+                : <ImportShipperFlow userId={user.id} onComplete={handleImportComplete} />
+            ) : workspaceRole === 'forwarder' ? (
+              <ForwarderWorkspaceForm state={forwarderForm} onChange={setForwarderForm} />
+            ) : !hasGenerated ? (
               /* --- 거래 정보 입력 모드 --- */
               <div className="dashboard-grid">
-                <div className="form-card" data-doctab={docTab} ref={formCardRef}>
+                <ShipperWorkspaceForm
+                  profile={profile}
+                  items={shipperItems}
+                  supplemental={shipperSupplemental}
+                  isProcessing={isProcessing}
+                  onProfilePatch={(patch) => setProfile((current) => ({ ...current, ...patch }))}
+                  onItemsChange={handleShipperItemsChange}
+                  onSupplementalChange={setShipperSupplemental}
+                  onReset={handleReset}
+                  onGenerate={() => void handleGenerateDocuments()}
+                  toolbar={IS_DEV_TEST_ENABLED ? (
+                    <div className="dev-test-actions">
+                      <span className="dev-badge">DEV</span>
+                      <button type="button" className="dev-test-button dev-test-button-perfect" onClick={handleFillPerfectTestData} disabled={isProcessing}>완벽 테스트</button>
+                      <button type="button" className="dev-test-button dev-test-button-revision" onClick={handleFillRevisionTestData} disabled={isProcessing}>수정 필요 테스트</button>
+                      {devTestMode && <button type="button" className="dev-test-disable" onClick={handleDisableDevTestMode}>테스트 모드 해제</button>}
+                    </div>
+                  ) : undefined}
+                  statusContent={(
+                    <>
+                      {devTestMode && <div className="dev-test-mode-label" role="status">DEV · {devTestMode === 'perfect' ? '완벽 테스트 모드' : '수정 필요 테스트 모드'}</div>}
+                      {devTestMessage && <div className="form-message info" role="status">{devTestMessage}</div>}
+                      {draftSaveLabel && (
+                        <div className={`draft-save-status ${draftSaveStatus}`} role="status" aria-live="polite">
+                          <span className="draft-save-dot" />
+                          {draftSaveLabel}
+                        </div>
+                      )}
+                    </>
+                  )}
+                />
+                {false && (
+                <div className="form-card">
                   <div className="trade-section-header">
                     <div className="trade-section-title">
                       <FileSignature size={20} className="text-primary" />
@@ -1400,28 +1487,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       <span className="draft-save-dot" />
                       {draftSaveLabel}
                     </div>
-                  )}
-
-                  {/* 서류 종류 라벨 탭 — 선택한 서류에 실제 반영되는 입력만 표시 */}
-                  <div className="doc-tab-bar">
-                    {DOC_TABS.map(tab => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        className={`doc-tab ${docTab === tab.id ? 'active' : ''}`}
-                        onClick={() => setDocTab(tab.id)}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {docTab !== 'all' && (
-                    <p className="doc-tab-hint">
-                      {docTab === 'insurance'
-                        ? '적하보험증권은 거래조건이 CIF일 때만 필요한 서류입니다. 아래 항목만 이 서류에 반영됩니다.'
-                        : `${DOC_TABS.find(t => t.id === docTab)?.label}에 실제 반영되는 항목만 표시 중입니다 — 생성은 전체 서류를 일괄 생성합니다.`}
-                    </p>
                   )}
 
                   <div className="form-grid">
@@ -1535,7 +1600,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       <input
                         type="date"
                         className="form-input"
-                        placeholder="연도-월-일"
                         value={profile.departureDate}
                         onChange={(e) => handleInputChange('departureDate', e.target.value)}
                       />
@@ -1546,7 +1610,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       <input
                         type="date"
                         className="form-input"
-                        placeholder="연도-월-일"
                         value={profile.arrivalDate}
                         onChange={(e) => handleInputChange('arrivalDate', e.target.value)}
                       />
@@ -2207,6 +2270,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                     </button>
                   </div>
                 </div>
+                )}
 
                 {/* Right Guide Card — 입력 대기 / 진행 / 완료 3-상태 */}
                 <div className="info-card">
@@ -2601,16 +2665,12 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                             {issue.docType === 'co' && (
                               <div className="mobile-input-group">
                                 <label className="mobile-input-label">원산지 정보 선택</label>
-                                <select
+                                <CountrySelect
                                   className="mobile-input"
                                   value={mobileOrigin}
-                                  onChange={(e) => setMobileOrigin(e.target.value)}
-                                >
-                                  <option value="">국가를 선택하세요</option>
-                                  <option value="대한민국">대한민국 (KR)</option>
-                                  <option value="미국">미국 (US)</option>
-                                  <option value="중국">중국 (CN)</option>
-                                </select>
+                                  onChange={setMobileOrigin}
+                                  emptyLabel="Select a country"
+                                />
                                 <button className="mobile-btn mobile-btn-primary" onClick={handleSolveOrigin} disabled={isRevalidating}>
                                   {isRevalidating ? '재검증 중...' : '원산지증명서 발급 요청'}
                                 </button>
@@ -2813,16 +2873,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               {previewDocId === 'invoice' ? (
                 // 상업송장: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
                 <div ref={docxPreviewRef} style={{ width: '100%' }} />
-              ) : previewDocId === 'packing_list' ? (
-                // 패킹리스트: 다운로드 xlsx와 같은 스키마로 표를 렌더(단일 소스). 합계는 템플릿 수식과 동일 규칙.
-                <div
-                  style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
-                  dangerouslySetInnerHTML={{
-                    __html: packingListData
-                      ? renderPackingListPreviewHtml(mapPackingListToSchema(packingListData))
-                      : '<p>문서 양식이 생성되지 않았습니다.</p>',
-                  }}
-                />
               ) : (
                 <div
                   style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
@@ -2852,7 +2902,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                {previewDocId === 'invoice' ? 'DOCX 다운로드' : previewDocId === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장 (텍스트)'}
+                {previewDocId === 'invoice' ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
             </div>
           </div>

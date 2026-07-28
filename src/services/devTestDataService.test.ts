@@ -42,8 +42,8 @@ describe('개발 테스트 데이터', () => {
 
   it('수정 필요 테스트는 생성 가능한 기본값과 의도적인 검증 누락을 함께 만든다', () => {
     const result = createRevisionTestProfile(emptyProfile, new Date('2026-07-14T00:00:00.000Z'));
-    expect(result.itemName).toBe('테스트 화물');
-    expect(result.loadPort).toBe('부산항');
+    expect(result.itemName).toBe('Test Cargo');
+    expect(result.loadPort).toBe('Busan Port');
     expect(result.hsCode).toBe('');
     expect(result.weight).toBe('');
     expect(result.departureDate).toBe('');

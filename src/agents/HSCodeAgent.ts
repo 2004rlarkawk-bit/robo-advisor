@@ -1,7 +1,14 @@
 import { Agent, HSCodeResult, AgentLog, createLog } from './types';
-import { suggestHSCode, hasApiKey } from '../services/claudeService';
-import { findHSCodesByItemName, classifyFishHS } from './hsCodeDict';
-import { searchHSByKeyword, lookupHSByCode, loadHSData } from '../services/hsDataService';
+import { suggestHSCode } from '../services/claudeService';
+import {
+  findHSCodesByItemName,
+  classifyFishHS
+} from './hsCodeDict';
+import {
+  searchHSByKeyword,
+  lookupHSByCode,
+  loadHSData
+} from '../services/hsDataService';
 
 /** 검색 점수를 신뢰도 라벨로 변환 */
 function scoreToConfidence(score: number): string {
@@ -10,191 +17,473 @@ function scoreToConfidence(score: number): string {
   return '낮음';
 }
 
+/** HS Code에서 공백, 점, 하이픈 제거 */
 export function cleanHSCode(code: string): string {
   return code.replace(/[\s.-]/g, '');
 }
 
+/** HS Code를 화면 표시 형식으로 변환 */
 export function formatHSCode(code: string): string {
   const cleaned = cleanHSCode(code);
+
   if (cleaned.length === 6) {
     return `${cleaned.slice(0, 4)}.${cleaned.slice(4, 6)}`;
   }
+
   if (cleaned.length === 10) {
     return `${cleaned.slice(0, 4)}.${cleaned.slice(4, 6)}-${cleaned.slice(6, 10)}`;
   }
+
   return code;
 }
 
-export class HSCodeAgent implements Agent<{ itemName: string; hsCode?: string; useLLM?: boolean; logs: AgentLog[] }, HSCodeResult> {
+type HSCodeAgentInput = {
+  itemName: string;
+  hsCode?: string;
+  useLLM?: boolean;
+  logs: AgentLog[];
+};
+
+export class HSCodeAgent
+  implements Agent<HSCodeAgentInput, HSCodeResult>
+{
   readonly name = 'HSCode Agent';
 
-  async run(input: { itemName: string; hsCode?: string; useLLM?: boolean; logs: AgentLog[] }): Promise<HSCodeResult> {
-    const { itemName, hsCode, useLLM = false, logs } = input;
+  async run(input: HSCodeAgentInput): Promise<HSCodeResult> {
+    const {
+      itemName,
+      hsCode,
+      useLLM = false,
+      logs
+    } = input;
 
-    logs.push(createLog(this.name, '품목명 기반 HS Code 분류 및 추천 작업 시작...', 'info'));
+    logs.push(
+      createLog(
+        this.name,
+        '품목명 기반 HS Code 분류 및 추천 작업 시작...',
+        'info'
+      )
+    );
 
-    // 1. 후보군 추천 진행 (itemName이 있을 경우 항상 진행하여 UI/검증에서 활용 가능하도록 함)
+    /*
+     * 1. 품목명 기반 후보 추천
+     *
+     * 후보 검색 순서:
+     * 1) 어종 전용 분류
+     * 2) OpenAI Edge Function
+     * 3) 관세청 HS 로컬 사전
+     * 4) 내장 HS Code 사전
+     */
     let candidates: HSCodeResult['candidates'] = [];
-    if (itemName) {
-      logs.push(createLog(this.name, `추천 분석할 품목명: "${itemName}" (AI 활용 여부: ${useLLM ? '예' : '아니오'})`, 'info'));
+
+    if (itemName && itemName.trim() !== '') {
+      const trimmedItemName = itemName.trim();
+
+      logs.push(
+        createLog(
+          this.name,
+          `추천 분석할 품목명: "${trimmedItemName}" (AI 활용 여부: ${
+            useLLM ? '예' : '아니오'
+          })`,
+          'info'
+        )
+      );
+
       try {
-        // 어종은 보존상태(신선/냉동/건조·염장) 기준으로 우선 분류한다(0302/0303/0305). 기본값 추정 없음.
-        const fishHS = classifyFishHS(itemName);
-        if (fishHS) {
-          candidates = fishHS.map(c => ({ code: c.code, description: c.description, confidence: c.confidence, reasoning: c.reasoning }));
-          logs.push(createLog(this.name, '어종 감지 — 보존상태 기준 HS(0302/0303/0305) 분류 적용', 'info'));
-        }
+        /*
+         * 1-1. 어종 우선 분류
+         *
+         * 생선 및 수산물은 보존 상태에 따라 HS Code가 크게 달라지므로
+         * 일반 검색보다 먼저 분류합니다.
+         *
+         * 예:
+         * - 신선·냉장: 0302
+         * - 냉동: 0303
+         * - 건조·염장: 0305
+         */
+        const fishHS = classifyFishHS(trimmedItemName);
 
-        // 폴백 체인: Claude(키 있을 때만, 의미 검색) → 관세청 로컬 사전(정확 매칭) → 내장 dict
-        if (candidates.length === 0 && useLLM && hasApiKey()) {
-          // LLM 호출만 별도 try — 잘못된 키(401) 등 API 오류가 나도 사전 검색은 계속돼야 한다
-          try {
-            const suggestions = await suggestHSCode(itemName);
-            candidates = suggestions.map(c => ({
-              code: formatHSCode(c.code),
-              description: c.description,
-              confidence: c.confidence,
-              reasoning: c.reasoning
-            }));
-            logs.push(createLog(this.name, `Claude LLM 기반 후보 ${candidates.length}건 수신`, 'success'));
-          } catch (llmError) {
-            const msg = llmError instanceof Error ? llmError.message : String(llmError);
-            logs.push(createLog(this.name, `Claude 추천 실패(${msg}) — 관세청 HS 사전 검색으로 대체합니다.`, 'warning'));
-          }
-        }
-
-        if (candidates.length === 0) {
-          // 관세청 HS부호 로컬 사전(12,469행) 검색
-          const dbResults = await searchHSByKeyword(itemName);
-          if (dbResults.length > 0) {
-            candidates = dbResults.map(r => ({
-              code: r.formattedCode,
-              description: r.category ? `${r.ko} ${r.category}` : r.ko,
-              confidence: scoreToConfidence(r.score),
-              reasoning: `관세청 HS부호 사전 기준 · 영문명: ${r.en || '-'} · 단위: ${r.wtUnit || r.qtyUnit || '-'}`
-            }));
-            logs.push(createLog(this.name, `관세청 HS 사전에서 ${candidates.length}건 매칭`, 'success'));
-          }
-        }
-
-        if (candidates.length === 0) {
-          // 최종 폴백: 내장 시뮬레이션 dict (사전 로드 실패/무매칭 시)
-          const localSuggestions = findHSCodesByItemName(itemName);
-          candidates = localSuggestions.map(c => ({
-            code: c.code, // hsCodeDict.ts에 이미 포맷팅되어 있음
-            description: c.description,
-            confidence: c.confidence,
-            reasoning: c.reasoning
+        if (fishHS && fishHS.length > 0) {
+          candidates = fishHS.map(candidate => ({
+            code: formatHSCode(candidate.code),
+            description: candidate.description,
+            confidence: candidate.confidence,
+            reasoning: candidate.reasoning
           }));
+
+           if (candidates.length === 0) {
+            logs.push(
+              createLog(
+                this.name,
+                fishHS[0].reasoning,
+                'warning'
+              )
+            );
+          }
+
+          logs.push(
+            createLog(
+              this.name,
+              `어종 감지 — 보존상태 기준 HS(0302/0303/0305) 후보 ${candidates.length}건 생성`,
+              'success'
+            )
+          );
+        }
+
+        /*
+         * 1-2. OpenAI 추천
+         *
+         * useLLM이 true이고 어종 전용 후보가 없을 때만 호출합니다.
+         *
+         * OpenAI 호출에 실패하더라도 전체 추천 작업을 중단하지 않고
+         * 관세청 HS 사전 검색으로 넘어갑니다.
+         */
+        if (candidates.length === 0 && useLLM) {
+          try {
+            const suggestions = await suggestHSCode(trimmedItemName);
+
+            candidates = suggestions.map(candidate => ({
+              code: formatHSCode(candidate.code),
+              description: candidate.description,
+              confidence: candidate.confidence,
+              reasoning: candidate.reasoning
+            }));
+
+            logs.push(
+              createLog(
+                this.name,
+                `OpenAI 기반 후보 ${candidates.length}건 수신`,
+                'success'
+              )
+            );
+          } catch (llmError) {
+            const message =
+              llmError instanceof Error
+                ? llmError.message
+                : String(llmError);
+
+            logs.push(
+              createLog(
+                this.name,
+                `OpenAI 추천 실패(${message}) — 관세청 HS 사전 검색으로 대체합니다.`,
+                'warning'
+              )
+            );
+          }
+        }
+
+        /*
+         * 1-3. 관세청 HS부호 로컬 사전 검색
+         */
+        if (candidates.length === 0) {
+          const dbResults = await searchHSByKeyword(trimmedItemName);
+
+          if (dbResults.length > 0) {
+            candidates = dbResults.map(result => ({
+              code: result.formattedCode,
+              description: result.category
+                ? `${result.ko} ${result.category}`
+                : result.ko,
+              confidence: scoreToConfidence(result.score),
+              reasoning:
+                `관세청 HS부호 사전 기준 · ` +
+                `영문명: ${result.en || '-'} · ` +
+                `단위: ${result.wtUnit || result.qtyUnit || '-'}`
+            }));
+
+            logs.push(
+              createLog(
+                this.name,
+                `관세청 HS 사전에서 ${candidates.length}건 매칭`,
+                'success'
+              )
+            );
+          }
+        }
+
+        /*
+         * 1-4. 최종 폴백: 프로젝트 내장 HS Code 사전
+         *
+         * 관세청 사전 로딩 실패 또는 검색 결과가 없는 경우 사용합니다.
+         */
+        if (candidates.length === 0) {
+          const localSuggestions =
+            findHSCodesByItemName(trimmedItemName);
+
+          candidates = localSuggestions.map(candidate => ({
+            code: formatHSCode(candidate.code),
+            description: candidate.description,
+            confidence: candidate.confidence,
+            reasoning: candidate.reasoning
+          }));
+
+          if (candidates.length > 0) {
+            logs.push(
+              createLog(
+                this.name,
+                `내장 HS 사전에서 후보 ${candidates.length}건 매칭`,
+                'success'
+              )
+            );
+          }
         }
       } catch (error) {
-        logs.push(createLog(this.name, `추천 중 오류 발생: ${error instanceof Error ? error.message : String(error)}`, 'error'));
+        const message =
+          error instanceof Error
+            ? error.message
+            : String(error);
+
+        logs.push(
+          createLog(
+            this.name,
+            `추천 중 오류 발생: ${message}`,
+            'error'
+          )
+        );
       }
     }
 
-    // 2. 검증 또는 추천 모드에 따라 최종 리턴 오브젝트 구성
+    /*
+     * 2. 사용자가 HS Code를 직접 입력한 경우
+     *
+     * 입력된 코드를 검증하는 모드입니다.
+     */
     if (hsCode && hsCode.trim() !== '') {
-      // 검증 모드
-      logs.push(createLog(this.name, `입력된 HS Code 검증 진행: "${hsCode}"`, 'info'));
+      logs.push(
+        createLog(
+          this.name,
+          `입력된 HS Code 검증 진행: "${hsCode}"`,
+          'info'
+        )
+      );
+
       const cleaned = cleanHSCode(hsCode);
       const isNumeric = /^\d+$/.test(cleaned);
 
+      /*
+       * 2-1. 숫자 형식 검증
+       */
       if (!isNumeric) {
-        const msg = 'HS CODE는 숫자만 포함해야 합니다.';
-        logs.push(createLog(this.name, `검증 실패: ${msg}`, 'error'));
+        const message =
+          'HS CODE는 숫자만 포함해야 합니다.';
+
+        logs.push(
+          createLog(
+            this.name,
+            `검증 실패: ${message}`,
+            'error'
+          )
+        );
+
         return {
           topCode: hsCode,
           candidates,
           status: 'invalid',
           formattedCode: hsCode,
-          validationMessage: msg
+          validationMessage: message
         };
       }
 
-      if (cleaned.length !== 6 && cleaned.length !== 10) {
-        const msg = 'HS CODE는 6자리(국제 기준) 또는 10자리(한국 HSK 기준)여야 합니다.';
-        logs.push(createLog(this.name, `검증 실패: ${msg}`, 'error'));
+      /*
+       * 2-2. 길이 검증
+       *
+       * - 6자리: 국제 공통 HS Code
+       * - 10자리: 대한민국 HSK
+       */
+      if (
+        cleaned.length !== 6 &&
+        cleaned.length !== 10
+      ) {
+        const message =
+          'HS CODE는 6자리(국제 기준) 또는 10자리(한국 HSK 기준)여야 합니다.';
+
+        logs.push(
+          createLog(
+            this.name,
+            `검증 실패: ${message}`,
+            'error'
+          )
+        );
+
         return {
           topCode: hsCode,
           candidates,
           status: 'invalid',
           formattedCode: hsCode,
-          validationMessage: msg
+          validationMessage: message
         };
       }
 
-      const chapter = parseInt(cleaned.slice(0, 2), 10);
+      /*
+       * 2-3. Chapter 범위 검증
+       */
+      const chapter = parseInt(
+        cleaned.slice(0, 2),
+        10
+      );
+
       const formatted = formatHSCode(cleaned);
 
       if (chapter < 1 || chapter > 97) {
-        const msg = 'Chapter 코드(앞 2자리)가 특수 범위(00, 98-99)에 속해 있어 검토가 필요합니다.';
-        logs.push(createLog(this.name, `검토 필요: ${msg}`, 'warning'));
+        const message =
+          'Chapter 코드(앞 2자리)가 특수 범위(00, 98-99)에 속해 있어 검토가 필요합니다.';
+
+        logs.push(
+          createLog(
+            this.name,
+            `검토 필요: ${message}`,
+            'warning'
+          )
+        );
+
         return {
           topCode: formatted,
           candidates,
           status: 'needs_review',
           formattedCode: formatted,
-          validationMessage: msg
+          validationMessage: message
         };
       }
 
-      // 관세청 사전에서 실제 품목명 확인 (존재 시 보강)
-      const dbEntry = await lookupHSByCode(cleaned);
-      if (dbEntry) {
-        const label = dbEntry.category ? `${dbEntry.ko} ${dbEntry.category}` : dbEntry.ko;
-        logs.push(createLog(this.name, `HS Code 검증 통과: ${formatted} (${label})`, 'success'));
-        return {
-          topCode: formatted,
-          candidates,
-          status: 'valid',
-          formattedCode: formatted,
-          validationMessage: `유효한 HS CODE입니다. 관세청 사전 품목: ${label} (${dbEntry.en || '-'})`
-        };
+      /*
+       * 2-4. 관세청 HS 사전에서 실제 코드 조회
+       */
+      try {
+        const dbEntry =
+          await lookupHSByCode(cleaned);
+
+        if (dbEntry) {
+          const label = dbEntry.category
+            ? `${dbEntry.ko} ${dbEntry.category}`
+            : dbEntry.ko;
+
+          logs.push(
+            createLog(
+              this.name,
+              `HS Code 검증 통과: ${formatted} (${label})`,
+              'success'
+            )
+          );
+
+          return {
+            topCode: formatted,
+            candidates,
+            status: 'valid',
+            formattedCode: formatted,
+            validationMessage:
+              `유효한 HS CODE입니다. ` +
+              `관세청 사전 품목: ${label} ` +
+              `(${dbEntry.en || '-'})`
+          };
+        }
+
+        /*
+         * 관세청 사전이 정상적으로 로드된 경우에만
+         * 10자리 코드의 미등록 여부를 판단합니다.
+         *
+         * 오프라인 또는 데이터 로드 실패 상황에서는
+         * 사전에 없다는 이유만으로 invalid 처리하지 않습니다.
+         */
+        const loadedHSData = await loadHSData();
+        const dbLoaded = loadedHSData.length > 0;
+
+        if (dbLoaded && cleaned.length === 10) {
+          logs.push(
+            createLog(
+              this.name,
+              `HS Code 형식 유효하나 사전 미등록: ${formatted}`,
+              'warning'
+            )
+          );
+
+          return {
+            topCode: formatted,
+            candidates,
+            status: 'needs_review',
+            formattedCode: formatted,
+            validationMessage:
+              '형식은 유효하나 관세청 HS부호 사전에 없는 코드입니다. 코드를 재확인하세요.'
+          };
+        }
+      } catch (lookupError) {
+        const message =
+          lookupError instanceof Error
+            ? lookupError.message
+            : String(lookupError);
+
+        logs.push(
+          createLog(
+            this.name,
+            `관세청 HS 사전 검증 실패(${message}) — 형식 검증 결과를 사용합니다.`,
+            'warning'
+          )
+        );
       }
 
-      // 사전이 실제 로드된 경우에만 "미등록 코드" 강등 적용 (테스트/오프라인 시 형식 검증만)
-      const dbLoaded = (await loadHSData()).length > 0;
-      if (dbLoaded && cleaned.length === 10) {
-        logs.push(createLog(this.name, `HS Code 형식 유효하나 사전 미등록: ${formatted}`, 'warning'));
-        return {
-          topCode: formatted,
-          candidates,
-          status: 'needs_review',
-          formattedCode: formatted,
-          validationMessage: '형식은 유효하나 관세청 HS부호 사전에 없는 코드입니다. 코드를 재확인하세요.'
-        };
-      }
+      /*
+       * 사전 조회 결과가 없거나 사전 로드가 불가능한 경우
+       * 숫자 및 자리수 형식 검증 결과를 기준으로 통과시킵니다.
+       */
+      logs.push(
+        createLog(
+          this.name,
+          `HS Code 형식 검증 통과: ${formatted}`,
+          'success'
+        )
+      );
 
-      logs.push(createLog(this.name, `HS Code 검증 통과: ${formatted}`, 'success'));
       return {
         topCode: formatted,
         candidates,
         status: 'valid',
         formattedCode: formatted,
-        validationMessage: '유효한 HS CODE 형식입니다.'
+        validationMessage:
+          '유효한 HS CODE 형식입니다.'
       };
-    } else {
-      // 추천 모드 (hsCode가 비어 있음)
-      if (candidates.length > 0) {
-        const topCode = candidates[0].code;
-        logs.push(createLog(this.name, `HS Code 추천 완료. 최적 코드: ${topCode} (${candidates[0].description})`, 'success'));
-        return {
-          topCode,
-          candidates,
-          status: 'suggested',
-          formattedCode: topCode,
-          validationMessage: '추천된 HS CODE입니다.'
-        };
-      } else {
-        logs.push(createLog(this.name, '추천 후보를 찾지 못했습니다.', 'warning'));
-        return {
-          topCode: '',
-          candidates: [],
-          status: 'invalid',
-          formattedCode: '',
-          validationMessage: '수출입 신고를 위한 HS CODE 정보가 누락되었습니다.'
-        };
-      }
     }
+
+    /*
+     * 3. HS Code가 입력되지 않은 경우
+     *
+     * 품목명을 이용해 추천한 후보를 반환합니다.
+     */
+    if (candidates.length > 0) {
+      const topCandidate = candidates[0];
+      const topCode = topCandidate.code;
+
+      logs.push(
+        createLog(
+          this.name,
+          `HS Code 추천 완료. 최적 코드: ${topCode} (${topCandidate.description})`,
+          'success'
+        )
+      );
+
+      return {
+        topCode,
+        candidates,
+        status: 'suggested',
+        formattedCode: topCode,
+        validationMessage:
+          '추천된 HS CODE입니다.'
+      };
+    }
+
+    logs.push(
+      createLog(
+        this.name,
+        '추천 후보를 찾지 못했습니다.',
+        'warning'
+      )
+    );
+
+    return {
+      topCode: '',
+      candidates: [],
+      status: 'invalid',
+      formattedCode: '',
+      validationMessage:
+        '수출입 신고를 위한 HS CODE 정보가 누락되었습니다.'
+    };
   }
 }

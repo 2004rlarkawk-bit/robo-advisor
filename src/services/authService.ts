@@ -7,6 +7,7 @@ export interface AuthSessionUser {
   email: string;
   name: string;
   type: 'member';
+  onboardingPending: boolean;
 }
 
 interface SignUpInput {
@@ -32,14 +33,26 @@ export function isValidEmail(email: string): boolean {
 }
 
 function toAuthSessionUser(user: User): AuthSessionUser {
-  return { id: user.id, email: user.email ?? '', name: user.email ?? 'member', type: 'member' };
+  return {
+    id: user.id,
+    email: user.email ?? '',
+    name: user.email ?? 'member',
+    type: 'member',
+    onboardingPending: user.user_metadata?.onboarding_completed === false,
+  };
 }
 
 export async function signUpWithEmail({ email, password, companyName, contactName }: SignUpInput): Promise<AuthSessionUser | null> {
   const { data, error } = await supabase.auth.signUp({
     email: normalizeEmail(email),
     password,
-    options: { data: { company_name: companyName || null, contact_name: contactName || null } },
+    options: {
+      data: {
+        company_name: companyName || null,
+        contact_name: contactName || null,
+        onboarding_completed: false,
+      },
+    },
   });
 
   if (error) {
@@ -65,6 +78,15 @@ export async function signInWithEmail(email: string, password: string): Promise<
   const { data, error } = await supabase.auth.signInWithPassword({ email: normalizeEmail(email), password });
   if (error) throw error;
   if (!data.user) throw new Error('로그인 사용자 정보를 가져오지 못했습니다.');
+  return toAuthSessionUser(data.user);
+}
+
+export async function markOnboardingCompleted(): Promise<AuthSessionUser> {
+  const { data, error } = await supabase.auth.updateUser({
+    data: { onboarding_completed: true },
+  });
+  if (error) throw error;
+  if (!data.user) throw new Error('온보딩 완료 상태를 갱신하지 못했습니다.');
   return toAuthSessionUser(data.user);
 }
 

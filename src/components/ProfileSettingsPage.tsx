@@ -18,7 +18,7 @@ export default function ProfileSettingsPage({ profile, isSaving, onSave, onDelet
   const save = async (values: UserProfileUpdate) => {
     setSaved('');
     await onSave(values);
-    setSaved('프로필이 저장되었습니다. 새 거래부터 변경된 기본값을 사용할 수 있습니다.');
+    setSaved('프로필이 저장되었습니다. 기존 거래 데이터는 변경되지 않습니다.');
   };
 
   const confirmDelete = async () => {

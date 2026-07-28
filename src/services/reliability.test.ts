@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
-import { extractJson, clearApiKey, setApiKey } from './claudeService';
+import { extractJson } from './claudeService';
 import { getIncotermsRule } from '../agents/incotermsRules';
 
 // node 환경에는 localStorage가 없음 — storageService/claudeService가 쓰는 전역을 폴리필
@@ -34,17 +34,20 @@ describe('extractJson — LLM 응답 코드펜스 처리', () => {
   });
 });
 
-describe('clearApiKey — 키 사본 동기 삭제', () => {
-  it('원본 키와 설정 JSON 사본을 모두 지운다', () => {
-    setApiKey('sk-ant-test-key-12345');
-    localStorage.setItem('portai_settings', JSON.stringify({ userName: '테스트', claudeApiKey: 'sk-ant-test-key-12345' }));
+describe('getSettings — 레거시 API 키 필드 제외', () => {
+  it('기존 설정 JSON의 키 필드를 읽거나 반환하지 않는다', async () => {
+    const legacyKeyName = ['claude', 'Api', 'Key'].join('');
+    localStorage.setItem('portai_settings', JSON.stringify({
+      userName: '테스트',
+      [legacyKeyName]: 'legacy-key',
+      useLLM: true,
+    }));
 
-    clearApiKey();
+    const { getSettings } = await import('./storageService');
+    const settings = getSettings();
 
-    expect(localStorage.getItem('portai_claude_api_key')).toBeNull();
-    const settings = JSON.parse(localStorage.getItem('portai_settings')!);
-    expect(settings.claudeApiKey).toBe('');
-    expect(settings.userName).toBe('테스트'); // 다른 설정은 보존
+    expect(settings.userName).toBe('테스트');
+    expect(settings).not.toHaveProperty(legacyKeyName);
   });
 });
 

@@ -170,6 +170,19 @@ describe('DocumentAgent — 문서번호 건(shipment) 단위 파생·안정성'
   });
 });
 
+describe('DocumentAgent — Buyer 영문 국가 연결', () => {
+  it('Buyer 국가를 같은 buyer 객체와 인보이스 HTML에 전달한다', async () => {
+    const result = await runAgent({
+      buyerName: 'Global Import LLC',
+      buyerAddress: '250 Market Street, Los Angeles, CA',
+      buyerCountry: 'United States',
+    });
+
+    expect(result.generatedDocs.invoice?.buyer?.country).toBe('United States');
+    expect(result.htmlTemplates?.invoice).toContain('United States');
+  });
+});
+
 describe('문서 템플릿 XSS 방어', () => {
   it('escapeHtml이 HTML 특수문자를 모두 치환한다', () => {
     expect(escapeHtml('<img src=x onerror=alert(1)>')).toBe('&lt;img src=x onerror=alert(1)&gt;');

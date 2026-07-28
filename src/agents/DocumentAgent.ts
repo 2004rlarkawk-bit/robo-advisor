@@ -36,7 +36,7 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     let currency = 'USD';
 
     if (useLLM && profile.itemName) {
-      logs.push(createLog(this.name, 'Claude AI에 품목 설명 및 거래 조건 자동 생성 요청 중...', 'info'));
+      logs.push(createLog(this.name, 'OpenAI에 품목 설명 및 거래 조건 자동 생성 요청 중...', 'info'));
       try {
         const autoFill = await autoFillDocumentFields({
           itemName: profile.itemName,
@@ -123,7 +123,12 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
         signedBy: profile.signedBy || profile.signerName || '',
         // 무역협회 표준 서식 ①~⑱ 추가 필드
         sellerTaxNo: profile.tradeType === 'export' ? (profile.businessRegistrationNo || profile.taxNo || '') : '',
-        buyer: profile.buyerName ? { name: profile.buyerName, address: profile.buyerAddress || '', contact: '' } : undefined,
+        buyer: profile.buyerName ? {
+          name: profile.buyerName,
+          address: profile.buyerAddress || '',
+          contact: '',
+          country: profile.buyerCountry || '',
+        } : undefined,
         vessel: profile.vesselOrFlight || '',
         shippingMarks: profile.shippingMarks || '',
         packageCount: Number(profile.packageCount) || 0,
