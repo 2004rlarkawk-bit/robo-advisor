@@ -29,6 +29,7 @@ import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDo
 import SettingsPanel from './components/SettingsPanel';
 import GuidePanel from './components/GuidePanel';
 import AboutPanel from './components/AboutPanel';
+import OnboardingTour from './components/OnboardingTour';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
 import AuthPage from './components/AuthPage';
@@ -1172,6 +1173,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 */
   return (
     <div className="app-container">
+            <OnboardingTour />
       {/* 1. Left Navigation Sidebar */}
       <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="logo-section">
