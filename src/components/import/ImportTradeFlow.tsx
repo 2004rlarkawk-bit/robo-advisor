@@ -137,6 +137,9 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
         : null;
       setState((current) => ({ ...current, step: 3, duty, generatedAt: current.generatedAt ?? new Date().toISOString(), existingStatus: 'generated' }));
       setMessage('');
+    } catch (error) {
+      console.error(error);
+      setMessage(error instanceof Error ? error.message : '관세율을 조회하지 못했습니다. 잠시 후 다시 시도해 주세요.');
     } finally {
       setBusy(false);
     }
@@ -283,7 +286,7 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
 
       {state.step === 3 && state.analysis && role === 'forwarder' && (
         <>
-          <section className="form-card import-card"><div className="import-card-heading"><div><h2>통관 진행 현황</h2></div><span className="source-badge">{state.cargo?.source === 'api' ? 'UNI-PASS API' : state.cargo ? '시뮬레이션' : '조회 전'}</span></div>
+          <section className="form-card import-card"><div className="import-card-heading"><div><h2>통관 진행 현황</h2></div><span className="source-badge">{state.cargo?.source === 'api' ? 'UNI-PASS API' : state.cargo?.lookupStatus === 'empty' ? '조회 결과 없음' : '조회 전'}</span></div>
             <div className="cargo-query"><label className="form-group"><span className="form-label">M/H B/L 번호</span><input className="form-input" value={state.analysis.extracted.blNo} onChange={(event) => setState((current) => ({ ...current, analysis: current.analysis ? { ...current.analysis, extracted: { ...current.analysis.extracted, blNo: event.target.value } } : null }))} /></label><label className="form-group"><span className="form-label">컨테이너 번호</span><input className="form-input" value={state.analysis.extracted.containerNo} onChange={(event) => setState((current) => ({ ...current, analysis: current.analysis ? { ...current.analysis, extracted: { ...current.analysis.extracted, containerNo: event.target.value } } : null }))} /></label><button className="btn btn-primary" disabled={busy} onClick={() => void lookupCargo()}><Search size={16} /> {busy ? '조회 중…' : '조회'}</button></div>
             {!state.cargo ? <p className="import-empty">B/L 번호로 통관 진행 정보를 조회해 주세요.</p> : <><p className="cargo-status-text"><strong>{state.cargo.status}</strong> · {state.cargo.detail}</p><ol className="cargo-timeline">{state.cargo.timeline.map((item) => <li key={item.label} className={item.current ? 'current' : item.completed ? 'done' : ''}><span />{item.label}</li>)}</ol></>}
           </section>

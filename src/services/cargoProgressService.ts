@@ -7,13 +7,12 @@ export async function lookupImportCargo(blNo: string): Promise<CargoTrackingResu
   const result = await getCargoProgress(blNo);
   if (!result) {
     return {
-      lookupStatus: 'simulation',
+      lookupStatus: 'empty',
       cargoNo: '',
-      status: '보세구역 반입',
-      detail: '실제 조회 결과가 없어 화면 검증용 시뮬레이션 진행 정보를 표시합니다.',
-      arrivalPort: '부산항',
-      source: 'simulation',
-      timeline: STEPS.map((label, index) => ({ label, completed: index <= 2, current: index === 2 })),
+      status: '조회 결과 없음',
+      detail: '입력한 B/L 번호로 조회된 화물 통관 정보가 없습니다.',
+      arrivalPort: '',
+      timeline: STEPS.map((label) => ({ label, completed: false, current: false })),
     };
   }
   const currentIndex = Math.max(0, STEPS.findIndex((step) => result.status.includes(step)));

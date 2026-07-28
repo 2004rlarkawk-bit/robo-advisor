@@ -4,42 +4,14 @@
  * 공공 API 연결 기준 (2026-07):
  *  - 관세청_관세환율정보(GW)            → Supabase Edge Function 경유
  *  - 국세청_사업자등록정보 진위확인/상태조회 → verifyBusinessRegistration
- *  - 관세청_품목별 수출입실적(GW)        → getItemTradeStats
+ *  - 관세청_품목별 수출입실적(GW)        → Supabase Edge Function 경유
  *  - 관세청_수출입총괄 / 국가별 / 품목별국가별 / 성질별 → (2차 확장 예정)
  *
- * 수출입 통계 API 호출:
- *  - 키는 localStorage 보관 (Settings 페이지에서 입력)
- *  - 호출 실패(CORS/네트워크/키없음) 시 시뮬레이션 폴백 → 데모 항상 동작
- *
- * 주의: data.go.kr 일부 엔드포인트는 브라우저 CORS 차단 가능.
- * 차단 확인 시 백엔드 프록시(팀원4 Express) 경유로 전환.
+ * 수출입 통계 API 키는 Supabase Secret에서만 관리하며 브라우저에 노출하지 않는다.
+ * 통계 API 실패는 호출자에게 전달하고 정상 데이터처럼 보이는 값을 만들지 않는다.
  */
 
 import { supabase } from '../lib/supabase';
-
-// ===== 키 관리 =====
-
-const KEY_DATA_GO_KR = 'portai_data_go_kr_key'; // 관세청 GW 수출입 통계용
-
-/** 테스트(node) 환경에는 localStorage가 없음 → 키 없음으로 처리해 시뮬 폴백 유도 */
-const storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> =
-  typeof localStorage !== 'undefined'
-    ? localStorage
-    : { getItem: () => null, setItem: () => {}, removeItem: () => {} };
-
-export function setDataGoKrKey(key: string): void {
-  storage.setItem(KEY_DATA_GO_KR, key);
-}
-export function getDataGoKrKey(): string | null {
-  return storage.getItem(KEY_DATA_GO_KR);
-}
-export function hasDataGoKrKey(): boolean {
-  const k = getDataGoKrKey();
-  return !!k && k.length > 10;
-}
-export function clearDataGoKrKey(): void {
-  storage.removeItem(KEY_DATA_GO_KR);
-}
 
 // ===== 공통 =====
 
@@ -50,35 +22,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-const BASE_1220000 = 'https://apis.data.go.kr/1220000';
-
 /** yyyyMMdd */
 function toYmd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}${m}${day}`;
-}
-
-/**
- * XML 응답에서 태그 배열 추출 (관세청 GW는 XML 기본).
- * resultCode가 정상(00)이 아니면 throw — 키 만료/인증 실패가
- * "데이터 없음"으로 위장되어 조용히 시뮬 폴백되는 것을 방지.
- */
-function xmlItems(xml: string): Record<string, string>[] {
-  const doc = new DOMParser().parseFromString(xml, 'text/xml');
-  const resultCode = doc.getElementsByTagName('resultCode')[0]?.textContent?.trim();
-  if (resultCode && resultCode !== '00') {
-    const resultMsg = doc.getElementsByTagName('resultMsg')[0]?.textContent?.trim() ?? '';
-    throw new Error(`관세청 GW 오류 (resultCode ${resultCode}): ${resultMsg || '사유 미상 — 키 상태를 확인하세요'}`);
-  }
-  return Array.from(doc.getElementsByTagName('item')).map((item) => {
-    const rec: Record<string, string> = {};
-    Array.from(item.children).forEach((c) => {
-      rec[c.tagName] = c.textContent ?? '';
-    });
-    return rec;
-  });
 }
 
 /**
@@ -278,7 +227,7 @@ function simulatedBusinessStatus(cleaned: string): BusinessStatus {
 // ===== 3. 품목별 수출입실적 (관세청 GW) =====
 
 export interface ItemTradeStat {
-  period: string; // yyyy.mm
+  period: string; // yyyyMM
   hsCode: string;
   exportWeight: number; // kg
   exportAmount: number; // USD
@@ -286,6 +235,115 @@ export interface ItemTradeStat {
   importAmount: number;
   balance: number; // 무역수지 USD
   source: DataSource;
+}
+
+export interface TradeStatsResult<T> {
+  records: T[];
+  source: 'api';
+  latestPeriod: string | null;
+  recordCount: number;
+}
+
+type TradeStatsAction = 'total' | 'country' | 'item';
+
+export class CustomsTradeStatsError extends Error {
+  constructor(public readonly code: string) {
+    super('관세청 통계 데이터를 불러오지 못했습니다.');
+    this.name = 'CustomsTradeStatsError';
+  }
+}
+
+function isPeriod(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{6}$/.test(value)) return false;
+  const month = Number(value.slice(4, 6));
+  return month >= 1 && month <= 12;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+async function requestTradeStats(
+  action: TradeStatsAction,
+  startPeriod: string,
+  endPeriod: string,
+  hsCode?: string,
+): Promise<TradeStatsResult<unknown>> {
+  const startedAt = Date.now();
+  const { data, error } = await supabase.functions.invoke('customs-trade-stats', {
+    body: {
+      action,
+      startPeriod,
+      endPeriod,
+      ...(action === 'item' ? { hsCode } : {}),
+    },
+  });
+
+  if (error) {
+    if (import.meta.env.DEV) {
+      console.error('[API][customs-trade-stats]', {
+        action,
+        status: 'error',
+        source: 'api',
+        recordCount: 0,
+        latestPeriod: null,
+        fallbackUsed: false,
+        errorCode: 'FUNCTION_INVOKE_ERROR',
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
+    throw new CustomsTradeStatsError('FUNCTION_INVOKE_ERROR');
+  }
+
+  if (!isRecord(data)) throw new CustomsTradeStatsError('INVALID_RESPONSE');
+  if (data.success !== true) {
+    const code = isRecord(data.error) && typeof data.error.code === 'string'
+      ? data.error.code
+      : 'CUSTOMS_API_ERROR';
+    if (import.meta.env.DEV) {
+      console.error('[API][customs-trade-stats]', {
+        action,
+        status: 'error',
+        source: 'api',
+        recordCount: 0,
+        latestPeriod: null,
+        fallbackUsed: false,
+        errorCode: code,
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
+    throw new CustomsTradeStatsError(code);
+  }
+
+  if (
+    data.source !== 'api' ||
+    data.action !== action ||
+    !Array.isArray(data.records) ||
+    typeof data.recordCount !== 'number' ||
+    data.recordCount !== data.records.length ||
+    (data.latestPeriod !== null && !isPeriod(data.latestPeriod))
+  ) {
+    throw new CustomsTradeStatsError('INVALID_RESPONSE');
+  }
+
+  if (import.meta.env.DEV) {
+    console.info('[API][customs-trade-stats]', {
+      action,
+      status: data.records.length === 0 ? 'empty' : 'success',
+      source: 'api',
+      recordCount: data.recordCount,
+      latestPeriod: data.latestPeriod,
+      fallbackUsed: false,
+      elapsedMs: Date.now() - startedAt,
+    });
+  }
+
+  return {
+    records: data.records,
+    source: 'api',
+    latestPeriod: data.latestPeriod,
+    recordCount: data.recordCount,
+  };
 }
 
 /**
@@ -296,88 +354,43 @@ export async function getItemTradeStats(
   hsCode: string,
   startYymm: string, // yyyyMM
   endYymm: string
-): Promise<ItemTradeStat[]> {
-  const key = getDataGoKrKey();
+): Promise<TradeStatsResult<ItemTradeStat>> {
   const cleaned = hsCode.replace(/[^0-9]/g, '');
-
-  if (key && cleaned.length >= 6) {
-    try {
-      const url =
-        `${BASE_1220000}/nitemtrade/getNitemtradeList` +
-        `?serviceKey=${encodeURIComponent(key)}&strtYymm=${startYymm}&endYymm=${endYymm}&hsSgn=${cleaned}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`수출입실적 API 오류 (${res.status})`);
-      const items = xmlItems(await res.text());
-      // 응답 행 = 기간 × 상대국가 breakdown → 기간별로 합산
-      const byPeriod = new Map<string, ItemTradeStat>();
-      for (const i of items) {
-        if (!i.year || i.year === '총계') continue;
-        const cur = byPeriod.get(i.year) ?? {
-          period: i.year,
-          hsCode: cleaned,
-          exportWeight: 0,
-          exportAmount: 0,
-          importWeight: 0,
-          importAmount: 0,
-          balance: 0,
-          source: 'api' as DataSource,
-        };
-        cur.exportWeight += parseFloat(i.expWgt || '0');
-        cur.exportAmount += parseFloat(i.expDlr || '0');
-        cur.importWeight += parseFloat(i.impWgt || '0');
-        cur.importAmount += parseFloat(i.impDlr || '0');
-        cur.balance += parseFloat(i.balPayments || '0');
-        byPeriod.set(i.year, cur);
-      }
-      const stats = [...byPeriod.values()].sort((a, b) => a.period.localeCompare(b.period));
-      if (stats.length > 0) return stats;
-      throw new Error('실적 데이터 없음');
-    } catch (err) {
-      console.warn('품목별 수출입실적 API 실패, 시뮬레이션 폴백:', err);
-    }
+  if (!/^\d{6,10}$/.test(cleaned)) {
+    throw new CustomsTradeStatsError('INVALID_HS_CODE');
   }
-
-  return simulatedTradeStats(cleaned, startYymm, endYymm);
-}
-
-function simulatedTradeStats(hsCode: string, startYymm: string, endYymm: string): ItemTradeStat[] {
-  // hsCode 기반 결정적 의사난수 → 데모 시 같은 품목은 같은 그래프
-  let seed = 0;
-  for (const ch of hsCode) seed = (seed * 31 + ch.charCodeAt(0)) % 97;
-
-  const out: ItemTradeStat[] = [];
-  let y = parseInt(startYymm.slice(0, 4), 10);
-  let m = parseInt(startYymm.slice(4, 6), 10);
-  const endY = parseInt(endYymm.slice(0, 4), 10);
-  const endM = parseInt(endYymm.slice(4, 6), 10);
-
-  while (y < endY || (y === endY && m <= endM)) {
-    const wave = Math.sin((m + seed) / 2) * 0.3 + 1;
-    const expAmt = Math.round((500_000 + seed * 20_000) * wave);
-    const impAmt = Math.round((420_000 + seed * 15_000) * (2 - wave));
-    out.push({
-      period: `${y}.${String(m).padStart(2, '0')}`,
-      hsCode,
-      exportWeight: Math.round(expAmt / 12),
-      exportAmount: expAmt,
-      importWeight: Math.round(impAmt / 10),
-      importAmount: impAmt,
-      balance: expAmt - impAmt,
-      source: 'simulation',
-    });
-    m++;
-    if (m > 12) {
-      m = 1;
-      y++;
+  const result = await requestTradeStats('item', startYymm, endYymm, cleaned);
+  const records = result.records.map((value): ItemTradeStat => {
+    if (
+      !isRecord(value) ||
+      !isPeriod(value.period) ||
+      typeof value.hsCode !== 'string' ||
+      !isFiniteNumber(value.exportWeight) ||
+      !isFiniteNumber(value.exportAmount) ||
+      !isFiniteNumber(value.importWeight) ||
+      !isFiniteNumber(value.importAmount) ||
+      !isFiniteNumber(value.balance)
+    ) {
+      throw new CustomsTradeStatsError('INVALID_RESPONSE');
     }
-  }
-  return out;
+    return {
+      period: value.period,
+      hsCode: value.hsCode,
+      exportWeight: value.exportWeight,
+      exportAmount: value.exportAmount,
+      importWeight: value.importWeight,
+      importAmount: value.importAmount,
+      balance: value.balance,
+      source: 'api',
+    };
+  });
+  return { ...result, records };
 }
 
 // ===== 3-1. 국가별 수출입실적 (관세청 GW, data.go.kr 15101612) =====
 
 export interface CountryTradeStat {
-  period: string; // yyyy.mm
+  period: string; // yyyyMM
   countryCode: string; // US, CN ...
   countryName: string;
   exportCount: number;
@@ -393,60 +406,43 @@ export async function getCountryTradeStats(
   startYymm: string,
   endYymm: string,
   countryCode?: string
-): Promise<CountryTradeStat[]> {
-  const key = getDataGoKrKey();
-
-  if (key) {
-    try {
-      let url =
-        `${BASE_1220000}/nationtrade/getNationtradeList` +
-        `?serviceKey=${encodeURIComponent(key)}&strtYymm=${startYymm}&endYymm=${endYymm}`;
-      if (countryCode) url += `&cntyCd=${countryCode.toUpperCase()}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`국가별 실적 API 오류 (${res.status})`);
-      const items = xmlItems(await res.text());
-      const stats = items
-        .filter((i) => i.year && i.year !== '총계')
-        .map((i) => ({
-          period: i.year,
-          countryCode: i.statCd || '',
-          countryName: i.statCdCntnKor1 || '',
-          exportCount: parseFloat(i.expCnt || '0'),
-          exportAmount: parseFloat(i.expDlr || '0'),
-          importCount: parseFloat(i.impCnt || '0'),
-          importAmount: parseFloat(i.impDlr || '0'),
-          balance: parseFloat(i.balPayments || '0'),
-          source: 'api' as DataSource,
-        }));
-      if (stats.length > 0) return stats;
-      throw new Error('실적 데이터 없음');
-    } catch (err) {
-      console.warn('국가별 수출입실적 API 실패, 시뮬레이션 폴백:', err);
+): Promise<TradeStatsResult<CountryTradeStat>> {
+  const result = await requestTradeStats('country', startYymm, endYymm);
+  const requestedCountry = countryCode?.toUpperCase();
+  const records = result.records.flatMap((value): CountryTradeStat[] => {
+    if (
+      !isRecord(value) ||
+      !isPeriod(value.period) ||
+      typeof value.countryCode !== 'string' ||
+      typeof value.countryName !== 'string' ||
+      !isFiniteNumber(value.exportCount) ||
+      !isFiniteNumber(value.exportAmount) ||
+      !isFiniteNumber(value.importCount) ||
+      !isFiniteNumber(value.importAmount) ||
+      !isFiniteNumber(value.balance)
+    ) {
+      throw new CustomsTradeStatsError('INVALID_RESPONSE');
     }
-  }
-
-  // 시뮬레이션: 주요 3개국 고정 샘플
-  const samples = [
-    { countryCode: 'US', countryName: '미국' },
-    { countryCode: 'CN', countryName: '중국' },
-    { countryCode: 'JP', countryName: '일본' },
-  ].filter((s) => !countryCode || s.countryCode === countryCode.toUpperCase());
-  return samples.map((s, idx) => ({
-    period: `${startYymm.slice(0, 4)}.${startYymm.slice(4, 6)}`,
-    ...s,
-    exportCount: 100000 - idx * 20000,
-    exportAmount: 10_000_000_000 - idx * 2_000_000_000,
-    importCount: 120000 - idx * 25000,
-    importAmount: 8_000_000_000 - idx * 1_500_000_000,
-    balance: 2_000_000_000 - idx * 500_000_000,
-    source: 'simulation' as DataSource,
-  }));
+    if (requestedCountry && value.countryCode !== requestedCountry) return [];
+    return [{
+      period: value.period,
+      countryCode: value.countryCode,
+      countryName: value.countryName,
+      exportCount: value.exportCount,
+      exportAmount: value.exportAmount,
+      importCount: value.importCount,
+      importAmount: value.importAmount,
+      balance: value.balance,
+      source: 'api',
+    }];
+  });
+  return { ...result, records, recordCount: records.length };
 }
 
 // ===== 3-2. 수출입총괄 (관세청 GW, data.go.kr 15102108) =====
 
 export interface TotalTradeStat {
-  period: string; // yyyy.mm
+  period: string; // yyyyMM
   exportCount: number;
   exportAmount: number; // USD
   importCount: number;
@@ -456,47 +452,34 @@ export interface TotalTradeStat {
 }
 
 /** 국가 전체 수출입총괄 (월별). 대시보드 상단 요약 카드용. */
-export async function getTotalTradeStats(startYymm: string, endYymm: string): Promise<TotalTradeStat[]> {
-  const key = getDataGoKrKey();
-
-  if (key) {
-    try {
-      const url =
-        `${BASE_1220000}/Newtrade/getNewtradeList` +
-        `?serviceKey=${encodeURIComponent(key)}&strtYymm=${startYymm}&endYymm=${endYymm}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`수출입총괄 API 오류 (${res.status})`);
-      const items = xmlItems(await res.text());
-      const stats = items
-        .filter((i) => i.year && i.year !== '총계')
-        .map((i) => ({
-          period: i.year,
-          exportCount: parseFloat(i.expCnt || '0'),
-          exportAmount: parseFloat(i.expDlr || '0'),
-          importCount: parseFloat(i.impCnt || '0'),
-          importAmount: parseFloat(i.impDlr || '0'),
-          balance: parseFloat(i.balPayments || '0'),
-          source: 'api' as DataSource,
-        }))
-        .sort((a, b) => a.period.localeCompare(b.period));
-      if (stats.length > 0) return stats;
-      throw new Error('실적 데이터 없음');
-    } catch (err) {
-      console.warn('수출입총괄 API 실패, 시뮬레이션 폴백:', err);
+export async function getTotalTradeStats(
+  startYymm: string,
+  endYymm: string,
+): Promise<TradeStatsResult<TotalTradeStat>> {
+  const result = await requestTradeStats('total', startYymm, endYymm);
+  const records = result.records.map((value): TotalTradeStat => {
+    if (
+      !isRecord(value) ||
+      !isPeriod(value.period) ||
+      !isFiniteNumber(value.exportCount) ||
+      !isFiniteNumber(value.exportAmount) ||
+      !isFiniteNumber(value.importCount) ||
+      !isFiniteNumber(value.importAmount) ||
+      !isFiniteNumber(value.balance)
+    ) {
+      throw new CustomsTradeStatsError('INVALID_RESPONSE');
     }
-  }
-
-  return [
-    {
-      period: `${startYymm.slice(0, 4)}.${startYymm.slice(4, 6)}`,
-      exportCount: 1_000_000,
-      exportAmount: 65_000_000_000,
-      importCount: 4_900_000,
-      importAmount: 57_000_000_000,
-      balance: 8_000_000_000,
-      source: 'simulation',
-    },
-  ];
+    return {
+      period: value.period,
+      exportCount: value.exportCount,
+      exportAmount: value.exportAmount,
+      importCount: value.importCount,
+      importAmount: value.importAmount,
+      balance: value.balance,
+      source: 'api',
+    };
+  });
+  return { ...result, records };
 }
 
 // ===== 3-3. 성질별 수출입실적 (관세청 GW, data.go.kr 15102109) =====

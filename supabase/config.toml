@@ -10,6 +10,12 @@ entrypoint = "./functions/customs-exchange-rate/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/customs-exchange-rate/*.html" ]
 
+[functions.customs-trade-stats]
+enabled = true
+verify_jwt = false
+import_map = "./functions/customs-trade-stats/deno.json"
+entrypoint = "./functions/customs-trade-stats/index.ts"
+
 [functions.unipass-tariff-basic]
 enabled = true
 verify_jwt = false

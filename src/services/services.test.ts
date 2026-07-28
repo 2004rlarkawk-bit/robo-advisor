@@ -32,8 +32,6 @@ import {
   verifyBusinessRegistration,
   validateBusinessRegistration,
   getItemTradeStats,
-  setDataGoKrKey,
-  clearDataGoKrKey,
 } from './customsApiService';
 import {
   getTariffRates,
@@ -45,19 +43,13 @@ import {
   type TariffRate,
 } from './unipassService';
 import { searchLaw, getRelatedLawForIssue } from './lawService';
-
-const DUMMY_KEY = 'test-key-1234567890';
-
-function xmlResponse(body: string): Response {
-  return new Response(body, { status: 200, headers: { 'Content-Type': 'application/xml' } });
-}
+import { lookupImportCargo } from './cargoProgressService';
 
 beforeEach(() => {
   invokeMock.mockResolvedValue({ data: null, error: new Error('Edge Function unavailable in test') });
 });
 
 afterEach(() => {
-  clearDataGoKrKey();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   invokeMock.mockReset();
@@ -148,19 +140,53 @@ describe('관세환율 100단위 통화 정규화', () => {
   });
 });
 
-// ===== 관세청 GW 오류 감지 =====
+// ===== 관세청 통계 Edge Function =====
 
-describe('관세청 GW resultCode 오류 감지', () => {
-  it('resultCode 99 응답은 "데이터 없음"이 아니라 오류로 기록 후 시뮬 폴백된다', async () => {
-    setDataGoKrKey(DUMMY_KEY);
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(xmlResponse(
-      '<response><header><resultCode>99</resultCode><resultMsg>인증키가 유효하지 않습니다</resultMsg></header></response>'
-    )));
-    const stats = await getItemTradeStats('8517621010', '202601', '202603');
-    expect(stats[0].source).toBe('simulation');
-    const logged = warn.mock.calls.map((c) => String(c[1] ?? c[0])).join(' ');
-    expect(logged).toContain('resultCode 99');
+describe('관세청 통계 Edge Function 응답 검증', () => {
+  it('품목 요청에 HS Code를 전달하고 API 레코드를 매핑한다', async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        success: true,
+        source: 'api',
+        action: 'item',
+        records: [{
+          period: '202601', hsCode: '8517621010',
+          exportWeight: 10, exportAmount: 100,
+          importWeight: 20, importAmount: 80, balance: 20,
+        }],
+        latestPeriod: '202601',
+        recordCount: 1,
+      },
+      error: null,
+    });
+    const result = await getItemTradeStats('8517-621010', '202601', '202603');
+    expect(invokeMock).toHaveBeenCalledWith('customs-trade-stats', {
+      body: {
+        action: 'item',
+        startPeriod: '202601',
+        endPeriod: '202603',
+        hsCode: '8517621010',
+      },
+    });
+    expect(result.records[0]).toMatchObject({ period: '202601', source: 'api' });
+    expect(result.latestPeriod).toBe('202601');
+  });
+
+  it('API 실패 시 시뮬레이션을 만들지 않고 오류를 전달한다', async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        success: false,
+        source: 'api',
+        action: 'item',
+        records: [],
+        latestPeriod: null,
+        recordCount: 0,
+        error: { code: 'CUSTOMS_API_ERROR', message: '실패' },
+      },
+      error: null,
+    });
+    await expect(getItemTradeStats('8517621010', '202601', '202603'))
+      .rejects.toMatchObject({ code: 'CUSTOMS_API_ERROR' });
   });
 });
 
@@ -265,13 +291,9 @@ describe('UNI-PASS Edge Function 호출·응답 검증', () => {
     expect(pickBasicRate(rates)?.rate).toBe(8);
   });
 
-  it('관세율 success:false는 경고 후 기본세율 8%로 폴백한다', async () => {
+  it('관세율 success:false는 임의 기본세율 없이 오류를 전달한다', async () => {
     invokeMock.mockResolvedValue({ data: { success: false, error: '인증 실패' }, error: null });
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const rates = await getTariffRates('8517621010');
-    expect(rates[0].source).toBe('simulation');
-    expect(rates[0].rate).toBe(8);
-    expect(warn).toHaveBeenCalled();
+    await expect(getTariffRates('8517621010')).rejects.toThrow('인증 실패');
   });
 
   it('요건승인 found:false는 null을 반환한다', async () => {
@@ -283,6 +305,14 @@ describe('UNI-PASS Edge Function 호출·응답 검증', () => {
     expect(invokeMock).toHaveBeenCalledWith('unipass-requirement-approval', {
       body: { approvalNo: 'INVALID', imexTpcd: 'I' },
     });
+  });
+
+  it('요건승인 API 오류는 가짜 승인 객체 없이 전달한다', async () => {
+    invokeMock.mockResolvedValue({
+      data: { success: false, error: '요건승인 조회 실패' },
+      error: null,
+    });
+    await expect(getRequirementApproval('AP-ERROR', 'I')).rejects.toThrow('요건승인 조회 실패');
   });
 
   it('요건승인 정상 응답을 기존 RequirementApproval로 매핑한다', async () => {
@@ -313,6 +343,26 @@ describe('UNI-PASS Edge Function 호출·응답 검증', () => {
       body: { blNo: 'BL123', blYear: '2026' },
     });
     expect(result).toMatchObject({ cargoNo: 'CARGO1', source: 'api' });
+  });
+
+  it('화물통관 found:false는 가짜 항만 없이 빈 상태로 표시한다', async () => {
+    invokeMock.mockResolvedValue({
+      data: { success: true, found: false, blNo: 'BL-NONE', data: null },
+      error: null,
+    });
+    const result = await lookupImportCargo('BL-NONE');
+    expect(result).toMatchObject({
+      lookupStatus: 'empty',
+      cargoNo: '',
+      arrivalPort: '',
+    });
+    expect(result.source).toBeUndefined();
+    expect(result.timeline.every((step) => !step.completed && !step.current)).toBe(true);
+  });
+
+  it('화물통관 API 오류는 임의 진행상태 없이 전달한다', async () => {
+    invokeMock.mockResolvedValue({ data: null, error: new Error('cargo network') });
+    await expect(lookupImportCargo('BL-ERROR')).rejects.toThrow('cargo network');
   });
 
   it('수출이행 found:false와 호출 오류는 null을 반환한다', async () => {
@@ -352,11 +402,20 @@ describe('UNI-PASS Edge Function 호출·응답 검증', () => {
     expect(pickBasicRate([])).toBeNull();
   });
 
-  it('estimateDuty: 과세가격 × 세율 (키 없음 → 시뮬 8%)', async () => {
+  it('estimateDuty: 실제 API 기본세율로 과세가격 × 세율을 계산한다', async () => {
+    invokeMock.mockResolvedValue({
+      data: {
+        success: true,
+        rates: [
+          { hsCode: '8517621010', typeCode: 'A', typeName: '기본', rate: 8, applyStart: '20260101', applyEnd: '20261231', source: 'api' },
+        ],
+      },
+      error: null,
+    });
     const duty = await estimateDuty('8517621010', 10_000_000);
     expect(duty).not.toBeNull();
     expect(duty!.estimatedDutyKrw).toBe(800_000);
-    expect(duty!.source).toBe('simulation');
+    expect(duty!.source).toBe('api');
   });
 });
 
