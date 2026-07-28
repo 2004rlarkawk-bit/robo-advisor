@@ -4,6 +4,7 @@ import {
   summarizeReconciliation,
   buildReconciliationInput,
   reconcileFromAnalysis,
+  evaluateReconciliationGate,
 } from './importReconciliationEngine';
 import { parseNumeric, jaccard, descTokens } from './importReconciliationRules';
 import type {
@@ -172,6 +173,47 @@ describe('IR1~IR10 개별 판정', () => {
     expect(r.status).toBe('fail');
     expect(r.severity).toBe('error');
     expect(r.evidence).toContain('B/L');
+  });
+});
+
+describe('2→3단계 전이 게이트 (evaluateReconciliationGate)', () => {
+  it('IR10은 blocking=true, 내용 불일치 룰(IR2)은 blocking=false로 전파된다', () => {
+    const results = runImportReconciliation(cleanInput());
+    expect(results.find((r) => r.ruleId === 'IR10')?.blocking).toBe(true);
+    expect(results.find((r) => r.ruleId === 'IR2')?.blocking).toBe(false);
+  });
+
+  it('클린 입력 → clear', () => {
+    const gate = evaluateReconciliationGate(runImportReconciliation(cleanInput()));
+    expect(gate.status).toBe('clear');
+  });
+
+  it('수량 불일치(IR2 error, overridable) → override_required, 사유 입력 시 clear', () => {
+    const input = cleanInput();
+    input.packing_list!.quantity = '1020';
+    const results = runImportReconciliation(input);
+
+    const gate = evaluateReconciliationGate(results);
+    expect(gate.status).toBe('override_required');
+    expect(gate.overridable.map((r) => r.ruleId)).toContain('IR2');
+    expect(gate.blocking).toHaveLength(0);
+
+    const cleared = evaluateReconciliationGate(results, { IR2: '수출자 확인 완료' });
+    expect(cleared.status).toBe('clear');
+  });
+
+  it('필수서류 누락(B/L 없음, IR10 blocking) → blocked, 사유로도 안 풀림', () => {
+    const input = cleanInput();
+    delete input.bill_of_lading;
+    const results = runImportReconciliation(input);
+
+    const gate = evaluateReconciliationGate(results);
+    expect(gate.status).toBe('blocked');
+    expect(gate.blocking.map((r) => r.ruleId)).toContain('IR10');
+
+    // IR10에 사유를 넣어도 blocking은 유지된다
+    const stillBlocked = evaluateReconciliationGate(results, { IR10: '그냥 진행' });
+    expect(stillBlocked.status).toBe('blocked');
   });
 });
 

@@ -12,6 +12,7 @@ import type {
   ImportDocFields,
   ImportDocumentType,
   ImportReconciliationInput,
+  ReconciliationGate,
   ReconciliationRuleResult,
 } from '../types/importTrade';
 import { IMPORT_RECONCILIATION_RULES } from './importReconciliationRules';
@@ -26,10 +27,45 @@ export function runImportReconciliation(input: ImportReconciliationInput): Recon
       severity: rule.severity,
       status: outcome.status,
       passed: outcome.status === 'pass',
+      blocking: rule.blocking ?? false,
       evidence: outcome.evidence,
       documents: rule.documents,
     };
   });
+}
+
+/**
+ * 2→3단계 전이 게이트 (역할 기반 소프트 게이트).
+ *  - blocking(하드) 오류가 1건이라도 있으면 → 'blocked' (사유로도 못 넘김: 필수서류 누락 등)
+ *  - blocking 없고 overridable 오류 중 사유(overrides) 없는 게 남으면 → 'override_required'
+ *  - error가 없거나 모두 사유 입력됨 → 'clear'
+ * warning/skip은 전이를 막지 않는다.
+ */
+export function evaluateReconciliationGate(
+  results: ReconciliationRuleResult[],
+  overrides: Record<string, string> = {},
+): ReconciliationGate {
+  const errors = results.filter((r) => r.status === 'fail' && r.severity === 'error');
+  const blocking = errors.filter((r) => r.blocking);
+  const unresolved = errors.filter((r) => !r.blocking && !overrides[r.ruleId]?.trim());
+
+  if (blocking.length > 0) {
+    return {
+      status: 'blocked',
+      blocking,
+      overridable: unresolved,
+      message: `필수 서류 누락으로 통관 진행 불가 — ${blocking.map((r) => r.label).join(', ')}`,
+    };
+  }
+  if (unresolved.length > 0) {
+    return {
+      status: 'override_required',
+      blocking,
+      overridable: unresolved,
+      message: `확인 필요 오류 ${unresolved.length}건 — 사유 입력 후 진행할 수 있습니다.`,
+    };
+  }
+  return { status: 'clear', blocking, overridable: [], message: '' };
 }
 
 /** 대사 요약: 미해결(error·fail) 개수 등 — 상위 차단 판단용 */

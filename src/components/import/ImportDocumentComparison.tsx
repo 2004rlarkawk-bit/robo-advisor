@@ -1,5 +1,5 @@
 import type { ImportComparisonRow, ImportDocumentType, ReconciliationRuleResult } from '../../types/importTrade';
-import { summarizeReconciliation } from '../../services/importReconciliationEngine';
+import { summarizeReconciliation, evaluateReconciliationGate } from '../../services/importReconciliationEngine';
 
 const DOC_LABEL: Record<ImportDocumentType, string> = {
   commercial_invoice: 'C/I',
@@ -27,7 +27,7 @@ interface Props {
 
 export default function ImportDocumentComparison({ results, rows = [] }: Props) {
   const summary = summarizeReconciliation(results);
-  const hasBlocking = summary.blocking > 0;
+  const gate = evaluateReconciliationGate(results);
 
   return (
     <section className="form-card import-card">
@@ -58,11 +58,13 @@ export default function ImportDocumentComparison({ results, rows = [] }: Props) 
         ))}
       </ul>
 
-      {hasBlocking
-        ? <div className="form-message error">차단(오류) {summary.blocking}건이 있습니다. 원본 서류를 확인하고 값을 보완한 뒤 다음 단계로 진행하세요.</div>
-        : summary.warnings > 0
-          ? <div className="form-message info">차단 오류는 없습니다. 주의 항목을 확인한 뒤 진행할 수 있습니다.</div>
-          : <div className="form-message success">모든 대사 항목을 통과했습니다.</div>}
+      {gate.status === 'blocked'
+        ? <div className="form-message error">{gate.message}</div>
+        : gate.status === 'override_required'
+          ? <div className="form-message info">{gate.message}</div>
+          : summary.warnings > 0
+            ? <div className="form-message info">차단·필수 오류는 없습니다. 주의 항목을 확인한 뒤 진행할 수 있습니다.</div>
+            : <div className="form-message success">모든 대사 항목을 통과했습니다.</div>}
 
       {rows.length > 0 && (
         <details className="reconcile-raw">

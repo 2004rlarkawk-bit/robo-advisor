@@ -8,7 +8,7 @@ import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 import { analyzeImportDocuments } from '../../services/importDocumentAnalysisService';
 import { calculateEstimatedImportDuty } from '../../services/importDutyService';
 import { assessImportRisks } from '../../services/importRiskService';
-import { reconcileFromAnalysis, runImportReconciliation } from '../../services/importReconciliationEngine';
+import { reconcileFromAnalysis, runImportReconciliation, evaluateReconciliationGate } from '../../services/importReconciliationEngine';
 import { IMPORT_DEMO_SCENARIOS, type ImportDemoScenario } from '../../services/importReconciliationFixtures';
 
 // 데모 데이터 버튼 노출 플래그 (OpenAI 없이 대사 화면 재현용).
@@ -41,6 +41,7 @@ interface CachedState {
   documents: ImportDocumentMeta[];
   analysis: ImportAnalysisResult | null;
   reconciliation: ReconciliationRuleResult[];
+  overrides: Record<string, string>; // ruleId → 진행 사유 (overridable 오류 우회 기록)
   suggestions: ImportHSCodeSuggestion[];
   selectedCode: string;
   duty: ImportDutyEstimate | null;
@@ -52,7 +53,7 @@ interface CachedState {
   existingStatus?: TradeStatus;
 }
 
-const EMPTY: CachedState = { step: 1, documents: [], analysis: null, reconciliation: [], suggestions: [], selectedCode: '', duty: null, risks: [], cargo: null, arrivalNotice: null, generatedAt: null };
+const EMPTY: CachedState = { step: 1, documents: [], analysis: null, reconciliation: [], overrides: {}, suggestions: [], selectedCode: '', duty: null, risks: [], cargo: null, arrivalNotice: null, generatedAt: null };
 function loadCached(key: string): CachedState {
   try {
     const parsed = JSON.parse(localStorage.getItem(key) ?? 'null') as Partial<CachedState> | null;
@@ -69,7 +70,10 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState(false);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
   const selectedHS = state.suggestions.find((item) => item.code === state.selectedCode);
+  const gate = state.analysis ? evaluateReconciliationGate(state.reconciliation, state.overrides) : null;
 
   useEffect(() => {
     try {
@@ -108,6 +112,7 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
           documents,
           analysis: result.analysis,
           reconciliation,
+          overrides: {},
           suggestions,
           selectedCode: suggestions[0]?.code ?? '',
           risks: assessImportRisks(documents, reconciliation, result.analysis.validations),
@@ -132,6 +137,7 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
       documents: scenario.documents,
       analysis: scenario.analysis,
       reconciliation,
+      overrides: {},
       suggestions: [],
       selectedCode: '',
       duty: null,
@@ -141,7 +147,8 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
     }));
   };
 
-  const continueToProcessing = async () => {
+  // 필수 정보 확인 + 관세 계산 후 3단계로 진입 (게이트 통과 이후에만 호출)
+  const proceedToProcessing = async () => {
     if (!state.analysis) return;
     const requiredFields = [
       ['품명', state.analysis.extracted.productDescription],
@@ -171,6 +178,39 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
     } finally {
       setBusy(false);
     }
+  };
+
+  // 2→3단계 전이 게이트: 하드 차단(IR10)→막음, overridable 오류→사유 모달, 없으면 바로 진행
+  const continueToProcessing = async () => {
+    if (!state.analysis) return;
+    const currentGate = evaluateReconciliationGate(state.reconciliation, state.overrides);
+    if (currentGate.status === 'blocked') {
+      setMessage(currentGate.message);
+      return;
+    }
+    if (currentGate.status === 'override_required') {
+      setOverrideReason('');
+      setOverrideOpen(true);
+      return;
+    }
+    await proceedToProcessing();
+  };
+
+  // 사유 입력 확정 → 미해결 overridable 오류를 사유로 우회 기록 후 3단계 진행
+  const confirmOverride = async () => {
+    const reason = overrideReason.trim();
+    if (!reason) {
+      setMessage('진행 사유를 입력해 주세요.');
+      return;
+    }
+    const currentGate = evaluateReconciliationGate(state.reconciliation, state.overrides);
+    const nextOverrides = { ...state.overrides };
+    currentGate.overridable.forEach((result) => { nextOverrides[result.ruleId] = reason; });
+    setState((current) => ({ ...current, overrides: nextOverrides }));
+    setOverrideOpen(false);
+    setOverrideReason('');
+    setMessage('');
+    await proceedToProcessing();
   };
 
   const lookupCargo = async () => {
@@ -203,6 +243,7 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
         documents: state.documents,
         arrivalNotice: state.arrivalNotice ?? undefined,
         analysis: state.analysis,
+        reconciliationOverrides: Object.keys(state.overrides).length > 0 ? state.overrides : undefined,
         selectedHSCode: selectedHS,
         duty: state.duty ?? undefined,
         risks: state.risks,
@@ -296,7 +337,15 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
               ))}</div>
             </section>
           )}
-          <div className="import-actions"><button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 1 }))}>이전</button><button className="btn btn-primary" disabled={busy} onClick={() => void continueToProcessing()}>확인</button></div>
+          {gate && gate.status !== 'clear' && (
+            <div className={`form-message ${gate.status === 'blocked' ? 'error' : 'info'}`} role="alert">{gate.message}</div>
+          )}
+          <div className="import-actions">
+            <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 1 }))}>이전</button>
+            <button className="btn btn-primary" disabled={busy || gate?.status === 'blocked'} onClick={() => void continueToProcessing()}>
+              {gate?.status === 'override_required' ? '사유 입력 후 진행' : '확인'}
+            </button>
+          </div>
         </>
       )}
 
@@ -334,6 +383,31 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
           <RiskSummary risks={state.risks} />
           <div className="import-actions"><button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button><button className="btn btn-primary" disabled={busy || state.existingStatus === 'submitted'} onClick={() => void complete()}>{state.existingStatus === 'submitted' ? '제출 완료' : state.arrivalNotice ? '완료 및 제출' : '진행 중으로 저장'}</button></div>
         </>
+      )}
+
+      {overrideOpen && gate && gate.overridable.length > 0 && (
+        <div className="import-modal-overlay" role="dialog" aria-modal="true" aria-label="진행 사유 입력">
+          <div className="import-modal">
+            <h3>확인 필요 오류 — 진행 사유 입력</h3>
+            <p className="import-modal-desc">아래 불일치를 검토했고, 사유를 남기면 통관 처리 단계로 진행합니다. (필수 서류 누락은 사유로도 진행할 수 없습니다.)</p>
+            <ul className="import-modal-list">
+              {gate.overridable.map((result) => (
+                <li key={result.ruleId}><strong>{result.ruleId}. {result.label}</strong><span>{result.evidence}</span></li>
+              ))}
+            </ul>
+            <textarea
+              className="form-input"
+              rows={3}
+              value={overrideReason}
+              onChange={(event) => setOverrideReason(event.target.value)}
+              placeholder="예: 수출자에 수량·중량 확인 요청함. 원본 P/L 재발행 예정."
+            />
+            <div className="import-modal-actions">
+              <button className="btn btn-secondary" onClick={() => { setOverrideOpen(false); setOverrideReason(''); }}>취소</button>
+              <button className="btn btn-primary" disabled={busy} onClick={() => void confirmOverride()}>사유 확인 후 진행</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

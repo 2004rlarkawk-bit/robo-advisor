@@ -92,6 +92,12 @@ export interface ReconciliationRule {
   id: string;
   label: string;
   severity: ValidationSeverity;
+  /**
+   * 하드 차단 여부. true면 사유 override로도 다음 단계로 넘길 수 없다(구조적 결격).
+   * 필수 서류 누락(IR10)처럼 수입신고 자체가 불가능한 경우에만 true.
+   * 내용 불일치(수량·중량 등)는 false — 포워더가 받은 서류를 못 고치므로 사유 override 허용.
+   */
+  blocking?: boolean;
   documents: ImportDocumentType[];
   evaluate: (input: ImportReconciliationInput) => RuleOutcome;
 }
@@ -249,6 +255,7 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
     id: 'IR10',
     label: '필수 서류 구비 (C/I·P/L·B/L)',
     severity: 'error',
+    blocking: true, // 필수 서류 누락은 수입신고 자체 불가 → 사유로도 override 불가
     documents: [CI, PL, BL],
     evaluate: (input) => {
       const missing = [CI, PL, BL].filter((type) => !input[type]);

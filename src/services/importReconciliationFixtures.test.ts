@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runImportReconciliation, summarizeReconciliation } from './importReconciliationEngine';
+import { runImportReconciliation, summarizeReconciliation, evaluateReconciliationGate } from './importReconciliationEngine';
 import { IMPORT_DEMO_MISMATCH, IMPORT_DEMO_CLEAN } from './importReconciliationFixtures';
 import type { ReconciliationRuleResult, ReconciliationStatus } from '../types/importTrade';
 
@@ -39,6 +39,13 @@ describe('데모 픽스처 오라클 — 이어폰 수입 (오류 포함)', () =
   it('집계: error 2 + warning 2 + pass 6, skip 0', () => {
     const s = summarizeReconciliation(results);
     expect(s).toMatchObject({ blocking: 2, warnings: 2, passed: 6, skipped: 0, failed: 4 });
+  });
+
+  it('게이트: IR10 통과·내용오류만 → override_required (IR2·IR3 우회 대상, 하드 차단 없음)', () => {
+    const gate = evaluateReconciliationGate(results);
+    expect(gate.status).toBe('override_required');
+    expect(gate.blocking).toHaveLength(0);
+    expect(gate.overridable.map((r) => r.ruleId).sort()).toEqual(['IR2', 'IR3']);
   });
 });
 

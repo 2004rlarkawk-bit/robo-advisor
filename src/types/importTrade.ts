@@ -104,8 +104,19 @@ export interface ReconciliationRuleResult {
   severity: ValidationSeverity;
   status: ReconciliationStatus; // pass(일치) / fail(불일치) / skip(확인불가·정보없음)
   passed: boolean;
+  blocking: boolean;           // 하드 차단(사유 override 불가) 여부 — 룰 정의에서 전파
   evidence: string;            // 근거 문자열 (예: "C/I 수량 1,000 vs P/L 수량 1,020 → 20개 차이")
   documents: ImportDocumentType[];
+}
+
+export type ReconciliationGateStatus = 'clear' | 'blocked' | 'override_required';
+
+/** 2→3단계 전이 판정 결과 (역할 기반 소프트 게이트). */
+export interface ReconciliationGate {
+  status: ReconciliationGateStatus;
+  blocking: ReconciliationRuleResult[];    // 하드 차단(IR10 등) — 사유로도 못 넘김
+  overridable: ReconciliationRuleResult[]; // 사유 입력 시 우회 가능한 미해결 오류
+  message: string;
 }
 
 export interface ImportDocumentClassification {
@@ -176,6 +187,8 @@ export interface ImportTradeSnapshot {
   documents: ImportDocumentMeta[];
   arrivalNotice?: ArrivalNoticeMeta;
   analysis: ImportAnalysisResult;
+  /** 대사 overridable 오류를 사유로 우회한 기록 (ruleId → 사유). 없으면 생략. */
+  reconciliationOverrides?: Record<string, string>;
   selectedHSCode?: ImportHSCodeSuggestion;
   duty?: ImportDutyEstimate;
   risks: ImportRisk[];

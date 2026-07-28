@@ -2450,6 +2450,18 @@ body {
 .import-demo-bar { margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--border-color); border-radius: 10px; background: #f8fafc; }
 .import-demo-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-light); margin-bottom: 8px; }
 .import-demo-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* 진행 사유 override 모달 */
+.import-modal-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, 0.45); }
+.import-modal { width: 100%; max-width: 480px; background: #fff; border-radius: 14px; padding: 22px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+.import-modal h3 { margin: 0 0 8px; font-size: 16px; }
+.import-modal-desc { margin: 0 0 14px; font-size: 13px; color: var(--text-light); line-height: 1.5; }
+.import-modal-list { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.import-modal-list li { padding: 10px 12px; border-radius: 8px; background: #fef7f7; border: 1px solid #fecaca; display: flex; flex-direction: column; gap: 3px; }
+.import-modal-list strong { font-size: 13px; }
+.import-modal-list span { font-size: 12px; color: var(--text-dark); line-height: 1.4; }
+.import-modal textarea.form-input { resize: vertical; }
+.import-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 .document-preview-actions { display: flex; gap: 10px; }
 .declaration-preview { overflow: auto; margin: 16px 0 0; padding: 18px; border-radius: 9px; background: #f8fafc; line-height: 1.8; white-space: pre-wrap; font-family: inherit; font-size: 13px; }
 .duty-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; padding: 1px; background: var(--border-color); }
