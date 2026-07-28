@@ -1535,10 +1535,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       <input
                         type="date"
                         className="form-input"
+                        placeholder="연도-월-일"
                         value={profile.departureDate}
                         onChange={(e) => handleInputChange('departureDate', e.target.value)}
                       />
-                      <span className="form-hint">형식: 연도-월-일</span>
                     </div>
 
                     <div className="form-group" data-docs="bl">
@@ -1546,10 +1546,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       <input
                         type="date"
                         className="form-input"
+                        placeholder="연도-월-일"
                         value={profile.arrivalDate}
                         onChange={(e) => handleInputChange('arrivalDate', e.target.value)}
                       />
-                      <span className="form-hint">형식: 연도-월-일</span>
                     </div>
 
                     <div className="form-group" data-docs="invoice packing_list co">
