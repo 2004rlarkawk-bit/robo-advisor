@@ -74,6 +74,40 @@ export interface ImportAnalysisResult {
   comparison: ImportComparisonRow[];
 }
 
+/**
+ * 문서별(per-document) 추출 필드 — 대사(對査) 룰 엔진의 입력 단위.
+ * OCR/LLM이 추출하든 데모 픽스처가 주입하든, 엔진은 이 구조만 소비한다.
+ * (엣지함수 analysis.extracted는 문서 구분 없는 머지 객체라 교차검증 불가.)
+ */
+export interface ImportDocFields {
+  productDescription?: string;
+  quantity?: string;
+  packageCount?: string;
+  grossWeight?: string;
+  netWeight?: string;
+  unitPrice?: string;
+  totalAmount?: string;
+  currency?: string;
+  hsCode?: string;
+  incoterms?: string;
+}
+
+/** 문서 종류별 추출 필드 묶음. 키 존재 = 해당 서류 업로드됨(IR10 판정 근거). */
+export type ImportReconciliationInput = Partial<Record<ImportDocumentType, ImportDocFields>>;
+
+export type ReconciliationStatus = 'pass' | 'fail' | 'skip';
+
+/** 대사 룰 1건 실행 결과. passed = (status === 'pass'). */
+export interface ReconciliationRuleResult {
+  ruleId: string;              // 'IR1' ~ 'IR10'
+  label: string;               // 룰 이름 (품명 일치 등)
+  severity: ValidationSeverity;
+  status: ReconciliationStatus; // pass(일치) / fail(불일치) / skip(확인불가·정보없음)
+  passed: boolean;
+  evidence: string;            // 근거 문자열 (예: "C/I 수량 1,000 vs P/L 수량 1,020 → 20개 차이")
+  documents: ImportDocumentType[];
+}
+
 export interface ImportDocumentClassification {
   id: string;
   type: ImportDocumentType;

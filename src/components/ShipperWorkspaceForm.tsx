@@ -31,6 +31,9 @@ const INCOTERMS_OPTIONS: Exclude<Incoterms, ''>[] = ['EXW', 'FOB', 'CFR', 'CIF',
 const PAYMENT_TERM_OPTIONS = ['T/T', 'L/C', 'D/P', 'D/A'] as const;
 const PACKAGE_TYPE_OPTIONS = ['CTNS', 'PALLETS', 'CASES', 'BOXES', 'BAGS', 'DRUMS'] as const;
 
+/** 필수 입력 항목 표시(검증엔진 validateRequiredInputs 기준과 일치). */
+const RequiredStar = () => <span className="form-required" aria-hidden="true"> *</span>;
+
 function numericValue(eventValue: string): NumericInput {
   return eventValue === '' ? '' : Number(eventValue);
 }
@@ -50,6 +53,8 @@ export default function ShipperWorkspaceForm({
 }: Props) {
   const invoiceSummary = summarizeShipperItems(items);
   const hasInvalidWeight = isGrossWeightBelowNet(profile.grossWeight, profile.netWeight);
+  // 선적항·도착항은 EXW를 제외한 조건에서만 필수(검증엔진 ports-missing 규칙과 일치).
+  const portsRequired = profile.incoterms !== 'EXW';
 
   const updateItem = <K extends keyof ShipperItem>(id: string, field: K, value: ShipperItem[K]) => {
     onItemsChange(items.map((item) => item.id === id ? { ...item, [field]: value } : item));
@@ -124,14 +129,16 @@ export default function ShipperWorkspaceForm({
       </div>
       {statusContent}
 
+      <p className="form-required-legend"><span className="form-required" aria-hidden="true">*</span> 표시는 필수 입력 항목입니다. 나머지는 선택 입력이며, 비워두면 자동값 또는 기본값이 적용됩니다.</p>
+
       {/* 2026-07-23 편의성 업그레이드: 화주용 통관 입력 폼 확장 */}
       <details className="form-section" open>
         <summary className="form-section-summary">1. 화주 기본정보</summary>
         <div className="form-grid">
-          <div className="form-group"><label className="form-label">회사명(상호명)</label><input className="form-input" value={profile.companyName} onChange={(event) => onProfilePatch({ companyName: event.target.value })} placeholder="ABC Logistics Co., Ltd." /></div>
+          <div className="form-group"><label className="form-label">회사명(상호명)<RequiredStar /></label><input className="form-input" value={profile.companyName} onChange={(event) => onProfilePatch({ companyName: event.target.value })} placeholder="ABC Logistics Co., Ltd." /></div>
           <div className="form-group"><label className="form-label">회사 주소</label><input className="form-input" value={profile.companyAddress ?? ''} onChange={(event) => onProfilePatch({ companyAddress: event.target.value })} placeholder="123 Teheran-ro, Gangnam-gu, Seoul, South Korea" /></div>
           <div className="form-group"><label className="form-label">국가</label><CountrySelect className="form-input" value={profile.companyCountry ?? ''} onChange={(value) => onProfilePatch({ companyCountry: value })} /></div>
-          <div className="form-group"><label className="form-label">회사 연락처</label><input className="form-input" type="tel" value={profile.contact} onChange={(event) => onProfilePatch({ contact: event.target.value })} placeholder="+82-2-1234-5678" /></div>
+          <div className="form-group"><label className="form-label">회사 연락처<RequiredStar /></label><input className="form-input" type="tel" value={profile.contact} onChange={(event) => onProfilePatch({ contact: event.target.value })} placeholder="+82-2-1234-5678" /></div>
           <div className="form-group"><label className="form-label">사업자등록번호</label><input className="form-input" value={profile.businessRegistrationNo ?? ''} onChange={(event) => onProfilePatch({ businessRegistrationNo: event.target.value, taxNo: event.target.value })} placeholder="123-45-67890" /></div>
         </div>
       </details>
@@ -147,7 +154,7 @@ export default function ShipperWorkspaceForm({
           <div className="form-group"><label className="form-label">Buyer 회사명</label><input className="form-input" value={profile.buyerName ?? ''} onChange={(e) => patchParty('buyerName', e.target.value)} placeholder="Global Import LLC" /></div>
           <div className="form-group"><label className="form-label">Buyer 영문 주소</label><input className="form-input" value={profile.buyerAddress ?? ''} onChange={(e) => patchParty('buyerAddress', e.target.value)} placeholder="250 Market Street, Los Angeles, CA, United States" /></div>
           <div className="form-group"><label className="form-label">Buyer 국가</label><CountrySelect className="form-input" value={profile.buyerCountry ?? ''} onChange={(value) => patchParty('buyerCountry', value)} /></div>
-          <div className="form-group"><label className="form-label">Consignee 회사명</label><input className="form-input" value={profile.partnerName ?? ''} onChange={(e) => patchParty('partnerName', e.target.value)} placeholder="Global Import LLC" /></div>
+          <div className="form-group"><label className="form-label">Consignee 회사명<RequiredStar /></label><input className="form-input" value={profile.partnerName ?? ''} onChange={(e) => patchParty('partnerName', e.target.value)} placeholder="Global Import LLC" /></div>
           <div className="form-group"><label className="form-label">Consignee 영문 주소</label><input className="form-input" value={profile.partnerAddress ?? ''} onChange={(e) => patchParty('partnerAddress', e.target.value)} placeholder="250 Market Street, Los Angeles, CA, United States" /></div>
           <div className="form-group"><label className="form-label">Consignee 국가</label><CountrySelect className="form-input" value={profile.partnerCountry ?? ''} onChange={(value) => patchParty('partnerCountry', value)} /></div>
           <div className="form-group"><label className="form-label">Notify Party 회사명</label><input className="form-input" value={profile.notifyPartyName ?? ''} onChange={(e) => patchParty('notifyPartyName', e.target.value)} placeholder="Global Import LLC" /></div>
@@ -162,11 +169,11 @@ export default function ShipperWorkspaceForm({
             <div className="shipper-item-card" key={item.id}>
               <div className="shipper-item-heading"><strong>품목 {index + 1}</strong><button type="button" className="btn btn-secondary btn-sm" disabled={items.length === 1} onClick={() => removeItem(item.id)}><Trash2 size={14} /> 삭제</button></div>
               <div className="form-grid">
-                <div className="form-group"><label className="form-label">품명</label><input className="form-input" value={item.itemName} onChange={(e) => updateItem(item.id, 'itemName', e.target.value)} placeholder="Cotton T-Shirts" /></div>
+                <div className="form-group"><label className="form-label">품명<RequiredStar /></label><input className="form-input" value={item.itemName} onChange={(e) => updateItem(item.id, 'itemName', e.target.value)} placeholder="Cotton T-Shirts" /></div>
                 <div className="form-group"><label className="form-label">HS Code</label><input className="form-input" value={item.hsCode} onChange={(e) => updateItem(item.id, 'hsCode', e.target.value)} placeholder={index === 0 ? 'e.g. 6109.10' : ''} /></div>
-                <div className="form-group"><label className="form-label">수량</label><input type="number" min="0" className="form-input" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', numericValue(e.target.value))} /></div>
+                <div className="form-group"><label className="form-label">수량<RequiredStar /></label><input type="number" min="0" className="form-input" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', numericValue(e.target.value))} /></div>
                 <div className="form-group"><label className="form-label">단위</label><select className="form-input" value={item.unit} onChange={(e) => updateItem(item.id, 'unit', e.target.value as ShipperItem['unit'])}>{SHIPPER_ITEM_UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></div>
-                <div className="form-group"><label className="form-label">단가</label><input type="number" min="0" step="any" className="form-input" value={item.unitPrice} onChange={(e) => updateItem(item.id, 'unitPrice', numericValue(e.target.value))} /></div>
+                <div className="form-group"><label className="form-label">단가<RequiredStar /></label><input type="number" min="0" step="any" className="form-input" value={item.unitPrice} onChange={(e) => updateItem(item.id, 'unitPrice', numericValue(e.target.value))} /></div>
                 <div className="form-group"><label className="form-label">통화</label><select className="form-input" value={item.currency} onChange={(e) => updateItem(item.id, 'currency', e.target.value as ShipperItem['currency'])}>{SHIPPER_CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></div>
                 <div className="form-group"><span className="form-label">금액</span><div className="form-input shipper-readonly-value">{item.currency} {calculateShipperItemAmount(item).toLocaleString()}</div></div>
               </div>
@@ -184,7 +191,7 @@ export default function ShipperWorkspaceForm({
       <details className="form-section">
         <summary className="form-section-summary">4. 거래 조건</summary>
         <div className="form-grid">
-          <div className="form-group"><label className="form-label">Incoterms</label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">Incoterms<RequiredStar /></label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
           <div className="form-group"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Incoterms 지정 장소 또는 항만</label><input className="form-input" value={supplemental.incotermsPlace} onChange={(e) => onSupplementalChange({ ...supplemental, incotermsPlace: e.target.value })} placeholder="Busan Port" /></div>
         </div>
@@ -205,8 +212,8 @@ export default function ShipperWorkspaceForm({
       <details className="form-section">
         <summary className="form-section-summary">6. 항만 및 일정</summary>
         <div className="form-grid">
-          <div className="form-group"><label className="form-label">선적항 POL</label><select className="form-input" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })}><option value="">선적항을 선택하세요</option>{LOAD_PORT_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">도착항 POD</label><select className="form-input" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })}><option value="">도착항을 선택하세요</option>{DISCHARGE_PORT_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">선적항 POL{portsRequired && <RequiredStar />}</label><select className="form-input" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })}><option value="">선적항을 선택하세요</option>{LOAD_PORT_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">도착항 POD{portsRequired && <RequiredStar />}</label><select className="form-input" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })}><option value="">도착항을 선택하세요</option>{DISCHARGE_PORT_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}</select></div>
           <div className="form-group"><label className="form-label">희망 출항일</label><input type="date" className="form-input" value={profile.departureDate} onChange={(e) => onProfilePatch({ departureDate: e.target.value })} /></div>
         </div>
       </details>

@@ -474,6 +474,22 @@ body {
   color: var(--text-dark);
 }
 
+/* 필수 입력 표시(별표) — 검증엔진 필수 항목과 일치 */
+.form-required {
+  color: var(--error-color);
+  font-weight: 700;
+}
+
+.form-required-legend {
+  margin: 0 0 16px;
+  font-size: 12.5px;
+  color: var(--text-muted, #64748b);
+}
+
+.form-required-legend .form-required {
+  margin-right: 2px;
+}
+
 .form-input {
   width: 100%;
   padding: 10px 14px;
@@ -2312,6 +2328,7 @@ body {
 .email-check-button { flex: 0 0 92px; border: 1px solid #bfdbfe; background: #eff6ff; color: var(--primary-color); }
 .email-check-button:hover:not(:disabled) { background: #dbeafe; }
 .auth-helper-message { margin-top: -6px; color: #64748b; font-size: 12px; line-height: 1.5; }
+.auth-helper-message.is-error { color: var(--error-color); }
 .account-modal-backdrop { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, 0.5); }
 .account-modal { width: min(100%, 430px); border: 1px solid var(--border-color); border-radius: 16px; padding: 24px; background: #fff; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24); }
 .account-modal h2 { margin: 0 0 18px; color: var(--text-dark); font-size: 20px; }
@@ -2404,6 +2421,35 @@ body {
 .match-badge { display: inline-flex; padding: 3px 8px; border-radius: 999px; font-weight: 700; }
 .match-badge.match { background: #dcfce7; color: #166534; }
 .match-badge.mismatch { background: #fee2e2; color: #991b1b; }
+
+/* 대사(對査) 엔진 결과 표시 */
+.reconcile-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.reconcile-chip { display: inline-flex; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.reconcile-chip.pass { background: #dcfce7; color: #166534; }
+.reconcile-chip.fail-error { background: #fee2e2; color: #991b1b; }
+.reconcile-chip.fail-warning { background: #fef3c7; color: #92400e; }
+.reconcile-chip.skip { background: #f1f5f9; color: #475569; }
+.reconcile-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.reconcile-item { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 10px; }
+.reconcile-item.fail { border-color: #fecaca; background: #fef7f7; }
+.reconcile-item.skip { opacity: 0.72; }
+.reconcile-badge { flex: 0 0 auto; display: inline-flex; align-items: center; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.reconcile-badge.pass { background: #dcfce7; color: #166534; }
+.reconcile-badge.fail-error { background: #fee2e2; color: #991b1b; }
+.reconcile-badge.fail-warning { background: #fef3c7; color: #92400e; }
+.reconcile-badge.skip { background: #f1f5f9; color: #475569; }
+.reconcile-body { min-width: 0; flex: 1; }
+.reconcile-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.reconcile-title strong { font-size: 13px; }
+.reconcile-docs { font-size: 11px; color: var(--text-light); }
+.reconcile-evidence { margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-dark); }
+.reconcile-raw { margin-top: 14px; }
+.reconcile-raw > summary { cursor: pointer; font-size: 12.5px; color: var(--text-light); padding: 6px 0; }
+
+/* 데모 데이터 바 (수입 대사 시연) */
+.import-demo-bar { margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--border-color); border-radius: 10px; background: #f8fafc; }
+.import-demo-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-light); margin-bottom: 8px; }
+.import-demo-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .document-preview-actions { display: flex; gap: 10px; }
 .declaration-preview { overflow: auto; margin: 16px 0 0; padding: 18px; border-radius: 9px; background: #f8fafc; line-height: 1.8; white-space: pre-wrap; font-family: inherit; font-size: 13px; }
 .duty-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; padding: 1px; background: var(--border-color); }

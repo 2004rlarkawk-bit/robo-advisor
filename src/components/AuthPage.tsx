@@ -176,6 +176,9 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
           <div className="login-input-group">
             <label className="login-label" htmlFor="auth-password">비밀번호</label>
             <input id="auth-password" type="password" className="login-input" placeholder="6자 이상 비밀번호" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={isSignup ? 'new-password' : 'current-password'} />
+            {isSignup && password.length > 0 && password.length < 6 && (
+              <span className="auth-helper-message is-error">비밀번호는 6자 이상이어야 합니다. (현재 {password.length}자)</span>
+            )}
           </div>
 
           {isSignup && (

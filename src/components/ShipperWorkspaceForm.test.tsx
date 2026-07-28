@@ -117,7 +117,7 @@ describe('화주용 통관 입력 폼', () => {
   it('프로필에서 초기화된 화주 기본정보를 표시하고 거래별로 직접 수정할 수 있다', () => {
     const rendered = renderForm();
     const companyInput = Array.from(rendered.container.querySelectorAll('label'))
-      .find((label) => label.textContent === '회사명(상호명)')
+      .find((label) => label.textContent?.startsWith('회사명(상호명)'))
       ?.parentElement?.querySelector<HTMLInputElement>('input');
 
     expect(companyInput?.value).toBe('인천테크');

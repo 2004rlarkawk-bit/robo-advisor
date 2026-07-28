@@ -8,6 +8,12 @@ import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 import { analyzeImportDocuments } from '../../services/importDocumentAnalysisService';
 import { calculateEstimatedImportDuty } from '../../services/importDutyService';
 import { assessImportRisks } from '../../services/importRiskService';
+import { reconcileFromAnalysis, runImportReconciliation } from '../../services/importReconciliationEngine';
+import { IMPORT_DEMO_SCENARIOS, type ImportDemoScenario } from '../../services/importReconciliationFixtures';
+
+// 데모 데이터 버튼 노출 플래그 (OpenAI 없이 대사 화면 재현용).
+// 팀 기존 플래그 재사용하되 DEV 게이트는 빼서 빌드/심사장에서도 사용 가능.
+const IMPORT_DEMO_ENABLED = import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
 import { generateImportDeclarationRequest, downloadImportDeclarationRequest } from '../../services/importDeclarationService';
 import { lookupImportCargo } from '../../services/cargoProgressService';
 import type {
@@ -19,6 +25,7 @@ import type {
   ImportHSCodeSuggestion,
   ImportRisk,
   ImportTradeSnapshot,
+  ReconciliationRuleResult,
   UserTradeRole,
 } from '../../types/importTrade';
 import type { TradeStatus } from '../../types';
@@ -33,6 +40,7 @@ interface CachedState {
   step: number;
   documents: ImportDocumentMeta[];
   analysis: ImportAnalysisResult | null;
+  reconciliation: ReconciliationRuleResult[];
   suggestions: ImportHSCodeSuggestion[];
   selectedCode: string;
   duty: ImportDutyEstimate | null;
@@ -44,7 +52,7 @@ interface CachedState {
   existingStatus?: TradeStatus;
 }
 
-const EMPTY: CachedState = { step: 1, documents: [], analysis: null, suggestions: [], selectedCode: '', duty: null, risks: [], cargo: null, arrivalNotice: null, generatedAt: null };
+const EMPTY: CachedState = { step: 1, documents: [], analysis: null, reconciliation: [], suggestions: [], selectedCode: '', duty: null, risks: [], cargo: null, arrivalNotice: null, generatedAt: null };
 function loadCached(key: string): CachedState {
   try {
     const parsed = JSON.parse(localStorage.getItem(key) ?? 'null') as Partial<CachedState> | null;
@@ -92,14 +100,17 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
           const classification = result.classifications.find((item) => item.id === document.id);
           return classification ? { ...document, type: classification.type, status: 'ready' as const } : document;
         });
+        // 결정론적 대사 엔진으로 판정(코드) — LLM validations는 AI 참고 채널로만 전달.
+        const reconciliation = reconcileFromAnalysis(result.analysis, documents.map((document) => document.type));
         return {
           ...current,
           step: 2,
           documents,
           analysis: result.analysis,
+          reconciliation,
           suggestions,
           selectedCode: suggestions[0]?.code ?? '',
-          risks: assessImportRisks(documents, result.analysis),
+          risks: assessImportRisks(documents, reconciliation, result.analysis.validations),
         };
       });
     } catch (error) {
@@ -108,6 +119,26 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const loadDemoScenario = (scenario: ImportDemoScenario) => {
+    setMessage('');
+    setSourceFiles({});
+    // 판정은 픽스처 input을 엔진에 직접 주입(OCR/어댑터 우회). 화면은 scenario.analysis로 표시.
+    const reconciliation = runImportReconciliation(scenario.input);
+    setState((current) => ({
+      ...current,
+      step: 2,
+      documents: scenario.documents,
+      analysis: scenario.analysis,
+      reconciliation,
+      suggestions: [],
+      selectedCode: '',
+      duty: null,
+      cargo: null,
+      risks: assessImportRisks(scenario.documents, reconciliation, scenario.analysis.validations),
+      generatedAt: current.generatedAt ?? new Date().toISOString(),
+    }));
   };
 
   const continueToProcessing = async () => {
@@ -236,13 +267,25 @@ export default function ImportTradeFlow({ role, userId, onComplete }: Props) {
               : '화주 또는 수출지 포워더에게 받은 B/L, C/I, P/L 사본을 업로드해 주세요.'}
           />
           <div className="import-actions"><button className="btn btn-primary" disabled={busy} onClick={() => void analyze()}>{busy ? 'AI 분석 중…' : 'AI 분석 시작'}</button></div>
+          {IMPORT_DEMO_ENABLED && role === 'forwarder' && (
+            <div className="import-demo-bar">
+              <span className="import-demo-label">데모 데이터 (OpenAI 없이 대사 시연)</span>
+              <div className="import-demo-buttons">
+                {IMPORT_DEMO_SCENARIOS.map((scenario) => (
+                  <button key={scenario.id} type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => loadDemoScenario(scenario)} title={scenario.description}>
+                    {scenario.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 
       {state.step === 2 && state.analysis && (
         <>
           <ImportAnalysisSummary analysis={state.analysis} onChange={(extracted) => setState((current) => ({ ...current, analysis: current.analysis ? { ...current.analysis, extracted } : null }))} />
-          {role === 'forwarder' ? <ImportDocumentComparison rows={state.analysis.comparison} /> : (
+          {role === 'forwarder' ? <ImportDocumentComparison results={state.reconciliation} rows={state.analysis.comparison} /> : (
             <section className="form-card import-card">
               <div className="import-card-heading"><div><span className="ai-badge">수입국 기준</span><h2>HS Code 추천</h2></div></div>
               <div className="hs-suggestion-list">{state.suggestions.map((suggestion) => (

@@ -1444,7 +1444,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             <div className="user-info-section">
               <button type="button" className="user-profile" onClick={() => setActiveMenu('profile')} title="프로필 관리" aria-label="프로필 관리 페이지로 이동">
                 <div className="user-avatar">{user.type === 'member' ? '회' : '비'}</div>
-                <span>{userProfile.company_name || userProfile.contact_name || user.email} 님</span>
+                <span>{(user.email?.split('@')[0] || user.email || '사용자')} 님</span>
                 <span className={`auth-badge ${user.type}`}>
                   {user.type === 'member' ? '회원' : '비회원'}
                 </span>
