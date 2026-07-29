@@ -38,7 +38,7 @@ import {
 } from './types';
 import './styles/feedbackReport.css';
 import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
-import { buildPackingListXlsx, mapPackingListToSchema, renderPackingListPreviewHtml } from './services/packingListXlsxService';
+import { buildPackingListDocx, renderPackingListDocxPreview } from './services/packingListDocxService';
 import SettingsPanel from './components/SettingsPanel';
 import GuidePanel from './components/GuidePanel';
 import AboutPanel from './components/AboutPanel';
@@ -403,9 +403,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const invoiceDocxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
   const docxPreviewRef = useRef<HTMLDivElement | null>(null);
 
-  // 패킹리스트도 고정 xlsx 템플릿에서 생성 — 미리보기/다운로드가 같은 스키마를 쓰게 한다.
+  // 패킹리스트도 고정 docx 템플릿에서 생성 — 미리보기/다운로드가 동일 바이너리(같은 Blob).
   const [packingListData, setPackingListData] = useState<PackingListData | null>(null);
   const packingXlsxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
+  const packingDocxPreviewRef = useRef<HTMLDivElement | null>(null);
 
   // 같은 InvoiceData면 같은 Blob 반환(캐시) → 화면 미리보기와 다운로드 파일이 동일 바이너리.
   const getInvoiceBlob = async (): Promise<Blob | null> => {
@@ -417,12 +418,12 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     return blob;
   };
 
-  // 같은 PackingListData면 같은 xlsx Blob 반환(캐시).
+  // 같은 PackingListData면 같은 docx Blob 반환(캐시) → 미리보기와 다운로드가 동일 바이너리.
   const getPackingListBlob = async (): Promise<Blob | null> => {
     if (!packingListData) return null;
     const sig = JSON.stringify(packingListData);
     if (packingXlsxCacheRef.current?.sig === sig) return packingXlsxCacheRef.current.blob;
-    const blob = await buildPackingListXlsx(packingListData);
+    const blob = await buildPackingListDocx(packingListData);
     packingXlsxCacheRef.current = { sig, blob };
     return blob;
   };
@@ -449,6 +450,25 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewDocId, invoiceData]);
+
+  // 패킹리스트도 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
+  useEffect(() => {
+    if (previewDocId !== 'packing_list' || !packingListData) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = await getPackingListBlob();
+        const host = packingDocxPreviewRef.current;
+        if (!blob || cancelled || !host) return;
+        await renderPackingListDocxPreview(blob, host);
+      } catch {
+        const host = packingDocxPreviewRef.current;
+        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">패킹리스트 미리보기 생성에 실패했습니다.</p>';
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewDocId, packingListData]);
 
   // Mobile simulator inputs
   const [mobileWeight, setMobileWeight] = useState('');
@@ -1029,7 +1049,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       return;
     }
 
-    // 패킹리스트: 고정 xlsx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 데이터).
+    // 패킹리스트: 고정 docx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 바이너리).
     if (docId === 'packing_list') {
       let blob: Blob | null = null;
       try {
@@ -1045,7 +1065,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = getDocFileName('packing_list').replace(/\.pdf$/i, '.xlsx');
+      a.download = getDocFileName('packing_list').replace(/\.pdf$/i, '.docx');
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -2540,7 +2560,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               </button>
                               <button
                                 className="rv-ib"
-                                title={doc.id === 'invoice' ? 'DOCX + PDF 저장' : doc.id === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장'}
+                                title={doc.id === 'invoice' ? 'DOCX + PDF 저장' : doc.id === 'packing_list' ? 'DOCX 다운로드' : 'PDF 저장'}
                                 onClick={() => handleDownloadDoc(doc.id)}
                               >
                                 <Download size={17} />
@@ -2936,15 +2956,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 // 상업송장: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
                 <div ref={docxPreviewRef} style={{ width: '100%' }} />
               ) : previewDocId === 'packing_list' ? (
-                // 패킹리스트: 다운로드 xlsx와 같은 스키마로 표를 렌더(단일 소스). 합계는 템플릿 수식과 동일 규칙.
-                <div
-                  style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
-                  dangerouslySetInnerHTML={{
-                    __html: packingListData
-                      ? renderPackingListPreviewHtml(mapPackingListToSchema(packingListData))
-                      : '<p>문서 양식이 생성되지 않았습니다.</p>',
-                  }}
-                />
+                // 패킹리스트: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
+                <div ref={packingDocxPreviewRef} style={{ width: '100%' }} />
               ) : (
                 <div
                   style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
@@ -2974,7 +2987,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : previewDocId === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장 (텍스트)'}
+                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : previewDocId === 'packing_list' ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
             </div>
           </div>
