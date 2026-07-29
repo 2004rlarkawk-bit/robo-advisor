@@ -45,7 +45,6 @@ export function determineRequiredDocuments(profile: TradeProfile): DocumentStatu
   });
 
   // 3. 선하증권 (B/L) - EXW에서는 선택적 (매도인 필수 제외)
-  const hasBLInfo = !!(profile.loadPort && profile.dischargePort);
   const isEXW = profile.incoterms === 'EXW';
   
   if (isEXW) {
@@ -56,53 +55,30 @@ export function determineRequiredDocuments(profile: TradeProfile): DocumentStatu
       statusText: 'EXW 조건 - 매수인 측 처리'
     });
   } else {
+    // 선하증권은 포워더/선사가 발행한다 — 화주가 여기서 생성하지 않고 발행을 기다린다.
     docs.push({
       id: 'bl',
       name: '선하증권(B/L)',
-      status: hasBLInfo ? 'completed' : 'not_started',
-      statusText: hasBLInfo ? '생성 완료' : '작성 필요',
-      lastReviewed: hasBLInfo ? timestamp : undefined
+      status: 'external_pending',
+      statusText: '포워더 발행 대기',
     });
   }
 
-  // 4. 통관신고서 - 항상 필수
-  const hasHSCode = !!profile.hsCode;
-  const cleanCode = profile.hsCode.replace(/[-.\s]/g, '');
-  const isHSCodeNumeric = /^\d+$/.test(cleanCode);
-  const isHSCodeValid = hasHSCode && isHSCodeNumeric && cleanCode.length >= 6;
-  
-  let customsStatus: DocumentStatus['status'] = 'not_started';
-  let customsStatusText = '작성 필요';
-
-  if (hasHSCode) {
-    if (isHSCodeValid) {
-      customsStatus = 'completed';
-      customsStatusText = '생성 완료';
-    } else {
-      customsStatus = 'review_required';
-      customsStatusText = '검토 필요';
-    }
-  }
-
+  // 4. 통관신고 관련 서류 - 세관 신고 후 발급(수출신고필증). 화주가 생성하는 문서가 아님.
   docs.push({
     id: 'customs_dec',
     name: '통관신고 관련 서류',
-    status: customsStatus,
-    statusText: customsStatusText,
-    lastReviewed: hasHSCode ? timestamp : undefined
+    status: 'external_pending',
+    statusText: '신고 준비',
   });
 
-  // 5. 원산지증명서 (C/O) - 수출의 경우 필수
-  // 사용자가 발급 요청을 확인(coIssuanceConfirmed)하면 완료 처리 (validatorEngine co-required 룰과 동일 기준).
-  // TODO: FTA 협정세율 적용 희망 여부 등 실제 원산지 판정 로직으로 고도화 예정.
+  // 5. 원산지증명서 (C/O) - 상공회의소/세관 발급. 화주가 생성하지 않고 발급을 신청한다.
   const isExport = profile.tradeType === 'export';
-  const isCOCompleted = isExport && !!profile.coIssuanceConfirmed;
   docs.push({
     id: 'co',
     name: '원산지증명서(C/O)',
-    status: isExport ? (isCOCompleted ? 'completed' : 'not_started') : 'not_needed',
-    statusText: isExport ? (isCOCompleted ? '생성 완료' : '작성 필요') : '해당 없음',
-    lastReviewed: isCOCompleted ? timestamp : undefined
+    status: isExport ? 'external_pending' : 'not_needed',
+    statusText: isExport ? '발급 신청 필요' : '해당 없음',
   });
 
   // 6. 보험증서 (Insurance) - CIF 조건일 때만 필수 (규칙 매트릭스 참조)
@@ -142,7 +118,9 @@ export interface ReadinessInfo {
  * 완료된 서류 비율(%)과 다음으로 채워야 할 서류의 안내 문구를 계산한다.
  */
 export function calculateReadiness(docs: DocumentStatus[]): ReadinessInfo {
-  const applicable = docs.filter((d) => d.status !== 'not_needed');
+  // 자동 생성 대상(화주가 만드는 C/I·P/L)만 준비도 분모에 포함 —
+  // 타 주체 발급 서류(external_pending)·해당없음(not_needed)은 제외해 "생성" 기준으로 계산한다.
+  const applicable = docs.filter((d) => d.status !== 'not_needed' && d.status !== 'external_pending');
   const completed = applicable.filter((d) => d.status === 'completed');
   const percent = applicable.length > 0 ? Math.round((completed.length / applicable.length) * 100) : 0;
   const nextStepDoc = applicable.find((d) => d.status !== 'completed');

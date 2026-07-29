@@ -2403,6 +2403,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                           if (d.status === 'completed') badgeClass = 'status-completed';
                           else if (d.status === 'review_required') badgeClass = 'status-review-required';
                           else if (d.status === 'not_needed') badgeClass = 'status-not-needed';
+                          else if (d.status === 'external_pending') badgeClass = 'status-external-pending';
                           return (
                             <li key={d.id}>
                               <span className="info-doc-name">{d.name}</span>

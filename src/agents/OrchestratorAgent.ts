@@ -1,5 +1,5 @@
 import { Agent, OrchestratorResult, AgentLog, createLog } from "./types";
-import { TradeProfile } from "../types";
+import { TradeProfile, TradeItem } from "../types";
 import { HSCodeAgent } from "./HSCodeAgent";
 import { DocumentAgent } from "./DocumentAgent";
 import { ComplianceAgent } from "./ComplianceAgent";
@@ -76,11 +76,11 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
     ]);
   }
 
-  async run(input: { profile: TradeProfile; useLLM?: boolean }): Promise<OrchestratorResult> {
+  async run(input: { profile: TradeProfile; items?: TradeItem[]; useLLM?: boolean }): Promise<OrchestratorResult> {
     const startTime = Date.now();
     // 동시 실행 시에도 각 run() 호출이 고유 ID를 갖도록 실행마다 새로 생성
     const executionId = this.generateExecutionId();
-    const { profile, useLLM = false } = input;
+    const { profile, items = [], useLLM = false } = input;
     const logs: AgentLog[] = [];
 
     logs.push(
@@ -122,9 +122,15 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
         throw new Error(`HS Code 검증 실패: ${errorMsg}`);
       }
 
-      if (!hsResult || !hsResult.topCode) {
+      // 결과 자체가 없거나 topCode가 null/undefined(형식 오류)면 중단.
+      // 단 topCode === ''(미입력·자동분류 실패)는 정상적인 "HS 누락" 상태이므로 파이프라인을 계속 진행하고,
+      // 누락은 ComplianceAgent가 hscode-missing 이슈로 처리한다(전체 중단 대신).
+      if (!hsResult || hsResult.topCode == null) {
         logs.push(createLog(this.name, "HS Code 검증 결과가 유효하지 않습니다.", "error"));
         throw new Error("HS Code 검증 결과 없음");
+      }
+      if (hsResult.topCode === "") {
+        logs.push(createLog(this.name, "HS Code 미확정 — 후속 검증에서 누락 이슈로 처리합니다.", "warning"));
       }
 
       const updatedProfile: TradeProfile = {
@@ -145,7 +151,7 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
       let docResult;
       try {
         docResult = await this.runWithTimeout(
-          this.documentAgent.run({ profile: updatedProfile, hsResult, useLLM, logs }),
+          this.documentAgent.run({ shipment: { profile: updatedProfile, items }, hsResult, useLLM, logs }),
           this.config.timeout!
         );
       } catch (error) {

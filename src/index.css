@@ -1324,6 +1324,13 @@ body {
   text-decoration: line-through;
 }
 
+/* 타 주체 발급 대기(포워더/세관/상공회의소) — 생성완료(초록)와 구분되는 중립 톤. 취소선 없음(대기지 해당없음 아님). */
+.status-external-pending {
+  background-color: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
 /* 이슈 심각도 그룹 헤더 (검토 보완 안내) */
 .sev-section-header {
   display: flex;

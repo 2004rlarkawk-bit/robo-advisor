@@ -22,11 +22,13 @@ describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테
     contact: '010-1234-5678'
   };
 
-  it('수출 거래의 경우 원산지증명서가 필요(작성 필요)하다', () => {
+  it('수출 거래의 원산지증명서는 발급 주체(상공회의소) 대기 상태다', () => {
     const docs = determineRequiredDocuments(mockValidProfile);
     const coDoc = docs.find(d => d.id === 'co');
     expect(coDoc).toBeDefined();
-    expect(coDoc?.statusText).toBe('작성 필요');
+    // C/O는 화주가 생성하지 않고 발급을 신청 — external_pending으로 표시.
+    expect(coDoc?.status).toBe('external_pending');
+    expect(coDoc?.statusText).toBe('발급 신청 필요');
   });
 
   it('수입 거래의 경우 원산지증명서는 해당 없음으로 나타나야 한다', () => {
@@ -90,25 +92,28 @@ describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테
     expect(resValid6.formattedCode).toBe('8517.62');
   });
 
-  it('모든 필수 항목이 올바르게 채워지면 송장, 패킹리스트, B/L은 완료(생성 완료) 상태여야 한다', () => {
+  it('필수 항목이 채워지면 송장·패킹리스트는 생성 완료, B/L은 포워더 발행 대기 상태다', () => {
     const docs = determineRequiredDocuments(mockValidProfile);
-    
+
     const invoice = docs.find(d => d.id === 'invoice');
     const packing = docs.find(d => d.id === 'packing_list');
     const bl = docs.find(d => d.id === 'bl');
 
+    // 화주가 생성하는 건 C/I·P/L뿐 — B/L은 포워더/선사 발행이라 대기 상태.
     expect(invoice?.status).toBe('completed');
     expect(packing?.status).toBe('completed');
-    expect(bl?.status).toBe('completed');
+    expect(bl?.status).toBe('external_pending');
+    expect(bl?.statusText).toBe('포워더 발행 대기');
   });
 
-  it('원산지증명서 발급 확인 전까지는 준비도가 100% 미만이고 다음 단계 힌트를 안내한다', () => {
+  it('자동 생성 대상(C/I·P/L)만 채워지면 준비도 100% — 타 주체 발급 서류는 준비도 분모에서 제외된다', () => {
     const docs = determineRequiredDocuments(mockValidProfile);
     const readiness = calculateReadiness(docs);
 
-    expect(readiness.percent).toBeLessThan(100);
-    expect(readiness.nextStepDocId).toBe('co');
-    expect(readiness.nextStepLabel).toContain('원산지증명서');
+    // C/I·P/L 둘 다 완료 → 100%. B/L·수출신고·C/O(external_pending)는 분모에 없음.
+    expect(readiness.percent).toBe(100);
+    expect(readiness.applicableCount).toBe(2);
+    expect(readiness.nextStepDocId).toBeUndefined();
   });
 
   it('원산지증명서 발급을 확인하면 수출 필수 서류가 모두 완료되어 준비도 100%가 된다', () => {
@@ -131,7 +136,8 @@ describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테
     const docs = determineRequiredDocuments(importProfile);
     const readiness = calculateReadiness(docs);
 
-    expect(readiness.applicableCount).toBe(docs.filter(d => d.status !== 'not_needed').length);
+    // 준비도 분모 = not_needed·external_pending 제외(자동 생성 대상만).
+    expect(readiness.applicableCount).toBe(docs.filter(d => d.status !== 'not_needed' && d.status !== 'external_pending').length);
     expect(readiness.percent).toBe(100);
   });
 });
@@ -257,13 +263,15 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
 
     const orchestrator = new OrchestratorAgent();
 
+    // C/O 문서 상태는 발급 주체(상공회의소) 대기로 고정(external_pending) — 화주가 생성하지 않음.
+    // 단, co-required 검증 이슈는 coIssuanceConfirmed로 해소된다(발급 신청 확인).
     const before = await orchestrator.run({ profile: base, useLLM: false });
     expect(before.issues?.issues.find(i => i.id === 'co-required')).toBeDefined();
-    expect(before.documents?.documents.find(d => d.id === 'co')?.status).toBe('not_started');
+    expect(before.documents?.documents.find(d => d.id === 'co')?.status).toBe('external_pending');
 
     const after = await orchestrator.run({ profile: { ...base, coIssuanceConfirmed: true, countryOfOrigin: '대한민국' }, useLLM: false });
     expect(after.issues?.issues.find(i => i.id === 'co-required')).toBeUndefined();
-    expect(after.documents?.documents.find(d => d.id === 'co')?.status).toBe('completed');
+    expect(after.documents?.documents.find(d => d.id === 'co')?.status).toBe('external_pending');
   });
 
   it('EXW 조건의 경우 B/L이 비필수(not_needed) 처리되고 정보성 안내가 발생한다', async () => {

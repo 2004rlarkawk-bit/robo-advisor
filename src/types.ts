@@ -136,7 +136,9 @@ export type DocumentStatusType =
   | 'not_started'
   | 'completed'
   | 'review_required'
-  | 'not_needed';
+  | 'not_needed'
+  // 타 주체(포워더/세관/상공회의소)가 발급 — 화주가 여기서 생성하지 않고 대기하는 서류.
+  | 'external_pending';
 
 export type TradeStatus =
   | 'draft'
@@ -175,6 +177,37 @@ export interface PartyInfo {
   address: string;
   contact: string;
   country?: string;
+}
+
+/**
+ * 품목 하나의 canonical 모델 — C/I·P/L이 각자 필요한 필드만 가져간다.
+ * 결정: currency는 Shipment 레벨(혼합통화 error 차단), amount는 저장 않고 계산(extractedAmount로 추출값 분리),
+ * packages는 packageCount(number)+packageUnit(string)로 분해.
+ */
+export interface TradeItem {
+  description: string;    // 품명 → C/I·P/L goods_description
+  hsCode: string;         // → C/I goods_spec
+  quantity: number;       // 수량(개수) → C/I quantity. net_weight와 다른 값이다.
+  unit: string;
+  unitPrice: number;      // → C/I unit_price
+  extractedAmount?: number; // 추출된 금액(있으면). amount는 저장하지 않고 tradeItemAmount로 계산.
+  // ── 물류필드(P/L) — 입력 경로가 생기기 전까지 공란(0/'')으로 둔다.
+  //    첫 품목·문서레벨 값으로 채우지 않는다(junk 기본값 재발 방지). 미입력은 검증이 잡는다.
+  netWeight: number;      // 순중량 → C/I net_weight, P/L quantity_or_net_weight
+  grossWeight: number;    // → P/L gross_weight
+  measurement: string;    // 용적(CBM) → P/L measurement
+  packageCount: number;   // → P/L packages(수)
+  packageUnit: string;    // → P/L packages(단위: CTNS 등)
+  shippingMarks?: string; // 품목별 화인 override — 비면 문서레벨 상속. C/I로 승격하지 않음.
+}
+
+/**
+ * 선적 건 하나 = 문서레벨 정보(profile) + 품목 배열(items).
+ * 통화는 profile.currency 단일 — 혼합 통화는 생성 전 error로 차단한다.
+ */
+export interface Shipment {
+  profile: TradeProfile;
+  items: TradeItem[];
 }
 
 export interface InvoiceItem {
