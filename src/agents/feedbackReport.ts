@@ -53,7 +53,9 @@ export function buildFeedbackReport(
   ).length;
 
   return {
-    summary: { reviewed: opts?.reviewed ?? 0, needsCheck },
+    // reviewed 기본값 = 이번 검증에서 평가된 전체 항목 수(사실 카드 + 확인 항목).
+    // UI 요약 칩 "검토 완료 N"이 실제 평가 개수와 일치하도록 한다.
+    summary: { reviewed: opts?.reviewed ?? issues.length, needsCheck },
     facts,
     checks,
     narrative: opts?.narrative,

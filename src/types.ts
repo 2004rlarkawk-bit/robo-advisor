@@ -131,7 +131,13 @@ export interface TradeProfile {
 
   /** CIF 조건에서 적하보험증권을 준비했음을 사용자가 확인 (insurance-missing 이슈 해소) */
   insuranceConfirmed?: boolean;
-  /** 원산지증명서 발급 요청을 확인 (co-required 이슈 해소 — 원산지 판정 로직 도입 전 단계) */
+  /**
+   * 원산지증명서 필요 여부 — 구매자가 FTA 적용/증명서를 요청했는지 사용자의 답변.
+   * undefined = 미확인(질문 노출), 'yes' = 신청자료 정리·발급기관 안내 노출, 'no' = 불필요 처리.
+   * 거래 상태에 저장되어 재진입 시 다시 묻지 않는다.
+   */
+  coNeeded?: 'yes' | 'no';
+  /** @deprecated 과거 "발급 요청 확인" 플래그 — coNeeded로 대체. 저장된 거래 JSON 호환용으로만 유지. */
   coIssuanceConfirmed?: boolean;
 
   /** 수출 화주 폼 전용 JSON 상태. 기존 profile JSON 저장/복원 흐름을 그대로 사용한다. */

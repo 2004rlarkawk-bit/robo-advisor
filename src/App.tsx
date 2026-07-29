@@ -24,7 +24,8 @@ import {
   BookOpen,
   Pencil,
   ArrowRight,
-  Calculator
+  Calculator,
+  OctagonAlert
 } from 'lucide-react';
 import {
   TradeProfile,
@@ -384,7 +385,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   // 미해결 차단 이슈 = error 중 (overridable+사유입력)으로 우회되지 않은 것
   const unresolvedBlockers = (list: ValidationIssue[], ov: Record<string, string>) =>
     list.filter(i => i.severity === 'error' && !(i.overridable && ov[issueKey(i)]));
-  const [, setAiFeedback] = useState<string>('');
   const [feedbackReport, setFeedbackReport] = useState<FeedbackReport | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [htmlTemplates, setHtmlTemplates] = useState<Record<string, string>>({});
@@ -503,6 +503,12 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const [mobileHSCode, setMobileHSCode] = useState('');
   const [mobileOrigin, setMobileOrigin] = useState('');
   const [hsCandidates, setHsCandidates] = useState<{ code: string; description: string; confidence: string; reasoning: string; }[]>([]);
+  // 어류 등 보존상태 불명 시 상태 선택 안내(선택하면 그 상태의 실제 HS 후보를 hsCandidates로 채움)
+  const [hsDisambiguation, setHsDisambiguation] = useState<{
+    question: string;
+    note: string;
+    options: { key: string; label: string; candidates: { code: string; description: string; confidence: string; reasoning: string; }[] }[];
+  } | null>(null);
 
   // "입력 화면에서 수정" — 이슈가 가리키는 입력 필드로 이동해 강조 + 무엇을 고칠지 안내
   const [highlightField, setHighlightField] = useState<string | null>(null);
@@ -660,11 +666,11 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   setCustomsDeclarationData(null);
   packingXlsxCacheRef.current = null;
   setHsCandidates([]);
+  setHsDisambiguation(null);
   currentTradeIdRef.current = null;
   setCurrentTradeStatus(null);
   isSubmittingTradeRef.current = false;
   hasSubmittedTradeRef.current = false;
-  setAiFeedback('');
   setFeedbackReport(null);
   setMobileWeight('');
   setMobileHSCode('');
@@ -796,9 +802,9 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       }));
       setDocuments(result.documents?.documents || []);
       setIssues(result.issues?.issues || []);
-      setAiFeedback(result.feedback?.message || '');
       setFeedbackReport(result.feedback?.report || null);
       setHsCandidates(result.hs?.candidates || []);
+      setHsDisambiguation(result.hs?.disambiguation || null);
 
       // 정책: error(미해결)만 생성 차단. warning은 통과(배지). 사유 override된 error는 우회.
       const issuesList: ValidationIssue[] = result.issues?.issues || [];
@@ -875,9 +881,9 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     packingXlsxCacheRef.current = null;
     setOverrides((t.generatedDocs?.overrides as Record<string, string>) || {});
     blockedGenRef.current = null;
-    setAiFeedback('');
     setFeedbackReport(null);
     setHsCandidates([]);
+    setHsDisambiguation(null);
     setHasGenerated(true);
     setActiveMenu('dashboard');
   };
@@ -914,9 +920,9 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setPackingListData(null);
     setCustomsDeclarationData(null);
     packingXlsxCacheRef.current = null;
-    setAiFeedback('');
     setFeedbackReport(null);
     setHsCandidates([]);
+    setHsDisambiguation(null);
     setHasGenerated(false);
     setDevTestMode(null);
     setDevTestMessage('');
@@ -952,9 +958,9 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       setCustomsDeclarationData(result.documents?.generatedDocs?.customsDeclaration || null);
       packingXlsxCacheRef.current = null;
       setIssues(result.issues?.issues || []);
-      setAiFeedback(result.feedback?.message || '');
       setFeedbackReport(result.feedback?.report || null);
       setHsCandidates(result.hs?.candidates || []);
+      setHsDisambiguation(result.hs?.disambiguation || null);
     } catch (error) {
       if (seq === rerunSeqRef.current) {
         console.error(error);
@@ -990,13 +996,19 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     await rerunAgents(updatedProfile);
   };
 
+  // C/O 필요 여부 답변(예/아니오) — 거래 상태(profile.coNeeded)에 저장되어 재진입 시 다시 묻지 않는다.
+  const handleCoNeededAnswer = async (answer: 'yes' | 'no') => {
+    const updatedProfile = { ...profile, coNeeded: answer };
+    setProfile(updatedProfile);
+    await rerunAgents(updatedProfile);
+  };
+
   const handleSolveOrigin = async () => {
     if (!mobileOrigin) return;
 
     const updatedProfile = {
       ...profile,
-      countryOfOrigin: mobileOrigin,
-      coIssuanceConfirmed: true
+      countryOfOrigin: mobileOrigin
     };
     setProfile(updatedProfile);
     await rerunAgents(updatedProfile);
@@ -2562,7 +2574,9 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         {blockingIssuesCount > 0 ? `⚠ 보완 필요 ${blockingIssuesCount}건` : '✓ 검증 통과'} · 생성 완료 {completedDocsCount}건
                       </div>
                       <ul className="info-doc-list">
-                        {documents.filter(d => d.status !== 'not_started').map(d => {
+                        {/* 수출·수입신고 서류는 관세사·신고인 처리 대상이라 "생성 결과" 요약에서는 제외 —
+                            상세 상태는 결과 화면의 서류 현황에서 확인한다. */}
+                        {documents.filter(d => d.status !== 'not_started' && d.id !== 'customs_dec').map(d => {
                           let badgeClass = 'status-not-started';
                           if (d.status === 'completed') badgeClass = 'status-completed';
                           else if (d.status === 'review_required') badgeClass = 'status-review-required';
@@ -2713,6 +2727,18 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </p>
                     </div>
 
+                      {/* 요약 칩 — 검토 완료·확인 필요 개수. 숫자는 아래 실제 렌더 항목 수와 일치한다. */}
+                      {feedbackReport && (
+                        <div className="review-summary-chips">
+                          <span className="review-chip review-chip-done">
+                            <CheckCircle2 size={14} /> 검토 완료 {feedbackReport.summary.reviewed}
+                          </span>
+                          <span className="review-chip review-chip-check">
+                            <AlertTriangle size={14} /> 확인 필요 {feedbackReport.summary.needsCheck}
+                          </span>
+                        </div>
+                      )}
+
                       {/* 사실 카드 — 과세가격 환산·예상 관세액 등. 값은 실 API/룰에서 결정론적으로 산출. */}
                       {feedbackReport && feedbackReport.facts.length > 0 && (
                         <div className="fact-card-list">
@@ -2739,17 +2765,18 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
                       <div className="mobile-fix-list">
                         {(() => {
-                          // 심각도별로 묶어 표시 — 오류(제출 차단) → 보완 권장 → 참고 안내 순.
+                          // 심각도별로 묶어 표시 — 오류(제출 차단) → 보완 권장 순.
                           // 성격이 다른 이슈를 문서 순서로 섞지 않고 그룹 헤더로 구분한다.
-                          const order: Record<string, number> = { error: 0, warning: 1, info: 2 };
+                          // info(참고)는 이 확인 목록에서 제외 — 요약 칩·사실 카드·확인 항목 3단 구성 유지,
+                          // "확인 필요" 칩 숫자(needsCheck = error+warning)와 목록 개수가 일치한다.
+                          const order: Record<string, number> = { error: 0, warning: 1 };
                           // card를 가진 이슈(과세가격 환산 등)는 위 사실 카드로 렌더 → 목록에선 제외(중복 방지).
-                          const sorted = [...issues].filter((i) => !i.card).sort(
+                          const sorted = [...issues].filter((i) => !i.card && i.severity !== 'info').sort(
                             (a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9)
                           );
-                          const sevMeta: Record<string, { label: string; hint: string; cls: string }> = {
-                            error: { label: '반드시 수정', hint: '제출 차단 · 먼저 해결', cls: 'sev-error' },
-                            warning: { label: '보완 권장', hint: '해소 권장', cls: 'sev-warning' },
-                            info: { label: '참고 안내', hint: '', cls: 'sev-info' },
+                          const sevMeta: Record<string, { label: string; hint: string; cls: string; icon: JSX.Element }> = {
+                            error: { label: '반드시 수정', hint: '제출 차단 · 먼저 해결', cls: 'sev-error', icon: <OctagonAlert size={17} strokeWidth={2.4} /> },
+                            warning: { label: '보완 권장', hint: '해소 권장', cls: 'sev-warning', icon: <AlertTriangle size={17} strokeWidth={2.4} /> },
                           };
                           let lastSev: string | null = null;
                           return sorted.map((issue) => {
@@ -2761,6 +2788,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               <Fragment key={issue.id}>
                                 {showHeader && (
                                   <div className={`sev-section-header ${meta.cls}`}>
+                                    <span className="sev-section-icon">{meta.icon}</span>
                                     <span className="sev-section-label">{meta.label}</span>
                                     <span className="sev-section-count">{count}</span>
                                     {meta.hint && <span className="sev-section-hint">{meta.hint}</span>}
@@ -2815,11 +2843,12 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                    issue.docType === 'insurance' ? '적하보험증권' : '기타 서류'}
                                 </div>
                               </div>
-                              {issue.severity !== 'info' &&
+                              {/* 입력수정 버튼은 화주가 직접 작성·수정하는 서류(C/I·P/L) 이슈에만.
+                                  B/L·E/D·C/O·보험은 외부 발급·전용 해소 UI라 상태 표시만 한다.
+                                  weight·hsCode는 아래 전용 인라인 입력이 있어 버튼 중복 방지. */}
+                              {(issue.docType === 'invoice' || issue.docType === 'packing_list') &&
                                 issue.field !== 'weight' &&
-                                issue.field !== 'hsCode' &&
-                                issue.docType !== 'co' &&
-                                issue.id !== 'insurance-missing' && (
+                                issue.field !== 'hsCode' && (
                                 <button className="mfc-fix-btn" onClick={() => goToFieldFix(issue)}>
                                   입력 수정 <ArrowRight size={14} />
                                 </button>
@@ -2854,10 +2883,48 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                   onChange={(e) => setMobileHSCode(e.target.value)}
                                 />
 
+                                {/* 보존·가공 상태 불명(어류 등) → 코드 대신 상태 선택 안내. 선택 시 그 상태의 실제 후보를 채운다. */}
+                                {hsDisambiguation && hsCandidates.length === 0 && (
+                                  <div className="hs-candidates-container" style={{ marginTop: '8px', marginBottom: '8px' }}>
+                                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-dark)', marginBottom: '4px' }}>
+                                      추가 정보가 필요합니다
+                                    </div>
+                                    <div style={{ fontSize: '11px', color: 'var(--text-light)', lineHeight: '1.4', marginBottom: '8px' }}>
+                                      {hsDisambiguation.note}
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                      {hsDisambiguation.options.map((opt) => (
+                                        <button
+                                          key={opt.key}
+                                          type="button"
+                                          onClick={() => { setMobileHSCode(''); setHsCandidates(opt.candidates); }}
+                                          style={{
+                                            fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                                            padding: '8px 14px', borderRadius: '999px',
+                                            border: '1px solid var(--border-color)',
+                                            background: 'var(--surface, #fff)', color: 'var(--text-dark)',
+                                            transition: 'background-color 0.2s, border-color 0.2s',
+                                          }}
+                                        >
+                                          {opt.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
                                 {hsCandidates && hsCandidates.length > 0 && (
                                   <div className="hs-candidates-container" style={{ marginTop: '8px', marginBottom: '8px' }}>
-                                    <div className="hs-candidates-title" style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-light)', marginBottom: '4px' }}>
-                                      추천 HS CODE 후보군 (클릭 시 자동 기입):
+                                    <div className="hs-candidates-title" style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-light)', marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                      <span>추천 HS CODE 후보군 (클릭 시 자동 기입):</span>
+                                      {hsDisambiguation && (
+                                        <span
+                                          onClick={() => { setHsCandidates([]); setMobileHSCode(''); }}
+                                          style={{ cursor: 'pointer', color: 'var(--primary-color)', fontWeight: 600, whiteSpace: 'nowrap' }}
+                                        >
+                                          ← 상태 다시 선택
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="hs-candidates-list" style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto' }}>
                                       {hsCandidates.map((cand, idx) => (
@@ -2895,24 +2962,72 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                   </div>
                                 )}
 
-                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveHSCode} disabled={isRevalidating}>
+                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveHSCode} disabled={isRevalidating || !mobileHSCode.trim()}>
                                   {isRevalidating ? '재검증 중...' : 'HS CODE 수정 반영'}
                                 </button>
                               </div>
                             )}
 
-                            {issue.docType === 'co' && (
+                            {/* C/O 조건부 흐름 — 발급은 상공회의소 몫이므로 "발급 요청" 버튼은 두지 않는다.
+                                미확인: 필요 여부 질문 / yes: 원산지 선택 + 신청자료 정리 + 발급기관 안내 / no: 이슈 자체가 안 뜸 */}
+                            {issue.docType === 'co' && profile.coNeeded !== 'yes' && (
                               <div className="mobile-input-group">
-                                <label className="mobile-input-label">원산지 정보 선택</label>
+                                <label className="mobile-input-label">구매자가 FTA 적용 또는 원산지증명서를 요청했나요?</label>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                  <button className="mobile-btn mobile-btn-primary" style={{ flex: 1 }} onClick={() => handleCoNeededAnswer('yes')} disabled={isRevalidating}>
+                                    예 — 필요해요
+                                  </button>
+                                  <button className="mobile-btn mobile-btn-secondary" style={{ flex: 1 }} onClick={() => handleCoNeededAnswer('no')} disabled={isRevalidating}>
+                                    아니오 — 필요 없어요
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {issue.docType === 'co' && profile.coNeeded === 'yes' && (
+                              <div className="mobile-input-group">
+                                <label className="mobile-input-label">원산지(국가) 선택</label>
                                 <CountrySelect
                                   className="mobile-input"
-                                  value={mobileOrigin}
+                                  value={mobileOrigin || profile.countryOfOrigin || ''}
                                   onChange={setMobileOrigin}
                                   emptyLabel="Select a country"
                                 />
-                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveOrigin} disabled={isRevalidating}>
-                                  {isRevalidating ? '재검증 중...' : '원산지증명서 발급 요청'}
-                                </button>
+                                {mobileOrigin && mobileOrigin !== profile.countryOfOrigin && (
+                                  <button className="mobile-btn mobile-btn-primary" onClick={handleSolveOrigin} disabled={isRevalidating}>
+                                    {isRevalidating ? '재검증 중...' : '원산지 반영'}
+                                  </button>
+                                )}
+
+                                {/* 신청자료 정리 카드 — 화면 표시 전용(다운로드 없음). 공식 신청서가 아닌 참고용 정리. */}
+                                <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                  <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0f172a' }}>신청자료 정리</div>
+                                  <div style={{ fontSize: 11.5, color: '#64748b', margin: '2px 0 10px' }}>
+                                    발급 문서가 아니라 발급기관 신청 시 참고용으로 정리한 내용입니다.
+                                  </div>
+                                  {[
+                                    ['품목명', profile.itemName || '—'],
+                                    ['HS 코드', profile.hsCode || '—'],
+                                    ['수량', profile.quantity !== '' && profile.quantity !== undefined ? `${profile.quantity}${profile.unit ? ` ${profile.unit}` : ''}` : '—'],
+                                    ['원산지', profile.countryOfOrigin || '미선택'],
+                                    ['수출자', profile.companyName || '—'],
+                                    ['수입자', profile.partnerName || '—'],
+                                  ].map(([k, v]) => (
+                                    <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '4px 0', fontSize: 12.5, borderTop: '1px solid #eef2f7' }}>
+                                      <span style={{ color: '#64748b', flexShrink: 0 }}>{k}</span>
+                                      <span style={{ color: '#0f172a', fontWeight: 600, textAlign: 'right', wordBreak: 'break-all' }}>{v}</span>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* 발급기관 안내 */}
+                                <div style={{ marginTop: 8, padding: '10px 14px', borderRadius: 10, background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: 12.5, color: '#1e40af', lineHeight: 1.55 }}>
+                                  발급은 <b>대한상공회의소 원산지증명센터</b>에서 진행됩니다.{' '}
+                                  <a href="https://cert.korcham.net" target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', fontWeight: 700 }}>
+                                    cert.korcham.net
+                                  </a>
+                                  에서 회원가입 후 위 정리 내용을 참고해 신청서를 작성하세요.
+                                </div>
                               </div>
                             )}
 

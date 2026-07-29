@@ -74,7 +74,24 @@ export function determineRequiredDocuments(
       : undefined,
   });
 
-  // 3. 선하증권(B/L)
+  // 3. 수출신고서(초안) — 관세사 전달용 초안을 docx로 생성한다(세관 제출본 아님).
+  //    수출신고필증은 관세사·신고인이 세관 신고 후 발급하지만, 여기서는 초안을 만들어 전달을 돕는다.
+  //    화주가 직접 생성하는 서류(C/I·P/L·E/D)를 묶어 보여주기 위해 B/L보다 먼저 배치한다.
+  const hasCustomsInfo = !!(
+    profile.hsCode &&
+    profile.itemName &&
+    profile.companyName &&
+    profile.incoterms
+  );
+  docs.push({
+    id: 'customs_dec',
+    name: '수출신고서(초안)',
+    status: hasCustomsInfo ? 'completed' : 'not_started',
+    statusText: hasCustomsInfo ? '초안 생성' : '작성 필요',
+    lastReviewed: hasCustomsInfo ? timestamp : undefined,
+  });
+
+  // 4. 선하증권(B/L)
   // B/L은 포워더 또는 선사가 발행하므로 화주가 직접 생성하지 않는다.
   // EXW에서는 매수인 측이 운송을 주도하므로 해당 없음으로 처리한다.
   const isEXW = profile.incoterms === 'EXW';
@@ -95,37 +112,41 @@ export function determineRequiredDocuments(
     });
   }
 
-  // 4. 수출신고서(초안) — 관세사 전달용 초안을 docx로 생성한다(세관 제출본 아님).
-  //    수출신고필증은 관세사·신고인이 세관 신고 후 발급하지만, 여기서는 초안을 만들어 전달을 돕는다.
-  const hasCustomsInfo = !!(
-    profile.hsCode &&
-    profile.itemName &&
-    profile.companyName &&
-    profile.incoterms
-  );
-  docs.push({
-    id: 'customs_dec',
-    name: '수출신고서(초안)',
-    status: hasCustomsInfo ? 'completed' : 'not_started',
-    statusText: hasCustomsInfo ? '초안 생성' : '작성 필요',
-    lastReviewed: hasCustomsInfo ? timestamp : undefined,
-  });
-
   // 5. 원산지증명서(C/O)
-  // 수출 거래에서는 상공회의소 또는 세관 등에 발급을 신청한다.
-  // 수입 거래에서는 이 서비스의 자동 생성 대상이 아니므로 해당 없음으로 처리한다.
+  // 실제 발급은 대한상공회의소 원산지증명센터에서 진행 — 우리는 신청자료 정리만 돕는다.
+  // 구매자가 FTA 적용/증명서를 요청했는지(coNeeded)에 따라 3상태로 나뉜다:
+  //   미확인 → "필요 여부 확인" / yes → 발급기관 신청 대상 / no → 불필요.
   const isExport = profile.tradeType === 'export';
 
-  docs.push({
-    id: 'co',
-    name: '원산지증명서(C/O)',
-    status: isExport
-      ? 'external_pending'
-      : 'not_needed',
-    statusText: isExport
-      ? '발급 신청 필요'
-      : '해당 없음',
-  });
+  if (!isExport) {
+    docs.push({
+      id: 'co',
+      name: '원산지증명서(C/O)',
+      status: 'not_needed',
+      statusText: '해당 없음',
+    });
+  } else if (profile.coNeeded === 'no') {
+    docs.push({
+      id: 'co',
+      name: '원산지증명서(C/O)',
+      status: 'not_needed',
+      statusText: '불필요 (구매자 요청 없음)',
+    });
+  } else if (profile.coNeeded === 'yes') {
+    docs.push({
+      id: 'co',
+      name: '원산지증명서(C/O)',
+      status: 'external_pending',
+      statusText: '상공회의소 발급 대상',
+    });
+  } else {
+    docs.push({
+      id: 'co',
+      name: '원산지증명서(C/O)',
+      status: 'external_pending',
+      statusText: '필요 여부 확인',
+    });
+  }
 
   // 6. 적하보험증권(Insurance Policy)
   // Incoterms 규칙상 보험이 필요한 경우에만 표시한다.

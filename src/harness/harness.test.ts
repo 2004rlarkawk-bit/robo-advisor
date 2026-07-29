@@ -28,13 +28,21 @@ describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테
     contact: '010-1234-5678'
   };
 
-  it('수출 거래의 원산지증명서는 발급 주체(상공회의소) 대기 상태다', () => {
-    const docs = determineRequiredDocuments(mockValidProfile);
-    const coDoc = docs.find(d => d.id === 'co');
-    expect(coDoc).toBeDefined();
-    // C/O는 화주가 생성하지 않고 발급을 신청 — external_pending으로 표시.
-    expect(coDoc?.status).toBe('external_pending');
-    expect(coDoc?.statusText).toBe('발급 신청 필요');
+  it('수출 거래의 원산지증명서는 필요 여부 답변(coNeeded)에 따라 3상태로 나뉜다', () => {
+    // 미확인 → 필요 여부 확인
+    const unanswered = determineRequiredDocuments(mockValidProfile).find(d => d.id === 'co');
+    expect(unanswered?.status).toBe('external_pending');
+    expect(unanswered?.statusText).toBe('필요 여부 확인');
+
+    // 예 → 상공회의소 발급 대상 (여전히 화주가 생성하지 않는 external_pending)
+    const yes = determineRequiredDocuments({ ...mockValidProfile, coNeeded: 'yes' }).find(d => d.id === 'co');
+    expect(yes?.status).toBe('external_pending');
+    expect(yes?.statusText).toBe('상공회의소 발급 대상');
+
+    // 아니오 → 불필요 처리
+    const no = determineRequiredDocuments({ ...mockValidProfile, coNeeded: 'no' }).find(d => d.id === 'co');
+    expect(no?.status).toBe('not_needed');
+    expect(no?.statusText).toBe('불필요 (구매자 요청 없음)');
   });
 
   it('수입 거래의 경우 원산지증명서는 해당 없음으로 나타나야 한다', () => {
@@ -112,26 +120,24 @@ describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테
     expect(bl?.statusText).toBe('포워더 발행 대기');
   });
 
-  it('자동 생성 대상(C/I·P/L)만 채워지면 준비도 100% — 타 주체 발급 서류는 준비도 분모에서 제외된다', () => {
+  it('자동 생성 대상(C/I·P/L·E/D)만 채워지면 준비도 100% — 타 주체 발급 서류는 준비도 분모에서 제외된다', () => {
     const docs = determineRequiredDocuments(mockValidProfile);
     const readiness = calculateReadiness(docs);
 
-    // C/I·P/L 둘 다 완료 → 100%. B/L·수출신고·C/O(external_pending)는 분모에 없음.
+    // C/I·P/L·수출신고서(초안) 셋 다 완료 → 100%. B/L·C/O(external_pending)는 분모에 없음.
     expect(readiness.percent).toBe(100);
-    expect(readiness.applicableCount).toBe(2);
+    expect(readiness.applicableCount).toBe(3);
     expect(readiness.nextStepDocId).toBeUndefined();
   });
 
-  it('원산지증명서 발급을 확인하면 수출 필수 서류가 모두 완료되어 준비도 100%가 된다', () => {
-    const readyProfile: TradeProfile = {
-      ...mockValidProfile,
-      coIssuanceConfirmed: true,
-    };
-    const docs = determineRequiredDocuments(readyProfile);
-    const readiness = calculateReadiness(docs);
-
-    expect(readiness.percent).toBe(100);
-    expect(readiness.nextStepDocId).toBeUndefined();
+  it('원산지증명서 필요 여부와 무관하게 C/O는 준비도 분모에 들어가지 않는다', () => {
+    // yes(발급기관 대상)·no(불필요) 모두 화주 자동 생성 대상이 아니므로 준비도는 변하지 않는다.
+    for (const coNeeded of ['yes', 'no'] as const) {
+      const docs = determineRequiredDocuments({ ...mockValidProfile, coNeeded });
+      const readiness = calculateReadiness(docs);
+      expect(readiness.percent).toBe(100);
+      expect(readiness.nextStepDocId).toBeUndefined();
+    }
   });
 
   it('수입 거래는 해당 없음(C/O)을 분모에서 제외하고 준비도를 계산한다', () => {
@@ -251,7 +257,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(insuranceDoc?.status).toBe('completed');
   });
 
-  it('수출 거래에서 원산지증명서 발급 확인(coIssuanceConfirmed) 시 co-required 이슈가 해소된다', async () => {
+  it('수출 거래의 co-required 이슈는 coNeeded 답변에 따라 노출·해소된다', async () => {
     const base: TradeProfile = {
       tradeType: 'export',
       itemName: '기계부품',
@@ -269,15 +275,25 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
 
     const orchestrator = new OrchestratorAgent();
 
-    // C/O 문서 상태는 발급 주체(상공회의소) 대기로 고정(external_pending) — 화주가 생성하지 않음.
-    // 단, co-required 검증 이슈는 coIssuanceConfirmed로 해소된다(발급 신청 확인).
+    // 미확인 → 필요 여부 확인 질문 이슈(warning) 노출.
     const before = await orchestrator.run({ profile: base, useLLM: false });
-    expect(before.issues?.issues.find(i => i.id === 'co-required')).toBeDefined();
+    const beforeIssue = before.issues?.issues.find(i => i.id === 'co-required');
+    expect(beforeIssue).toBeDefined();
+    expect(beforeIssue?.severity).toBe('warning');
+    expect(beforeIssue?.message).toContain('필요 여부 확인');
     expect(before.documents?.documents.find(d => d.id === 'co')?.status).toBe('external_pending');
 
-    const after = await orchestrator.run({ profile: { ...base, coIssuanceConfirmed: true, countryOfOrigin: '대한민국' }, useLLM: false });
-    expect(after.issues?.issues.find(i => i.id === 'co-required')).toBeUndefined();
-    expect(after.documents?.documents.find(d => d.id === 'co')?.status).toBe('external_pending');
+    // 예 → 발급기관 안내 이슈로 전환(여전히 확인 목록에 남음), 문서는 external_pending 유지.
+    const yes = await orchestrator.run({ profile: { ...base, coNeeded: 'yes', countryOfOrigin: '대한민국' }, useLLM: false });
+    const yesIssue = yes.issues?.issues.find(i => i.id === 'co-required');
+    expect(yesIssue).toBeDefined();
+    expect(yesIssue?.message).toContain('상공회의소 발급 대상');
+    expect(yes.documents?.documents.find(d => d.id === 'co')?.status).toBe('external_pending');
+
+    // 아니오 → 이슈 미발행 + 문서 불필요 처리.
+    const no = await orchestrator.run({ profile: { ...base, coNeeded: 'no' }, useLLM: false });
+    expect(no.issues?.issues.find(i => i.id === 'co-required')).toBeUndefined();
+    expect(no.documents?.documents.find(d => d.id === 'co')?.status).toBe('not_needed');
   });
 
   it('EXW 조건의 경우 B/L이 비필수(not_needed) 처리되고 정보성 안내가 발생한다', async () => {

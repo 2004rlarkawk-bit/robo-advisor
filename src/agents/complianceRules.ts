@@ -124,9 +124,12 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
   }
 
   // ── R2. 선적일 (warning) ────────────────────────────
-  // 인보이스는 선적 전 발행이 흔하므로 error가 아닌 경고.
-  if (!(profile.departureDate || '').trim()) {
-    issues.push(mk('r2-departure-missing', 'bl', 'departureDate',
+  // 본선적재(On Board) 인도 조건(FOB·CFR·CIF)에서만 선적일 확인을 권장한다.
+  // EXW·FCA·DAP·DDP 등은 인도 시점이 본선적재와 무관하므로 공란이어도 안내하지 않는다.
+  // 선적일은 상업송장(C/I) 입력 필드이므로 귀속도 invoice — B/L은 우리가 생성하지 않는 서류.
+  const ON_BOARD_TERMS = new Set(['FOB', 'CFR', 'CIF']);
+  if (ON_BOARD_TERMS.has(inc) && !(profile.departureDate || '').trim()) {
+    issues.push(mk('r2-departure-missing', 'invoice', 'departureDate',
       '선적일(출발일)이 비어 있습니다. 선적 전 발행이면 무방하나, 확정 시 입력을 권장합니다.'));
   }
 

@@ -107,7 +107,7 @@ function createPerfectDefaults(now: Date): TradeProfile {
     signerName: 'Test Manager',
     signerPosition: 'Export Manager',
     insuranceConfirmed: false,
-    coIssuanceConfirmed: true,
+    coNeeded: 'yes' as const,
     shipperSupplemental: {
       buyerMatchesConsignee: true,
       consigneeMatchesNotifyParty: true,
@@ -139,7 +139,7 @@ export function createRevisionTestProfile(currentProfile: TradeProfile, now = ne
     grossWeight: '',
     departureDate: '',
     arrivalDate: '',
-    coIssuanceConfirmed: false,
+    coNeeded: undefined,
   };
 }
 

@@ -161,16 +161,19 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
 
   // 2. 통관신고서 - HS CODE 검증 (HSCodeAgent에서 처리하므로 여기서는 중복 제거)
 
-  // 3. 원산지증명서 - 작성 여부 검증
-  // 사용자가 발급 요청을 확인(coIssuanceConfirmed)하면 해소된다.
-  // TODO: FTA 협정세율 적용 희망 여부 등 실제 원산지 판정 로직으로 고도화 예정.
-  if (profile.tradeType === 'export' && !profile.coIssuanceConfirmed) {
+  // 3. 원산지증명서 - 필요 여부 확인 → 신청자료 정리 안내
+  // 실제 발급은 상공회의소가 하므로 "작성/발급 요청"이 아니라
+  // ① 구매자 요청 여부 질문 → ② yes면 신청자료 정리·발급기관 안내로 흐른다.
+  // 답변이 'no'면 이슈를 발행하지 않는다(확인 목록에서 제외).
+  if (profile.tradeType === 'export' && profile.coNeeded !== 'no') {
     issues.push({
       id: 'co-required',
       docType: 'co',
-      severity: 'info',
-      message: '원산지증명서: 작성 필요 (원산지증명서 작성을 진행해 주세요.)',
-      field: 'tradeType'
+      severity: 'warning',
+      message: profile.coNeeded === 'yes'
+        ? '원산지증명서: 상공회의소 발급 대상 (아래 신청자료 정리를 참고해 발급기관에서 신청을 진행해 주세요.)'
+        : '원산지증명서: 필요 여부 확인 (구매자가 FTA 적용 또는 원산지증명서를 요청했는지 확인해 주세요.)',
+      field: 'coNeeded'
     });
   }
 
