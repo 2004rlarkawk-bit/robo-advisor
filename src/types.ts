@@ -344,13 +344,37 @@ export interface InsuranceData {
 
   [key: string]: any;
 }
+export interface CustomsDeclarationData {
+  declarationNo: string;
+  declarationDate: string;
+  tradeType: TradeType;
+  exporter: PartyInfo;
+  importer: PartyInfo;
+  itemName: string;
+  hsCode: string;
+  quantity: number;
+  unit: string;
+  weight: number;
+  currency: string;
+  invoiceAmount: number;
+  incoterms: string;
+  loadPort: string;
+  dischargePort: string;
+  countryOfOrigin: string;
+  customsValue?: number;
+  dutyRate?: string;
+  dutyAmount?: number;
+  signedBy?: string;
 
+  [key: string]: any;
+}
 export interface GeneratedDocuments {
   documents?: DocumentStatus[];
   invoice?: InvoiceData;
   packingList?: PackingListData;
   certificateOfOrigin?: CertificateOfOriginData;
   insurance?: InsuranceData;
+  customsDeclaration?: CustomsDeclarationData;
   htmlTemplates?: Record<string, string>;
 
   [key: string]: any;
