@@ -2446,6 +2446,14 @@ body {
 .reconcile-raw { margin-top: 14px; }
 .reconcile-raw > summary { cursor: pointer; font-size: 12.5px; color: var(--text-light); padding: 6px 0; }
 
+/* 일치(pass) 접이식 그룹 */
+.reconcile-pass-group { margin-top: 8px; border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; }
+.reconcile-pass-summary { cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 12px 14px; font-size: 13px; font-weight: 600; color: var(--text-dark); background: #f8fafc; list-style: none; }
+.reconcile-pass-summary::-webkit-details-marker { display: none; }
+.reconcile-pass-summary::after { content: "▾"; margin-left: auto; color: var(--text-light); font-size: 11px; transition: transform 0.15s ease; }
+.reconcile-pass-group[open] .reconcile-pass-summary::after { transform: rotate(180deg); }
+.reconcile-pass-list { padding: 10px; }
+
 /* 데모 데이터 바 (수입 대조 시연) */
 .import-demo-bar { margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--border-color); border-radius: 10px; background: #f8fafc; }
 .import-demo-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-light); margin-bottom: 8px; }

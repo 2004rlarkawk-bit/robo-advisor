@@ -20,6 +20,32 @@ function badgeText(result: ReconciliationRuleResult): string {
   return result.severity === 'error' ? '불일치·오류' : '불일치·주의';
 }
 
+/** 심각도 정렬 순위: 오류 → 주의 → 확인불가 → 일치 */
+function severityRank(result: ReconciliationRuleResult): number {
+  if (result.status === 'fail') return result.severity === 'error' ? 0 : 1;
+  if (result.status === 'skip') return 2;
+  return 3; // pass
+}
+
+function ruleNo(result: ReconciliationRuleResult): number {
+  return parseInt(result.ruleId.replace(/\D/g, ''), 10) || 0;
+}
+
+function ReconcileItem({ result }: { result: ReconciliationRuleResult }) {
+  return (
+    <li className={`reconcile-item ${result.status}`}>
+      <span className={badgeClass(result)}>{badgeText(result)}</span>
+      <div className="reconcile-body">
+        <div className="reconcile-title">
+          <strong>{result.ruleId}. {result.label}</strong>
+          <span className="reconcile-docs">{result.documents.map((doc) => DOC_LABEL[doc]).join(' · ')}</span>
+        </div>
+        <p className="reconcile-evidence">{result.evidence}</p>
+      </div>
+    </li>
+  );
+}
+
 interface Props {
   results: ReconciliationRuleResult[];
   rows?: ImportComparisonRow[];
@@ -29,10 +55,18 @@ export default function ImportDocumentComparison({ results, rows = [] }: Props) 
   const summary = summarizeReconciliation(results);
   const gate = evaluateReconciliationGate(results);
 
+  // 렌더 전용 파생 정렬(원본 results·판정 로직 불변): 심각도 우선, 같은 심각도는 IR 번호 순.
+  const attention = results
+    .filter((result) => result.status !== 'pass')
+    .sort((a, b) => severityRank(a) - severityRank(b) || ruleNo(a) - ruleNo(b));
+  const passed = results
+    .filter((result) => result.status === 'pass')
+    .sort((a, b) => ruleNo(a) - ruleNo(b));
+
   return (
     <section className="form-card import-card">
       <div className="import-card-heading">
-        <div><h2>문서 간 대조 (對照)</h2></div>
+        <div><h2>문서 간 대조</h2></div>
         <p>C/I·P/L·B/L 추출값을 IR1~IR10 규칙으로 교차검증합니다. (판정은 코드 기준 · 재현 가능)</p>
       </div>
 
@@ -43,20 +77,22 @@ export default function ImportDocumentComparison({ results, rows = [] }: Props) 
         <span className="reconcile-chip skip">확인불가 {summary.skipped}</span>
       </div>
 
-      <ul className="reconcile-list">
-        {results.map((result) => (
-          <li key={result.ruleId} className={`reconcile-item ${result.status}`}>
-            <span className={badgeClass(result)}>{badgeText(result)}</span>
-            <div className="reconcile-body">
-              <div className="reconcile-title">
-                <strong>{result.ruleId}. {result.label}</strong>
-                <span className="reconcile-docs">{result.documents.map((doc) => DOC_LABEL[doc]).join(' · ')}</span>
-              </div>
-              <p className="reconcile-evidence">{result.evidence}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {attention.length > 0 && (
+        <ul className="reconcile-list">
+          {attention.map((result) => <ReconcileItem key={result.ruleId} result={result} />)}
+        </ul>
+      )}
+
+      {passed.length > 0 && (
+        <details className="reconcile-pass-group">
+          <summary className="reconcile-pass-summary">
+            <span className="reconcile-badge pass">일치</span> {passed.length}건 검증 통과
+          </summary>
+          <ul className="reconcile-list reconcile-pass-list">
+            {passed.map((result) => <ReconcileItem key={result.ruleId} result={result} />)}
+          </ul>
+        </details>
+      )}
 
       {gate.status === 'blocked'
         ? <div className="form-message error">{gate.message}</div>
