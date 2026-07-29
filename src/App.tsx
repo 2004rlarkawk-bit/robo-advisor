@@ -47,6 +47,7 @@ import OnboardingPage from './components/OnboardingPage';
 import ProfileSettingsPage from './components/ProfileSettingsPage';
 import ForwarderWorkspaceForm from './components/ForwarderWorkspaceForm';
 import ShipperWorkspaceForm from './components/ShipperWorkspaceForm';
+import OnboardingTour from './components/OnboardingTour';
 import TradeDirectionSelector from './components/trade/TradeDirectionSelector';
 import TradeRoleSelector from './components/trade/TradeRoleSelector';
 import ImportShipperFlow from './components/import/ImportShipperFlow';
@@ -1347,6 +1348,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 */
   return (
     <div className="app-container">
+      <OnboardingTour />
       {/* 1. Left Navigation Sidebar */}
       <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="logo-section">
