@@ -232,13 +232,23 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
   if (currency !== 'KRW' && amount > 0) {
     try {
       const dv = await calcDutiableValue(amount, currency, profile.tradeType);
-      const srcNote = dv.source === 'api' ? `관세청 주간환율, 적용일 ${dv.effectiveDate}` : '시뮬레이션 환율 — 실환율은 API 키 설정 후 적용';
+      const srcNote = dv.source === 'api' ? `관세청 주간환율 · 적용일 ${dv.effectiveDate}` : '시뮬레이션 환율 — 실환율은 API 키 설정 후 적용';
+      const itemNote = profile.itemName ? `${profile.itemName} · ` : '';
       issues.push({
         id: 'dutiable-value-info',
         docType: 'customs_dec',
         severity: 'info',
         message: `과세가격 환산: ${currency} ${amount.toLocaleString()} × ${dv.rate.toLocaleString()}원 = 약 ${dv.totalKrw.toLocaleString()}원 (${srcNote})`,
-        field: 'invoiceAmount'
+        field: 'invoiceAmount',
+        // 사실 카드 — 값은 실 환율 API(또는 시뮬레이션 폴백)에서 결정론적으로 산출.
+        card: {
+          id: 'dutiable-value',
+          title: '과세가격 환산',
+          value: `약 ${dv.totalKrw.toLocaleString()}원`,
+          formula: `${currency} ${amount.toLocaleString()} × ${dv.rate.toLocaleString()}원`,
+          meta: `${itemNote}${srcNote}`,
+          basis: { label: '근거', law: '관세법 제30조' },
+        },
       });
 
       // 6-1. 수입 거래 + 유효 HSK 10자리 → UNI-PASS 관세율 기반 예상 관세액 안내
@@ -252,7 +262,14 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
             docType: 'customs_dec',
             severity: 'info',
             message: `예상 관세액: 과세가격 ${duty.dutiableValueKrw.toLocaleString()}원 × ${duty.rate}% (${duty.rateName}) = 약 ${duty.estimatedDutyKrw.toLocaleString()}원 (${dutySrc})`,
-            field: 'hsCode'
+            field: 'hsCode',
+            card: {
+              id: 'estimated-duty',
+              title: '예상 관세액',
+              value: `약 ${duty.estimatedDutyKrw.toLocaleString()}원`,
+              formula: `과세가격 ${duty.dutiableValueKrw.toLocaleString()}원 × ${duty.rate}% (${duty.rateName})`,
+              meta: dutySrc,
+            },
           });
         }
       }

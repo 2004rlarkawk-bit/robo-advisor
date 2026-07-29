@@ -50,8 +50,11 @@ export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents
     // 여기서 다시 적용해야 hscode-* 이슈에도 관세법 조문이 붙는다 (중복 방지 검사 포함)
     for (const issue of issues) {
       const law = getRelatedLawForIssue(issue.id);
-      if (law && !issue.message.includes('근거:')) {
-        issue.message += ` [근거: ${law.lawName} ${law.article}]`;
+      if (law) {
+        // 구조화 근거(배지 렌더용) — card가 이미 자체 basis를 가지면 덮어쓰지 않는다.
+        if (!issue.basis && !issue.card) issue.basis = { label: '근거', law: `${law.lawName} ${law.article}` };
+        // 문자열 접미사(레거시 내러티브·테스트 호환)
+        if (!issue.message.includes('근거:')) issue.message += ` [근거: ${law.lawName} ${law.article}]`;
       }
     }
 

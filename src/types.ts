@@ -170,6 +170,55 @@ export interface ValidationIssue {
    * severity==='error'일 때만 의미. warning/info는 undefined(생성 차단 안 함).
    */
   overridable?: boolean;
+  /** 짧은 제목(확인 항목 카드용). 없으면 docType 라벨로 대체. */
+  title?: string;
+  /** 근거 법령(구조화) — message에 문자열로 붙이는 대신 배지로 렌더. */
+  basis?: FeedbackBasis;
+  /**
+   * 계산 결과 사실 카드(과세가격 환산·예상 관세액 등).
+   * 존재하면 이 이슈는 "확인 항목"이 아니라 "사실 카드"로 렌더된다.
+   * 금액·법근거는 여기서 결정론적으로 채워짐 — GPT가 나중 껴도 이 숫자는 안 바뀜.
+   */
+  card?: FeedbackFactCard;
+}
+
+// ===== AI 검토 리포트 "틀" — 룰(지금)과 GPT(나중)가 같은 구조를 채운다 =====
+// 3층 분리: 숫자·법근거(결정론) / 구조·어떤 카드·체크(룰) / 산문 설명(룰→GPT 교체).
+// GPT는 리포트 저자가 아니라 빈 산문 슬롯을 채우는 필러 — 금액·법조문은 못 지어낸다.
+
+/** 근거 배지 — 예: { label: '근거', law: '관세법 제30조' } */
+export interface FeedbackBasis {
+  label: string;
+  law?: string;
+}
+
+/** 계산 결과 사실 카드 — 과세가격 환산 등. 값은 실 API/룰에서 결정론적으로 산출. */
+export interface FeedbackFactCard {
+  id: string;
+  title: string;             // 예: 과세가격 환산
+  value: string;             // 예: 약 36,961,000원
+  formula?: string;          // 예: USD 25,000 × 1,478.44원
+  meta?: string;             // 예: 여성 캐시미어 코트 · 관세청 주간환율 · 적용일 2026-07-26
+  basis?: FeedbackBasis;     // 예: 근거 · 관세법 제30조
+}
+
+/** 확인이 필요한 항목 — 오류/보완/참고. */
+export interface FeedbackCheckItem {
+  id: string;
+  title: string;             // 짧은 제목
+  detail: string;            // 설명 문장(근거 접미사 제거된 순수 메시지)
+  severity: ValidationSeverity;
+  docType?: DocumentType;
+  field?: keyof TradeProfile | string;
+  basis?: FeedbackBasis;
+}
+
+/** AI 검토 리포트 전체 틀. facts·checks 구조는 룰이, narrative 산문은 룰→GPT가 채운다. */
+export interface FeedbackReport {
+  summary: { reviewed: number; needsCheck: number };
+  facts: FeedbackFactCard[];
+  checks: FeedbackCheckItem[];
+  narrative?: string;
 }
 
 export interface PartyInfo {

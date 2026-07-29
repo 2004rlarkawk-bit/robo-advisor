@@ -55,6 +55,8 @@ export interface ComplianceResult {
 // FeedbackAgent 출력
 export interface FeedbackResult {
   message: string;
+  /** 구조화 리포트 "틀" — 카드/체크로 렌더. GPT 연동 후에도 이 구조는 유지. */
+  report?: import('../types').FeedbackReport;
 }
 
 // OrchestratorAgent 통합 출력

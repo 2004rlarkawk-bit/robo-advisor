@@ -22,7 +22,8 @@ import {
   Anchor,
   BookOpen,
   Pencil,
-  ArrowRight
+  ArrowRight,
+  Calculator
 } from 'lucide-react';
 import {
   TradeProfile,
@@ -33,7 +34,9 @@ import {
   InvoiceData,
   PackingListData,
   type ShipperItem,
+  type FeedbackReport,
 } from './types';
+import './styles/feedbackReport.css';
 import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
 import { buildPackingListXlsx, mapPackingListToSchema, renderPackingListPreviewHtml } from './services/packingListXlsxService';
 import SettingsPanel from './components/SettingsPanel';
@@ -391,6 +394,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const unresolvedBlockers = (list: ValidationIssue[], ov: Record<string, string>) =>
     list.filter(i => i.severity === 'error' && !(i.overridable && ov[issueKey(i)]));
   const [, setAiFeedback] = useState<string>('');
+  const [feedbackReport, setFeedbackReport] = useState<FeedbackReport | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [htmlTemplates, setHtmlTemplates] = useState<Record<string, string>>({});
   // 상업송장은 고정 docx 템플릿에서 생성한다. 구조 데이터를 보관하고, 생성된 Blob을 캐시해
@@ -605,6 +609,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   isSubmittingTradeRef.current = false;
   hasSubmittedTradeRef.current = false;
   setAiFeedback('');
+  setFeedbackReport(null);
   setMobileWeight('');
   setMobileHSCode('');
   setMobileOrigin('');
@@ -729,6 +734,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       setDocuments(result.documents?.documents || []);
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
+      setFeedbackReport(result.feedback?.report || null);
       setHsCandidates(result.hs?.candidates || []);
 
       // 정책: error(미해결)만 생성 차단. warning은 통과(배지). 사유 override된 error는 우회.
@@ -806,6 +812,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setOverrides((t.generatedDocs?.overrides as Record<string, string>) || {});
     blockedGenRef.current = null;
     setAiFeedback('');
+    setFeedbackReport(null);
     setHsCandidates([]);
     setHasGenerated(true);
     setActiveMenu('dashboard');
@@ -845,6 +852,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setPackingListData(null);
     packingXlsxCacheRef.current = null;
     setAiFeedback('');
+    setFeedbackReport(null);
     setHsCandidates([]);
     setHasGenerated(false);
     setDevTestMode(null);
@@ -881,6 +889,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       packingXlsxCacheRef.current = null;
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
+      setFeedbackReport(result.feedback?.report || null);
       setHsCandidates(result.hs?.candidates || []);
     } catch (error) {
       if (seq === rerunSeqRef.current) {
@@ -2568,12 +2577,37 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </p>
                     </div>
 
+                      {/* 사실 카드 — 과세가격 환산·예상 관세액 등. 값은 실 API/룰에서 결정론적으로 산출. */}
+                      {feedbackReport && feedbackReport.facts.length > 0 && (
+                        <div className="fact-card-list">
+                          {feedbackReport.facts.map((f) => (
+                            <div key={f.id} className="fact-card">
+                              <div className="fact-card-head">
+                                <span className="fact-card-title">
+                                  <Calculator size={15} className="fact-card-icon" />
+                                  {f.title}
+                                </span>
+                                {f.basis && (
+                                  <span className="fact-card-basis">
+                                    {f.basis.label}{f.basis.law ? ` · ${f.basis.law}` : ''}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="fact-card-value">{f.value}</div>
+                              {f.formula && <div className="fact-card-formula">{f.formula}</div>}
+                              {f.meta && <div className="fact-card-meta">{f.meta}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="mobile-fix-list">
                         {(() => {
                           // 심각도별로 묶어 표시 — 오류(제출 차단) → 보완 권장 → 참고 안내 순.
                           // 성격이 다른 이슈를 문서 순서로 섞지 않고 그룹 헤더로 구분한다.
                           const order: Record<string, number> = { error: 0, warning: 1, info: 2 };
-                          const sorted = [...issues].sort(
+                          // card를 가진 이슈(과세가격 환산 등)는 위 사실 카드로 렌더 → 목록에선 제외(중복 방지).
+                          const sorted = [...issues].filter((i) => !i.card).sort(
                             (a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9)
                           );
                           const sevMeta: Record<string, { label: string; hint: string; cls: string }> = {

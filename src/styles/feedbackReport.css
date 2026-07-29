@@ -1,0 +1,87 @@
+/*
+ * AI 검토 리포트 "틀" — 사실 카드(과세가격 환산 등) 스타일.
+ * 룰(지금)과 GPT(나중)가 같은 구조를 채우고, 렌더는 항상 이 카드 틀로 통일.
+ * index.css(팀원 작업)를 건드리지 않기 위해 별도 파일로 분리.
+ */
+
+.fact-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 14px;
+}
+
+.fact-card {
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: var(--surface, #fff);
+}
+
+.fact-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.fact-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-strong, #1e293b);
+}
+
+.fact-card-icon {
+  color: #3b6fe0;
+  flex-shrink: 0;
+}
+
+.fact-card-basis {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3b6fe0;
+  background: #eef3ff;
+  border: 1px solid #dbe4ff;
+  border-radius: 999px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.fact-card-value {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text-strong, #111827);
+  letter-spacing: -0.01em;
+}
+
+.fact-card-formula {
+  margin-top: 6px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-light, #64748b);
+}
+
+.fact-card-meta {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-muted, #94a3b8);
+}
+
+@media (prefers-color-scheme: dark) {
+  .fact-card {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .fact-card-basis {
+    color: #a9c2ff;
+    background: rgba(59, 111, 224, 0.14);
+    border-color: rgba(59, 111, 224, 0.35);
+  }
+  .fact-card-icon { color: #8fb0ff; }
+}
