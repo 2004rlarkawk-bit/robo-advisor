@@ -10,10 +10,9 @@ import {
   PhoneCall, 
   Bell, 
   HelpCircle,
-  RotateCcw, 
-  FileSignature, 
-  AlertTriangle, 
-  CheckCircle2, 
+  RotateCcw,
+  FileSignature,
+  CheckCircle2,
   Terminal,
   Download,
   Eye,
@@ -21,7 +20,9 @@ import {
   PanelLeftOpen,
   UserRound,
   Anchor,
-  BookOpen
+  BookOpen,
+  Pencil,
+  ArrowRight
 } from 'lucide-react';
 import {
   TradeProfile,
@@ -388,7 +389,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   // 미해결 차단 이슈 = error 중 (overridable+사유입력)으로 우회되지 않은 것
   const unresolvedBlockers = (list: ValidationIssue[], ov: Record<string, string>) =>
     list.filter(i => i.severity === 'error' && !(i.overridable && ov[issueKey(i)]));
-  const [aiFeedback, setAiFeedback] = useState<string>('');
+  const [, setAiFeedback] = useState<string>('');
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [htmlTemplates, setHtmlTemplates] = useState<Record<string, string>>({});
   // 상업송장은 고정 docx 템플릿에서 생성한다. 구조 데이터를 보관하고, 생성된 Blob을 캐시해
@@ -449,6 +450,56 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const [mobileHSCode, setMobileHSCode] = useState('');
   const [mobileOrigin, setMobileOrigin] = useState('');
   const [hsCandidates, setHsCandidates] = useState<{ code: string; description: string; confidence: string; reasoning: string; }[]>([]);
+
+  // "입력 화면에서 수정" — 이슈가 가리키는 입력 필드로 이동해 강조 + 무엇을 고칠지 안내
+  const [highlightField, setHighlightField] = useState<string | null>(null);
+  const [highlightHint, setHighlightHint] = useState<string>('');
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 이슈 → 입력 폼 data-field 키. 전용 필드명이 다른 경우만 보정.
+  const issueToFieldKey = (issue: ValidationIssue): string => {
+    const f = String(issue.field);
+    if (f === 'invoiceAmount') return 'totalAmount';
+    return f;
+  };
+
+  const clearFieldHighlight = () => {
+    if (highlightTimerRef.current) { clearTimeout(highlightTimerRef.current); highlightTimerRef.current = null; }
+    document.querySelectorAll('.field-focus').forEach((e) => e.classList.remove('field-focus'));
+    setHighlightField(null);
+    setHighlightHint('');
+  };
+
+  const goToFieldFix = (issue: ValidationIssue) => {
+    setHighlightHint(issue.message);
+    setHighlightField(issueToFieldKey(issue));
+    setHasGenerated(false);
+  };
+
+  // 입력 화면으로 전환되면 해당 필드로 스크롤 + 강조 표시. (5초 후 자동 해제)
+  useEffect(() => {
+    if (hasGenerated || !highlightField) return;
+    const raf = requestAnimationFrame(() => {
+      document.querySelectorAll('.field-focus').forEach((e) => e.classList.remove('field-focus'));
+      const el = document.querySelector<HTMLElement>(`[data-field="${highlightField}"]`);
+      if (!el) return;
+      // 접힌 상세(details) 안이면 펼쳐서 보이게 한다
+      let p: HTMLElement | null = el.parentElement;
+      while (p) { if (p.tagName === 'DETAILS') (p as HTMLDetailsElement).open = true; p = p.parentElement; }
+      el.classList.add('field-focus');
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const input = el.querySelector<HTMLElement>('input, select, textarea');
+      if (input) setTimeout(() => input.focus({ preventScroll: true }), 320);
+    });
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => {
+      document.querySelectorAll('.field-focus').forEach((e) => e.classList.remove('field-focus'));
+      setHighlightField(null);
+      setHighlightHint('');
+    }, 5000);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightField, hasGenerated]);
 
   const consoleEndRef = useRef<HTMLDivElement>(null);
   const currentTradeIdRef = useRef<string | null>(null);
@@ -1069,19 +1120,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
   // Calculate statistics — info 수준 이슈는 안내일 뿐 제출을 막지 않음
   const completedDocsCount = documents.filter(d => d.status === 'completed').length;
-  // 차단(제출/생성 게이트) = 미해결 error만. 표시용 보완필요 = error+warning 총계.
+  // 차단(제출/생성 게이트) = 미해결 error만.
   const blockingIssuesCount = unresolvedBlockers(issues, overrides).length;
-  const reviewDocsCount = issues.filter(i => i.severity !== 'info').length;
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
-
-  // AI 피드백에서 이슈 상세 라인(📦🔢🌍⚓⚠️ 접두)은 아래 보완 카드와 중복되므로
-  // 요약 문단만 표시한다. 전부 이슈 라인이면(필터 결과가 비면) 원문 유지.
-  const feedbackParagraphs = (() => {
-    const lines = aiFeedback.split('\n').map(l => l.trim()).filter(Boolean);
-    const summary = lines.filter(l => !/^(📦|🔢|🌍|⚓|⚠️)/.test(l));
-    return summary.length > 0 ? summary : lines;
-  })();
 
   const draftSaveLabel = (() => {
     if (draftSaveStatus === 'local') return '로컬에 저장됨';
@@ -1554,7 +1596,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </select>
                     </div>
 
-                    <div className="form-group" data-docs="invoice packing_list co">
+                    <div className="form-group" data-docs="invoice packing_list co" data-field="itemName">
                       <label className="form-label">품목명</label>
                       <input
                         type="text"
@@ -1576,7 +1618,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       />
                     </div>
 
-                    <div className="form-group" data-docs="invoice bl">
+                    <div className="form-group" data-docs="invoice bl" data-field="loadPort">
                       <label className="form-label">선적항</label>
                       <select
                         className="form-input"
@@ -1590,7 +1632,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </select>
                     </div>
 
-                    <div className="form-group" data-docs="invoice bl">
+                    <div className="form-group" data-docs="invoice bl" data-field="dischargePort">
                       <label className="form-label">도착항</label>
                       <select
                         className="form-input"
@@ -1604,7 +1646,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </select>
                     </div>
 
-                    <div className="form-group" data-docs="invoice bl insurance">
+                    <div className="form-group" data-docs="invoice bl insurance" data-field="incoterms">
                       <label className="form-label">거래조건 (Incoterms)</label>
                       <select
                         className="form-input"
@@ -1619,7 +1661,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </select>
                     </div>
 
-                    <div className="form-group" data-docs="invoice packing_list co">
+                    <div className="form-group" data-docs="invoice packing_list co" data-field="quantity">
                       <label className="form-label">화물 수량</label>
                       <div className="input-suffix">
                         <input
@@ -1633,7 +1675,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </div>
                     </div>
 
-                    <div className="form-group" data-docs="packing_list">
+                    <div className="form-group" data-docs="packing_list" data-field="weight">
                       <label className="form-label">중량(kg)</label>
                       <div className="input-suffix">
                         <input
@@ -1647,7 +1689,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </div>
                     </div>
 
-                    <div className="form-group" data-docs="bl">
+                    <div className="form-group" data-docs="bl" data-field="departureDate">
                       <label className="form-label">출발일</label>
                       <input
                         type="date"
@@ -1657,7 +1699,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       />
                     </div>
 
-                    <div className="form-group" data-docs="bl">
+                    <div className="form-group" data-docs="bl" data-field="arrivalDate">
                       <label className="form-label">도착예정일</label>
                       <input
                         type="date"
@@ -1667,7 +1709,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       />
                     </div>
 
-                    <div className="form-group" data-docs="invoice packing_list co">
+                    <div className="form-group" data-docs="invoice packing_list co" data-field="companyName">
                       <label className="form-label">업체명</label>
                       <input
                         type="text"
@@ -1678,7 +1720,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       />
                     </div>
 
-                    <div className="form-group" data-docs="invoice packing_list co">
+                    <div className="form-group" data-docs="invoice packing_list co" data-field="contact">
                       <label className="form-label">담당자 연락처</label>
                       <input
                         type="text"
@@ -1722,7 +1764,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         />
                       </div>
 
-                      <div className="form-group" data-docs="invoice">
+                      <div className="form-group" data-docs="invoice" data-field="invoiceDate">
                         <label className="form-label">송장 작성일</label>
                         <input
                           type="date"
@@ -1776,7 +1818,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         </select>
                       </div>
 
-                      <div className="form-group" data-docs="invoice">
+                      <div className="form-group" data-docs="invoice" data-field="unitPrice">
                         <label className="form-label">단가</label>
                         <input
                           type="number"
@@ -1787,7 +1829,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         />
                       </div>
 
-                      <div className="form-group" data-docs="invoice">
+                      <div className="form-group" data-docs="invoice" data-field="totalAmount">
                         <label className="form-label">총 금액</label>
                         <input
                           type="number"
@@ -1820,7 +1862,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         />
                       </div>
 
-                      <div className="form-group" data-docs="invoice customs_dec">
+                      <div className="form-group" data-docs="invoice customs_dec" data-field="currency">
                         <label className="form-label">결제 통화</label>
                         <select
                           className="form-input"
@@ -2410,21 +2452,18 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       ? <> — 아래 <b>{blockingIssuesCount}건</b>만 처리하면 제출할 수 있어요.</>
                       : <> — 제출 준비가 끝났어요.</>}
                   </div>
-                  {readiness.nextStepLabel && (
-                    <p className="rv-hero-next">다음 단계 · {readiness.nextStepLabel}</p>
-                  )}
                 </div>
 
                 {/* 3. 서류 현황 — 한 줄 = 한 서류 (상태 + 완료 시 보기·다운로드) */}
                 <div className="rv-panel">
                   <div className="rv-panel-head">서류 현황 · {documents.length}건</div>
                   {documents.map((doc) => {
-                    const abbr = doc.id === 'invoice' ? 'INV'
-                      : doc.id === 'packing_list' ? 'PKL'
-                      : doc.id === 'bl' ? 'B/L'
+                    const abbr = doc.id === 'invoice' ? '송장'
+                      : doc.id === 'packing_list' ? '포장'
+                      : doc.id === 'bl' ? '선하'
                       : doc.id === 'customs_dec' ? '신고'
-                      : doc.id === 'co' ? 'C/O'
-                      : doc.id === 'insurance' ? '보험' : 'DOC';
+                      : doc.id === 'co' ? '원산'
+                      : doc.id === 'insurance' ? '보험' : '서류';
                     const sbClass = doc.status === 'completed' ? 'ok'
                       : doc.status === 'review_required' ? 'rev' : 'na';
                     const isCompleted = doc.status === 'completed';
@@ -2434,7 +2473,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         <span className="rv-nm">{doc.name}</span>
                         <span className={`rv-sb rv-sb-${sbClass}`}>{doc.statusText}</span>
                         <div className="rv-act">
-                          {isCompleted && hasDoc(doc.id) && (
+                          {hasDoc(doc.id) ? (
                             <>
                               <button className="rv-view" onClick={() => setPreviewDocId(doc.id)}>
                                 <Eye size={15} /> 보기
@@ -2447,46 +2486,36 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                 <Download size={17} />
                               </button>
                             </>
-                          )}
+                          ) : isCompleted ? (
+                            // 실물이 외부(선사·세관)에서 발급되어 앱에서 내려받을 파일이 없는 서류(B/L·통관신고)
+                            <span className="rv-act-note">정보 확인 완료</span>
+                          ) : null}
                         </div>
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Section 3: AI 검토 및 보완 워크스페이스 — 스크롤 하단 전체 폭 */}
+                {/* Section 4: 해결 워크스페이스 — 문제 문구는 크게, 액션은 컴팩트하게 */}
                 <div className="result-column result-review-full">
-                    <div className="rv-fixes-head">
-                      <h3 className="rv-fixes-title">{blockingIssuesCount > 0 ? '해결하면 제출할 수 있어요' : '검토 결과'}</h3>
-                      {blockingIssuesCount > 0 && (
-                        <p className="rv-fixes-sub">아래 항목을 처리하면 준비도가 100%에 가까워집니다.</p>
-                      )}
-                    </div>
-
-                    <div className="review-summary-line">
-                      <span className="review-summary-item">
-                        <CheckCircle2 size={14} className="text-success" />
-                        검토 완료 <strong>{completedDocsCount}</strong>건
-                      </span>
-                      <span className="review-summary-item">
-                        <AlertTriangle size={14} className="text-warning" />
-                        보완 필요 <strong>{reviewDocsCount}</strong>건
-                      </span>
-                    </div>
-
-                    <div className="ai-report-box">
-                      <div className="ai-header">
-                        <CheckCircle2 size={16} className="text-success" />
-                        AI 분석 결과
+                  {issues.length === 0 ? (
+                    <div className="rv-done">
+                      <span className="rv-done-ic"><CheckCircle2 size={26} /></span>
+                      <div>
+                        <div className="rv-done-title">제출 준비 완료</div>
+                        <p className="rv-done-sub">필요한 모든 서류가 검증을 통과했어요. 아래에서 바로 전송할 수 있습니다.</p>
                       </div>
-
-                      {aiFeedback && (
-                        <div className="ai-feedback-narrative">
-                          {feedbackParagraphs.map((line, idx) => (
-                            <p key={idx}>{line}</p>
-                          ))}
-                        </div>
-                      )}
+                    </div>
+                  ) : (
+                    <>
+                    <div className="rv-fixes-head">
+                      <h3 className="rv-fixes-title">{blockingIssuesCount > 0 ? '해결하면 제출할 수 있어요' : '검토 참고 사항'}</h3>
+                      <p className="rv-fixes-sub">
+                        {blockingIssuesCount > 0
+                          ? '문제 문구를 확인하고 해당 입력을 수정하면 준비도가 100%에 가까워집니다.'
+                          : '제출을 막지는 않지만, 아래 내용을 확인하면 서류가 더 정확해져요.'}
+                      </p>
+                    </div>
 
                       <div className="mobile-fix-list">
                         {(() => {
@@ -2516,26 +2545,29 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                     {meta.hint && <span className="sev-section-hint">{meta.hint}</span>}
                                   </div>
                                 )}
-                          <div className="mobile-fix-card">
-                            <div className="mobile-fix-header">
-                              <div className="mobile-fix-info">
-                                <span className="mobile-fix-name">
+                          <div className={`mobile-fix-card sev-${issue.severity}`}>
+                            <div className="mfc-head">
+                              <span className="mfc-dot" />
+                              <div className="mfc-text">
+                                <div className="mfc-headline">{issue.message}</div>
+                                <div className="mfc-sub">
                                   {issue.docType === 'invoice' ? '상업송장' :
                                    issue.docType === 'packing_list' ? '패킹리스트' :
                                    issue.docType === 'bl' ? '선하증권(B/L)' :
                                    issue.docType === 'customs_dec' ? '통관신고서' :
                                    issue.docType === 'co' ? '원산지증명서' :
                                    issue.docType === 'insurance' ? '적하보험증권' : '기타 서류'}
-                                </span>
-                                <span className="mobile-fix-msg">{issue.message}</span>
+                                </div>
                               </div>
-                              <span className={`mobile-fix-badge ${
-                                issue.severity === 'error' ? 'status-error' :
-                                issue.severity === 'info' ? 'status-info' : 'status-review-required'
-                              }`}>
-                                {issue.severity === 'error' ? '오류' :
-                                 issue.severity === 'info' ? '안내' : '보완 필요'}
-                              </span>
+                              {issue.severity !== 'info' &&
+                                issue.field !== 'weight' &&
+                                issue.field !== 'hsCode' &&
+                                issue.docType !== 'co' &&
+                                issue.id !== 'insurance-missing' && (
+                                <button className="mfc-fix-btn" onClick={() => goToFieldFix(issue)}>
+                                  입력 수정 <ArrowRight size={14} />
+                                </button>
+                              )}
                             </div>
 
                             {/* 이슈 유형별 즉시 보완 입력 */}
@@ -2650,33 +2682,15 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               )
                             )}
 
-                            {/* 전용 보완 입력이 없는 이슈는 입력 화면으로 돌아가 수정 */}
-                            {issue.severity !== 'info' &&
-                              issue.field !== 'weight' &&
-                              issue.field !== 'hsCode' &&
-                              issue.docType !== 'co' &&
-                              issue.id !== 'insurance-missing' && (
-                              <button className="mobile-btn mobile-btn-secondary" onClick={() => setHasGenerated(false)}>
-                                입력 화면에서 수정
-                              </button>
-                            )}
                           </div>
                               </Fragment>
                             );
                           });
                         })()}
 
-                        {issues.length === 0 && (
-                          <div className="warning-item info">
-                            <span className="warning-icon">✅</span>
-                            <div className="warning-body">
-                              <span className="warning-title">문서 검증 통과</span>
-                              <span className="warning-text">수출입 통관 및 해상 운송에 필요한 모든 서류 규격이 완벽히 충족되었습니다.</span>
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    </div>
+                    </>
+                  )}
 
                     <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
                       <button
@@ -2698,6 +2712,18 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
           </div>
         </main>
       </div>
+
+      {/* 입력 화면 수정 안내 배너 — "입력 수정" 클릭 시 해당 필드로 이동하며 무엇을 고칠지 표시 */}
+      {highlightField && !hasGenerated && (
+        <div className="field-fix-banner" role="status">
+          <span className="ffb-ic"><Pencil size={16} /></span>
+          <div className="ffb-text">
+            <b>강조된 항목을 수정하세요</b>
+            <span>{highlightHint}</span>
+          </div>
+          <button className="ffb-close" onClick={clearFieldHighlight} aria-label="안내 닫기">✕</button>
+        </div>
+      )}
 
       {/* 4. Agent Execution Terminal Terminal Overlay */}
       {showConsole && (
