@@ -57,6 +57,50 @@ export async function removeTradeAttachment(input: {
   if (error) throw error;
 }
 
+export async function loadTradeAttachmentFile(
+  attachment: Pick<TradeAttachment, 'storageBucket' | 'storagePath' | 'fileName' | 'mimeType'>,
+): Promise<File> {
+  const { data, error } = await supabase.storage
+    .from(attachment.storageBucket)
+    .download(attachment.storagePath);
+  if (error) throw error;
+  return new File([data], attachment.fileName, {
+    type: attachment.mimeType || data.type || 'application/octet-stream',
+  });
+}
+
+export async function moveTradeAttachmentsToScope(input: {
+  userId: string;
+  scopeId: string;
+  attachments: TradeAttachment[];
+}): Promise<TradeAttachment[]> {
+  const moved: TradeAttachment[] = [];
+  for (const attachment of input.attachments) {
+    const segments = attachment.storagePath.split('/');
+    if (segments[0] !== input.userId) {
+      throw new Error('첨부파일 Storage 경로의 사용자 범위가 일치하지 않습니다.');
+    }
+    if (segments[1] === input.scopeId) {
+      moved.push(attachment);
+      continue;
+    }
+    const fileSegment = segments[segments.length - 1];
+    if (!fileSegment) throw new Error('첨부파일 Storage 경로가 올바르지 않습니다.');
+    const nextPath = [
+      input.userId,
+      input.scopeId,
+      attachment.documentType,
+      fileSegment,
+    ].join('/');
+    const { error } = await supabase.storage
+      .from(attachment.storageBucket)
+      .move(attachment.storagePath, nextPath);
+    if (error) throw error;
+    moved.push({ ...attachment, storagePath: nextPath });
+  }
+  return moved;
+}
+
 export async function removeTradeAttachments(
   attachments: TradeAttachment[],
 ): Promise<void> {

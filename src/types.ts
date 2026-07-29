@@ -435,6 +435,7 @@ export interface SavedTrade {
   profile: TradeProfile;
   tradeDirection?: TradeType;
   tradeRole?: TradeRole;
+  attachments?: import('./types/tradeFormData').TradeAttachment[];
   arrivalNotice?: object | null;
   analysisResult?: object;
   riskSummary?: unknown[];

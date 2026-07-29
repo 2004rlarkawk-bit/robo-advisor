@@ -115,6 +115,7 @@ describe('useTradeDraft 프로필 비동기 초기화', () => {
       'user-1',
       expect.objectContaining({ companyName: 'Saved Draft Company', signedBy: 'Saved Signer' }),
       'shipper',
+      { attachments: [], currentStep: 1, tradeId: null },
     );
   });
 });

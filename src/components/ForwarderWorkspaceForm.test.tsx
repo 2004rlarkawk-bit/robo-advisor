@@ -32,6 +32,10 @@ function renderForm(overrides: Partial<ForwarderFormState> = {}) {
         onSave={vi.fn()}
         onSubmit={vi.fn()}
         onReset={vi.fn()}
+        userId="user-1"
+        attachmentScopeId="draft-export-forwarder"
+        attachments={[]}
+        onAttachmentsChange={vi.fn()}
       />,
     );
   });
@@ -76,12 +80,11 @@ describe('포워더용 선적 및 부킹 입력 폼', () => {
     expect(rendered.container.textContent).toContain('취소된 부킹입니다. 입력값은 삭제되지 않습니다.');
   });
 
-  it('업로드 기능 대신 비활성 안내만 표시한다', () => {
+  it('수출 포워더 첨부 영역과 허용 파일 input을 표시한다', () => {
     const rendered = renderForm();
-    const disabledUploadButtons = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('button'))
-      .filter((button) => button.textContent === '파일 첨부 기능 준비 중');
-    expect(disabledUploadButtons).toHaveLength(4);
-    expect(disabledUploadButtons.every((button) => button.disabled)).toBe(true);
-    expect(rendered.container.querySelector('input[type="file"]')).toBeNull();
+    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(rendered.container.textContent).toContain('파일 첨부');
+    expect(rendered.container.textContent).toContain('첨부된 파일이 없습니다.');
+    expect(input?.accept).toBe('.pdf,.png,.jpg,.jpeg');
   });
 });

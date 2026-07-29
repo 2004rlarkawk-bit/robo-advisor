@@ -14,6 +14,10 @@ import {
   tradeProfileToFormData,
 } from './tradeDataMapper';
 import { removeTradeAttachments } from './tradeAttachmentStorageService';
+import {
+  filterDocumentManagerTrades,
+  filterTradeManagerTrades,
+} from './tradeListPolicy';
 
 const STORAGE_KEY = 'portai_saved_trades';
 const SETTINGS_KEY = 'portai_settings';
@@ -70,6 +74,7 @@ function mapTradeRow(row: TradeRow): SavedTrade {
     id: row.id,
     tradeDirection: row.direction,
     tradeRole: row.role,
+    attachments: Array.isArray(formData.attachments) ? formData.attachments : [],
     arrivalNotice: findArrivalNotice(formData),
     profile: tradeFormDataToProfile(formData),
     documents: row.direction === 'export'
@@ -128,6 +133,7 @@ export interface GeneratedTradeData {
   profile: TradeProfile;
   tradeDirection?: TradeType;
   tradeRole?: TradeRole;
+  attachments?: TradeAttachment[];
   documents: DocumentStatus[];
   issues: ValidationIssue[];
   generatedDocs?: GeneratedDocuments;
@@ -218,7 +224,7 @@ function generatedTradePayload(data: GeneratedTradeData) {
     direction,
     role,
     schema_version: 3,
-    form_data: tradeProfileToFormData(data.profile, role),
+    form_data: tradeProfileToFormData(data.profile, role, data.attachments ?? []),
     workflow_data: {},
     documents: data.documents,
     document_data: generatedDocumentsToData(data.generatedDocs),
@@ -290,6 +296,7 @@ export async function markTradeAsSubmitted(
     documents: DocumentStatus[];
     issues: ValidationIssue[];
     generatedDocs?: GeneratedDocuments;
+    attachments?: TradeAttachment[];
   }
 ): Promise<SavedTrade> {
   const userId = await getRequiredUserId();
@@ -298,7 +305,11 @@ export async function markTradeAsSubmitted(
   const { data, error } = await supabase
     .from('trades')
     .update({
-      form_data: tradeProfileToFormData(latestData.profile, latestData.tradeRole ?? 'shipper'),
+      form_data: tradeProfileToFormData(
+        latestData.profile,
+        latestData.tradeRole ?? 'shipper',
+        latestData.attachments ?? [],
+      ),
       documents: latestData.documents,
       document_data: generatedDocumentsToData(latestData.generatedDocs),
       issues: latestData.issues,
@@ -338,6 +349,31 @@ export async function fetchSavedTrades(status?: PersistedTradeStatus | Persisted
   return (data || []).map(mapTradeRow);
 }
 
+/** 거래관리는 최종 제출 전 generated/in_progress 거래만 최신 수정순으로 조회합니다. */
+export async function fetchTradeManagerTrades(): Promise<SavedTrade[]> {
+  const { data, error } = await supabase
+    .from('trades')
+    .select('*')
+    .in('status', ['generated', 'in_progress'])
+    .order('updated_at', { ascending: false });
+
+  if (error) throw error;
+  return filterTradeManagerTrades((data || []).map(mapTradeRow));
+}
+
+/** 문서관리는 submitted_at이 존재하는 최종 제출 거래만 조회합니다. */
+export async function fetchSubmittedTrades(): Promise<SavedTrade[]> {
+  const { data, error } = await supabase
+    .from('trades')
+    .select('*')
+    .eq('status', 'submitted')
+    .not('submitted_at', 'is', null)
+    .order('submitted_at', { ascending: false });
+
+  if (error) throw error;
+  return filterDocumentManagerTrades((data || []).map(mapTradeRow));
+}
+
 // [EDIT: Supabase Auth] RLS 정책에 따라 본인 trade만 삭제됩니다.
 export async function deleteSavedTrade(id: string): Promise<void> {
   const userId = await getRequiredUserId();
@@ -368,7 +404,7 @@ export async function deleteSavedTrade(id: string): Promise<void> {
 // [EDIT: Supabase Auth] 로그인한 사용자에게 보이는 모든 trade를 삭제합니다.
 export async function clearSavedTrades(): Promise<void> {
   // [EDIT: Document Management] 문서관리 화면에 보이는 최종 전송 거래만 전체 삭제 대상으로 삼습니다.
-  const trades = await fetchSavedTrades(['submitted', 'in_progress']);
+  const trades = await fetchSubmittedTrades();
   if (trades.length === 0) return;
 
   for (const trade of trades) {

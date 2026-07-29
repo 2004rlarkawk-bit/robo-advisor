@@ -500,6 +500,9 @@ body {
 .shipper-workspace-form .form-section > .form-message,
 .forwarder-workspace-form .form-section > .form-message { margin: 0 18px 16px; }
 .forwarder-workspace-form .form-label b { color: var(--error-color); }
+.forwarder-attachment-uploader { display: grid; gap: 12px; padding: 0 18px 18px; }
+.forwarder-attachment-picker { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.forwarder-attachment-picker .form-group { flex: 1 1 280px; margin: 0; }
 .shipper-readonly-value { min-height: 42px; background: #f8fafc; color: var(--text-light); }
 .shipper-checkbox-row { display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 0 18px 16px; color: var(--text-dark); font-size: 13px; }
 .shipper-checkbox-row label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }

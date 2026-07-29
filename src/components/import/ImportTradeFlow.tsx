@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, Eye, RefreshCw, Search } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
@@ -18,8 +18,18 @@ import {
 } from '../../services/importDeclarationService';
 import type { ImportDeclarationDownloadFormat } from '../../services/importDeclarationService';
 import { lookupImportCargo } from '../../services/cargoProgressService';
-import { hasValidStoragePath } from '../../services/tradeDataMapper';
 import {
+  arrivalNoticeToAttachment,
+  findArrivalNotice,
+  hasValidStoragePath,
+  importDocumentToAttachment,
+  importSnapshotToPersistence,
+  tradeAttachmentToImportDocument,
+  tradeProfileToFormData,
+} from '../../services/tradeDataMapper';
+import {
+  loadTradeAttachmentFile,
+  moveTradeAttachmentsToScope,
   removeTradeAttachment,
   uploadTradeAttachment,
 } from '../../services/tradeAttachmentStorageService';
@@ -35,16 +45,20 @@ import type {
   ImportTradeSnapshot,
   UserTradeRole,
 } from '../../types/importTrade';
-import type { PersistedTradeStatus } from '../../types';
+import type { PersistedTradeStatus, SavedTrade, TradeProfile } from '../../types';
+import type { TradeFormDataV3 } from '../../types/tradeFormData';
+import type { TradeDraftRow } from '../../services/draftCacheService';
+import { useFormDataDraft } from '../../hooks/useFormDataDraft';
 
 interface Props {
   role: UserTradeRole;
   userId: string;
   importerCompanyName?: string;
   onGenerate: (snapshot: ImportTradeSnapshot) => Promise<string>;
-  onComplete: (snapshot: ImportTradeSnapshot) => Promise<void>;
+  onComplete: (snapshot: ImportTradeSnapshot) => Promise<SavedTrade>;
+  onWorkspaceStateChange?: (state: { currentStep: number; tradeId: string | null }) => void;
 }
-interface CachedState {
+export interface CachedState {
   step: number;
   documents: ImportDocumentMeta[];
   analysis: ImportAnalysisResult | null;
@@ -105,7 +119,89 @@ function loadCached(key: string): CachedState {
   }
 }
 
-export default function ImportTradeFlow({ role, userId, importerCompanyName = '', onGenerate, onComplete }: Props) {
+function emptyImportProfile(): TradeProfile {
+  return {
+    tradeType: 'import',
+    itemName: '',
+    hsCode: '',
+    loadPort: '',
+    dischargePort: '',
+    incoterms: '',
+    quantity: '',
+    weight: '',
+    departureDate: '',
+    arrivalDate: '',
+    companyName: '',
+    contact: '',
+  };
+}
+
+export function importDraftFormData(
+  state: CachedState,
+  role: UserTradeRole,
+): TradeFormDataV3 {
+  if (state.analysis) {
+    const selectedHS = state.suggestions.find((item) =>
+      item.code === state.selectedCode
+      || state.analysis?.extracted.items.some((entry) => entry.confirmedHSCode === item.code));
+    return importSnapshotToPersistence({
+      tradeId: state.tradeId,
+      direction: 'import',
+      role,
+      documents: state.documents,
+      arrivalNotice: state.arrivalNotice ?? undefined,
+      analysis: state.analysis,
+      selectedHSCode: selectedHS,
+      duty: state.duty ?? undefined,
+      risks: state.risks,
+      cargo: state.cargo ?? undefined,
+      generatedAt: state.generatedAt ?? '',
+    }).formData;
+  }
+
+  const attachments = state.documents
+    .map(importDocumentToAttachment)
+    .filter((attachment): attachment is NonNullable<typeof attachment> => attachment !== null);
+  const arrivalNotice = arrivalNoticeToAttachment(state.arrivalNotice);
+  if (arrivalNotice) attachments.push(arrivalNotice);
+  return tradeProfileToFormData(emptyImportProfile(), role, attachments);
+}
+
+export function hydrateImportDraft(
+  current: CachedState,
+  draft: TradeDraftRow | null,
+): CachedState {
+  if (!draft?.form_data) return current;
+  const persistedDocuments = draft.form_data.attachments
+    .map(tradeAttachmentToImportDocument)
+    .filter((document): document is ImportDocumentMeta => document !== null);
+  const persistedById = new Map(persistedDocuments.map((document) => [document.id, document]));
+  const documents = current.documents.map((document) => {
+    const persisted = persistedById.get(document.id);
+    if (!persisted) return document;
+    persistedById.delete(document.id);
+    return { ...persisted, ...document, storageBucket: persisted.storageBucket, storagePath: persisted.storagePath, uploadedAt: persisted.uploadedAt };
+  });
+  documents.push(...persistedById.values());
+  return {
+    ...current,
+    step: draft.current_step ?? current.step,
+    tradeId: draft.trade_id ?? current.tradeId,
+    documents,
+    arrivalNotice: current.arrivalNotice && hasValidStoragePath(current.arrivalNotice)
+      ? current.arrivalNotice
+      : findArrivalNotice(draft.form_data),
+  };
+}
+
+export default function ImportTradeFlow({
+  role,
+  userId,
+  importerCompanyName = '',
+  onGenerate,
+  onComplete,
+  onWorkspaceStateChange,
+}: Props) {
   const cacheKey = `portai_import_draft:${userId}:${role}`;
   const [state, setState] = useState<CachedState>(() => loadCached(cacheKey));
   const [sourceFiles, setSourceFiles] = useState<Record<string, File>>({});
@@ -117,6 +213,31 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
     const firstCode = state.analysis?.extracted.items.find((item) => item.confirmedHSCode)?.confirmedHSCode;
     return state.suggestions.find((item) => item.code === firstCode || item.code === state.selectedCode);
   }, [state.analysis, state.selectedCode, state.suggestions]);
+  const draftFormData = useMemo(() => importDraftFormData(state, role), [role, state]);
+  const handleDraftRestore = useCallback((draft: TradeDraftRow | null) => {
+    setState((current) => hydrateImportDraft(current, draft));
+  }, []);
+  const {
+    isHydrated: isDraftHydrated,
+    saveStatus: draftSaveStatus,
+    completeDraft,
+  } = useFormDataDraft({
+    userId,
+    enabled: Boolean(userId),
+    direction: 'import',
+    role,
+    formData: draftFormData,
+    currentStep: state.step,
+    tradeId: state.tradeId ?? null,
+    onRestore: handleDraftRestore,
+  });
+
+  useEffect(() => {
+    onWorkspaceStateChange?.({
+      currentStep: state.step,
+      tradeId: state.tradeId ?? null,
+    });
+  }, [onWorkspaceStateChange, state.step, state.tradeId]);
 
   const persistImportDocuments = async (): Promise<ImportDocumentMeta[]> => {
     const missingFiles = state.documents.filter((document) =>
@@ -125,7 +246,7 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
       throw new Error('새로고침 후 파일 내용은 복원할 수 없습니다. Storage에 저장되지 않은 문서를 다시 첨부해 주세요.');
     }
 
-    const scopeId = state.tradeId ?? `draft-${crypto.randomUUID()}`;
+    const scopeId = state.tradeId ?? `draft-import-${role}`;
     const persisted = [...state.documents];
     for (let index = 0; index < persisted.length; index += 1) {
       const document = persisted[index];
@@ -168,15 +289,28 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
         return setMessage(`필수 기본서류를 첨부해 주세요: ${missing.map((type) => labels[type]).join(', ')}`);
       }
     }
-    const missingFiles = state.documents.filter((document) => !sourceFiles[document.id]);
-    if (missingFiles.length) return setMessage(`원본 파일을 다시 선택해 주세요: ${missingFiles.map((document) => document.name).join(', ')}`);
     setBusy(true);
     setState((current) => ({
       ...current,
       documents: current.documents.map((document) => ({ ...document, status: 'analyzing', analysisStatus: 'analyzing', errorMessage: undefined })),
     }));
     try {
-      const result = await analyzeImportDocuments(state.documents, sourceFiles);
+      const resolvedFiles = { ...sourceFiles };
+      for (const document of state.documents) {
+        if (resolvedFiles[document.id] || !hasValidStoragePath(document)) continue;
+        resolvedFiles[document.id] = await loadTradeAttachmentFile({
+          storageBucket: document.storageBucket || 'trade-documents',
+          storagePath: document.storagePath!,
+          fileName: document.name,
+          mimeType: document.mimeType,
+        });
+      }
+      const missingFiles = state.documents.filter((document) => !resolvedFiles[document.id]);
+      if (missingFiles.length) {
+        throw new Error(`Storage에서 원본 파일을 복원하지 못했습니다: ${missingFiles.map((document) => document.name).join(', ')}`);
+      }
+      setSourceFiles(resolvedFiles);
+      const result = await analyzeImportDocuments(state.documents, resolvedFiles);
       setState((current) => {
         const documents = current.documents.map((document) => {
           const classification = result.classifications.find((item) => item.id === document.id);
@@ -258,8 +392,8 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
     const risks = assessImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName);
     const generatedAt = new Date().toISOString();
     try {
-      const persistedDocuments = await persistImportDocuments();
-      const tradeId = await onGenerate({
+      let persistedDocuments = await persistImportDocuments();
+      const generatedSnapshot: ImportTradeSnapshot = {
         tradeId: state.tradeId,
         direction: 'import',
         role,
@@ -271,7 +405,37 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
         risks,
         cargo: state.cargo ?? undefined,
         generatedAt,
-      });
+      };
+      const tradeId = await onGenerate(generatedSnapshot);
+      setState((current) => ({ ...current, tradeId }));
+      if (!state.tradeId) {
+        const originalAttachments = persistedDocuments
+          .map(importDocumentToAttachment)
+          .filter((attachment): attachment is NonNullable<typeof attachment> => attachment !== null);
+        if (originalAttachments.length > 0) {
+          const scopedAttachments = await moveTradeAttachmentsToScope({
+            userId,
+            scopeId: tradeId,
+            attachments: originalAttachments,
+          });
+          const scopedById = new Map(scopedAttachments.map((attachment) => [attachment.id, attachment]));
+          persistedDocuments = persistedDocuments.map((document) => {
+            const attachment = scopedById.get(document.id);
+            return attachment ? {
+              ...document,
+              storageBucket: attachment.storageBucket,
+              storagePath: attachment.storagePath,
+              uploadedAt: attachment.uploadedAt,
+              uploadStatus: 'uploaded',
+            } : document;
+          });
+          await onGenerate({
+            ...generatedSnapshot,
+            tradeId,
+            documents: persistedDocuments,
+          });
+        }
+      }
       setState((current) => ({
         ...current,
         documents: persistedDocuments,
@@ -332,7 +496,7 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
     if (!window.confirm('수입 거래를 최종 완료하고 저장할까요?')) return;
     setBusy(true);
     try {
-      await onComplete({
+      const completedTrade = await onComplete({
         tradeId: state.tradeId,
         direction: 'import',
         role,
@@ -346,10 +510,20 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
         generatedAt: state.generatedAt,
         flowCompletedAt: new Date().toISOString(),
       });
-      localStorage.removeItem(cacheKey);
-      setState(EMPTY);
-      setSourceFiles({});
-      setMessage('수입 거래를 완료했습니다.');
+      if (completedTrade.status === 'submitted') {
+        await completeDraft();
+        localStorage.removeItem(cacheKey);
+        setState(EMPTY);
+        setSourceFiles({});
+        setMessage('수입 거래를 제출 완료했습니다.');
+      } else {
+        setState((current) => ({
+          ...current,
+          tradeId: completedTrade.id,
+          existingStatus: 'in_progress',
+        }));
+        setMessage('완료 조건 서류가 없어 진행 중 거래로 저장했습니다.');
+      }
     } catch (error) {
       console.error(error);
       setMessage('거래 저장에 실패했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
@@ -387,6 +561,8 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
         onMove={(step) => setState((current) => ({ ...current, step }))}
       />
       {message && <div className={`form-message ${state.dutyError && state.step === 3 ? 'warning' : 'error'}`} role="alert">{message}</div>}
+      {!isDraftHydrated && <div className="draft-save-status saving" role="status">초안 복원 중...</div>}
+      {draftSaveStatus === 'error' && <div className="form-message error" role="alert">초안 자동 저장에 실패했습니다.</div>}
 
       {state.step === 1 && (
         <>

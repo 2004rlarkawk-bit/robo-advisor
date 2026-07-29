@@ -354,6 +354,31 @@ export function importDocumentToAttachment(document: ImportDocumentMeta): TradeA
   };
 }
 
+export function tradeAttachmentToImportDocument(
+  attachment: TradeAttachment,
+): ImportDocumentMeta | null {
+  if (attachment.documentType === 'arrival_notice' || !hasValidStoragePath(attachment)) {
+    return null;
+  }
+  const type: ImportDocumentType = attachment.documentType === 'other'
+    ? 'other'
+    : attachment.documentType;
+  return {
+    id: attachment.id,
+    name: attachment.fileName,
+    size: attachment.sizeBytes,
+    mimeType: attachment.mimeType,
+    type,
+    status: 'ready',
+    uploadStatus: 'uploaded',
+    analysisStatus: 'pending',
+    sourceId: attachment.id,
+    storageBucket: attachment.storageBucket,
+    storagePath: attachment.storagePath,
+    uploadedAt: attachment.uploadedAt,
+  };
+}
+
 export function arrivalNoticeToAttachment(arrivalNotice: ArrivalNoticeMeta | null | undefined): TradeAttachment | null {
   if (!arrivalNotice || !hasValidStoragePath(arrivalNotice)) return null;
   return {

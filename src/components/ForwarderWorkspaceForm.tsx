@@ -6,6 +6,8 @@ import {
   isEtaBeforeEtd,
   type ForwarderFormState,
 } from '../utils/forwarderForm';
+import type { TradeAttachment } from '../types/tradeFormData';
+import TradeAttachmentUploader from './TradeAttachmentUploader';
 
 interface Props {
   state: ForwarderFormState;
@@ -15,9 +17,12 @@ interface Props {
   onSave: () => Promise<void>;
   onSubmit: () => Promise<void>;
   onReset: () => void;
+  userId: string;
+  attachmentScopeId: string;
+  attachments: TradeAttachment[];
+  onAttachmentsChange: (attachments: TradeAttachment[]) => void;
 }
 
-const SOURCE_DOCUMENTS = ['Commercial Invoice', 'Packing List', '수출신고필증', '기타 서류'] as const;
 const BOOKING_STATUS_OPTIONS: { value: BookingStatus; label: string }[] = [
   { value: 'requested', label: '요청' },
   { value: 'confirmed', label: '확정' },
@@ -29,7 +34,19 @@ function numericValue(value: string): NumericInput {
   return value === '' ? '' : Number(value);
 }
 
-export default function ForwarderWorkspaceForm({ state, onChange, status, busy, onSave, onSubmit, onReset }: Props) {
+export default function ForwarderWorkspaceForm({
+  state,
+  onChange,
+  status,
+  busy,
+  onSave,
+  onSubmit,
+  onReset,
+  userId,
+  attachmentScopeId,
+  attachments,
+  onAttachmentsChange,
+}: Props) {
   const patch = (values: Partial<ForwarderFormState>) => onChange({ ...state, ...values });
   const bookingNumberMissing = isBookingNumberRequired(state);
   const invalidSchedule = isEtaBeforeEtd(state.departureDate, state.arrivalDate);
@@ -46,15 +63,12 @@ export default function ForwarderWorkspaceForm({ state, onChange, status, busy, 
       {/* 2026-07-23 편의성 업그레이드: 포워더용 선적 및 부킹 입력 폼 추가 */}
       <details className="form-section" open>
         <summary className="form-section-summary">1. 원천서류 업로드</summary>
-        <div className="form-message info">파일 첨부 기능 준비 중</div>
-        <div className="form-grid forwarder-source-docs">
-          {SOURCE_DOCUMENTS.map((documentName) => (
-            <div className="form-group" key={documentName}>
-              <span className="form-label">{documentName}</span>
-              <button type="button" className="btn btn-secondary" disabled>파일 첨부 기능 준비 중</button>
-            </div>
-          ))}
-        </div>
+        <TradeAttachmentUploader
+          userId={userId}
+          scopeId={attachmentScopeId}
+          attachments={attachments}
+          onChange={onAttachmentsChange}
+        />
       </details>
 
       <details className="form-section" open>

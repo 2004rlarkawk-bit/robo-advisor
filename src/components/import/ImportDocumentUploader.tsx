@@ -42,7 +42,9 @@ export default function ImportDocumentUploader({
       return;
     }
     const fresh = files.filter((file) => !documents.some(
-      (document) => document.name === file.name && document.size === file.size && document.type === forcedType,
+      (document) => document.name === file.name
+        && document.size === file.size
+        && (!forcedType || document.type === forcedType),
     ));
     const pending: ImportDocumentMeta[] = fresh.map((file) => {
       const id = crypto.randomUUID();
@@ -90,7 +92,9 @@ export default function ImportDocumentUploader({
           <span>
             {(document.size / 1024).toFixed(1)} KB · {TYPE_LABELS[document.type]}
             {' · '}
-            {document.analysisStatus === 'success'
+            {document.uploadStatus === 'uploaded' && document.analysisStatus === 'pending'
+              ? '업로드 완료'
+              : document.analysisStatus === 'success'
               ? '분석 성공'
               : document.analysisStatus === 'error'
                 ? `분석 실패${document.errorMessage ? `: ${document.errorMessage}` : ''}`

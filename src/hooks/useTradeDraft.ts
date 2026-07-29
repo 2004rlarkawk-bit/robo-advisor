@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import type { TradeProfile, TradeRole, TradeType } from '../types';
+import type { TradeAttachment } from '../types/tradeFormData';
 import {
   deleteTradeDraft,
   loadDraftFromLocal,
@@ -22,9 +23,25 @@ interface UseTradeDraftInput {
   profile: TradeProfile;
   defaultProfile: TradeProfile;
   setProfile: Dispatch<SetStateAction<TradeProfile>>;
+  attachments?: TradeAttachment[];
+  setAttachments?: Dispatch<SetStateAction<TradeAttachment[]>>;
+  currentStep?: number;
+  tradeId?: string | null;
 }
 
-export function useTradeDraft({ userId, enabled, tradeDirection, tradeRole, profile, defaultProfile, setProfile }: UseTradeDraftInput) {
+export function useTradeDraft({
+  userId,
+  enabled,
+  tradeDirection,
+  tradeRole,
+  profile,
+  defaultProfile,
+  setProfile,
+  attachments = [],
+  setAttachments,
+  currentStep = 1,
+  tradeId = null,
+}: UseTradeDraftInput) {
   const [isDraftLoading, setIsDraftLoading] = useState(false);
   const [isDraftRestored, setIsDraftRestored] = useState(false);
   const [saveStatus, setSaveStatus] = useState<DraftSaveStatus>('idle');
@@ -39,12 +56,18 @@ export function useTradeDraft({ userId, enabled, tradeDirection, tradeRole, prof
   const tradeDirectionRef = useRef(tradeDirection);
   const tradeRoleRef = useRef(tradeRole);
   const saveInFlightRef = useRef<Promise<void> | null>(null);
+  const attachmentsRef = useRef(attachments);
+  const currentStepRef = useRef(currentStep);
+  const tradeIdRef = useRef(tradeId);
 
   profileRef.current = profile;
   enabledRef.current = enabled;
   userIdRef.current = userId;
   tradeDirectionRef.current = tradeDirection;
   tradeRoleRef.current = tradeRole;
+  attachmentsRef.current = attachments;
+  currentStepRef.current = currentStep;
+  tradeIdRef.current = tradeId;
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -63,7 +86,16 @@ export function useTradeDraft({ userId, enabled, tradeDirection, tradeRole, prof
     const savePromise = (async () => {
       setSaveStatus('saving');
       try {
-        const result = await saveTradeDraft(currentUserId, profileToSave, tradeRoleRef.current);
+        const result = await saveTradeDraft(
+          currentUserId,
+          profileToSave,
+          tradeRoleRef.current,
+          {
+            attachments: attachmentsRef.current,
+            currentStep: currentStepRef.current,
+            tradeId: tradeIdRef.current,
+          },
+        );
         if (userIdRef.current !== currentUserId) return;
         setLastSavedAt(result.updatedAt);
         setSaveStatus('saved');
@@ -116,6 +148,7 @@ export function useTradeDraft({ userId, enabled, tradeDirection, tradeRole, prof
       try {
         const newest = selectNewestDraft(localDraft, databaseDraft);
         setProfile(newest ? { ...defaultProfile, ...newest.profile } : defaultProfile);
+        if (setAttachments) setAttachments(newest?.formData.attachments ?? []);
         if (newest) {
           setLastSavedAt(newest.updatedAt);
           setSaveStatus(newest.source === 'database' ? 'saved' : 'local');
@@ -134,7 +167,7 @@ export function useTradeDraft({ userId, enabled, tradeDirection, tradeRole, prof
       clearTimer();
       if (restoreSequenceRef.current === sequence) restoreSequenceRef.current += 1;
     };
-  }, [clearTimer, enabled, setProfile, tradeDirection, tradeRole, userId]);
+  }, [clearTimer, enabled, setAttachments, setProfile, tradeDirection, tradeRole, userId]);
 
   useEffect(() => {
     clearTimer();
@@ -144,7 +177,11 @@ export function useTradeDraft({ userId, enabled, tradeDirection, tradeRole, prof
     if (!userId || !enabled || !isDraftRestored || !restoredRef.current || !activeRef.current) return;
 
     try {
-      saveDraftToLocal(userId, profile, tradeRole);
+      saveDraftToLocal(userId, profile, tradeRole, {
+        attachments,
+        currentStep,
+        tradeId,
+      });
       setSaveStatus('local');
     } catch (error) {
       console.error('[Trade Draft] localStorage 저장 실패:', error);
@@ -156,7 +193,18 @@ export function useTradeDraft({ userId, enabled, tradeDirection, tradeRole, prof
     }, DATABASE_SAVE_DELAY_MS);
 
     return clearTimer;
-  }, [clearTimer, enabled, flushDraft, isDraftRestored, profile, tradeRole, userId]);
+  }, [
+    attachments,
+    clearTimer,
+    currentStep,
+    enabled,
+    flushDraft,
+    isDraftRestored,
+    profile,
+    tradeId,
+    tradeRole,
+    userId,
+  ]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
