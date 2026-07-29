@@ -3,10 +3,10 @@ import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginDa
 import { tradeItemAmount } from '../utils/shipment';
 import { determineRequiredDocuments } from '../harness/rulesEngine';
 import { autoFillDocumentFields } from '../services/claudeService';
+import { getCustomsExchangeRate } from '../services/customsApiService';
 import { isLcPayment } from './paymentTerms';
 import { renderCertificateOfOriginHTML } from './templates/co';
 import { renderInsuranceHTML } from './templates/insurance';
-import { renderCustomsDeclarationHTML } from './templates/customsDeclaration';
 export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCodeResult; useLLM?: boolean; logs: AgentLog[] }, DocumentResult> {
   readonly name = 'Document Agent';
 
@@ -348,7 +348,21 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
       const customsImporter = generatedDocs.invoice?.consignee || { name: profile.partnerName || '', address: profile.partnerAddress || '', contact: profile.partnerContact || '' };
       const totalQuantity = items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
       const totalWeight = items.reduce((sum, it) => sum + (Number(it.grossWeight) || 0), 0);
+      const totalPackages = items.reduce((sum, it) => sum + (Number(it.packageCount) || 0), 0);
       const invoiceAmount = generatedDocs.invoice?.totalAmount || Number(profile.invoiceAmount || profile.totalAmount) || 0;
+      const customsCurrency = profile.currency || currency;
+
+      // 신고가격(FOB) 원화 환산용 관세청 수출환율 — 외화 거래일 때만 조회. 실패 시 null(→ 서비스가 FOB 공란).
+      let fobRate: number | null = null;
+      if (customsCurrency !== 'KRW') {
+        try {
+          const fx = await getCustomsExchangeRate(customsCurrency, 'export');
+          fobRate = fx.rate;
+          logs.push(createLog(this.name, `수출신고서 FOB 환율 확보: 1 ${customsCurrency} = ${fx.rate.toLocaleString()}원 (${fx.source === 'api' ? '관세청' : '시뮬레이션'})`, 'info'));
+        } catch {
+          logs.push(createLog(this.name, '수출신고서 FOB 환율 미확보 — 신고가격(원화) 공란 처리', 'warning'));
+        }
+      }
 
       const customsDeclaration: CustomsDeclarationData = {
         declarationNo: docNo('CD'),
@@ -361,7 +375,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         quantity: totalQuantity || Number(profile.quantity) || 0,
         unit: profile.unit || items[0]?.unit || '',
         weight: totalWeight || Number(profile.grossWeight || profile.weight) || 0,
-        currency: profile.currency || currency,
+        currency: customsCurrency,
         invoiceAmount,
         incoterms: profile.incoterms || '',
         loadPort: profile.loadPort || '',
@@ -370,11 +384,31 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         customsValue: invoiceAmount,
         dutyRate: '',
         dutyAmount: 0,
-        signedBy: profile.signedBy || profile.signerName || ''
+        signedBy: profile.signedBy || profile.signerName || '',
+        // ── 수출신고서(초안) docx 전환용 확장 ──
+        items,                                   // 갑지=items[0], 을지=items.slice(1)
+        fobRate,
+        ownerAddress: customsExporter.address,
+        ownerBizNo: profile.businessRegistrationNo || profile.taxNo || '',
+        makerName: profile.companyName || '',    // 제조자 별도 소스 없음 — 수출자 상호로 기본
+        buyerName: profile.buyerName || profile.partnerName || '',
+        buyerCountry: profile.buyerCountry || '',
+        destCountry: profile.partnerCountry || profile.dischargePort || '',
+        carrier: profile.carrier || '',
+        vessel: profile.vesselOrFlight || '',
+        departureDate: profile.departureDate || '',
+        transportType: '',                       // 운송형태 코드 소스 없음 — 공란
+        lcNo,                                     // 비신용장이면 위에서 ''로 강제됨
+        totalWeight,
+        totalPackages,
+        paymentAmount: invoiceAmount,
+        containerNo: profile.containerNo || '',
+        invoiceNo: generatedDocs.invoice?.invoiceNo || profile.invoiceNo || '',
+        invoiceDate: profile.invoiceDate || ''
       };
 
       generatedDocs.customsDeclaration = customsDeclaration;
-      logs.push(createLog(this.name, '통관신고 관련 서류 초안 조립 완료', 'success'));
+      logs.push(createLog(this.name, `수출신고서(초안) 데이터 조립 완료 (품목 ${items.length}건${items.length > 1 ? ', 을지 ' + (items.length - 1) + '란' : ''})`, 'success'));
     }
     // HTML 템플릿 렌더링 적용
     // 상업송장은 고정 docx 템플릿(invoiceDocxService)에서 생성·미리보기하므로 HTML을 만들지 않는다.
@@ -388,9 +422,8 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
     if (generatedDocs.insurance) {
       htmlTemplates.insurance = renderInsuranceHTML(generatedDocs.insurance);
     }
-    if (generatedDocs.customsDeclaration) {
-      htmlTemplates.customs_dec = renderCustomsDeclarationHTML(generatedDocs.customsDeclaration);
-    }
+    // 수출신고서(초안)는 고정 docx 템플릿(exportDeclarationDocxService)에서 생성·미리보기한다.
+    // (미리보기 = 다운로드 docx 단일 소스. HTML은 만들지 않는다. customsDeclaration.ts는 @deprecated.)
     logs.push(createLog(this.name, '문서 생성 에이전트 작업 완료.', 'success'));
 
     return {

@@ -38,6 +38,7 @@ supabase/.temp/
 # 무역서류 템플릿(docx)은 값 주입용 고정 자산 — 추적
 !templates/commercial_invoice_template.docx
 !templates/packing_list_template.docx
+!templates/export_declaration_template.docx
 
 # 샘플 생성 스크립트 산출물(generate-packing-sample.ts) — 커밋 대상 아님
 packing_sample_*.xlsx

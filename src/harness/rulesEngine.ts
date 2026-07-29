@@ -95,19 +95,20 @@ export function determineRequiredDocuments(
     });
   }
 
-  // 4. 통관신고 관련 서류
-  // 수출신고필증·수입신고필증 등은 관세사 또는 신고인이
-  // 세관 신고를 진행한 후 발급받는 서류다.
-  // 화주가 이 화면에서 직접 생성하는 문서가 아니므로
-  // external_pending으로 처리하고 준비도 계산에서도 제외한다.
+  // 4. 수출신고서(초안) — 관세사 전달용 초안을 docx로 생성한다(세관 제출본 아님).
+  //    수출신고필증은 관세사·신고인이 세관 신고 후 발급하지만, 여기서는 초안을 만들어 전달을 돕는다.
+  const hasCustomsInfo = !!(
+    profile.hsCode &&
+    profile.itemName &&
+    profile.companyName &&
+    profile.incoterms
+  );
   docs.push({
     id: 'customs_dec',
-    name:
-      profile.tradeType === 'export'
-        ? '수출신고 관련 서류'
-        : '수입신고 관련 서류',
-    status: 'external_pending',
-    statusText: '관세사·신고인 처리 대기',
+    name: '수출신고서(초안)',
+    status: hasCustomsInfo ? 'completed' : 'not_started',
+    statusText: hasCustomsInfo ? '초안 생성' : '작성 필요',
+    lastReviewed: hasCustomsInfo ? timestamp : undefined,
   });
 
   // 5. 원산지증명서(C/O)

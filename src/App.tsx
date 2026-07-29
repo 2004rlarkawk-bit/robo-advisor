@@ -37,10 +37,12 @@ import {
   type ShipperItem,
   type ShipperSupplementalState,
   type FeedbackReport,
+  type CustomsDeclarationData,
 } from './types';
 import './styles/feedbackReport.css';
 import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
 import { buildPackingListDocx, renderPackingListDocxPreview } from './services/packingListDocxService';
+import { buildExportDeclarationDocx, renderExportDeclarationDocxPreview } from './services/exportDeclarationDocxService';
 import SettingsPanel from './components/SettingsPanel';
 import GuidePanel from './components/GuidePanel';
 import AboutPanel from './components/AboutPanel';
@@ -397,6 +399,11 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const packingXlsxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
   const packingDocxPreviewRef = useRef<HTMLDivElement | null>(null);
 
+  // 수출신고서(초안)도 고정 docx 템플릿에서 생성 — 미리보기/다운로드 동일 바이너리.
+  const [customsDeclarationData, setCustomsDeclarationData] = useState<CustomsDeclarationData | null>(null);
+  const customsDocxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
+  const customsDocxPreviewRef = useRef<HTMLDivElement | null>(null);
+
   // 같은 InvoiceData면 같은 Blob 반환(캐시) → 화면 미리보기와 다운로드 파일이 동일 바이너리.
   const getInvoiceBlob = async (): Promise<Blob | null> => {
     if (!invoiceData) return null;
@@ -417,9 +424,22 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     return blob;
   };
 
-  // 문서 생성 여부: 상업송장=invoiceData, 패킹리스트=packingListData, 나머지=htmlTemplates로 판정
+  // 같은 CustomsDeclarationData면 같은 docx Blob 반환(캐시).
+  const getCustomsDeclBlob = async (): Promise<Blob | null> => {
+    if (!customsDeclarationData) return null;
+    const sig = JSON.stringify(customsDeclarationData);
+    if (customsDocxCacheRef.current?.sig === sig) return customsDocxCacheRef.current.blob;
+    const blob = await buildExportDeclarationDocx(customsDeclarationData);
+    customsDocxCacheRef.current = { sig, blob };
+    return blob;
+  };
+
+  // 문서 생성 여부: 상업송장=invoiceData, 패킹리스트=packingListData, 수출신고서=customsDeclarationData, 나머지=htmlTemplates로 판정
   const hasDoc = (id: string) =>
-    id === 'invoice' ? !!invoiceData : id === 'packing_list' ? !!packingListData : !!htmlTemplates[id];
+    id === 'invoice' ? !!invoiceData
+      : id === 'packing_list' ? !!packingListData
+      : id === 'customs_dec' ? !!customsDeclarationData
+      : !!htmlTemplates[id];
 
   // 미리보기 모달에서 상업송장은 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
   useEffect(() => {
@@ -458,6 +478,25 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewDocId, packingListData]);
+
+  // 수출신고서(초안)도 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
+  useEffect(() => {
+    if (previewDocId !== 'customs_dec' || !customsDeclarationData) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = await getCustomsDeclBlob();
+        const host = customsDocxPreviewRef.current;
+        if (!blob || cancelled || !host) return;
+        await renderExportDeclarationDocxPreview(blob, host);
+      } catch {
+        const host = customsDocxPreviewRef.current;
+        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">수출신고서 미리보기 생성에 실패했습니다.</p>';
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewDocId, customsDeclarationData]);
 
   // Mobile simulator inputs
   const [mobileWeight, setMobileWeight] = useState('');
@@ -618,6 +657,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   setInvoiceData(null);
   invoiceDocxCacheRef.current = null;
   setPackingListData(null);
+  setCustomsDeclarationData(null);
   packingXlsxCacheRef.current = null;
   setHsCandidates([]);
   currentTradeIdRef.current = null;
@@ -643,6 +683,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setInvoiceData(result.documents?.generatedDocs?.invoice || null);
     invoiceDocxCacheRef.current = null;
     setPackingListData(result.documents?.generatedDocs?.packingList || null);
+    setCustomsDeclarationData(result.documents?.generatedDocs?.customsDeclaration || null);
     packingXlsxCacheRef.current = null;
     setHasGenerated(true);
     blockedGenRef.current = null;
@@ -770,6 +811,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         setInvoiceData(result.documents?.generatedDocs?.invoice || null);
         invoiceDocxCacheRef.current = null;
         setPackingListData(result.documents?.generatedDocs?.packingList || null);
+        setCustomsDeclarationData(result.documents?.generatedDocs?.customsDeclaration || null);
         packingXlsxCacheRef.current = null;
         setHasGenerated(true);
         blockedGenRef.current = { result, generationProfile, writeMode };
@@ -829,6 +871,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setInvoiceData((t.generatedDocs?.invoice as InvoiceData) || null);
     invoiceDocxCacheRef.current = null;
     setPackingListData((t.generatedDocs?.packingList as PackingListData) || null);
+    setCustomsDeclarationData((t.generatedDocs?.customsDeclaration as CustomsDeclarationData) || null);
     packingXlsxCacheRef.current = null;
     setOverrides((t.generatedDocs?.overrides as Record<string, string>) || {});
     blockedGenRef.current = null;
@@ -869,6 +912,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setInvoiceData(null);
     invoiceDocxCacheRef.current = null;
     setPackingListData(null);
+    setCustomsDeclarationData(null);
     packingXlsxCacheRef.current = null;
     setAiFeedback('');
     setFeedbackReport(null);
@@ -905,6 +949,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       setInvoiceData(result.documents?.generatedDocs?.invoice || null);
       invoiceDocxCacheRef.current = null;
       setPackingListData(result.documents?.generatedDocs?.packingList || null);
+      setCustomsDeclarationData(result.documents?.generatedDocs?.customsDeclaration || null);
       packingXlsxCacheRef.current = null;
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
@@ -1072,6 +1117,30 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       return;
     }
 
+    // 수출신고서(초안): 고정 docx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 바이너리).
+    if (docId === 'customs_dec') {
+      let blob: Blob | null = null;
+      try {
+        blob = await getCustomsDeclBlob();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : '수출신고서 생성에 실패했습니다.');
+        return;
+      }
+      if (!blob) {
+        alert('수출신고서 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = getDocFileName('customs_dec').replace(/\.pdf$/i, '.docx');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+
     const htmlContent = htmlTemplates[docId];
     if (!htmlContent) {
       alert('문서 양식 템플릿이 생성되지 않았습니다.');
@@ -1159,8 +1228,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     try {
       const validationErrorCount = issues.filter((issue) => issue.severity === 'error').length;
       const generatedDocs = devTestMode && canBypassValidation
-        ? { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, overrides, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
-        : { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, overrides };
+        ? { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, customsDeclaration: customsDeclarationData ?? undefined, overrides, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
+        : { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, customsDeclaration: customsDeclarationData ?? undefined, overrides };
       await markTradeAsSubmitted(tradeId, {
         profile,
         documents,
@@ -2610,7 +2679,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               </button>
                               <button
                                 className="rv-ib"
-                                title={doc.id === 'invoice' ? 'DOCX + PDF 저장' : doc.id === 'packing_list' ? 'DOCX 다운로드' : 'PDF 저장'}
+                                title={doc.id === 'invoice' ? 'DOCX + PDF 저장' : (doc.id === 'packing_list' || doc.id === 'customs_dec') ? 'DOCX 다운로드' : 'PDF 저장'}
                                 onClick={() => handleDownloadDoc(doc.id)}
                               >
                                 <Download size={17} />
@@ -3006,7 +3075,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                   packing_list: '패킹리스트(Packing List)',
                   co: '원산지증명서(Certificate of Origin)',
                   bl: '선하증권(B/L)',
-                  customs_dec: '통관신고서',
+                  customs_dec: '수출신고서(초안)',
                   insurance: '적하보험증권(Insurance Policy)',
                 } as Record<string, string>)[previewDocId ?? ''] ?? '문서')} 미리보기
               </h3>
@@ -3040,6 +3109,18 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               ) : previewDocId === 'packing_list' ? (
                 // 패킹리스트: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
                 <div ref={packingDocxPreviewRef} style={{ width: '100%' }} />
+              ) : previewDocId === 'customs_dec' ? (
+                // 수출신고서(초안): 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
+                <div style={{ width: '100%' }}>
+                  <div style={{
+                    marginBottom: '12px', padding: '10px 14px', borderRadius: '8px',
+                    background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412',
+                    fontSize: '13px', lineHeight: 1.5,
+                  }}>
+                    <b>초안 생성</b> — 세관 제출본이 아닙니다. 신고번호·세관기재란 등은 <b>신고 후 확정</b>되며, 실제 신고는 관세사 또는 UNI-PASS를 통해 진행하세요.
+                  </div>
+                  <div ref={customsDocxPreviewRef} style={{ width: '100%' }} />
+                </div>
               ) : (
                 <div
                   style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
@@ -3069,7 +3150,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : previewDocId === 'packing_list' ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
+                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : (previewDocId === 'packing_list' || previewDocId === 'customs_dec') ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
             </div>
           </div>

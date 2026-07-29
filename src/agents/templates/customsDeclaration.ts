@@ -1,3 +1,8 @@
+/**
+ * @deprecated docx로 대체됨 (exportDeclarationDocxService + templates/export_declaration_template.docx).
+ * 통관신고 서류는 수출신고서(초안) docx 방식으로 전환됨 — 이 HTML 렌더러는 참조 0.
+ * (packingListXlsxService와 동일하게 삭제하지 않고 휴면 상태로 둔다.)
+ */
 import type { CustomsDeclarationData } from '../../types';
 import { escapeHtml as esc } from './escapeHtml';
 

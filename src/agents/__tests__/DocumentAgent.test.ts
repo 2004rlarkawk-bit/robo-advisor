@@ -1,4 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+// 수출신고서 FOB용 관세청 환율 호출은 결정론적으로 mock (네트워크 미접촉).
+// importActual로 customsApiService의 다른 export(calcDutiableValue 등)는 real 유지.
+vi.mock('../../services/customsApiService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/customsApiService')>()),
+  getCustomsExchangeRate: vi.fn().mockResolvedValue({
+    rate: 1478.44, currency: 'USD', source: 'simulation', tradeType: 'export', effectiveDate: '2026-07-26',
+  }),
+}));
 import { DocumentAgent } from '../DocumentAgent';
 import { escapeHtml } from '../templates/escapeHtml';
 import { HSCodeResult, AgentLog } from '../types';
