@@ -46,6 +46,7 @@ import AboutPanel from './components/AboutPanel';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
 import TradeManagerPanel from './components/TradeManagerPanel';
+import CustomsHistoryPanel from './components/CustomsHistoryPanel';
 import AuthPage from './components/AuthPage';
 import OnboardingPage from './components/OnboardingPage';
 import ProfileSettingsPage from './components/ProfileSettingsPage';
@@ -1593,17 +1594,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             : activeMenu === 'guide' ? <GuidePanel onNavigate={setActiveMenu} />
             : activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'analysis' ? <DataAnalysisPanel />
-            : activeMenu === 'customs_history' ? (
-  <div className="dashboard-card">
-    <div className="card-header">
-      <h2>통관 내역</h2>
-    </div>
-    <div className="card-body">
-      <p>통관신고 관련 서류 생성 및 진행 상태를 확인하는 화면입니다.</p>
-      <p>문서 자동 생성 화면에서 통관신고 관련 서류를 생성한 뒤 미리보기와 다운로드를 확인하세요.</p>
-    </div>
-  </div>
-)  
+            : activeMenu === 'customs_history' ? <CustomsHistoryPanel onLoad={handleLoadSavedTrade} />
             : activeMenu === 'trades' ? <TradeManagerPanel onLoad={handleLoadSavedTrade} />   
             : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
             : <>
