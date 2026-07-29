@@ -5,6 +5,20 @@ import { estimateDuty } from '../services/unipassService';
 import { getRelatedLawForIssue } from '../services/lawService';
 
 /**
+ * 외부 API(Supabase 엣지함수) 호출에 개별 상한을 둔다.
+ * 엣지함수 콜드스타트·중단 시 invoke가 무한 대기하면 재검증 전체가 오케스트레이터
+ * 30초 타임아웃으로 실패한다("규정 검증 실패: 작업 타임아웃"). 각 호출을 ms 안에
+ * 끊어, 지연 시 해당 안내 이슈만 건너뛰고 검증을 계속 진행한다(값은 이미 룰로 확정).
+ */
+function withTimeout<T>(promise: Promise<T>, ms = 8000, label = '외부 API'): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} 응답 지연 (${ms}ms)`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
+/**
  * 거래정보 입력값 검증 (팀원 Python 스펙 "거래정보 입력값 검증 모듈" 포팅)
  * 1) 필수 항목 누락 체크 (단가·금액·송장 작성일 포함)
  * 2) 숫자 항목(수량·중량·단가·금액)은 0보다 커야 함
@@ -231,7 +245,7 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
   const amount = profile.invoiceAmount !== '' && profile.invoiceAmount !== undefined ? profile.invoiceAmount : 0;
   if (currency !== 'KRW' && amount > 0) {
     try {
-      const dv = await calcDutiableValue(amount, currency, profile.tradeType);
+      const dv = await withTimeout(calcDutiableValue(amount, currency, profile.tradeType), 8000, '환율 환산');
       const srcNote = dv.source === 'api' ? `관세청 주간환율 · 적용일 ${dv.effectiveDate}` : '시뮬레이션 환율 — 실환율은 API 키 설정 후 적용';
       const itemNote = profile.itemName ? `${profile.itemName} · ` : '';
       issues.push({
@@ -254,7 +268,7 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
       // 6-1. 수입 거래 + 유효 HSK 10자리 → UNI-PASS 관세율 기반 예상 관세액 안내
       const hsCleaned = profile.hsCode.replace(/[^0-9]/g, '');
       if (profile.tradeType === 'import' && hsCleaned.length === 10) {
-        const duty = await estimateDuty(hsCleaned, dv.totalKrw);
+        const duty = await withTimeout(estimateDuty(hsCleaned, dv.totalKrw), 8000, '관세율 조회');
         if (duty) {
           const dutySrc = duty.source === 'api' ? 'UNI-PASS 관세율 기준' : '시뮬레이션 세율 — 실세율은 UNI-PASS 키 설정 후 적용';
           issues.push({
@@ -283,7 +297,7 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
   const bizNo = (profile.businessRegistrationNo || '').replace(/[^0-9]/g, '');
   if (bizNo.length > 0) {
     try {
-      const biz = await verifyBusinessRegistration(bizNo);
+      const biz = await withTimeout(verifyBusinessRegistration(bizNo), 8000, '사업자번호 조회');
       if (!biz.valid) {
         issues.push({
           id: 'bizno-invalid',
