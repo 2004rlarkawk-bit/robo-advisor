@@ -953,14 +953,54 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     return `${docTypeLabel}_${company}_${dateStr}.pdf`;
   };
 
+  // 상업송장 docx Blob을 브라우저 인쇄로 PDF 저장 — 미리보기와 같은 docx-preview 렌더를 인쇄 iframe에 그려
+  // 벡터(텍스트 선택·추출 가능) PDF로 뽑는다. (정적 호스팅이라 서버 soffice 변환은 불가 → 클라이언트 인쇄 사용.)
+  const printInvoiceAsPdf = async (blob: Blob) => {
+    const title = getDocFileName('invoice').replace(/\.pdf$/i, '').replace(/[<>"'&]/g, '');
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:fixed; right:0; bottom:0; width:0; height:0; border:0;';
+    document.body.appendChild(iframe);
+
+    const idoc = iframe.contentWindow?.document;
+    if (!idoc) {
+      document.body.removeChild(iframe);
+      alert('PDF 인쇄 창 생성에 실패했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    // docx는 자체 여백을 가지므로 @page 여백은 0으로 두고 docx-preview 렌더의 여백을 그대로 살린다.
+    idoc.open();
+    idoc.write(
+      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>' + title + '</title>' +
+      '<style>@page { size: A4; margin: 0; } html, body { margin: 0; padding: 0; background: #fff; }' +
+      '* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }</style></head>' +
+      '<body><div id="pdf-host"></div></body></html>'
+    );
+    idoc.close();
+
+    const host = idoc.getElementById('pdf-host') as HTMLElement | null;
+    if (!host) { document.body.removeChild(iframe); return; }
+    // 같은 docx Blob을 인쇄 iframe 문서에 렌더(스타일도 그 문서에 주입됨).
+    await renderInvoiceDocxPreview(blob, host);
+
+    const win = iframe.contentWindow!;
+    let cleaned = false;
+    const cleanup = () => { if (cleaned) return; cleaned = true; if (iframe.parentNode) document.body.removeChild(iframe); };
+    win.onafterprint = cleanup;
+    win.focus();
+    win.print();
+    setTimeout(cleanup, 60000); // onafterprint 미발화 브라우저 대비
+  };
+
   const handleDownloadDoc = async (docId: string) => {
-    // 상업송장: 고정 docx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 바이너리).
+    // 상업송장: 고정 docx 템플릿에서 생성한 Blob을 docx로 저장 + 같은 Blob을 인쇄해 PDF로도 저장.
     if (docId === 'invoice') {
       const blob = await getInvoiceBlob();
       if (!blob) {
         alert('상업송장 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
         return;
       }
+      // 1) DOCX 저장
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -969,6 +1009,14 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      // 2) PDF 저장(브라우저 인쇄) — 같은 docx를 렌더해서 벡터 PDF로.
+      alert(
+        '상업송장 DOCX가 저장되었습니다. 이어서 PDF 저장 창이 열립니다.\n\n' +
+        '· 대상(프린터): "PDF로 저장" 선택\n' +
+        '· URL/날짜가 찍히지 않게 하려면 → "옵션 더보기 → 머리글 및 바닥글" 체크 해제'
+      );
+      await printInvoiceAsPdf(blob);
       return;
     }
 
@@ -2483,7 +2531,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               </button>
                               <button
                                 className="rv-ib"
-                                title={doc.id === 'invoice' ? 'DOCX 다운로드' : doc.id === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장'}
+                                title={doc.id === 'invoice' ? 'DOCX + PDF 저장' : doc.id === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장'}
                                 onClick={() => handleDownloadDoc(doc.id)}
                               >
                                 <Download size={17} />
@@ -2892,7 +2940,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                {previewDocId === 'invoice' ? 'DOCX 다운로드' : previewDocId === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장 (텍스트)'}
+                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : previewDocId === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
             </div>
           </div>
