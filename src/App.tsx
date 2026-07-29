@@ -1487,11 +1487,13 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             </div>
           </li>
           <li>
-            <div className="menu-item disabled" title="준비 중인 기능입니다">
-              <FileCheck2 size={18} />
-              통관 내역
-              <span className="badge-soon">준비중</span>
-            </div>
+            <div
+  className={`menu-item ${activeMenu === 'customs_history' ? 'active' : ''}`}
+  onClick={() => setActiveMenu('customs_history')}
+>
+  <FileCheck2 size={18} />
+  통관 내역
+</div>
           </li>
           <li>
             <div
@@ -1591,6 +1593,17 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             : activeMenu === 'guide' ? <GuidePanel onNavigate={setActiveMenu} />
             : activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'analysis' ? <DataAnalysisPanel />
+            : activeMenu === 'customs_history' ? (
+  <div className="dashboard-card">
+    <div className="card-header">
+      <h2>통관 내역</h2>
+    </div>
+    <div className="card-body">
+      <p>통관신고 관련 서류 생성 및 진행 상태를 확인하는 화면입니다.</p>
+      <p>문서 자동 생성 화면에서 통관신고 관련 서류를 생성한 뒤 미리보기와 다운로드를 확인하세요.</p>
+    </div>
+  </div>
+)  
             : activeMenu === 'trades' ? <TradeManagerPanel onLoad={handleLoadSavedTrade} />   
             : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
             : <>
