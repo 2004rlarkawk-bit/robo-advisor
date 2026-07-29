@@ -1570,11 +1570,16 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             </button>
             <div className="user-info-section">
               <button type="button" className="user-profile" onClick={() => setActiveMenu('profile')} title="프로필 관리" aria-label="프로필 관리 페이지로 이동">
-                <div className="user-avatar">{user.type === 'member' ? '회' : '비'}</div>
+                <div className="user-avatar">
+                  {(() => {
+                    // 아바타는 회사명·담당자명·이메일 순으로 첫 글자를 노출한다.
+                    // 아무 정보도 없을 때만 회원/비회원 이니셜 폴백.
+                    const label = userProfile.company_name || userProfile.contact_name || user.email || '';
+                    const first = label.trim().charAt(0);
+                    return first || (user.type === 'member' ? '회' : '비');
+                  })()}
+                </div>
                 <span>{userProfile.company_name || userProfile.contact_name || user.email} 님</span>
-                <span className={`auth-badge ${user.type}`}>
-                  {user.type === 'member' ? '회원' : '비회원'}
-                </span>
               </button>
               <button className="btn-logout" onClick={handleLogout}>
                 로그아웃
