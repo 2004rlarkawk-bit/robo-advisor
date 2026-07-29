@@ -2843,10 +2843,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                    issue.docType === 'insurance' ? '적하보험증권' : '기타 서류'}
                                 </div>
                               </div>
-                              {/* 입력수정 버튼은 화주가 직접 작성·수정하는 서류(C/I·P/L) 이슈에만.
-                                  B/L·E/D·C/O·보험은 외부 발급·전용 해소 UI라 상태 표시만 한다.
-                                  weight·hsCode는 아래 전용 인라인 입력이 있어 버튼 중복 방지. */}
-                              {(issue.docType === 'invoice' || issue.docType === 'packing_list') &&
+                              {/* 입력수정 버튼 = 입력 폼 필드로 해소 가능한 이슈에 노출(도착예정일·항구 등 B/L 귀속 포함).
+                                  전용 해소 UI가 있는 것만 제외: C/O(필요 여부 질문)·보험(준비 확인)·중량·HS코드(인라인 입력). */}
+                              {issue.docType !== 'co' &&
+                                issue.id !== 'insurance-missing' &&
                                 issue.field !== 'weight' &&
                                 issue.field !== 'hsCode' && (
                                 <button className="mfc-fix-btn" onClick={() => goToFieldFix(issue)}>
