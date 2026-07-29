@@ -676,7 +676,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         const createdTrade = await createGeneratedTrade(generatedTradeData);
         currentTradeIdRef.current = createdTrade.id;
         alert(overrideRecords.length > 0
-          ? `필요 서류가 생성·저장되었습니다. (차단 오류 ${overrideRecords.length}건이 사유 입력으로 override됨)`
+          ? `필요 서류가 생성·저장되었습니다. (경고 ${overrideRecords.length}건이 사유 기록 후 무시 처리됨)`
           : '필요 서류가 생성되고 새로운 거래가 저장되었습니다.');
       } else {
         const currentTradeId = currentTradeIdRef.current;
@@ -684,7 +684,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         const updatedTrade = await updateGeneratedTrade(currentTradeId, generatedTradeData);
         if (updatedTrade.id !== currentTradeId) throw new Error('재생성된 거래 ID가 현재 거래와 일치하지 않습니다.');
         alert(overrideRecords.length > 0
-          ? `필요 서류가 다시 생성되었습니다. (차단 오류 ${overrideRecords.length}건 사유 override됨)`
+          ? `필요 서류가 다시 생성되었습니다. (경고 ${overrideRecords.length}건이 사유 기록 후 무시 처리됨)`
           : '수정된 내용으로 필요 서류가 다시 생성되었으며 기존 거래가 업데이트되었습니다.');
       }
       setCurrentTradeStatus('generated');
@@ -704,7 +704,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const confirmOverride = () => {
     if (!overrideTarget) return;
     const reason = overrideReason.trim();
-    if (!reason) { alert('override 사유를 입력하세요.'); return; }
+    if (!reason) { alert('사유를 입력하세요.'); return; }
     const nextOv = { ...overrides, [issueKey(overrideTarget)]: reason };
     setOverrides(nextOv);
     setOverrideTarget(null);
@@ -777,7 +777,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         alert(
           `초안이 생성되었습니다. 제출 전 해결해야 할 오류 ${blockers.length}건이 있어요 — 미리보기·다운로드는 가능하지만 최종 제출은 보류됩니다.` +
           (overridable > 0
-            ? `\n(그중 ${overridable}건은 아래 검증 결과에서 "사유 입력 후 override"로 진행 가능)`
+            ? `\n(그중 ${overridable}건은 아래 검증 결과에서 "경고 무시하고 생성"으로 진행 가능)`
             : '')
         );
         return;
@@ -2821,11 +2821,11 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                             {issue.severity === 'error' && issue.overridable && (
                               overrides[issueKey(issue)] ? (
                                 <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(16,185,129,0.12)', color: '#065f46', fontSize: 12, fontWeight: 600 }}>
-                                  ✅ 사유 포함 override됨 — {overrides[issueKey(issue)]}
+                                  ✅ 경고 무시 처리됨 — 사유: {overrides[issueKey(issue)]}
                                 </div>
                               ) : (
                                 <button className="mobile-btn mobile-btn-secondary" onClick={() => { setOverrideTarget(issue); setOverrideReason(''); }}>
-                                  사유 입력 후 override (생성 진행)
+                                  경고 무시하고 생성 (사유 필요)
                                 </button>
                               )
                             )}
@@ -3044,8 +3044,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
           style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
         >
           <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(520px, 92vw)', background: '#fff', borderRadius: 14, padding: '22px 24px', boxShadow: '0 12px 40px rgba(0,0,0,0.25)' }}>
-            <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>오류 override — 사유 입력</h3>
-            <p style={{ margin: '0 0 4px', fontSize: 12, color: '#64748b' }}>이 오류를 우회하고 생성을 진행합니다. 사유는 검증 결과에 기록됩니다.</p>
+            <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>경고 무시하고 생성 — 사유 입력</h3>
+            <p style={{ margin: '0 0 4px', fontSize: 12, color: '#64748b' }}>이 경고를 무시하고 문서를 생성합니다. 입력한 사유는 문서 이력에 기록되어 본인·관리자 사후 검토에 활용됩니다.</p>
             <div style={{ margin: '10px 0 12px', padding: '10px 12px', borderRadius: 8, background: '#fef2f2', color: '#991b1b', fontSize: 13 }}>
               <strong>[{overrideTarget.id}]</strong> {overrideTarget.message}
             </div>
@@ -3053,12 +3053,12 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               autoFocus
               value={overrideReason}
               onChange={(e) => setOverrideReason(e.target.value)}
-              placeholder="예: 보세운송 건으로 동일국가 항구가 정상입니다."
+              placeholder={"예:\n· 관세사와 협의됨 — 현재 상태로 신고 진행\n· 보세운송 건으로 동일국가 항구가 정상\n· 사업자번호 확정 전 초안만 생성"}
               style={{ width: '100%', minHeight: 88, padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
               <button className="btn btn-secondary" onClick={() => { setOverrideTarget(null); setOverrideReason(''); }}>취소</button>
-              <button className="btn btn-primary" onClick={confirmOverride}>사유 기록 후 override</button>
+              <button className="btn btn-primary" onClick={confirmOverride}>사유 기록하고 생성</button>
             </div>
           </div>
         </div>
