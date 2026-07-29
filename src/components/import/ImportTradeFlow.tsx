@@ -18,6 +18,11 @@ import {
 } from '../../services/importDeclarationService';
 import type { ImportDeclarationDownloadFormat } from '../../services/importDeclarationService';
 import { lookupImportCargo } from '../../services/cargoProgressService';
+import { hasValidStoragePath } from '../../services/tradeDataMapper';
+import {
+  removeTradeAttachment,
+  uploadTradeAttachment,
+} from '../../services/tradeAttachmentStorageService';
 import type {
   ArrivalNoticeMeta,
   CargoTrackingResult,
@@ -30,12 +35,13 @@ import type {
   ImportTradeSnapshot,
   UserTradeRole,
 } from '../../types/importTrade';
-import type { TradeStatus } from '../../types';
+import type { PersistedTradeStatus } from '../../types';
 
 interface Props {
   role: UserTradeRole;
   userId: string;
   importerCompanyName?: string;
+  onGenerate: (snapshot: ImportTradeSnapshot) => Promise<string>;
   onComplete: (snapshot: ImportTradeSnapshot) => Promise<void>;
 }
 interface CachedState {
@@ -51,7 +57,7 @@ interface CachedState {
   arrivalNotice: ArrivalNoticeMeta | null;
   generatedAt: string | null;
   tradeId?: string;
-  existingStatus?: TradeStatus;
+  existingStatus?: PersistedTradeStatus;
 }
 const EMPTY: CachedState = {
   step: 1,
@@ -70,9 +76,23 @@ function loadCached(key: string): CachedState {
   try {
     const parsed = JSON.parse(localStorage.getItem(key) ?? 'null') as Partial<CachedState> | null;
     if (!parsed) return EMPTY;
+    const legacyArrival = parsed.arrivalNotice as (Partial<ArrivalNoticeMeta> & { size?: number }) | null | undefined;
+    const arrivalNotice = legacyArrival?.fileName
+      ? {
+        id: legacyArrival.id ?? crypto.randomUUID(),
+        documentType: 'arrival_notice' as const,
+        storageBucket: legacyArrival.storageBucket,
+        storagePath: legacyArrival.storagePath,
+        fileName: legacyArrival.fileName,
+        mimeType: legacyArrival.mimeType ?? 'application/octet-stream',
+        sizeBytes: legacyArrival.sizeBytes ?? legacyArrival.size ?? 0,
+        uploadedAt: legacyArrival.uploadedAt ?? new Date().toISOString(),
+      }
+      : null;
     return {
       ...EMPTY,
       ...parsed,
+      arrivalNotice,
       documents: parsed.documents ?? [],
       analysis: parsed.analysis ? normalizeImportAnalysisResult(parsed.analysis) : null,
       duty: parsed.duty?.status === 'calculated' ? parsed.duty : null,
@@ -85,7 +105,7 @@ function loadCached(key: string): CachedState {
   }
 }
 
-export default function ImportTradeFlow({ role, userId, importerCompanyName = '', onComplete }: Props) {
+export default function ImportTradeFlow({ role, userId, importerCompanyName = '', onGenerate, onComplete }: Props) {
   const cacheKey = `portai_import_draft:${userId}:${role}`;
   const [state, setState] = useState<CachedState>(() => loadCached(cacheKey));
   const [sourceFiles, setSourceFiles] = useState<Record<string, File>>({});
@@ -97,6 +117,37 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
     const firstCode = state.analysis?.extracted.items.find((item) => item.confirmedHSCode)?.confirmedHSCode;
     return state.suggestions.find((item) => item.code === firstCode || item.code === state.selectedCode);
   }, [state.analysis, state.selectedCode, state.suggestions]);
+
+  const persistImportDocuments = async (): Promise<ImportDocumentMeta[]> => {
+    const missingFiles = state.documents.filter((document) =>
+      !hasValidStoragePath(document) && !sourceFiles[document.id]);
+    if (missingFiles.length > 0) {
+      throw new Error('새로고침 후 파일 내용은 복원할 수 없습니다. Storage에 저장되지 않은 문서를 다시 첨부해 주세요.');
+    }
+
+    const scopeId = state.tradeId ?? `draft-${crypto.randomUUID()}`;
+    const persisted = [...state.documents];
+    for (let index = 0; index < persisted.length; index += 1) {
+      const document = persisted[index];
+      if (hasValidStoragePath(document)) continue;
+      const file = sourceFiles[document.id];
+      if (!file) continue;
+      const uploaded = await uploadTradeAttachment({
+        userId,
+        scopeId,
+        documentType: document.type === 'unknown' ? 'other' : document.type,
+        file,
+      });
+      persisted[index] = {
+        ...document,
+        storageBucket: uploaded.storageBucket,
+        storagePath: uploaded.storagePath,
+        uploadedAt: uploaded.uploadedAt,
+      };
+      setState((current) => ({ ...current, documents: [...persisted] }));
+    }
+    return persisted;
+  };
 
   useEffect(() => {
     try {
@@ -205,17 +256,42 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
       console.error('[Import Duty] calculation failed', { error, message: dutyError });
     }
     const risks = assessImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName);
-    setState((current) => ({
-      ...current,
-      step: 3,
-      duty,
-      dutyError,
-      risks,
-      generatedAt: new Date().toISOString(),
-      existingStatus: 'generated',
-    }));
-    setMessage(dutyError ? `${dutyError} 사유를 표시한 상태로 다음 단계로 이동했습니다.` : '');
-    setBusy(false);
+    const generatedAt = new Date().toISOString();
+    try {
+      const persistedDocuments = await persistImportDocuments();
+      const tradeId = await onGenerate({
+        tradeId: state.tradeId,
+        direction: 'import',
+        role,
+        documents: persistedDocuments,
+        arrivalNotice: state.arrivalNotice ?? undefined,
+        analysis: state.analysis,
+        selectedHSCode: selectedHS,
+        duty: duty ?? undefined,
+        risks,
+        cargo: state.cargo ?? undefined,
+        generatedAt,
+      });
+      setState((current) => ({
+        ...current,
+        documents: persistedDocuments,
+        step: 3,
+        duty,
+        dutyError,
+        risks,
+        generatedAt,
+        tradeId,
+        existingStatus: 'generated',
+      }));
+      setMessage(dutyError ? `${dutyError} 사유를 표시한 상태로 다음 단계로 이동했습니다.` : '');
+    } catch (error) {
+      console.error('[Import Trade] generated 상태 저장 실패:', error);
+      setMessage(error instanceof Error
+        ? error.message
+        : '확인 결과를 저장하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const updateConfirmedHS = (itemId: string, code: string) => setState((current) => {
@@ -323,11 +399,19 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
               entries.forEach(({ id, file }) => { next[id] = file; });
               return next;
             })}
-            onFileRemoved={(id) => setSourceFiles((current) => {
+            onFileRemoved={async (document) => {
+              if (document.storageBucket && document.storagePath) {
+                await removeTradeAttachment({
+                  storageBucket: document.storageBucket,
+                  storagePath: document.storagePath,
+                });
+              }
+              setSourceFiles((current) => {
               const next = { ...current };
-              delete next[id];
+              delete next[document.id];
               return next;
-            })}
+              });
+            }}
             description={role === 'shipper'
               ? '해외 수출업자에게 받은 C/I, P/L, B/L, C/O 및 기타서류를 한 번에 업로드해 주세요.'
               : 'B/L, C/I, P/L 사본을 업로드해 주세요.'}
@@ -439,9 +523,14 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
             </div>
             {state.cargo && <p className="cargo-status-text"><strong>{state.cargo.status}</strong> · {state.cargo.detail}</p>}
           </section>
-          <ArrivalNoticeUploader value={state.arrivalNotice} onChange={(arrivalNotice) => setState((current) => ({ ...current, arrivalNotice }))} />
+          <ArrivalNoticeUploader
+            value={state.arrivalNotice}
+            onChange={(arrivalNotice) => setState((current) => ({ ...current, arrivalNotice }))}
+            userId={userId}
+            tradeId={state.tradeId}
+          />
           <RiskSummary risks={state.risks} />
-          <div className="import-actions"><button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button><button className="btn btn-primary" disabled={busy || state.existingStatus === 'submitted'} onClick={() => void complete()}>{state.existingStatus === 'submitted' ? '제출 완료' : state.arrivalNotice ? '완료 및 제출' : '진행 중으로 저장'}</button></div>
+          <div className="import-actions"><button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button><button className="btn btn-primary" disabled={busy || state.existingStatus === 'submitted'} onClick={() => void complete()}>{state.existingStatus === 'submitted' ? '제출 완료' : hasValidStoragePath(state.arrivalNotice) ? '완료 및 제출' : '진행 중으로 저장'}</button></div>
         </>
       )}
     </div>

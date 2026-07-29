@@ -1,8 +1,7 @@
 import { FileSignature, RotateCcw } from 'lucide-react';
 import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from '../constants/ports';
-import type { BookingStatus, ContainerSize, NumericInput } from '../types';
+import type { BookingStatus, ContainerSize, NumericInput, PersistedTradeStatus } from '../types';
 import {
-  createEmptyForwarderFormState,
   isBookingNumberRequired,
   isEtaBeforeEtd,
   type ForwarderFormState,
@@ -11,6 +10,11 @@ import {
 interface Props {
   state: ForwarderFormState;
   onChange: (state: ForwarderFormState) => void;
+  status: PersistedTradeStatus | null;
+  busy: boolean;
+  onSave: () => Promise<void>;
+  onSubmit: () => Promise<void>;
+  onReset: () => void;
 }
 
 const SOURCE_DOCUMENTS = ['Commercial Invoice', 'Packing List', '수출신고필증', '기타 서류'] as const;
@@ -25,7 +29,7 @@ function numericValue(value: string): NumericInput {
   return value === '' ? '' : Number(value);
 }
 
-export default function ForwarderWorkspaceForm({ state, onChange }: Props) {
+export default function ForwarderWorkspaceForm({ state, onChange, status, busy, onSave, onSubmit, onReset }: Props) {
   const patch = (values: Partial<ForwarderFormState>) => onChange({ ...state, ...values });
   const bookingNumberMissing = isBookingNumberRequired(state);
   const invalidSchedule = isEtaBeforeEtd(state.departureDate, state.arrivalDate);
@@ -116,7 +120,13 @@ export default function ForwarderWorkspaceForm({ state, onChange }: Props) {
       </details>
 
       <div className="form-actions">
-        <button type="button" className="btn btn-secondary" onClick={() => onChange(createEmptyForwarderFormState())}><RotateCcw size={16} /> 초기화</button>
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={onReset}><RotateCcw size={16} /> 초기화</button>
+        <button type="button" className="btn btn-secondary" disabled={busy || status === 'submitted' || bookingNumberMissing || invalidSchedule} onClick={() => void onSave()}>
+          {status === 'generated' ? '선적·부킹 정보 다시 저장' : '선적·부킹 정보 저장'}
+        </button>
+        <button type="button" className="btn btn-primary" disabled={busy || status !== 'generated' || bookingNumberMissing || invalidSchedule} onClick={() => void onSubmit()}>
+          {status === 'submitted' ? '전송 완료' : '전체 문서 전송'}
+        </button>
       </div>
     </div>
   );

@@ -35,6 +35,9 @@ hwp/
 
 # Supabase CLI temporary files
 supabase/.temp/
+
+# Supabase database backups (may contain personal or business data)
+supabase/backups/
 # 무역서류 템플릿(docx)은 값 주입용 고정 자산 — 추적
 !templates/commercial_invoice_template.docx
 !templates/packing_list_template.docx

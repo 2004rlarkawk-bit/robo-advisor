@@ -30,13 +30,19 @@ export interface ImportDocumentMeta {
   analysisSuccess?: boolean;
   errorMessage?: string;
   sourceId?: string;
+  storageBucket?: string;
+  storagePath?: string;
+  uploadedAt?: string;
 }
 
 export interface ArrivalNoticeMeta {
+  id: string;
+  documentType: 'arrival_notice';
+  storageBucket?: string;
   storagePath?: string;
   fileName: string;
   mimeType: string;
-  size: number;
+  sizeBytes: number;
   uploadedAt: string;
 }
 
@@ -233,5 +239,5 @@ export interface ImportTradeSnapshot {
   risks: ImportRisk[];
   cargo?: CargoTrackingResult;
   generatedAt: string;
-  flowCompletedAt: string;
+  flowCompletedAt?: string;
 }

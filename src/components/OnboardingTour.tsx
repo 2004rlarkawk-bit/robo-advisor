@@ -133,7 +133,6 @@ export default function OnboardingTour() {
     };
     timer = setTimeout(locate, step.goto ? 250 : 0);
     return () => { cancelled = true; clearTimeout(timer); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, idx, tick]);
 
   useEffect(() => {
