@@ -12,6 +12,7 @@ import {
   HelpCircle,
   RotateCcw,
   FileSignature,
+  AlertTriangle,
   CheckCircle2,
   Terminal,
   Download,
@@ -1202,6 +1203,16 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const blockingIssuesCount = unresolvedBlockers(issues, overrides).length;
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
+
+  // 화주(내가) 직접 생성하는 서류 = 외부 발행(external_pending)·해당없음(not_needed) 제외.
+  // rulesEngine 상태는 입력값만 보고 'completed'로 표시하지만, 차단(error)이면 실제 파일은
+  // 생성되지 않는다(handleGenerateDocuments가 invoiceData/packingListData=null). 따라서
+  // "정말 만들어졌는지"는 hasDoc(실제 파일 유무)로 판단한다.
+  const ownDocs = documents.filter(d => d.status !== 'external_pending' && d.status !== 'not_needed');
+  const ownReadyCount = ownDocs.filter(d => hasDoc(d.id)).length;
+  const externalPendingCount = documents.filter(d => d.status === 'external_pending').length;
+  const isGenerationBlocked = blockingIssuesCount > 0;
+  const isSubmitReady = !isGenerationBlocked && ownDocs.length > 0 && ownReadyCount === ownDocs.length;
 
   const draftSaveLabel = (() => {
     if (draftSaveStatus === 'local') return '로컬에 저장됨';
@@ -2521,18 +2532,37 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                   </button>
                 </div>
 
-                {/* 2. 준비도 히어로 */}
-                <div className="rv-hero">
-                  <div className="rv-hero-lab">{profile.tradeType === 'import' ? '수입' : '수출'} 준비도</div>
-                  <div className="rv-hero-pct">{readiness.percent}<small>%</small></div>
-                  <div className="rv-track"><div className="rv-track-fill" style={{ width: `${readiness.percent}%` }} /></div>
-                  <div className="rv-hero-msg">
-                    서류 <b>{completedDocsCount}/{documents.length}</b> 생성 완료
-                    {blockingIssuesCount > 0
-                      ? <> — 아래 <b>{blockingIssuesCount}건</b>만 처리하면 제출할 수 있어요.</>
-                      : <> — 제출 준비가 끝났어요.</>}
+                {/* 2. 준비도 히어로 — 차단 중엔 100% 대신 해결 유도, 준비완료면 실제 % */}
+                {isGenerationBlocked ? (
+                  <div className="rv-hero rv-hero-blocked">
+                    <span className="rv-hero-blocked-ic"><AlertTriangle size={22} /></span>
+                    <div>
+                      <div className="rv-hero-blocked-title">
+                        제출 전 <b>{blockingIssuesCount}건</b>을 해결해야 서류가 생성돼요
+                      </div>
+                      <p className="rv-hero-blocked-sub">
+                        아래 “해결하면 제출” 목록에서 바로 수정할 수 있어요. 해결하면 상업송장·패킹리스트가 자동으로 만들어집니다.
+                      </p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rv-hero">
+                    <div className="rv-hero-lab">{profile.tradeType === 'import' ? '수입' : '수출'} 준비도</div>
+                    <div className="rv-hero-pct">{readiness.percent}<small>%</small></div>
+                    <div className="rv-track"><div className="rv-track-fill" style={{ width: `${readiness.percent}%` }} /></div>
+                    <div className="rv-hero-msg">
+                      화주 서류 <b>{ownReadyCount}/{ownDocs.length}</b> 생성 완료
+                      {isSubmitReady
+                        ? <> — 제출 준비가 끝났어요.</>
+                        : readiness.nextStepLabel ? <> — {readiness.nextStepLabel}</> : null}
+                    </div>
+                    {externalPendingCount > 0 && (
+                      <p className="rv-hero-ext">
+                        선하증권·통관신고·원산지증명서 등 <b>{externalPendingCount}건</b>은 선사·관세사·상공회의소가 발행해요.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* 3. 서류 현황 — 한 줄 = 한 서류 (상태 + 완료 시 보기·다운로드) */}
                 <div className="rv-panel">
@@ -2544,16 +2574,21 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       : doc.id === 'customs_dec' ? '신고'
                       : doc.id === 'co' ? '원산'
                       : doc.id === 'insurance' ? '보험' : '서류';
-                    const sbClass = doc.status === 'completed' ? 'ok'
+                    const fileReady = hasDoc(doc.id);
+                    const isOwnDoc = doc.id === 'invoice' || doc.id === 'packing_list';
+                    // 화주 서류인데 실제 파일이 없으면(차단·미생성) '생성 완료'로 표기하지 않는다
+                    const blockedOwn = isOwnDoc && doc.status === 'completed' && !fileReady;
+                    const displayText = blockedOwn ? '생성 대기' : doc.statusText;
+                    const sbClass = blockedOwn ? 'na'
+                      : doc.status === 'completed' ? 'ok'
                       : doc.status === 'review_required' ? 'rev' : 'na';
-                    const isCompleted = doc.status === 'completed';
                     return (
                       <div className="rv-row" key={doc.id}>
-                        <span className={`rv-abbr ${isCompleted ? '' : 'gray'}`}>{abbr}</span>
+                        <span className={`rv-abbr ${fileReady ? '' : 'gray'}`}>{abbr}</span>
                         <span className="rv-nm">{doc.name}</span>
-                        <span className={`rv-sb rv-sb-${sbClass}`}>{doc.statusText}</span>
+                        <span className={`rv-sb rv-sb-${sbClass}`}>{displayText}</span>
                         <div className="rv-act">
-                          {hasDoc(doc.id) ? (
+                          {fileReady ? (
                             <>
                               <button className="rv-view" onClick={() => setPreviewDocId(doc.id)}>
                                 <Eye size={15} /> 보기
@@ -2566,9 +2601,9 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                 <Download size={17} />
                               </button>
                             </>
-                          ) : isCompleted ? (
-                            // 실물이 외부(선사·세관)에서 발급되어 앱에서 내려받을 파일이 없는 서류(B/L·통관신고)
-                            <span className="rv-act-note">정보 확인 완료</span>
+                          ) : doc.status === 'external_pending' ? (
+                            // 선사·관세사·상공회의소 등 외부에서 발행하는 서류
+                            <span className="rv-act-note ext">외부 발행</span>
                           ) : null}
                         </div>
                       </div>
