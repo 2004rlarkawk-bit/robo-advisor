@@ -44,18 +44,16 @@ async function invokeOpenAIAssistant(
     );
 
   if (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(
-      (typeof error === 'object' &&
-      error !== null &&
-      'message' in error &&
-      typeof error.message === 'string'
-        ? error.message
-        : '') ||
-        'OpenAI Assistant Edge Function 요청에 실패했습니다.'
-    );
+    // 원본 에러 객체를 그대로 호출 측에 전달합니다.
+    // Error가 아닌 값만 메시지를 가진 Error 객체로 감쌉니다.
+    throw error instanceof Error
+      ? error
+      : new Error(
+          (isRecord(error) &&
+          typeof error.message === 'string' &&
+          error.message) ||
+            'OpenAI Assistant Edge Function 요청에 실패했습니다.'
+        );
   }
 
   if (

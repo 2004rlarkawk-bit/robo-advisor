@@ -10,19 +10,21 @@ import {
   PhoneCall, 
   Bell, 
   HelpCircle,
-  RotateCcw, 
-  FileSignature, 
-  AlertTriangle, 
-  CheckCircle2, 
+  RotateCcw,
+  FileSignature,
+  AlertTriangle,
+  CheckCircle2,
   Terminal,
   Download,
   Eye,
-  Edit3,
   PanelLeftClose,
   PanelLeftOpen,
   UserRound,
   Anchor,
-  BookOpen
+  BookOpen,
+  Pencil,
+  ArrowRight,
+  Calculator
 } from 'lucide-react';
 import {
   TradeProfile,
@@ -34,20 +36,24 @@ import {
   PackingListData,
   type ShipperItem,
   type ShipperSupplementalState,
+  type FeedbackReport,
 } from './types';
+import './styles/feedbackReport.css';
 import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
-import { buildPackingListXlsx, mapPackingListToSchema, renderPackingListPreviewHtml } from './services/packingListXlsxService';
+import { buildPackingListDocx, renderPackingListDocxPreview } from './services/packingListDocxService';
 import SettingsPanel from './components/SettingsPanel';
 import GuidePanel from './components/GuidePanel';
 import AboutPanel from './components/AboutPanel';
 import DataAnalysisPanel from './components/DataAnalysisPanel';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
 import TradeManagerPanel from './components/TradeManagerPanel';
+import CustomsHistoryPanel from './components/CustomsHistoryPanel';
 import AuthPage from './components/AuthPage';
 import OnboardingPage from './components/OnboardingPage';
 import ProfileSettingsPage from './components/ProfileSettingsPage';
 import ForwarderWorkspaceForm from './components/ForwarderWorkspaceForm';
 import ShipperWorkspaceForm from './components/ShipperWorkspaceForm';
+import OnboardingTour from './components/OnboardingTour';
 import TradeDirectionSelector from './components/trade/TradeDirectionSelector';
 import TradeRoleSelector from './components/trade/TradeRoleSelector';
 import ImportShipperFlow from './components/import/ImportShipperFlow';
@@ -376,7 +382,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   // 미해결 차단 이슈 = error 중 (overridable+사유입력)으로 우회되지 않은 것
   const unresolvedBlockers = (list: ValidationIssue[], ov: Record<string, string>) =>
     list.filter(i => i.severity === 'error' && !(i.overridable && ov[issueKey(i)]));
-  const [aiFeedback, setAiFeedback] = useState<string>('');
+  const [, setAiFeedback] = useState<string>('');
+  const [feedbackReport, setFeedbackReport] = useState<FeedbackReport | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [htmlTemplates, setHtmlTemplates] = useState<Record<string, string>>({});
   // 상업송장은 고정 docx 템플릿에서 생성한다. 구조 데이터를 보관하고, 생성된 Blob을 캐시해
@@ -385,9 +392,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const invoiceDocxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
   const docxPreviewRef = useRef<HTMLDivElement | null>(null);
 
-  // 패킹리스트도 고정 xlsx 템플릿에서 생성 — 미리보기/다운로드가 같은 스키마를 쓰게 한다.
+  // 패킹리스트도 고정 docx 템플릿에서 생성 — 미리보기/다운로드가 동일 바이너리(같은 Blob).
   const [packingListData, setPackingListData] = useState<PackingListData | null>(null);
   const packingXlsxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
+  const packingDocxPreviewRef = useRef<HTMLDivElement | null>(null);
 
   // 같은 InvoiceData면 같은 Blob 반환(캐시) → 화면 미리보기와 다운로드 파일이 동일 바이너리.
   const getInvoiceBlob = async (): Promise<Blob | null> => {
@@ -399,12 +407,12 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     return blob;
   };
 
-  // 같은 PackingListData면 같은 xlsx Blob 반환(캐시).
+  // 같은 PackingListData면 같은 docx Blob 반환(캐시) → 미리보기와 다운로드가 동일 바이너리.
   const getPackingListBlob = async (): Promise<Blob | null> => {
     if (!packingListData) return null;
     const sig = JSON.stringify(packingListData);
     if (packingXlsxCacheRef.current?.sig === sig) return packingXlsxCacheRef.current.blob;
-    const blob = await buildPackingListXlsx(packingListData);
+    const blob = await buildPackingListDocx(packingListData);
     packingXlsxCacheRef.current = { sig, blob };
     return blob;
   };
@@ -432,11 +440,80 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewDocId, invoiceData]);
 
+  // 패킹리스트도 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
+  useEffect(() => {
+    if (previewDocId !== 'packing_list' || !packingListData) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = await getPackingListBlob();
+        const host = packingDocxPreviewRef.current;
+        if (!blob || cancelled || !host) return;
+        await renderPackingListDocxPreview(blob, host);
+      } catch {
+        const host = packingDocxPreviewRef.current;
+        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">패킹리스트 미리보기 생성에 실패했습니다.</p>';
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewDocId, packingListData]);
+
   // Mobile simulator inputs
   const [mobileWeight, setMobileWeight] = useState('');
   const [mobileHSCode, setMobileHSCode] = useState('');
   const [mobileOrigin, setMobileOrigin] = useState('');
   const [hsCandidates, setHsCandidates] = useState<{ code: string; description: string; confidence: string; reasoning: string; }[]>([]);
+
+  // "입력 화면에서 수정" — 이슈가 가리키는 입력 필드로 이동해 강조 + 무엇을 고칠지 안내
+  const [highlightField, setHighlightField] = useState<string | null>(null);
+  const [highlightHint, setHighlightHint] = useState<string>('');
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 이슈 → 입력 폼 data-field 키. 전용 필드명이 다른 경우만 보정.
+  const issueToFieldKey = (issue: ValidationIssue): string => {
+    const f = String(issue.field);
+    if (f === 'invoiceAmount') return 'totalAmount';
+    return f;
+  };
+
+  const clearFieldHighlight = () => {
+    if (highlightTimerRef.current) { clearTimeout(highlightTimerRef.current); highlightTimerRef.current = null; }
+    document.querySelectorAll('.field-focus').forEach((e) => e.classList.remove('field-focus'));
+    setHighlightField(null);
+    setHighlightHint('');
+  };
+
+  const goToFieldFix = (issue: ValidationIssue) => {
+    setHighlightHint(issue.message);
+    setHighlightField(issueToFieldKey(issue));
+    setHasGenerated(false);
+  };
+
+  // 입력 화면으로 전환되면 해당 필드로 스크롤 + 강조 표시. (5초 후 자동 해제)
+  useEffect(() => {
+    if (hasGenerated || !highlightField) return;
+    const raf = requestAnimationFrame(() => {
+      document.querySelectorAll('.field-focus').forEach((e) => e.classList.remove('field-focus'));
+      const el = document.querySelector<HTMLElement>(`[data-field="${highlightField}"]`);
+      if (!el) return;
+      // 접힌 상세(details) 안이면 펼쳐서 보이게 한다
+      let p: HTMLElement | null = el.parentElement;
+      while (p) { if (p.tagName === 'DETAILS') (p as HTMLDetailsElement).open = true; p = p.parentElement; }
+      el.classList.add('field-focus');
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const input = el.querySelector<HTMLElement>('input, select, textarea');
+      if (input) setTimeout(() => input.focus({ preventScroll: true }), 320);
+    });
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => {
+      document.querySelectorAll('.field-focus').forEach((e) => e.classList.remove('field-focus'));
+      setHighlightField(null);
+      setHighlightHint('');
+    }, 5000);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightField, hasGenerated]);
 
   const consoleEndRef = useRef<HTMLDivElement>(null);
   const currentTradeIdRef = useRef<string | null>(null);
@@ -548,6 +625,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   isSubmittingTradeRef.current = false;
   hasSubmittedTradeRef.current = false;
   setAiFeedback('');
+  setFeedbackReport(null);
   setMobileWeight('');
   setMobileHSCode('');
   setMobileOrigin('');
@@ -593,7 +671,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         const createdTrade = await createGeneratedTrade(generatedTradeData);
         currentTradeIdRef.current = createdTrade.id;
         alert(overrideRecords.length > 0
-          ? `필요 서류가 생성·저장되었습니다. (차단 오류 ${overrideRecords.length}건이 사유 입력으로 override됨)`
+          ? `필요 서류가 생성·저장되었습니다. (경고 ${overrideRecords.length}건이 사유 기록 후 무시 처리됨)`
           : '필요 서류가 생성되고 새로운 거래가 저장되었습니다.');
       } else {
         const currentTradeId = currentTradeIdRef.current;
@@ -601,7 +679,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         const updatedTrade = await updateGeneratedTrade(currentTradeId, generatedTradeData);
         if (updatedTrade.id !== currentTradeId) throw new Error('재생성된 거래 ID가 현재 거래와 일치하지 않습니다.');
         alert(overrideRecords.length > 0
-          ? `필요 서류가 다시 생성되었습니다. (차단 오류 ${overrideRecords.length}건 사유 override됨)`
+          ? `필요 서류가 다시 생성되었습니다. (경고 ${overrideRecords.length}건이 사유 기록 후 무시 처리됨)`
           : '수정된 내용으로 필요 서류가 다시 생성되었으며 기존 거래가 업데이트되었습니다.');
       }
       setCurrentTradeStatus('generated');
@@ -621,7 +699,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const confirmOverride = () => {
     if (!overrideTarget) return;
     const reason = overrideReason.trim();
-    if (!reason) { alert('override 사유를 입력하세요.'); return; }
+    if (!reason) { alert('사유를 입력하세요.'); return; }
     const nextOv = { ...overrides, [issueKey(overrideTarget)]: reason };
     setOverrides(nextOv);
     setOverrideTarget(null);
@@ -678,6 +756,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       setDocuments(result.documents?.documents || []);
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
+      setFeedbackReport(result.feedback?.report || null);
       setHsCandidates(result.hs?.candidates || []);
 
       // 정책: error(미해결)만 생성 차단. warning은 통과(배지). 사유 override된 error는 우회.
@@ -685,19 +764,20 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       const canBypass = IS_DEV_TEST_ENABLED && devTestMode !== null;
       const blockers = unresolvedBlockers(issuesList, overrides);
       if (blockers.length > 0 && !canBypass) {
-        // 차단 중에도 검증 결과와 override UI는 보여준다. 문서 자체는 공개·저장하지 않는다.
-        setHtmlTemplates({});
-        setInvoiceData(null);
+        // 차단이라도 파이프라인이 조립한 초안 문서는 볼 수 있게 공개한다(미리보기·다운로드).
+        // 단, 최종 제출·거래 저장은 막는다: blockedGenRef 유지 + "전체 문서 전송"은 blockingIssuesCount로 비활성.
+        setHtmlTemplates(result.documents?.htmlTemplates || {});
+        setInvoiceData(result.documents?.generatedDocs?.invoice || null);
         invoiceDocxCacheRef.current = null;
-        setPackingListData(null);
+        setPackingListData(result.documents?.generatedDocs?.packingList || null);
         packingXlsxCacheRef.current = null;
         setHasGenerated(true);
         blockedGenRef.current = { result, generationProfile, writeMode };
         const overridable = blockers.filter((blocker) => blocker.overridable).length;
         alert(
-          `생성이 차단되었습니다 — 해결해야 할 오류 ${blockers.length}건.` +
+          `초안이 생성되었습니다. 제출 전 해결해야 할 오류 ${blockers.length}건이 있어요 — 미리보기·다운로드는 가능하지만 최종 제출은 보류됩니다.` +
           (overridable > 0
-            ? `\n(그중 ${overridable}건은 아래 검증 결과에서 "사유 입력 후 override"로 진행 가능)`
+            ? `\n(그중 ${overridable}건은 아래 검증 결과에서 "경고 무시하고 생성"으로 진행 가능)`
             : '')
         );
         return;
@@ -753,6 +833,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setOverrides((t.generatedDocs?.overrides as Record<string, string>) || {});
     blockedGenRef.current = null;
     setAiFeedback('');
+    setFeedbackReport(null);
     setHsCandidates([]);
     setHasGenerated(true);
     setActiveMenu('dashboard');
@@ -790,6 +871,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setPackingListData(null);
     packingXlsxCacheRef.current = null;
     setAiFeedback('');
+    setFeedbackReport(null);
     setHsCandidates([]);
     setHasGenerated(false);
     setDevTestMode(null);
@@ -826,6 +908,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       packingXlsxCacheRef.current = null;
       setIssues(result.issues?.issues || []);
       setAiFeedback(result.feedback?.message || '');
+      setFeedbackReport(result.feedback?.report || null);
       setHsCandidates(result.hs?.candidates || []);
     } catch (error) {
       if (seq === rerunSeqRef.current) {
@@ -898,14 +981,54 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     return `${docTypeLabel}_${company}_${dateStr}.pdf`;
   };
 
+  // 상업송장 docx Blob을 브라우저 인쇄로 PDF 저장 — 미리보기와 같은 docx-preview 렌더를 인쇄 iframe에 그려
+  // 벡터(텍스트 선택·추출 가능) PDF로 뽑는다. (정적 호스팅이라 서버 soffice 변환은 불가 → 클라이언트 인쇄 사용.)
+  const printInvoiceAsPdf = async (blob: Blob) => {
+    const title = getDocFileName('invoice').replace(/\.pdf$/i, '').replace(/[<>"'&]/g, '');
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:fixed; right:0; bottom:0; width:0; height:0; border:0;';
+    document.body.appendChild(iframe);
+
+    const idoc = iframe.contentWindow?.document;
+    if (!idoc) {
+      document.body.removeChild(iframe);
+      alert('PDF 인쇄 창 생성에 실패했습니다. 다시 시도해 주세요.');
+      return;
+    }
+    // docx는 자체 여백을 가지므로 @page 여백은 0으로 두고 docx-preview 렌더의 여백을 그대로 살린다.
+    idoc.open();
+    idoc.write(
+      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>' + title + '</title>' +
+      '<style>@page { size: A4; margin: 0; } html, body { margin: 0; padding: 0; background: #fff; }' +
+      '* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }</style></head>' +
+      '<body><div id="pdf-host"></div></body></html>'
+    );
+    idoc.close();
+
+    const host = idoc.getElementById('pdf-host') as HTMLElement | null;
+    if (!host) { document.body.removeChild(iframe); return; }
+    // 같은 docx Blob을 인쇄 iframe 문서에 렌더(스타일도 그 문서에 주입됨).
+    await renderInvoiceDocxPreview(blob, host);
+
+    const win = iframe.contentWindow!;
+    let cleaned = false;
+    const cleanup = () => { if (cleaned) return; cleaned = true; if (iframe.parentNode) document.body.removeChild(iframe); };
+    win.onafterprint = cleanup;
+    win.focus();
+    win.print();
+    setTimeout(cleanup, 60000); // onafterprint 미발화 브라우저 대비
+  };
+
   const handleDownloadDoc = async (docId: string) => {
-    // 상업송장: 고정 docx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 바이너리).
+    // 상업송장: 고정 docx 템플릿에서 생성한 Blob을 docx로 저장 + 같은 Blob을 인쇄해 PDF로도 저장.
     if (docId === 'invoice') {
       const blob = await getInvoiceBlob();
       if (!blob) {
         alert('상업송장 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
         return;
       }
+      // 1) DOCX 저장
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -914,10 +1037,18 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      // 2) PDF 저장(브라우저 인쇄) — 같은 docx를 렌더해서 벡터 PDF로.
+      alert(
+        '상업송장 DOCX가 저장되었습니다. 이어서 PDF 저장 창이 열립니다.\n\n' +
+        '· 대상(프린터): "PDF로 저장" 선택\n' +
+        '· URL/날짜가 찍히지 않게 하려면 → "옵션 더보기 → 머리글 및 바닥글" 체크 해제'
+      );
+      await printInvoiceAsPdf(blob);
       return;
     }
 
-    // 패킹리스트: 고정 xlsx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 데이터).
+    // 패킹리스트: 고정 docx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 바이너리).
     if (docId === 'packing_list') {
       let blob: Blob | null = null;
       try {
@@ -933,7 +1064,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = getDocFileName('packing_list').replace(/\.pdf$/i, '.xlsx');
+      a.download = getDocFileName('packing_list').replace(/\.pdf$/i, '.docx');
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1066,23 +1197,20 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
   // Calculate statistics — info 수준 이슈는 안내일 뿐 제출을 막지 않음
   const completedDocsCount = documents.filter(d => d.status === 'completed').length;
-  // 결과 상단 통계 바 — 생성 대상인데 자동 생성 양식이 아직 없는 서류(= '양식 준비 중' 카드) 개수
-  const pendingTemplateCount = documents.filter(
-    d => d.status !== 'not_needed' && d.status !== 'not_started' && !hasDoc(d.id)
-  ).length;
-  // 차단(제출/생성 게이트) = 미해결 error만. 표시용 보완필요 = error+warning 총계.
+  // 차단(제출/생성 게이트) = 미해결 error만.
   const blockingIssuesCount = unresolvedBlockers(issues, overrides).length;
-  const reviewDocsCount = issues.filter(i => i.severity !== 'info').length;
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 
-  // AI 피드백에서 이슈 상세 라인(📦🔢🌍⚓⚠️ 접두)은 아래 보완 카드와 중복되므로
-  // 요약 문단만 표시한다. 전부 이슈 라인이면(필터 결과가 비면) 원문 유지.
-  const feedbackParagraphs = (() => {
-    const lines = aiFeedback.split('\n').map(l => l.trim()).filter(Boolean);
-    const summary = lines.filter(l => !/^(📦|🔢|🌍|⚓|⚠️)/.test(l));
-    return summary.length > 0 ? summary : lines;
-  })();
+  // 화주(내가) 직접 생성하는 서류 = 외부 발행(external_pending)·해당없음(not_needed) 제외.
+  // rulesEngine 상태는 입력값만 보고 'completed'로 표시하지만, 차단(error)이면 실제 파일은
+  // 생성되지 않는다(handleGenerateDocuments가 invoiceData/packingListData=null). 따라서
+  // "정말 만들어졌는지"는 hasDoc(실제 파일 유무)로 판단한다.
+  const ownDocs = documents.filter(d => d.status !== 'external_pending' && d.status !== 'not_needed');
+  const ownReadyCount = ownDocs.filter(d => hasDoc(d.id)).length;
+  const externalPendingCount = documents.filter(d => d.status === 'external_pending').length;
+  const isGenerationBlocked = blockingIssuesCount > 0;
+  const isSubmitReady = !isGenerationBlocked && ownDocs.length > 0 && ownReadyCount === ownDocs.length;
 
   const draftSaveLabel = (() => {
     if (draftSaveStatus === 'local') return '로컬에 저장됨';
@@ -1306,6 +1434,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 */
   return (
     <div className="app-container">
+      <OnboardingTour />
       {/* 1. Left Navigation Sidebar */}
       <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="logo-section">
@@ -1355,11 +1484,13 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             </div>
           </li>
           <li>
-            <div className="menu-item disabled" title="준비 중인 기능입니다">
-              <FileCheck2 size={18} />
-              통관 내역
-              <span className="badge-soon">준비중</span>
-            </div>
+            <div
+  className={`menu-item ${activeMenu === 'customs_history' ? 'active' : ''}`}
+  onClick={() => setActiveMenu('customs_history')}
+>
+  <FileCheck2 size={18} />
+  통관 내역
+</div>
           </li>
           <li>
             <div
@@ -1456,9 +1587,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
           <div className="workspace-area">
             {activeMenu === 'about' ? <AboutPanel onStart={() => setActiveMenu('dashboard')} />
             : activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
-            : activeMenu === 'guide' ? <GuidePanel />
+            : activeMenu === 'guide' ? <GuidePanel onNavigate={setActiveMenu} />
             : activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'analysis' ? <DataAnalysisPanel />
+            : activeMenu === 'customs_history' ? <CustomsHistoryPanel onLoad={handleLoadSavedTrade} />
             : activeMenu === 'trades' ? <TradeManagerPanel onLoad={handleLoadSavedTrade} />   
             : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
             : <>
@@ -1556,7 +1688,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </select>
                     </div>
 
-                    <div className="form-group" data-docs="invoice packing_list co">
+                    <div className="form-group" data-docs="invoice packing_list co" data-field="itemName">
                       <label className="form-label">품목명</label>
                       <input
                         type="text"
@@ -1578,7 +1710,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       />
                     </div>
 
-                    <div className="form-group" data-docs="invoice bl">
+                    <div className="form-group" data-docs="invoice bl" data-field="loadPort">
                       <label className="form-label">선적항</label>
                       <select
                         className="form-input"
@@ -1592,7 +1724,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </select>
                     </div>
 
-                    <div className="form-group" data-docs="invoice bl">
+                    <div className="form-group" data-docs="invoice bl" data-field="dischargePort">
                       <label className="form-label">도착항</label>
                       <select
                         className="form-input"
@@ -1606,7 +1738,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </select>
                     </div>
 
-                    <div className="form-group" data-docs="invoice bl insurance">
+                    <div className="form-group" data-docs="invoice bl insurance" data-field="incoterms">
                       <label className="form-label">거래조건 (Incoterms)</label>
                       <select
                         className="form-input"
@@ -1621,7 +1753,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </select>
                     </div>
 
-                    <div className="form-group" data-docs="invoice packing_list co">
+                    <div className="form-group" data-docs="invoice packing_list co" data-field="quantity">
                       <label className="form-label">화물 수량</label>
                       <div className="input-suffix">
                         <input
@@ -1635,7 +1767,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </div>
                     </div>
 
-                    <div className="form-group" data-docs="packing_list">
+                    <div className="form-group" data-docs="packing_list" data-field="weight">
                       <label className="form-label">중량(kg)</label>
                       <div className="input-suffix">
                         <input
@@ -1649,7 +1781,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </div>
                     </div>
 
-                    <div className="form-group" data-docs="bl">
+                    <div className="form-group" data-docs="bl" data-field="departureDate">
                       <label className="form-label">출발일</label>
                       <input
                         type="date"
@@ -1659,7 +1791,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       />
                     </div>
 
-                    <div className="form-group" data-docs="bl">
+                    <div className="form-group" data-docs="bl" data-field="arrivalDate">
                       <label className="form-label">도착예정일</label>
                       <input
                         type="date"
@@ -1669,7 +1801,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       />
                     </div>
 
-                    <div className="form-group" data-docs="invoice packing_list co">
+                    <div className="form-group" data-docs="invoice packing_list co" data-field="companyName">
                       <label className="form-label">업체명</label>
                       <input
                         type="text"
@@ -1680,7 +1812,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       />
                     </div>
 
-                    <div className="form-group" data-docs="invoice packing_list co">
+                    <div className="form-group" data-docs="invoice packing_list co" data-field="contact">
                       <label className="form-label">담당자 연락처</label>
                       <input
                         type="text"
@@ -1724,7 +1856,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         />
                       </div>
 
-                      <div className="form-group" data-docs="invoice">
+                      <div className="form-group" data-docs="invoice" data-field="invoiceDate">
                         <label className="form-label">송장 작성일</label>
                         <input
                           type="date"
@@ -1778,7 +1910,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         </select>
                       </div>
 
-                      <div className="form-group" data-docs="invoice">
+                      <div className="form-group" data-docs="invoice" data-field="unitPrice">
                         <label className="form-label">단가</label>
                         <input
                           type="number"
@@ -1789,7 +1921,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         />
                       </div>
 
-                      <div className="form-group" data-docs="invoice">
+                      <div className="form-group" data-docs="invoice" data-field="totalAmount">
                         <label className="form-label">총 금액</label>
                         <input
                           type="number"
@@ -1822,7 +1954,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         />
                       </div>
 
-                      <div className="form-group" data-docs="invoice customs_dec">
+                      <div className="form-group" data-docs="invoice customs_dec" data-field="currency">
                         <label className="form-label">결제 통화</label>
                         <select
                           className="form-input"
@@ -2361,6 +2493,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                           if (d.status === 'completed') badgeClass = 'status-completed';
                           else if (d.status === 'review_required') badgeClass = 'status-review-required';
                           else if (d.status === 'not_needed') badgeClass = 'status-not-needed';
+                          else if (d.status === 'external_pending') badgeClass = 'status-external-pending';
                           return (
                             <li key={d.id}>
                               <span className="info-doc-name">{d.name}</span>
@@ -2383,210 +2516,147 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               </div>
             ) : (
               /* --- 결과 리포트 대시보드 모드 --- */
-              <div className="workspace-area">
-                <div className="result-header-summary">
-                  <div className="summary-badge-list">
-                    <div className="summary-badge">
-                      <span className="summary-badge-icon">🏷️</span>
-                      수출입 구분: {profile.tradeType === 'export' ? '수출' : '수입'}
-                    </div>
-                    {profile.itemName && (
-                      <div className="summary-badge">
-                        <span className="summary-badge-icon">📦</span>
-                        품목명: {profile.itemName}
-                      </div>
-                    )}
-                    {profile.loadPort && (
-                      <div className="summary-badge">
-                        <span className="summary-badge-icon">⚓</span>
-                        선적항: {profile.loadPort}
-                      </div>
-                    )}
-                    {profile.dischargePort && (
-                      <div className="summary-badge">
-                        <span className="summary-badge-icon">🏁</span>
-                        도착항: {profile.dischargePort}
-                      </div>
-                    )}
-                    {profile.incoterms && (
-                      <div className="summary-badge">
-                        <span className="summary-badge-icon">📄</span>
-                        거래조건: {profile.incoterms}
-                      </div>
-                    )}
+              <div className="workspace-area result-view">
+                {/* 1. 상단: 거래 요약 + 로그 */}
+                <div className="rv-topline">
+                  <div className="rv-summary">
+                    <span className={`trade-type-badge ${profile.tradeType}`}>{profile.tradeType === 'export' ? '수출' : '수입'}</span>
+                    <span className="rv-summary-text">
+                      {profile.itemName || '(품목명 없음)'}
+                      {(profile.loadPort || profile.dischargePort) && (
+                        <span className="rv-dim"> · {profile.loadPort || '-'} → {profile.dischargePort || '-'}</span>
+                      )}
+                      {profile.incoterms && <span className="rv-dim"> · {profile.incoterms}</span>}
+                    </span>
                   </div>
-
-                  <button className="btn btn-secondary btn-sm" onClick={() => setShowConsole(true)}>
-                    <Terminal size={14} />
-                    에이전트 실행 로그 확인
+                  <button className="rv-log-btn" onClick={() => setShowConsole(true)}>
+                    <Terminal size={14} /> 에이전트 실행 로그
                   </button>
                 </div>
 
-                {/* 실제 제출 전 준비도 바 */}
-                <div className="readiness-card">
-                  <div className="readiness-card-header">
-                    <span className="readiness-card-title">{profile.tradeType === 'import' ? '수입' : '수출'} 준비도</span>
-                    <span className="readiness-card-percent">{readiness.percent}%</span>
+                {/* 2. 준비도 히어로 — 차단 중엔 100% 대신 해결 유도, 준비완료면 실제 % */}
+                {isGenerationBlocked ? (
+                  <div className="rv-hero rv-hero-blocked">
+                    <span className="rv-hero-blocked-ic"><AlertTriangle size={22} /></span>
+                    <div>
+                      <div className="rv-hero-blocked-title">
+                        제출 전 <b>{blockingIssuesCount}건</b>을 해결해야 최종 제출할 수 있어요
+                      </div>
+                      <p className="rv-hero-blocked-sub">
+                        상업송장·패킹리스트 <b>초안은 아래에서 미리보기·다운로드</b>할 수 있어요. 다만 아래 “해결하면 제출” 목록의 항목을 수정해야 최종 제출이 가능합니다.
+                      </p>
+                    </div>
                   </div>
-                  <div className="readiness-bar-track">
-                    <div className="readiness-bar-fill" style={{ width: `${readiness.percent}%` }} />
+                ) : (
+                  <div className="rv-hero">
+                    <div className="rv-hero-lab">{profile.tradeType === 'import' ? '수입' : '수출'} 준비도</div>
+                    <div className="rv-hero-pct">{readiness.percent}<small>%</small></div>
+                    <div className="rv-track"><div className="rv-track-fill" style={{ width: `${readiness.percent}%` }} /></div>
+                    <div className="rv-hero-msg">
+                      화주 서류 <b>{ownReadyCount}/{ownDocs.length}</b> 생성 완료
+                      {isSubmitReady
+                        ? <> — 제출 준비가 끝났어요.</>
+                        : readiness.nextStepLabel ? <> — {readiness.nextStepLabel}</> : null}
+                    </div>
+                    {externalPendingCount > 0 && (
+                      <p className="rv-hero-ext">
+                        선하증권·통관신고·원산지증명서 등 <b>{externalPendingCount}건</b>은 선사·관세사·상공회의소가 발행해요.
+                      </p>
+                    )}
                   </div>
-                  {readiness.nextStepLabel && (
-                    <p className="readiness-next-step">다음 단계: {readiness.nextStepLabel}</p>
-                  )}
+                )}
+
+                {/* 3. 서류 현황 — 한 줄 = 한 서류 (상태 + 완료 시 보기·다운로드) */}
+                <div className="rv-panel">
+                  <div className="rv-panel-head">서류 현황 · {documents.length}건</div>
+                  {documents.map((doc) => {
+                    const abbr = doc.id === 'invoice' ? '송장'
+                      : doc.id === 'packing_list' ? '포장'
+                      : doc.id === 'bl' ? '선하'
+                      : doc.id === 'customs_dec' ? '신고'
+                      : doc.id === 'co' ? '원산'
+                      : doc.id === 'insurance' ? '보험' : '서류';
+                    const fileReady = hasDoc(doc.id);
+                    const isOwnDoc = doc.id === 'invoice' || doc.id === 'packing_list';
+                    // 표시 상태 규칙:
+                    //  - 화주 서류 + 파일 있음 + 차단 중  → '초안' (볼 수 있지만 제출 전 검토 필요)
+                    //  - 화주 서류 + completed + 파일 없음 → '생성 대기' (아직 미생성)
+                    //  - 그 외 → rulesEngine 상태문구 그대로
+                    let displayText = doc.statusText;
+                    let sbClass = doc.status === 'completed' ? 'ok'
+                      : doc.status === 'review_required' ? 'rev' : 'na';
+                    if (isOwnDoc && fileReady && isGenerationBlocked) {
+                      displayText = '초안'; sbClass = 'rev';
+                    } else if (isOwnDoc && doc.status === 'completed' && !fileReady) {
+                      displayText = '생성 대기'; sbClass = 'na';
+                    }
+                    return (
+                      <div className="rv-row" key={doc.id}>
+                        <span className={`rv-abbr ${fileReady ? '' : 'gray'}`}>{abbr}</span>
+                        <span className="rv-nm">{doc.name}</span>
+                        <span className={`rv-sb rv-sb-${sbClass}`}>{displayText}</span>
+                        <div className="rv-act">
+                          {fileReady && (
+                            <>
+                              <button className="rv-view" onClick={() => setPreviewDocId(doc.id)}>
+                                <Eye size={15} /> 보기
+                              </button>
+                              <button
+                                className="rv-ib"
+                                title={doc.id === 'invoice' ? 'DOCX + PDF 저장' : doc.id === 'packing_list' ? 'DOCX 다운로드' : 'PDF 저장'}
+                                onClick={() => handleDownloadDoc(doc.id)}
+                              >
+                                <Download size={17} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {/* 결과 요약 통계 바 */}
-                <div className="result-stats-grid">
-                  <div className="result-stat-card">
-                    <span className="result-stat-label">필요 서류</span>
-                    <span className="result-stat-value">{documents.length}</span>
-                  </div>
-                  <div className="result-stat-card">
-                    <span className="result-stat-label">생성 완료</span>
-                    <span className="result-stat-value">{completedDocsCount}</span>
-                  </div>
-                  <div className="result-stat-card">
-                    <span className="result-stat-label">양식 준비 중</span>
-                    <span className="result-stat-value">{pendingTemplateCount}</span>
-                  </div>
-                  <div className="result-stat-card">
-                    <span className="result-stat-label">보완 필요</span>
-                    <span className="result-stat-value">{reviewDocsCount}</span>
-                  </div>
-                </div>
-
-                <div className="result-columns-layout">
-                  {/* Column 1: 필요 서류 목록 */}
-                  <div className="result-column">
-                    <div className="col-header">
-                      <div className="col-number">1</div>
-                      <h3 className="col-title">필요 서류 목록</h3>
+                {/* Section 4: 해결 워크스페이스 — 문제 문구는 크게, 액션은 컴팩트하게 */}
+                <div className="result-column result-review-full">
+                  {issues.length === 0 ? (
+                    <div className="rv-done">
+                      <span className="rv-done-ic"><CheckCircle2 size={26} /></span>
+                      <div>
+                        <div className="rv-done-title">제출 준비 완료</div>
+                        <p className="rv-done-sub">필요한 모든 서류가 검증을 통과했어요. 아래에서 바로 전송할 수 있습니다.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                    <div className="rv-fixes-head">
+                      <h3 className="rv-fixes-title">{blockingIssuesCount > 0 ? '해결하면 제출할 수 있어요' : '검토 참고 사항'}</h3>
+                      <p className="rv-fixes-sub">
+                        {blockingIssuesCount > 0
+                          ? '문제 문구를 확인하고 해당 입력을 수정하면 준비도가 100%에 가까워집니다.'
+                          : '제출을 막지는 않지만, 아래 내용을 확인하면 서류가 더 정확해져요.'}
+                      </p>
                     </div>
 
-                    <div className="doc-item-list">
-                      {documents.map((doc) => {
-                        let badgeClass = 'status-not-started';
-                        if (doc.status === 'completed') badgeClass = 'status-completed';
-                        else if (doc.status === 'review_required') badgeClass = 'status-review-required';
-                        else if (doc.status === 'not_needed') badgeClass = 'status-not-needed';
-
-                        return (
-                          <div className="doc-item-card" key={doc.id}>
-                            <div className="doc-item-left">
-                              <FileText size={16} className="text-light" />
-                              {doc.name}
-                            </div>
-                            <span className={`status-badge ${badgeClass}`}>
-                              {doc.statusText}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Column 2: 문서 생성 결과 프리뷰 */}
-                  <div className="result-column">
-                    <div className="col-header">
-                      <div className="col-number">2</div>
-                      <h3 className="col-title">문서 생성 결과</h3>
-                    </div>
-
-                    <div className="doc-preview-list">
-                      {documents
-                        .filter(d => d.status !== 'not_needed' && d.status !== 'not_started')
-                        .map((doc) => (
-                          <div 
-                            className={`preview-card ${doc.status === 'completed' ? 'success-border' : 'warning-border'}`}
-                            key={doc.id}
-                          >
-                            <div className="preview-header">
-                              <div className="preview-title-sec">
-                                <div className={`doc-icon-box doc-icon-${doc.id}`}>
-                                  {doc.id === 'invoice' ? 'INV' : doc.id === 'packing_list' ? 'PKL' : doc.id === 'bl' ? 'B/L' : 'DOC'}
-                                </div>
-                                <div className="preview-details">
-                                  <span className="preview-name">{doc.name}</span>
-                                  {doc.lastReviewed && (
-                                    <span className="preview-time">마지막 검토: {doc.lastReviewed}</span>
-                                  )}
-                                </div>
-                              </div>
-                              
-                              <div className="preview-actions">
-                                {hasDoc(doc.id) ? (
-                                  <>
-                                    <button
-                                      className="action-btn-circle"
-                                      title="미리보기"
-                                      onClick={() => setPreviewDocId(doc.id)}
-                                    >
-                                      <Eye size={14} />
-                                    </button>
-                                    <button
-                                      className="action-btn-circle"
-                                      title={doc.id === 'invoice' ? 'DOCX 다운로드' : doc.id === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장 (텍스트)'}
-                                      onClick={() => handleDownloadDoc(doc.id)}
-                                    >
-                                      <Download size={14} />
-                                    </button>
-                                    <button className="action-btn-circle" title="편집">
-                                      <Edit3 size={14} />
-                                    </button>
-                                  </>
-                                ) : (
-                                  <span
-                                    title="이 서류의 자동 생성 양식은 준비 중입니다"
-                                    style={{ fontSize: '11px', color: 'var(--text-light)', padding: '4px 8px', border: '1px dashed var(--border-color)', borderRadius: '10px' }}
-                                  >
-                                    양식 준비 중
+                      {/* 사실 카드 — 과세가격 환산·예상 관세액 등. 값은 실 API/룰에서 결정론적으로 산출. */}
+                      {feedbackReport && feedbackReport.facts.length > 0 && (
+                        <div className="fact-card-list">
+                          {feedbackReport.facts.map((f) => (
+                            <div key={f.id} className="fact-card">
+                              <div className="fact-card-head">
+                                <span className="fact-card-title">
+                                  <Calculator size={15} className="fact-card-icon" />
+                                  {f.title}
+                                </span>
+                                {f.basis && (
+                                  <span className="fact-card-basis">
+                                    {f.basis.label}{f.basis.law ? ` · ${f.basis.law}` : ''}
                                   </span>
                                 )}
                               </div>
+                              <div className="fact-card-value">{f.value}</div>
+                              {f.formula && <div className="fact-card-formula">{f.formula}</div>}
+                              {f.meta && <div className="fact-card-meta">{f.meta}</div>}
                             </div>
-                          </div>
-                        ))}
-                      
-                      {documents.filter(d => d.status !== 'not_needed' && d.status !== 'not_started').length === 0 && (
-                        <div className="mobile-empty-state">
-                          <span className="mobile-empty-icon">📁</span>
-                          <span className="mobile-empty-text">생성된 문서 없음</span>
-                          <span className="mobile-empty-sub">아래 검토 안내에 따라 입력을 보완해 주세요.</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 3: AI 검토 및 보완 워크스페이스 — 스크롤 하단 전체 폭 */}
-                <div className="result-column result-review-full">
-                    <div className="col-header">
-                      <div className="col-number">3</div>
-                      <h3 className="col-title">검토 및 입력 보완 안내</h3>
-                    </div>
-
-                    <div className="review-summary-line">
-                      <span className="review-summary-item">
-                        <CheckCircle2 size={14} className="text-success" />
-                        검토 완료 <strong>{completedDocsCount}</strong>건
-                      </span>
-                      <span className="review-summary-item">
-                        <AlertTriangle size={14} className="text-warning" />
-                        보완 필요 <strong>{reviewDocsCount}</strong>건
-                      </span>
-                    </div>
-
-                    <div className="ai-report-box">
-                      <div className="ai-header">
-                        <CheckCircle2 size={16} className="text-success" />
-                        AI 분석 결과
-                      </div>
-
-                      {aiFeedback && (
-                        <div className="ai-feedback-narrative">
-                          {feedbackParagraphs.map((line, idx) => (
-                            <p key={idx}>{line}</p>
                           ))}
                         </div>
                       )}
@@ -2596,7 +2666,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                           // 심각도별로 묶어 표시 — 오류(제출 차단) → 보완 권장 → 참고 안내 순.
                           // 성격이 다른 이슈를 문서 순서로 섞지 않고 그룹 헤더로 구분한다.
                           const order: Record<string, number> = { error: 0, warning: 1, info: 2 };
-                          const sorted = [...issues].sort(
+                          // card를 가진 이슈(과세가격 환산 등)는 위 사실 카드로 렌더 → 목록에선 제외(중복 방지).
+                          const sorted = [...issues].filter((i) => !i.card).sort(
                             (a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9)
                           );
                           const sevMeta: Record<string, { label: string; hint: string; cls: string }> = {
@@ -2619,26 +2690,64 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                     {meta.hint && <span className="sev-section-hint">{meta.hint}</span>}
                                   </div>
                                 )}
-                          <div className="mobile-fix-card">
-                            <div className="mobile-fix-header">
-                              <div className="mobile-fix-info">
-                                <span className="mobile-fix-name">
+                          <div className={`mobile-fix-card sev-${issue.severity}`}>
+                            <div className="mfc-head">
+                              <span className="mfc-dot" />
+                              <div className="mfc-text">
+                                {(() => {
+                                  // 메시지에서 근거 접미사와 마지막 (부연설명)을 분리해 3층으로 렌더한다.
+                                  // - 헤드라인: 본문 (근거·부연 제거)
+                                  // - 부연: 마지막 괄호 안 문장 — 한 줄 띄우고 흐리게 표시
+                                  // - 근거: issue.basis 우선, 없으면 message 접미사에서 파싱 — 접이식으로 조문 요약 노출
+                                  const rawMsg = issue.message || '';
+                                  const basisMatch = rawMsg.match(/\s*\[근거:\s*([^\]]+)\]\s*$/);
+                                  const withoutBasis = basisMatch ? rawMsg.slice(0, basisMatch.index).trimEnd() : rawMsg;
+                                  const parenMatch = withoutBasis.match(/\s*\(([^()]+)\)\s*$/);
+                                  const mainLine = parenMatch ? withoutBasis.slice(0, parenMatch.index).trimEnd() : withoutBasis;
+                                  const detailLine = parenMatch ? parenMatch[1].trim() : '';
+                                  const basisLaw = issue.basis?.law || (basisMatch ? basisMatch[1].trim() : '');
+                                  const basisSummary = issue.basis?.summary || '';
+                                  return (
+                                    <>
+                                      <div className="mfc-headline">{mainLine}</div>
+                                      {detailLine && (
+                                        <div className="mfc-detail" style={{ marginTop: 6, fontSize: 13, color: '#475569', lineHeight: 1.45 }}>
+                                          ({detailLine})
+                                        </div>
+                                      )}
+                                      {basisLaw && (
+                                        <details className="mfc-basis" style={{ marginTop: 8 }}>
+                                          <summary style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600, cursor: 'pointer', listStyle: 'none' }}>
+                                            [근거: {basisLaw}] {basisSummary ? '▸' : ''}
+                                          </summary>
+                                          {basisSummary && (
+                                            <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: 12, color: '#334155', lineHeight: 1.5 }}>
+                                              {basisSummary}
+                                            </div>
+                                          )}
+                                        </details>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                                <div className="mfc-sub">
                                   {issue.docType === 'invoice' ? '상업송장' :
                                    issue.docType === 'packing_list' ? '패킹리스트' :
                                    issue.docType === 'bl' ? '선하증권(B/L)' :
                                    issue.docType === 'customs_dec' ? '통관신고서' :
                                    issue.docType === 'co' ? '원산지증명서' :
                                    issue.docType === 'insurance' ? '적하보험증권' : '기타 서류'}
-                                </span>
-                                <span className="mobile-fix-msg">{issue.message}</span>
+                                </div>
                               </div>
-                              <span className={`mobile-fix-badge ${
-                                issue.severity === 'error' ? 'status-error' :
-                                issue.severity === 'info' ? 'status-info' : 'status-review-required'
-                              }`}>
-                                {issue.severity === 'error' ? '오류' :
-                                 issue.severity === 'info' ? '안내' : '보완 필요'}
-                              </span>
+                              {issue.severity !== 'info' &&
+                                issue.field !== 'weight' &&
+                                issue.field !== 'hsCode' &&
+                                issue.docType !== 'co' &&
+                                issue.id !== 'insurance-missing' && (
+                                <button className="mfc-fix-btn" onClick={() => goToFieldFix(issue)}>
+                                  입력 수정 <ArrowRight size={14} />
+                                </button>
+                              )}
                             </div>
 
                             {/* 이슈 유형별 즉시 보완 입력 */}
@@ -2744,42 +2853,24 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                             {issue.severity === 'error' && issue.overridable && (
                               overrides[issueKey(issue)] ? (
                                 <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(16,185,129,0.12)', color: '#065f46', fontSize: 12, fontWeight: 600 }}>
-                                  ✅ 사유 포함 override됨 — {overrides[issueKey(issue)]}
+                                  ✅ 경고 무시 처리됨 — 사유: {overrides[issueKey(issue)]}
                                 </div>
                               ) : (
                                 <button className="mobile-btn mobile-btn-secondary" onClick={() => { setOverrideTarget(issue); setOverrideReason(''); }}>
-                                  사유 입력 후 override (생성 진행)
+                                  경고 무시하고 생성 (사유 필요)
                                 </button>
                               )
                             )}
 
-                            {/* 전용 보완 입력이 없는 이슈는 입력 화면으로 돌아가 수정 */}
-                            {issue.severity !== 'info' &&
-                              issue.field !== 'weight' &&
-                              issue.field !== 'hsCode' &&
-                              issue.docType !== 'co' &&
-                              issue.id !== 'insurance-missing' && (
-                              <button className="mobile-btn mobile-btn-secondary" onClick={() => setHasGenerated(false)}>
-                                입력 화면에서 수정
-                              </button>
-                            )}
                           </div>
                               </Fragment>
                             );
                           });
                         })()}
 
-                        {issues.length === 0 && (
-                          <div className="warning-item info">
-                            <span className="warning-icon">✅</span>
-                            <div className="warning-body">
-                              <span className="warning-title">문서 검증 통과</span>
-                              <span className="warning-text">수출입 통관 및 해상 운송에 필요한 모든 서류 규격이 완벽히 충족되었습니다.</span>
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    </div>
+                    </>
+                  )}
 
                     <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
                       <button
@@ -2801,6 +2892,18 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
           </div>
         </main>
       </div>
+
+      {/* 입력 화면 수정 안내 배너 — "입력 수정" 클릭 시 해당 필드로 이동하며 무엇을 고칠지 표시 */}
+      {highlightField && !hasGenerated && (
+        <div className="field-fix-banner" role="status">
+          <span className="ffb-ic"><Pencil size={16} /></span>
+          <div className="ffb-text">
+            <b>강조된 항목을 수정하세요</b>
+            <span>{highlightHint}</span>
+          </div>
+          <button className="ffb-close" onClick={clearFieldHighlight} aria-label="안내 닫기">✕</button>
+        </div>
+      )}
 
       {/* 4. Agent Execution Terminal Terminal Overlay */}
       {showConsole && (
@@ -2928,15 +3031,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 // 상업송장: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
                 <div ref={docxPreviewRef} style={{ width: '100%' }} />
               ) : previewDocId === 'packing_list' ? (
-                // 패킹리스트: 다운로드 xlsx와 같은 스키마로 표를 렌더(단일 소스). 합계는 템플릿 수식과 동일 규칙.
-                <div
-                  style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
-                  dangerouslySetInnerHTML={{
-                    __html: packingListData
-                      ? renderPackingListPreviewHtml(mapPackingListToSchema(packingListData))
-                      : '<p>문서 양식이 생성되지 않았습니다.</p>',
-                  }}
-                />
+                // 패킹리스트: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
+                <div ref={packingDocxPreviewRef} style={{ width: '100%' }} />
               ) : (
                 <div
                   style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
@@ -2966,7 +3062,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                {previewDocId === 'invoice' ? 'DOCX 다운로드' : previewDocId === 'packing_list' ? 'XLSX 다운로드' : 'PDF 저장 (텍스트)'}
+                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : previewDocId === 'packing_list' ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
             </div>
           </div>
@@ -2980,8 +3076,8 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
           style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
         >
           <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(520px, 92vw)', background: '#fff', borderRadius: 14, padding: '22px 24px', boxShadow: '0 12px 40px rgba(0,0,0,0.25)' }}>
-            <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>오류 override — 사유 입력</h3>
-            <p style={{ margin: '0 0 4px', fontSize: 12, color: '#64748b' }}>이 오류를 우회하고 생성을 진행합니다. 사유는 검증 결과에 기록됩니다.</p>
+            <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>경고 무시하고 생성 — 사유 입력</h3>
+            <p style={{ margin: '0 0 4px', fontSize: 12, color: '#64748b' }}>이 경고를 무시하고 문서를 생성합니다. 입력한 사유는 문서 이력에 기록되어 본인·관리자 사후 검토에 활용됩니다.</p>
             <div style={{ margin: '10px 0 12px', padding: '10px 12px', borderRadius: 8, background: '#fef2f2', color: '#991b1b', fontSize: 13 }}>
               <strong>[{overrideTarget.id}]</strong> {overrideTarget.message}
             </div>
@@ -2989,12 +3085,12 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               autoFocus
               value={overrideReason}
               onChange={(e) => setOverrideReason(e.target.value)}
-              placeholder="예: 보세운송 건으로 동일국가 항구가 정상입니다."
+              placeholder={"예:\n· 관세사와 협의됨 — 현재 상태로 신고 진행\n· 보세운송 건으로 동일국가 항구가 정상\n· 사업자번호 확정 전 초안만 생성"}
               style={{ width: '100%', minHeight: 88, padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
               <button className="btn btn-secondary" onClick={() => { setOverrideTarget(null); setOverrideReason(''); }}>취소</button>
-              <button className="btn btn-primary" onClick={confirmOverride}>사유 기록 후 override</button>
+              <button className="btn btn-primary" onClick={confirmOverride}>사유 기록하고 생성</button>
             </div>
           </div>
         </div>

@@ -152,7 +152,9 @@ export type DocumentStatusType =
   | 'not_started'
   | 'completed'
   | 'review_required'
-  | 'not_needed';
+  | 'not_needed'
+  // 타 주체(포워더/세관/상공회의소)가 발급 — 화주가 여기서 생성하지 않고 대기하는 서류.
+  | 'external_pending';
 
 export type TradeStatus =
   | 'draft'
@@ -184,6 +186,57 @@ export interface ValidationIssue {
    * severity==='error'일 때만 의미. warning/info는 undefined(생성 차단 안 함).
    */
   overridable?: boolean;
+  /** 짧은 제목(확인 항목 카드용). 없으면 docType 라벨로 대체. */
+  title?: string;
+  /** 근거 법령(구조화) — message에 문자열로 붙이는 대신 배지로 렌더. */
+  basis?: FeedbackBasis;
+  /**
+   * 계산 결과 사실 카드(과세가격 환산·예상 관세액 등).
+   * 존재하면 이 이슈는 "확인 항목"이 아니라 "사실 카드"로 렌더된다.
+   * 금액·법근거는 여기서 결정론적으로 채워짐 — GPT가 나중 껴도 이 숫자는 안 바뀜.
+   */
+  card?: FeedbackFactCard;
+}
+
+// ===== AI 검토 리포트 "틀" — 룰(지금)과 GPT(나중)가 같은 구조를 채운다 =====
+// 3층 분리: 숫자·법근거(결정론) / 구조·어떤 카드·체크(룰) / 산문 설명(룰→GPT 교체).
+// GPT는 리포트 저자가 아니라 빈 산문 슬롯을 채우는 필러 — 금액·법조문은 못 지어낸다.
+
+/** 근거 배지 — 예: { label: '근거', law: '관세법 제30조', summary: '과세가격 결정의 원칙' } */
+export interface FeedbackBasis {
+  label: string;
+  law?: string;
+  /** 조문 간략 설명(펼침 UI용). 사용자가 배지를 클릭해 펼치면 표시. */
+  summary?: string;
+}
+
+/** 계산 결과 사실 카드 — 과세가격 환산 등. 값은 실 API/룰에서 결정론적으로 산출. */
+export interface FeedbackFactCard {
+  id: string;
+  title: string;             // 예: 과세가격 환산
+  value: string;             // 예: 약 36,961,000원
+  formula?: string;          // 예: USD 25,000 × 1,478.44원
+  meta?: string;             // 예: 여성 캐시미어 코트 · 관세청 주간환율 · 적용일 2026-07-26
+  basis?: FeedbackBasis;     // 예: 근거 · 관세법 제30조
+}
+
+/** 확인이 필요한 항목 — 오류/보완/참고. */
+export interface FeedbackCheckItem {
+  id: string;
+  title: string;             // 짧은 제목
+  detail: string;            // 설명 문장(근거 접미사 제거된 순수 메시지)
+  severity: ValidationSeverity;
+  docType?: DocumentType;
+  field?: keyof TradeProfile | string;
+  basis?: FeedbackBasis;
+}
+
+/** AI 검토 리포트 전체 틀. facts·checks 구조는 룰이, narrative 산문은 룰→GPT가 채운다. */
+export interface FeedbackReport {
+  summary: { reviewed: number; needsCheck: number };
+  facts: FeedbackFactCard[];
+  checks: FeedbackCheckItem[];
+  narrative?: string;
 }
 
 export interface PartyInfo {
@@ -191,6 +244,37 @@ export interface PartyInfo {
   address: string;
   contact: string;
   country?: string;
+}
+
+/**
+ * 품목 하나의 canonical 모델 — C/I·P/L이 각자 필요한 필드만 가져간다.
+ * 결정: currency는 Shipment 레벨(혼합통화 error 차단), amount는 저장 않고 계산(extractedAmount로 추출값 분리),
+ * packages는 packageCount(number)+packageUnit(string)로 분해.
+ */
+export interface TradeItem {
+  description: string;    // 품명 → C/I·P/L goods_description
+  hsCode: string;         // → C/I goods_spec
+  quantity: number;       // 수량(개수) → C/I quantity. net_weight와 다른 값이다.
+  unit: string;
+  unitPrice: number;      // → C/I unit_price
+  extractedAmount?: number; // 추출된 금액(있으면). amount는 저장하지 않고 tradeItemAmount로 계산.
+  // ── 물류필드(P/L) — 입력 경로가 생기기 전까지 공란(0/'')으로 둔다.
+  //    첫 품목·문서레벨 값으로 채우지 않는다(junk 기본값 재발 방지). 미입력은 검증이 잡는다.
+  netWeight: number;      // 순중량 → C/I net_weight, P/L quantity_or_net_weight
+  grossWeight: number;    // → P/L gross_weight
+  measurement: string;    // 용적(CBM) → P/L measurement
+  packageCount: number;   // → P/L packages(수)
+  packageUnit: string;    // → P/L packages(단위: CTNS 등)
+  shippingMarks?: string; // 품목별 화인 override — 비면 문서레벨 상속. C/I로 승격하지 않음.
+}
+
+/**
+ * 선적 건 하나 = 문서레벨 정보(profile) + 품목 배열(items).
+ * 통화는 profile.currency 단일 — 혼합 통화는 생성 전 error로 차단한다.
+ */
+export interface Shipment {
+  profile: TradeProfile;
+  items: TradeItem[];
 }
 
 export interface InvoiceItem {
@@ -278,13 +362,63 @@ export interface InsuranceData {
 
   [key: string]: any;
 }
+export interface CustomsDeclarationData {
+  declarationNo: string;
+  declarationDate: string;
+  tradeType: TradeType;
+  exporter: PartyInfo;
+  importer: PartyInfo;
+  itemName: string;
+  hsCode: string;
+  quantity: number;
+  unit: string;
+  weight: number;
+  currency: string;
+  invoiceAmount: number;
+  incoterms: string;
+  loadPort: string;
+  dischargePort: string;
+  countryOfOrigin: string;
+  customsValue?: number;
+  dutyRate?: string;
+  dutyAmount?: number;
+  signedBy?: string;
 
+  // ── 수출신고서(초안) docx 전환용 확장 필드 (기존 HTML 필드는 그대로 유지) ──
+  // 갑지=items[0], 을지=items.slice(1). 서비스가 포맷/공란/FOB환산을 담당한다.
+  items?: TradeItem[];
+  // 관세청 수출환율(원/외화 1단위). null이면 환율 미확보 → FOB 원화 공란.
+  fobRate?: number | null;
+  // 당사자(소스 있는 것만; 통관고유부호·대표자 등 소스 없는 건 서비스에서 공란).
+  ownerAddress?: string;
+  ownerBizNo?: string;
+  makerName?: string;
+  buyerName?: string;
+  buyerCountry?: string;
+  // 선적 정보
+  destCountry?: string;
+  carrier?: string;
+  vessel?: string;
+  departureDate?: string;
+  transportType?: string;
+  lcNo?: string;
+  // 합계·기타
+  totalWeight?: number;
+  totalPackages?: number;
+  paymentAmount?: number;
+  containerNo?: string;
+  invoiceNo?: string;
+  invoiceDate?: string;
+
+  [key: string]: any;
+}
 export interface GeneratedDocuments {
   documents?: DocumentStatus[];
   invoice?: InvoiceData;
   packingList?: PackingListData;
   certificateOfOrigin?: CertificateOfOriginData;
   insurance?: InsuranceData;
+  customsDeclaration?: CustomsDeclarationData;
   htmlTemplates?: Record<string, string>;
 
   [key: string]: any;

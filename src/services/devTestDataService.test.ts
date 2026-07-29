@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { TradeProfile } from '../types';
+
+// 파이프라인이 관세환율·사업자조회 Edge Function을 라이브 호출하지 않도록 supabase를 목킹 —
+// 시뮬레이션 폴백을 타게 해 검증이 결정적이 되게 한다(네트워크 의존 제거).
+const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
+vi.mock('../lib/supabase', () => ({
+  supabase: { functions: { invoke: invokeMock } },
+}));
+
 import { OrchestratorAgent } from '../agents/OrchestratorAgent';
 import {
   createPerfectTestProfile,
@@ -11,6 +19,11 @@ import {
   getTestSubmissionMeta,
   removeDevOnlyFields,
 } from './devTestDataService';
+
+beforeEach(() => {
+  invokeMock.mockReset();
+  invokeMock.mockResolvedValue({ data: null, error: new Error('edge disabled in test') });
+});
 
 const emptyProfile: TradeProfile = {
   tradeType: 'export', itemName: '', hsCode: '', loadPort: '', dischargePort: '', incoterms: '',

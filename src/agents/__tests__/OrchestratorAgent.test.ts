@@ -91,10 +91,12 @@ describe('OrchestratorAgent', () => {
       const logMessages = result.logs.map(l => l.message);
       expect(logMessages.some(msg => msg.includes('자동 보완'))).toBe(true);
 
-      // 보완된 코드가 하위 에이전트(DocumentAgent)에 실제로 전파되는지 검증
+      // 보완된 코드가 하위 에이전트(DocumentAgent)에 실제로 전파되는지 검증(shipment.profile로 전달)
       expect(mockDocumentAgent.run).toHaveBeenCalledWith(
         expect.objectContaining({
-          profile: expect.objectContaining({ hsCode: '847330' })
+          shipment: expect.objectContaining({
+            profile: expect.objectContaining({ hsCode: '847330' })
+          })
         })
       );
     });

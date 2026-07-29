@@ -1204,10 +1204,9 @@ body {
 }
 
 .result-review-full .mobile-fix-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-  gap: 14px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* AI 분석 결과 서술 박스 — 문단 단위로 여백을 주어 가독성 확보 */
@@ -1341,6 +1340,13 @@ body {
   background-color: #f1f5f9;
   color: #94a3b8;
   text-decoration: line-through;
+}
+
+/* 타 주체 발급 대기(포워더/세관/상공회의소) — 생성완료(초록)와 구분되는 중립 톤. 취소선 없음(대기지 해당없음 아님). */
+.status-external-pending {
+  background-color: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
 }
 
 /* 이슈 심각도 그룹 헤더 (검토 보완 안내) */
@@ -2890,6 +2896,24 @@ body {
 .rv-hero-msg { font-size: 14px; color: var(--text-dark); font-weight: 500; }
 .rv-hero-msg b { color: var(--primary-color); }
 .rv-hero-next { margin: 10px 0 0; font-size: 12.5px; color: var(--text-light); }
+.rv-hero-ext { margin: 12px 0 0; font-size: 12.5px; color: var(--text-light); line-height: 1.5; }
+.rv-hero-ext b { color: var(--text-dark); font-weight: 700; }
+
+/* 차단 상태 히어로 — 100% 대신 해결 유도 (색·문구로 "아직 제출 불가" 명확히) */
+.rv-hero-blocked {
+  display: flex; align-items: flex-start; gap: 14px;
+  background: var(--warning-bg); border: 1px solid #fcd9a5;
+}
+.rv-hero-blocked-ic {
+  width: 40px; height: 40px; flex-shrink: 0; border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; color: var(--warning-color); border: 1px solid #fcd9a5;
+}
+.rv-hero-blocked-title { font-size: 16px; font-weight: 800; color: #7c4a06; line-height: 1.4; }
+.rv-hero-blocked-title b { color: var(--warning-color); }
+.rv-hero-blocked-sub { margin: 6px 0 0; font-size: 13px; color: #8a5a1c; line-height: 1.55; }
+.rv-hero-blocked-sub b { color: #7c4a06; font-weight: 700; }
+
 
 /* 3) 서류 현황 — 표처럼 4열 고정 정렬 */
 .rv-panel {
@@ -2897,7 +2921,8 @@ body {
 }
 .rv-panel-head { font-size: 15px; font-weight: 700; padding: 16px 0 10px; border-bottom: 1px solid #eef2f7; }
 .rv-row {
-  display: grid; grid-template-columns: 50px 1fr 78px 128px; align-items: center; gap: 16px;
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) 108px 120px; align-items: center; gap: 12px;
+
   padding: 15px 0; border-top: 1px solid #f2f5f9;
 }
 .rv-row:first-of-type { border-top: none; }
@@ -2908,7 +2933,8 @@ body {
 }
 .rv-abbr.gray { color: var(--text-light); background: #f1f5f9; }
 .rv-nm { font-size: 14.5px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rv-sb { font-size: 11.5px; font-weight: 700; padding: 5px 0; border-radius: 7px; text-align: center; width: 100%; }
+.rv-sb { font-size: 11.5px; font-weight: 700; padding: 5px 8px; border-radius: 7px; text-align: center; width: 100%; white-space: nowrap; }
+
 .rv-sb-ok { background: var(--success-bg); color: var(--success-color); }
 .rv-sb-rev { background: var(--warning-bg); color: var(--warning-color); }
 .rv-sb-na { background: #f1f5f9; color: var(--text-light); }
@@ -2958,4 +2984,190 @@ body {
 
 .form-help-error {
   color: var(--danger, #b91c1c);
+}
+
+/* 서류 현황 — 내려받을 파일이 없는 서류(외부 발행 등) 표시 */
+.rv-act-note {
+  font-size: 12px; font-weight: 600; color: var(--text-light);
+  background: #f1f5f9; border-radius: 7px; padding: 6px 12px; white-space: nowrap;
+}
+.rv-act-note.ext { color: var(--text-light); background: #f1f5f9; }
+
+/* ============================================================
+   해결 워크스페이스 v9 — 문제 문구는 크게·진하게(헤드라인),
+   근거/서류명은 작은 회색 서브라인, 액션 버튼은 작고 심각도 색으로.
+   ("글이 잔잔바리 → 위계를 세워 눈에 들어오게")
+   ============================================================ */
+
+/* 이슈 없음 — 깔끔한 제출 준비 완료 */
+.rv-done {
+  display: flex; align-items: center; gap: 16px;
+  background: var(--success-bg); border: 1px solid #bbf7d0;
+  border-radius: 14px; padding: 20px 22px;
+}
+.rv-done-ic {
+  width: 46px; height: 46px; flex-shrink: 0; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; color: var(--success-color); border: 1px solid #bbf7d0;
+}
+.rv-done-title { font-size: 16px; font-weight: 800; color: #166534; }
+.rv-done-sub { margin: 4px 0 0; font-size: 13px; color: #3f6b4e; line-height: 1.5; }
+
+/* 보완 카드 — 심각도별 좌측 컬러 바 + 위계 있는 텍스트 */
+.mobile-fix-card.sev-error   { border-left: 3px solid var(--error-color); }
+.mobile-fix-card.sev-warning { border-left: 3px solid var(--warning-color); }
+.mobile-fix-card.sev-info    { border-left: 3px solid var(--border-color); background: #fbfdff; }
+
+.mfc-head { display: flex; align-items: flex-start; gap: 12px; }
+.mfc-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+.sev-error   .mfc-dot { background: var(--error-color); }
+.sev-warning .mfc-dot { background: var(--warning-color); }
+.sev-info    .mfc-dot { background: #94a3b8; }
+
+.mfc-text { flex: 1; min-width: 0; }
+/* 문제 문구 = 헤드라인 (크고 진하게) */
+.mfc-headline { font-size: 14.5px; font-weight: 700; color: var(--text-dark); line-height: 1.45; }
+.sev-info .mfc-headline { font-size: 13.5px; font-weight: 600; color: #475569; }
+/* 서류명 = 서브라인 (작고 회색) */
+.mfc-sub { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+
+/* 액션 버튼 — 작고 심각도 컬러 아웃라인 */
+.mfc-fix-btn {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;
+  font-family: inherit; font-size: 12.5px; font-weight: 700;
+  border-radius: 8px; padding: 7px 12px; cursor: pointer;
+  background: #fff; transition: background 0.15s;
+}
+.sev-error   .mfc-fix-btn { border: 1px solid var(--error-color); color: var(--error-color); }
+.sev-error   .mfc-fix-btn:hover { background: var(--error-bg); }
+.sev-warning .mfc-fix-btn { border: 1px solid var(--warning-color); color: var(--warning-color); }
+.sev-warning .mfc-fix-btn:hover { background: var(--warning-bg); }
+
+/* 입력 화면에서 강조되는 필드 — 색을 확실히 다르게 + 링 */
+.form-group.field-focus {
+  position: relative;
+  background: #fff7ed;
+  border-radius: 10px;
+  padding: 12px;
+  margin: -4px -12px;
+  box-shadow: 0 0 0 2px var(--warning-color);
+  animation: field-focus-pulse 1.1s ease-in-out 2;
+}
+.form-group.field-focus .form-label { color: var(--warning-color); font-weight: 700; }
+.form-group.field-focus .form-input,
+.form-group.field-focus .mobile-input { border-color: var(--warning-color); }
+@keyframes field-focus-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--warning-color); }
+  50%      { box-shadow: 0 0 0 4px rgba(180, 83, 9, 0.35); }
+}
+
+/* "입력 수정" 클릭 시 화면 상단 고정 안내 배너 */
+.field-fix-banner {
+  position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+  z-index: 1200; max-width: 560px; width: calc(100% - 32px);
+  display: flex; align-items: flex-start; gap: 12px;
+  background: #1e293b; color: #fff;
+  border-radius: 12px; padding: 13px 16px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.3);
+  animation: ffb-in 0.25s ease-out;
+}
+@keyframes ffb-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.field-fix-banner .ffb-ic {
+  width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--warning-color); color: #fff;
+}
+.field-fix-banner .ffb-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.field-fix-banner .ffb-text b { font-size: 13px; font-weight: 700; }
+.field-fix-banner .ffb-text span { font-size: 12.5px; color: #cbd5e1; line-height: 1.45; }
+.field-fix-banner .ffb-close {
+  flex-shrink: 0; background: none; border: none; color: #94a3b8;
+  font-size: 15px; cursor: pointer; padding: 2px 4px; line-height: 1;
+}
+.field-fix-banner .ffb-close:hover { color: #fff; }
+
+/* ============================================================
+   사용 안내 — "시작하기" 스타일 (매뉴얼 톤 제거)
+   ============================================================ */
+.gs-hero {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  background: linear-gradient(135deg, #eef4fd 0%, #f6f9fe 100%);
+  border: 1px solid #d5e3f5; border-radius: 18px;
+  padding: 30px 32px; margin-bottom: 28px;
+}
+.gs-hero-text { min-width: 0; }
+.gs-hero-eyebrow {
+  display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 0.02em;
+  color: var(--primary-color); background: var(--primary-light);
+  padding: 4px 11px; border-radius: 999px; margin-bottom: 12px;
+}
+.gs-hero-title { font-size: 23px; font-weight: 800; color: var(--text-dark); line-height: 1.35; margin: 0; }
+.gs-hero-sub { margin: 10px 0 20px; font-size: 14.5px; color: var(--text-light); line-height: 1.55; }
+.gs-cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--primary-color); color: #fff; border: none;
+  border-radius: 11px; padding: 12px 20px; font-size: 15px; font-weight: 700;
+  font-family: inherit; cursor: pointer; transition: filter 0.15s, transform 0.05s;
+}
+.gs-cta:hover { filter: brightness(1.06); }
+.gs-cta:active { transform: translateY(1px); }
+.gs-hero-badge {
+  flex-shrink: 0; width: 92px; height: 92px; border-radius: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; color: var(--primary-color); border: 1px solid #d5e3f5;
+}
+
+.gs-section-title { font-size: 15px; font-weight: 800; color: var(--text-dark); margin: 0 0 14px; }
+
+/* 진행 스텝 카드 */
+.gs-steps {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px; margin-bottom: 28px;
+}
+.gs-step {
+  background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px;
+}
+.gs-step-ic {
+  width: 40px; height: 40px; border-radius: 11px; margin-bottom: 12px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--primary-light); color: var(--primary-color);
+}
+.gs-step-no { font-size: 11px; font-weight: 800; color: var(--primary-color); letter-spacing: 0.04em; margin-bottom: 5px; }
+.gs-step-title { font-size: 14.5px; font-weight: 700; color: var(--text-dark); margin-bottom: 6px; }
+.gs-step-desc { font-size: 12.5px; color: var(--text-light); line-height: 1.55; margin: 0; }
+
+/* 바로가기 (클릭 가능한 메뉴 카드) */
+.gs-shortcuts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px; margin-bottom: 28px;
+}
+.gs-shortcut {
+  display: flex; align-items: center; gap: 13px; text-align: left; width: 100%;
+  background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px;
+  padding: 15px 16px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, background 0.15s;
+}
+.gs-shortcut:hover { border-color: var(--primary-color); background: #fbfdff; }
+.gs-shortcut-ic {
+  width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--primary-light); color: var(--primary-color);
+}
+.gs-shortcut-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gs-shortcut-label { font-size: 14px; font-weight: 700; color: var(--text-dark); }
+.gs-shortcut-desc { font-size: 12px; color: var(--text-light); }
+.gs-shortcut-arrow { color: var(--text-light); flex-shrink: 0; }
+.gs-shortcut:hover .gs-shortcut-arrow { color: var(--primary-color); }
+
+/* 팁 */
+.gs-tips { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.gs-tips li {
+  position: relative; padding-left: 24px; font-size: 13px; color: var(--text-light); line-height: 1.55;
+}
+.gs-tips li::before { content: '💡'; position: absolute; left: 0; top: 0; font-size: 13px; }
+
+@media (max-width: 620px) {
+  .gs-hero { flex-direction: column; align-items: flex-start; padding: 24px; }
+  .gs-hero-badge { display: none; }
+  .gs-hero-title { font-size: 20px; }
+
 }

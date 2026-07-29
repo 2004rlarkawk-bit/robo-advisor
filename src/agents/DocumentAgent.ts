@@ -1,16 +1,62 @@
 import { Agent, DocumentResult, HSCodeResult, AgentLog, createLog } from './types';
-import { TradeProfile, GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, InsuranceData } from '../types';
+import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, InsuranceData, CustomsDeclarationData, Shipment } from '../types';
+import { tradeItemAmount } from '../utils/shipment';
 import { determineRequiredDocuments } from '../harness/rulesEngine';
 import { autoFillDocumentFields } from '../services/claudeService';
 import { isLcPayment } from './paymentTerms';
 import { renderCertificateOfOriginHTML } from './templates/co';
 import { renderInsuranceHTML } from './templates/insurance';
-
-export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: HSCodeResult; useLLM?: boolean; logs: AgentLog[] }, DocumentResult> {
+import { renderCustomsDeclarationHTML } from './templates/customsDeclaration';
+export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCodeResult; useLLM?: boolean; logs: AgentLog[] }, DocumentResult> {
   readonly name = 'Document Agent';
 
-  async run(input: { profile: TradeProfile; hsResult: HSCodeResult; useLLM?: boolean; logs: AgentLog[] }): Promise<DocumentResult> {
-    const { profile, hsResult, useLLM = false, logs } = input;
+  async run(input: { shipment: Shipment; hsResult: HSCodeResult; useLLM?: boolean; logs: AgentLog[] }): Promise<DocumentResult> {
+    const { shipment, hsResult, useLLM = false, logs } = input;
+    const { profile } = shipment;
+    // 품목 데이터 우선순위:
+    // 1) Orchestrator가 전달한 canonical shipment.items
+    // 2) 수출 화주 폼의 profile.shipperItems
+    // 3) 레거시 단일 품목 profile 필드
+    //
+    // 병합 과정에서 2번 경로가 빠지면 화주 폼에 입력한 영문 품명과 다품목이
+    // profile.itemName 하나로 덮어써지므로 반드시 유지한다.
+    const items = shipment.items.length > 0
+      ? shipment.items
+      : profile.shipperItems?.length
+        ? profile.shipperItems.map((item, index) => ({
+            description: item.itemName || '',
+            hsCode: item.hsCode || '',
+            quantity: Number(item.quantity) || 0,
+            unit: item.unit || '',
+            unitPrice: Number(item.unitPrice) || 0,
+            extractedAmount: undefined,
+            // 현재 화주 폼의 중량·포장 정보는 문서 단위 입력이므로 첫 품목에만 연결한다.
+            netWeight: index === 0 ? Number(profile.netWeight) || 0 : 0,
+            grossWeight: index === 0
+              ? Number(profile.grossWeight || profile.weight) || 0
+              : 0,
+            measurement: index === 0 ? profile.measurement || '' : '',
+            packageCount: index === 0 ? Number(profile.packageCount) || 0 : 0,
+            packageUnit: index === 0 ? profile.packageType || '' : '',
+            shippingMarks: index === 0 ? profile.shippingMarks || undefined : undefined,
+          }))
+        : [{
+            description: profile.itemName || '',
+            hsCode: profile.hsCode || '',
+            quantity: Number(profile.quantity) || 0,
+            unit: profile.unit || '',
+            unitPrice: Number(profile.unitPrice) || 0,
+            extractedAmount:
+              profile.totalAmount !== '' && profile.totalAmount !== undefined
+                ? Number(profile.totalAmount)
+                : undefined,
+            netWeight: Number(profile.netWeight) || 0,
+            grossWeight: Number(profile.grossWeight || profile.weight) || 0,
+            measurement: profile.measurement || '',
+            packageCount: Number(profile.packageCount) || 0,
+            packageUnit: profile.packageType || '',
+            shippingMarks: profile.shippingMarks || undefined,
+          }];
     const generatedDocs: GeneratedDocuments = {};
 
     logs.push(createLog(this.name, '거래 정보 및 HS Code 분석을 기반으로 문서 판별 및 데이터 조립 시작...', 'info'));
@@ -29,19 +75,10 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     const shipSeq = shipMatch ? shipMatch[4] : String(Date.now()).slice(-6);
     const docNo = (prefix: string) => `${prefix}-${shipYear}-${shipSeq}`;
 
-    // 2. 문서 품목 설명은 사용자가 입력한 itemName만 사용한다.
-    const shipperItems = profile.shipperItems?.length
-      ? profile.shipperItems
-      : [{
-          id: 'primary-item',
-          itemName: profile.itemName,
-          hsCode: profile.hsCode,
-          quantity: profile.quantity,
-          unit: profile.unit || 'EA',
-          unitPrice: profile.unitPrice ?? '',
-          currency: (profile.currency || 'USD') as import('../types').ShipperCurrency,
-        }];
-    const itemDescription = shipperItems[0]?.itemName.trim() || profile.itemName;
+    // 2. LLM으로 품목 설명 자동 생성 (옵션)
+    // 기본값은 지어내지 않는다 — 품목 설명은 사용자 입력(itemName) 그대로, 통화는 UI 셀렉터 기본(KRW)과 일치.
+    let itemDescription = items[0]?.description || profile.itemName; // 대표 품명(C/O·보험 goods 용)
+
     let paymentTerms = profile.paymentTerms || '';
     let currency = 'USD';
 
@@ -74,12 +111,21 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     if (invoiceDoc && invoiceDoc.status !== 'not_needed') {
       logs.push(createLog(this.name, '상업송장(Invoice) 데이터 조립 중...', 'info'));
       
-      const quantity = Number(profile.quantity) || 0;
-      // 단가·총액은 사용자 입력만 사용한다 — 가격을 지어내지 않는다(단가 추정 제거).
-      // 미입력이면 0으로 두고, 누락은 validatorEngine이 막는다.
-      // 총액만 단가×수량으로 파생(사용자가 총액을 안 넣었을 때) — 실입력 단가 기반이라 정합성 유지.
-      const unitPrice = Number(profile.unitPrice) || 0;
-      const totalAmount = Number(profile.totalAmount) || Math.round(unitPrice * quantity * 100) / 100;
+      // 다품목: 각 품목 금액을 계산(extractedAmount ?? 수량×단가)해 합산한다. amount는 저장 않고 계산.
+      const invoiceItems = items.map((it, i) => ({
+        no: i + 1,
+        description: it.description,
+        hsCode: it.hsCode || hsResult.topCode || '',
+        countryOfOrigin: profile.countryOfOrigin || '',
+        quantity: it.quantity,
+        unit: it.unit || '',
+        unitPrice: it.unitPrice,
+        amount: tradeItemAmount(it),
+        netWeight: it.netWeight,
+        grossWeight: it.grossWeight,
+        dimensions: it.measurement || '',
+      }));
+      const totalAmount = invoiceItems.reduce((s, it) => s + (Number(it.amount) || 0), 0);
 
       const invoiceDate = profile.invoiceDate || new Date().toISOString().split('T')[0];
       // 당사자 정보는 프로필 실입력값만 사용한다 — 미입력이면 빈 문자열(양식에서 빈 칸으로 렌더).
@@ -96,32 +142,7 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
         contact: profile.tradeType === 'import' ? (profile.contact || '') : (profile.partnerContact || ''),
         country: profile.tradeType === 'import' ? (profile.companyCountry || '') : (profile.partnerCountry || ''),
       };
-      const invGrossWeight = Number(profile.grossWeight || profile.weight) || 0;
-      // 순중량은 실측 신고값 — 추정 금지(총중량×0.9 제거). 미입력이면 0(공란 렌더).
-      const invNetWeight = Number(profile.netWeight) || 0;
 
-      const invoiceItems = shipperItems.map((item, index) => {
-        const itemQuantity = Number(item.quantity) || 0;
-        const itemUnitPrice = Number(item.unitPrice) || 0;
-        const itemAmount = !profile.shipperItems?.length && index === 0 && Number(profile.totalAmount) > 0
-          ? Number(profile.totalAmount)
-          : Math.round(itemQuantity * itemUnitPrice * 100) / 100;
-        return {
-          no: index + 1,
-          description: item.itemName,
-          hsCode: item.hsCode || (index === 0 ? hsResult.topCode : '') || '',
-          countryOfOrigin: profile.countryOfOrigin || '',
-          quantity: itemQuantity,
-          unit: item.unit || '',
-          unitPrice: itemUnitPrice,
-          amount: itemAmount,
-          netWeight: invNetWeight,
-          grossWeight: invGrossWeight,
-          dimensions: profile.measurement || '',
-          packageCount: index === 0 ? Number(profile.packageCount) || 0 : 0,
-        };
-      });
-      const calculatedTotal = invoiceItems.reduce((sum, item) => sum + item.amount, 0);
       const invoice: InvoiceData = {
         invoiceNo: profile.invoiceNo || docNo('INV'),
         invoiceDate,
@@ -133,8 +154,9 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
         departureDate: profile.departureDate,
         arrivalDate: profile.arrivalDate,
         items: invoiceItems,
-        totalAmount: calculatedTotal || totalAmount,
-        currency: shipperItems[0]?.currency || profile.currency || currency,
+        totalAmount: totalAmount,
+        currency: profile.currency || currency,
+
         incoterms: profile.incoterms,
         loadPort: profile.loadPort,
         dischargePort: profile.dischargePort,
@@ -169,12 +191,26 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     if (packingDoc && packingDoc.status !== 'not_needed' && packingDoc.status !== 'not_started') {
       logs.push(createLog(this.name, '패킹리스트(Packing List) 데이터 조립 중...', 'info'));
       
-      const qty = Number(profile.quantity) || 0;
-      // 인보이스(invGrossWeight/invNetWeight)와 동일 규칙 — 두 문서의 중량이 어긋나면 안 된다.
-      // grossWeight의 빈 문자열('')은 ??로는 걸러지지 않으므로 ||로 weight까지 폴백한다.
-      const grossWeight = Number(profile.grossWeight || profile.weight) || 0;
-      // 순중량은 실측 신고값 — 추정 금지(총중량×0.9 제거). 미입력이면 0(템플릿에서 공란).
-      const netWeight = Number(profile.netWeight) || 0;
+      // 다품목 패킹 — 각 품목의 물류필드(순/총중량·용적·포장)를 그대로 쓴다.
+      // 입력 경로 전까지 공란이면 공란 유지(첫 품목·문서레벨 값으로 채우지 않는다). 미입력은 검증이 잡는다.
+      const packingItems = items.map((it, i) => ({
+        no: i + 1,
+        description: it.description,
+        hsCode: it.hsCode || hsResult.topCode || '',
+        quantity: it.quantity,
+        unit: it.unit || '',
+        unitPrice: it.unitPrice,
+        amount: tradeItemAmount(it),
+        netWeight: it.netWeight,
+        grossWeight: it.grossWeight,
+        dimensions: it.measurement || '',
+        packageCount: it.packageCount,
+        packageType: it.packageUnit || '',
+        marks: it.shippingMarks,
+      }));
+      const sumNet = packingItems.reduce((s, it) => s + (Number(it.netWeight) || 0), 0);
+      const sumGross = packingItems.reduce((s, it) => s + (Number(it.grossWeight) || 0), 0);
+      const sumPackages = packingItems.reduce((s, it) => s + (Number(it.packageCount) || 0), 0);
 
       const plSeller = generatedDocs.invoice?.seller || { name: profile.companyName || '', address: '', contact: '' };
       const plConsignee = generatedDocs.invoice?.consignee || { name: '', address: '', contact: '' };
@@ -202,21 +238,16 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
         // 화인(shipping marks) 미입력이면 빈 값 — 템플릿이 'N/M'(No Marks) 표기를 담당한다.
         shippingMarks: profile.shippingMarks || '',
         signedBy: profile.signedBy || profile.signerName || '',
-        packageCount: Number(profile.packageCount) || qty,
-        packageType: profile.packageType || '',
-        netWeight,
-        grossWeight,
-        measurement: profile.measurement || '',
-        items: (generatedDocs.invoice?.items || []).map((item, index) => ({
-          ...item,
-          netWeight: index === 0 ? netWeight : item.netWeight,
-          grossWeight: index === 0 ? grossWeight : item.grossWeight,
-          packageCount: index === 0 ? Number(profile.packageCount) || 0 : 0,
-          dimensions: profile.measurement || '',
-        })),
-        totalPackages: Number(profile.packageCount) || qty,
-        totalNetWeight: netWeight,
-        totalGrossWeight: grossWeight,
+        packageCount: sumPackages,
+        packageType: items[0]?.packageUnit || profile.packageType || '',
+        netWeight: sumNet,
+        grossWeight: sumGross,
+        measurement: '', // 용적은 품목별(measurement) — 문서레벨 총합은 두지 않는다.
+        items: packingItems,
+        totalPackages: sumPackages,
+        totalNetWeight: sumNet,
+        totalGrossWeight: sumGross,
+
         // 무역협회 표준 서식 ①~⑯ 추가 필드
         sellerTaxNo: profile.tradeType === 'export' ? (profile.businessRegistrationNo || profile.taxNo || '') : '',
         buyer: profile.buyerName ? { name: profile.buyerName, address: profile.buyerAddress || '', contact: '' } : undefined,
@@ -229,12 +260,15 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
       };
 
       generatedDocs.packingList = packingList;
-      logs.push(createLog(this.name, `패킹리스트 조립 완료 (총중량: ${grossWeight}kg)`, 'success'));
+      logs.push(createLog(this.name, `패킹리스트 조립 완료 (품목 ${packingItems.length}건, 총중량: ${sumGross}kg)`, 'success'));
     }
 
     // 5. Certificate of Origin 데이터 조립
+    // C/O는 상공회의소/세관이 발급(external_pending) — 화주가 여기서 생성하지 않는다.
+    // 화주 서류는 C/I·P/L만. external_pending이면 초안·HTML·로그를 만들지 않는다.
+    // (향후 인증수출자 자율발급 경로가 생겨 status가 external_pending이 아니게 되면 그때 조립된다.)
     const coDoc = requiredDocs.find(d => d.id === 'co');
-    if (coDoc && coDoc.status !== 'not_needed' && profile.tradeType === 'export') {
+    if (coDoc && coDoc.status !== 'not_needed' && coDoc.status !== 'external_pending' && profile.tradeType === 'export') {
       logs.push(createLog(this.name, '원산지증명서(C/O) 데이터 조립 중...', 'info'));
       
       const coIssueDate = new Date().toISOString().split('T')[0];
@@ -305,7 +339,43 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
       generatedDocs.insurance = insurance;
       logs.push(createLog(this.name, `적하보험증권 초안 조립 완료 (부보금액: ${inv.currency} ${insuredAmount.toLocaleString()})`, 'success'));
     }
+    // 7. 통관신고 관련 서류 데이터 조립
+    const customsDoc = requiredDocs.find(d => d.id === 'customs_dec');
+    if (customsDoc && customsDoc.status !== 'not_needed' && customsDoc.status !== 'external_pending') {
+      logs.push(createLog(this.name, '통관신고 관련 서류 데이터 조립 중...', 'info'));
 
+      const customsExporter = generatedDocs.invoice?.seller || { name: profile.companyName || '', address: profile.companyAddress || '', contact: profile.contact || '' };
+      const customsImporter = generatedDocs.invoice?.consignee || { name: profile.partnerName || '', address: profile.partnerAddress || '', contact: profile.partnerContact || '' };
+      const totalQuantity = items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+      const totalWeight = items.reduce((sum, it) => sum + (Number(it.grossWeight) || 0), 0);
+      const invoiceAmount = generatedDocs.invoice?.totalAmount || Number(profile.invoiceAmount || profile.totalAmount) || 0;
+
+      const customsDeclaration: CustomsDeclarationData = {
+        declarationNo: docNo('CD'),
+        declarationDate: new Date().toISOString().split('T')[0],
+        tradeType: profile.tradeType,
+        exporter: customsExporter,
+        importer: customsImporter,
+        itemName: itemDescription || profile.itemName || '',
+        hsCode: profile.hsCode || hsResult.topCode || '',
+        quantity: totalQuantity || Number(profile.quantity) || 0,
+        unit: profile.unit || items[0]?.unit || '',
+        weight: totalWeight || Number(profile.grossWeight || profile.weight) || 0,
+        currency: profile.currency || currency,
+        invoiceAmount,
+        incoterms: profile.incoterms || '',
+        loadPort: profile.loadPort || '',
+        dischargePort: profile.dischargePort || '',
+        countryOfOrigin: profile.countryOfOrigin || '',
+        customsValue: invoiceAmount,
+        dutyRate: '',
+        dutyAmount: 0,
+        signedBy: profile.signedBy || profile.signerName || ''
+      };
+
+      generatedDocs.customsDeclaration = customsDeclaration;
+      logs.push(createLog(this.name, '통관신고 관련 서류 초안 조립 완료', 'success'));
+    }
     // HTML 템플릿 렌더링 적용
     // 상업송장은 고정 docx 템플릿(invoiceDocxService)에서 생성·미리보기하므로 HTML을 만들지 않는다.
     // (미리보기 = 다운로드 docx 단일 소스. generatedDocs.invoice 구조 데이터만 넘긴다.)
@@ -318,7 +388,9 @@ export class DocumentAgent implements Agent<{ profile: TradeProfile; hsResult: H
     if (generatedDocs.insurance) {
       htmlTemplates.insurance = renderInsuranceHTML(generatedDocs.insurance);
     }
-
+    if (generatedDocs.customsDeclaration) {
+      htmlTemplates.customs_dec = renderCustomsDeclarationHTML(generatedDocs.customsDeclaration);
+    }
     logs.push(createLog(this.name, '문서 생성 에이전트 작업 완료.', 'success'));
 
     return {

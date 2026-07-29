@@ -1,6 +1,7 @@
 import { Agent, FeedbackResult, AgentLog, createLog } from './types';
 import { TradeProfile, ValidationIssue } from '../types';
 import { generateContextualFeedback } from '../services/claudeService';
+import { buildFeedbackReport } from './feedbackReport';
 
 export class FeedbackAgent implements Agent<{ profile: TradeProfile; issues: ValidationIssue[]; useLLM?: boolean; logs: AgentLog[] }, FeedbackResult> {
   readonly name = 'Feedback Agent';
@@ -14,7 +15,7 @@ export class FeedbackAgent implements Agent<{ profile: TradeProfile; issues: Val
     if (issues.length === 0) {
       message = '모든 통관 서류가 규정에 부합합니다. 추가 보완사항이 없습니다.';
       logs.push(createLog(this.name, '이슈가 없으므로 긍정적 피드백 반환.', 'success'));
-      return { message };
+      return { message, report: buildFeedbackReport(issues, profile, { narrative: message }) };
     }
 
     if (useLLM) {
@@ -55,7 +56,9 @@ export class FeedbackAgent implements Agent<{ profile: TradeProfile; issues: Val
       responsibilityNote = '💡 [FCA 책임안내] 지정 장소에서 운송인에게 인도하면 위험이 이전됩니다. 이후 운송·보험은 매수인이 수배합니다.\n\n';
     }
 
-    return { message: responsibilityNote + message };
+    const fullMessage = responsibilityNote + message;
+    // 리포트 "틀": facts·checks 구조는 룰이 결정론적으로 채우고, narrative(산문)만 GPT로 교체 가능.
+    return { message: fullMessage, report: buildFeedbackReport(issues, profile, { narrative: fullMessage }) };
   }
 
   private generateFallbackFeedback(profile: TradeProfile, issues: ValidationIssue[]): string {

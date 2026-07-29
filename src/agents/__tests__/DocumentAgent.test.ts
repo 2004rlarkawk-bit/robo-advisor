@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { DocumentAgent } from '../DocumentAgent';
 import { escapeHtml } from '../templates/escapeHtml';
 import { HSCodeResult, AgentLog } from '../types';
-import { TradeProfile } from '../../types';
+import { TradeProfile, TradeItem } from '../../types';
 import { mapPackingListToSchema, renderPackingListPreviewHtml } from '../../services/packingListXlsxService';
 import { mapInvoiceToSchema } from '../../services/invoiceDocxService';
 
@@ -32,13 +32,58 @@ const baseProfile: TradeProfile = {
 async function runAgent(overrides: Partial<TradeProfile> = {}) {
   const logs: AgentLog[] = [];
   const agent = new DocumentAgent();
+  // items를 비워 넘기면 DocumentAgent가 프로필 단일 품목으로 폴백한다(레거시 단일품목 경로 검증).
   return agent.run({
-    profile: { ...baseProfile, ...overrides },
+    shipment: { profile: { ...baseProfile, ...overrides }, items: [] },
     hsResult,
     useLLM: false,
     logs
   });
 }
+
+const mkItem = (o: Partial<TradeItem> = {}): TradeItem => ({
+  description: 'ITEM', hsCode: '8471300000', quantity: 10, unit: 'EA', unitPrice: 5,
+  extractedAmount: undefined, netWeight: 0, grossWeight: 0, measurement: '',
+  packageCount: 0, packageUnit: '', shippingMarks: undefined, ...o,
+});
+async function runMulti(items: TradeItem[], overrides: Partial<TradeProfile> = {}) {
+  return new DocumentAgent().run({
+    shipment: { profile: { ...baseProfile, ...overrides }, items },
+    hsResult, useLLM: false, logs: [],
+  });
+}
+
+describe('DocumentAgent — 다품목(C2) 파이프라인', () => {
+  it('여러 품목이 인보이스·패킹리스트에 모두 반영된다(폼 입력 유실 없음)', async () => {
+    const r = await runMulti([
+      mkItem({ description: 'A', quantity: 10, unitPrice: 5 }),
+      mkItem({ description: 'B', quantity: 3, unitPrice: 100 }),
+      mkItem({ description: 'C', quantity: 2, unitPrice: 50 }),
+    ]);
+    expect(r.generatedDocs.invoice!.items.length).toBe(3);
+    expect(r.generatedDocs.packingList!.items.length).toBe(3);
+    // 총액 = Σ(수량×단가) = 50 + 300 + 100 = 450 (amount는 저장 않고 계산)
+    expect(r.generatedDocs.invoice!.totalAmount).toBe(450);
+    expect(r.generatedDocs.invoice!.items.map(i => i.description)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('extractedAmount가 있으면 그 값을, 없으면 수량×단가를 amount로 쓴다', async () => {
+    const r = await runMulti([
+      mkItem({ quantity: 10, unitPrice: 5, extractedAmount: 999 }), // 추출값 우선
+      mkItem({ quantity: 4, unitPrice: 25 }),                        // 계산 100
+    ]);
+    expect(r.generatedDocs.invoice!.items[0].amount).toBe(999);
+    expect(r.generatedDocs.invoice!.items[1].amount).toBe(100);
+    expect(r.generatedDocs.invoice!.totalAmount).toBe(1099);
+  });
+
+  it('물류필드(순/총중량·용적)는 입력 경로 전까지 공란 — 문서레벨·첫품목 값으로 채우지 않는다', async () => {
+    // 프로필엔 중량이 있어도 canonical 품목이 공란이면 공란 유지(junk 기본값 재발 방지)
+    const r = await runMulti([mkItem({ netWeight: 0, grossWeight: 0 })], { netWeight: 2200, grossWeight: 2400 });
+    expect(r.generatedDocs.packingList!.items[0].netWeight).toBe(0);
+    expect(r.generatedDocs.packingList!.items[0].grossWeight).toBe(0);
+  });
+});
 
 describe('DocumentAgent — 인보이스·패킹리스트 중량 일관성', () => {
   it('grossWeight가 빈 문자열이면 weight로 폴백해 두 문서의 총중량이 일치한다', async () => {
@@ -149,16 +194,15 @@ describe('DocumentAgent — 문서번호 건(shipment) 단위 파생·안정성'
     const r = await runAgent(shipProfile);
     const inv = r.generatedDocs.invoice! as any;
     const pl = r.generatedDocs.packingList! as any;
-    const co = r.generatedDocs.certificateOfOrigin! as any;
     const ins = r.generatedDocs.insurance! as any;
 
     expect(inv.invoiceNo).toBe('INV-2026-123456');
     expect(pl.plNo).toBe('PL-2026-123456');
-    expect(co.coNo).toBe('CO-2026-123456');
-    expect(co.certNo).toBe('CO-2026-123456');
     expect(ins.certNo).toBe('INS-2026-123456');
     // 교차참조도 같은 invoiceNo를 가리킨다
     expect(pl.invoiceNo).toBe(inv.invoiceNo);
+    // C/O는 상공회의소 발급(external_pending) — 화주가 생성하지 않는다.
+    expect(r.generatedDocs.certificateOfOrigin).toBeUndefined();
   });
 
   it('같은 documentNo로 재생성해도 모든 번호가 유지된다', async () => {
@@ -166,7 +210,6 @@ describe('DocumentAgent — 문서번호 건(shipment) 단위 파생·안정성'
     const b = await runAgent(shipProfile);
     expect((b.generatedDocs.invoice as any).invoiceNo).toBe((a.generatedDocs.invoice as any).invoiceNo);
     expect((b.generatedDocs.packingList as any).plNo).toBe((a.generatedDocs.packingList as any).plNo);
-    expect((b.generatedDocs.certificateOfOrigin as any).certNo).toBe((a.generatedDocs.certificateOfOrigin as any).certNo);
     expect((b.generatedDocs.insurance as any).certNo).toBe((a.generatedDocs.insurance as any).certNo);
   });
 });
@@ -180,7 +223,10 @@ describe('DocumentAgent — Buyer 영문 국가 연결', () => {
     });
 
     expect(result.generatedDocs.invoice?.buyer?.country).toBe('United States');
-    expect(mapInvoiceToSchema(result.generatedDocs.invoice!).buyer_address3).toBe('United States');
+    // 인보이스는 DOCX 고정 템플릿을 사용하므로
+    // Buyer 국가가 DOCX 스키마까지 전달되는지 확인한다.
+    const schema = mapInvoiceToSchema(result.generatedDocs.invoice!);
+    expect(schema.buyer_address3).toBe('United States');
   });
 });
 
@@ -211,14 +257,17 @@ describe('DocumentAgent — 수출 화주 신규 문서 필드', () => {
 
     const invoice = result.generatedDocs.invoice!;
     const packingList = result.generatedDocs.packingList!;
+
     expect(invoice.items[0].description).toBe('Cotton T-shirts');
     expect(invoice.items[1].description).toBe('Stainless Steel Kitchen Tongs');
     expect(packingList.items[0].description).toBe('Cotton T-shirts');
     expect(packingList.items[1].description).toBe('Stainless Steel Kitchen Tongs');
+
     expect((invoice as any).otherReferences).toBe('PO-2026-77');
     expect((packingList as any).otherReferences).toBe('PO-2026-77');
     expect((invoice as any).vessel).toBe('OCEAN STAR V.1001');
     expect((packingList as any).vessel).toBe('OCEAN STAR V.1001');
+
     expect(invoice.signedBy).toBe('KIM JIMIN');
     expect((packingList as any).signedBy).toBe('KIM JIMIN');
   });
@@ -235,6 +284,7 @@ describe('DocumentAgent — 수출 화주 신규 문서 필드', () => {
         currency: 'USD',
       }],
     });
+
     expect(result.generatedDocs.invoice?.items[0].description).toBe('Sample Goods');
   });
 });

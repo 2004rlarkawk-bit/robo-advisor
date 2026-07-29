@@ -5,6 +5,20 @@ import { estimateDuty } from '../services/unipassService';
 import { getRelatedLawForIssue } from '../services/lawService';
 
 /**
+ * 외부 API(Supabase 엣지함수) 호출에 개별 상한을 둔다.
+ * 엣지함수 콜드스타트·중단 시 invoke가 무한 대기하면 재검증 전체가 오케스트레이터
+ * 30초 타임아웃으로 실패한다("규정 검증 실패: 작업 타임아웃"). 각 호출을 ms 안에
+ * 끊어, 지연 시 해당 안내 이슈만 건너뛰고 검증을 계속 진행한다(값은 이미 룰로 확정).
+ */
+function withTimeout<T>(promise: Promise<T>, ms = 8000, label = '외부 API'): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} 응답 지연 (${ms}ms)`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
+/**
  * 거래정보 입력값 검증 (팀원 Python 스펙 "거래정보 입력값 검증 모듈" 포팅)
  * 1) 필수 항목 누락 체크 (단가·금액·송장 작성일 포함)
  * 2) 숫자 항목(수량·중량·단가·금액)은 0보다 커야 함
@@ -231,28 +245,50 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
   const amount = profile.invoiceAmount !== '' && profile.invoiceAmount !== undefined ? profile.invoiceAmount : 0;
   if (currency !== 'KRW' && amount > 0) {
     try {
-      const dv = await calcDutiableValue(amount, currency, profile.tradeType);
-      const srcNote = dv.source === 'api' ? `관세청 주간환율, 적용일 ${dv.effectiveDate}` : '시뮬레이션 환율 — 실환율은 API 키 설정 후 적용';
+      const dv = await withTimeout(calcDutiableValue(amount, currency, profile.tradeType), 8000, '환율 환산');
+      const srcNote = dv.source === 'api' ? `관세청 주간환율 · 적용일 ${dv.effectiveDate}` : '시뮬레이션 환율 — 실환율은 API 키 설정 후 적용';
+      const itemNote = profile.itemName ? `${profile.itemName} · ` : '';
       issues.push({
         id: 'dutiable-value-info',
         docType: 'customs_dec',
         severity: 'info',
         message: `과세가격 환산: ${currency} ${amount.toLocaleString()} × ${dv.rate.toLocaleString()}원 = 약 ${dv.totalKrw.toLocaleString()}원 (${srcNote})`,
-        field: 'invoiceAmount'
+        field: 'invoiceAmount',
+        // 사실 카드 — 값은 실 환율 API(또는 시뮬레이션 폴백)에서 결정론적으로 산출.
+        card: {
+          id: 'dutiable-value',
+          title: '과세가격 환산',
+          value: `약 ${dv.totalKrw.toLocaleString()}원`,
+          formula: `${currency} ${amount.toLocaleString()} × ${dv.rate.toLocaleString()}원`,
+          meta: `${itemNote}${srcNote}`,
+          basis: { label: '근거', law: '관세법 제30조' },
+        },
       });
 
       // 6-1. 수입 거래 + 유효 HSK 10자리 → UNI-PASS 관세율 기반 예상 관세액 안내
       const hsCleaned = profile.hsCode.replace(/[^0-9]/g, '');
       if (profile.tradeType === 'import' && hsCleaned.length === 10) {
-        const duty = await estimateDuty(hsCleaned, dv.totalKrw);
-        if (duty) {
-          const dutySrc = duty.source === 'api' ? 'UNI-PASS 관세율 기준' : '시뮬레이션 세율 — 실세율은 UNI-PASS 키 설정 후 적용';
+        const duty = await withTimeout(estimateDuty(hsCleaned, dv.totalKrw), 8000, '관세율 조회');
+
+        
+
+        // 실제 UNI-PASS API에서 확인된 관세율일 때만 예상 관세액을 표시한다.
+        // API 실패 후 반환되는 시뮬레이션 세율(예: 임의 8%)은 사용하지 않는다.
+        if (duty?.source === 'api') {
+          const dutySrc = 'UNI-PASS 관세율 기준';
           issues.push({
             id: 'estimated-duty-info',
             docType: 'customs_dec',
             severity: 'info',
             message: `예상 관세액: 과세가격 ${duty.dutiableValueKrw.toLocaleString()}원 × ${duty.rate}% (${duty.rateName}) = 약 ${duty.estimatedDutyKrw.toLocaleString()}원 (${dutySrc})`,
-            field: 'hsCode'
+            field: 'hsCode',
+            card: {
+              id: 'estimated-duty',
+              title: '예상 관세액',
+              value: `약 ${duty.estimatedDutyKrw.toLocaleString()}원`,
+              formula: `과세가격 ${duty.dutiableValueKrw.toLocaleString()}원 × ${duty.rate}% (${duty.rateName})`,
+              meta: dutySrc,
+            },
           });
         }
       }
@@ -266,21 +302,25 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
   const bizNo = (profile.businessRegistrationNo || '').replace(/[^0-9]/g, '');
   if (bizNo.length > 0) {
     try {
-      const biz = await verifyBusinessRegistration(bizNo);
+      const biz = await withTimeout(verifyBusinessRegistration(bizNo), 8000, '사업자번호 조회');
+
+      
+
       if (!biz.valid) {
         issues.push({
           id: 'bizno-invalid',
           docType: 'customs_dec',
           severity: 'error',
+          overridable: true, // 국세청 실조회 실패 시 사용자가 통제 불가 — 사유 기록 후 계속 진행 가능
           message: `사업자등록번호 확인 필요: ${biz.statusText} (통관 신고인 정보 불일치 시 세관 반려 사유가 됩니다.)`,
           field: 'businessRegistrationNo'
         });
-      } else if (biz.source === 'simulation') {
+      } else if (biz.source !== 'api') {
         issues.push({
           id: 'bizno-checksum-only',
           docType: 'customs_dec',
           severity: 'info',
-          message: '사업자등록번호: 형식(체크섬)만 확인됨 — 국세청 실조회는 설정에서 API 키 등록 후 가능합니다.',
+          message: '사업자등록번호: 형식(체크섬)만 확인됨 — 국세청 실조회는 API 설정 후 확인할 수 있습니다.',
           field: 'businessRegistrationNo'
         });
       }
@@ -291,9 +331,15 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
   }
 
   // 8. 근거 법령 표기 (법제처 매핑 — 해당 이슈 유형에만)
+  // 구조화 basis 필드에 조문 요약까지 담아 UI가 접이식으로 렌더할 수 있게 한다.
+  // message 문자열은 기존 UI/알림 백워드 호환을 위해 그대로 유지한다.
   for (const issue of issues) {
     const law = getRelatedLawForIssue(issue.id);
-    if (law && !issue.message.includes('근거:')) {
+    if (!law) continue;
+    if (!issue.basis) {
+      issue.basis = { label: '근거', law: `${law.lawName} ${law.article}`, summary: law.summary };
+    }
+    if (!issue.message.includes('근거:')) {
       issue.message += ` [근거: ${law.lawName} ${law.article}]`;
     }
   }
