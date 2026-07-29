@@ -1,10 +1,11 @@
 name: Deploy to GitHub Pages
 
 on:
-  workflow_dispatch: # 이 설정이 깃허브 웹 화면에 "Run workflow" 수동 실행 버튼을 생성합니다.
-  push:
-    branches:
-      - main # main 브랜치에 코드가 푸시될 때도 자동 실행되도록 지원합니다.
+  workflow_dispatch:
+
+concurrency:
+  group: github-pages-production
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -16,6 +17,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify deployment source
+        shell: bash
+        run: |
+          echo "Deploy ref: ${GITHUB_REF}"
+          echo "Deploy branch or tag: ${GITHUB_REF_NAME}"
+          echo "Deploy commit: ${GITHUB_SHA}"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -24,13 +33,65 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-# github Page에서 실행할 때는 , 테스트용 버튼 숨김 (실제 배포용이기 때문에)
+
+      - name: Verify TradeFormData v3 source contract
+        shell: bash
+        run: |
+          grep -Fq "onConflict: 'user_id,direction,role'" src/services/draftCacheService.ts
+          grep -Fq "direction, role, trade_id, schema_version, current_step, form_data" src/services/draftCacheService.ts
+          grep -Fq "const formData = row.form_data" src/services/storageService.ts
+          if grep -En "trade_direction|trade_role|generated_docs|user_id,trade_direction,trade_role" \
+            src/services/draftCacheService.ts src/services/storageService.ts; then
+            echo "Legacy database access found in persistence services."
+            exit 1
+          fi
+          if grep -En "row\.profile" src/services/storageService.ts; then
+            echo "Legacy row.profile database mapping found in trade persistence."
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
       - name: Build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_ENABLE_TEST_SUBMISSION: 'false'
         run: npm run build
+
+      - name: Verify TradeFormData v3 production bundle
+        shell: bash
+        run: |
+          for required in \
+            "trade-documents" \
+            "schema_version" \
+            "form_data" \
+            "workflow_data" \
+            "document_data" \
+            "user_id,direction,role"; do
+            grep -R --include='*.js' -Fq "${required}" dist/assets || {
+              echo "Required v3 marker missing from bundle: ${required}"
+              exit 1
+            }
+          done
+
+          for forbidden in \
+            "trade_direction" \
+            "trade_role" \
+            "generated_docs" \
+            "user_id,trade_direction,trade_role"; do
+            if grep -R --include='*.js' -Fq "${forbidden}" dist/assets; then
+              echo "Legacy database marker found in bundle: ${forbidden}"
+              exit 1
+            fi
+          done
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4

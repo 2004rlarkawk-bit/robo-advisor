@@ -1682,11 +1682,14 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             </button>
             <div className="user-info-section">
               <button type="button" className="user-profile" onClick={() => setActiveMenu('profile')} title="프로필 관리" aria-label="프로필 관리 페이지로 이동">
-                <div className="user-avatar">{user.type === 'member' ? '회' : '비'}</div>
+                <div className="user-avatar">
+                  {(() => {
+                    const label = userProfile.company_name || userProfile.contact_name || user.email || '';
+                    const first = label.trim().charAt(0);
+                    return first || (user.type === 'member' ? '회' : '비');
+                  })()}
+                </div>
                 <span>{userProfile.company_name || userProfile.contact_name || user.email} 님</span>
-                <span className={`auth-badge ${user.type}`}>
-                  {user.type === 'member' ? '회원' : '비회원'}
-                </span>
               </button>
               <button className="btn-logout" onClick={handleLogout}>
                 로그아웃
@@ -2690,12 +2693,12 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 <div className="rv-panel">
                   <div className="rv-panel-head">서류 현황 · {documents.length}건</div>
                   {documents.map((doc) => {
-                    const abbr = doc.id === 'invoice' ? '송장'
-                      : doc.id === 'packing_list' ? '포장'
-                      : doc.id === 'bl' ? '선하'
-                      : doc.id === 'customs_dec' ? '신고'
-                      : doc.id === 'co' ? '원산'
-                      : doc.id === 'insurance' ? '보험' : '서류';
+                    const abbr = doc.id === 'invoice' ? 'C/I'
+                      : doc.id === 'packing_list' ? 'P/L'
+                      : doc.id === 'bl' ? 'B/L'
+                      : doc.id === 'customs_dec' ? (profile.tradeType === 'import' ? 'I/D' : 'E/D')
+                      : doc.id === 'co' ? 'C/O'
+                      : doc.id === 'insurance' ? 'I/P' : '서류';
                     const fileReady = hasDoc(doc.id);
                     const isOwnDoc = doc.id === 'invoice' || doc.id === 'packing_list';
                     // 표시 상태 규칙:

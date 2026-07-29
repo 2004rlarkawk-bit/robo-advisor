@@ -174,7 +174,6 @@ export async function saveTradeDraft(userId: string, profile: TradeProfile, role
     return { saved: false, updatedAt: previous.updatedAt };
   }
 
-  const updatedAt = new Date().toISOString();
   const { data, error } = await supabase
     .from('trade_drafts')
     .upsert(
@@ -185,7 +184,6 @@ export async function saveTradeDraft(userId: string, profile: TradeProfile, role
         schema_version: 3,
         current_step: 1,
         form_data: tradeProfileToFormData(cleanProfile, role),
-        updated_at: updatedAt,
       },
       { onConflict: 'user_id,direction,role' },
     )
@@ -193,7 +191,10 @@ export async function saveTradeDraft(userId: string, profile: TradeProfile, role
     .single();
 
   if (error) throw error;
-  const savedAt = typeof data?.updated_at === 'string' ? data.updated_at : updatedAt;
+  if (typeof data?.updated_at !== 'string' || data.updated_at.trim() === '') {
+    throw new Error('초안 저장 후 서버 수정 시각을 확인하지 못했습니다.');
+  }
+  const savedAt = data.updated_at;
   lastDatabaseSnapshots.set(identity, { signature, updatedAt: savedAt });
   return { saved: true, updatedAt: savedAt };
 }

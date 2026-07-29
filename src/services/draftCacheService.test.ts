@@ -5,8 +5,19 @@ import {
   loadDraftFromLocal,
   removeDraftFromLocal,
   saveDraftToLocal,
+  saveTradeDraft,
   selectNewestDraft,
 } from './draftCacheService';
+
+const { fromMock } = vi.hoisted(() => ({
+  fromMock: vi.fn(),
+}));
+
+vi.mock('../lib/supabase', () => ({
+  supabase: {
+    from: fromMock,
+  },
+}));
 
 class MemoryStorage {
   private values = new Map<string, string>();
@@ -26,7 +37,21 @@ beforeAll(() => {
   (globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage();
 });
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  fromMock.mockReset();
+});
+
+function mockDraftUpsert(updatedAt?: string) {
+  const single = vi.fn().mockResolvedValue({
+    data: updatedAt === undefined ? {} : { updated_at: updatedAt },
+    error: null,
+  });
+  const select = vi.fn().mockReturnValue({ single });
+  const upsert = vi.fn().mockReturnValue({ select });
+  fromMock.mockReturnValue({ upsert });
+  return { upsert, select, single };
+}
 
 describe('사용자별 거래 초안 localStorage', () => {
   it('user.id별 키로 저장하고 같은 사용자만 복원한다', () => {
@@ -179,5 +204,68 @@ describe('로컬과 DB 초안 최신본 선택', () => {
     const local = { version: 2, profile, updatedAt: '2026-07-14T10:00:00.000Z' };
     const database = { user_id: 'user-a', profile: { ...profile, itemName: 'DB' }, updated_at: '2026-07-14T10:01:00.000Z' };
     expect(selectNewestDraft(local, database)?.profile.itemName).toBe('DB');
+  });
+});
+
+describe('Supabase v3 초안 저장 timestamp', () => {
+  it('서버 기본값을 사용하도록 updated_at 없이 v3 payload와 신규 conflict key를 전송한다', async () => {
+    const serverTimestamp = '2026-07-30T01:00:00.000Z';
+    const { upsert, select } = mockDraftUpsert(serverTimestamp);
+
+    const result = await saveTradeDraft('insert-user', profile, 'shipper');
+
+    expect(fromMock).toHaveBeenCalledWith('trade_drafts');
+    expect(upsert).toHaveBeenCalledTimes(1);
+    const [payload, options] = upsert.mock.calls[0];
+    expect(options).toEqual({ onConflict: 'user_id,direction,role' });
+    expect(payload).toMatchObject({
+      user_id: 'insert-user',
+      direction: 'export',
+      role: 'shipper',
+      schema_version: 3,
+      current_step: 1,
+      form_data: {
+        schemaVersion: 3,
+        direction: 'export',
+        role: 'shipper',
+      },
+    });
+    expect(payload).not.toHaveProperty('updated_at');
+    expect(payload).not.toHaveProperty('status');
+    expect(payload).not.toHaveProperty('profile');
+    expect(payload).not.toHaveProperty('trade_direction');
+    expect(payload).not.toHaveProperty('trade_role');
+    expect(select).toHaveBeenCalledWith('updated_at');
+    expect(result).toEqual({ saved: true, updatedAt: serverTimestamp });
+  });
+
+  it('conflict UPDATE 뒤 DB가 반환한 새 updated_at을 최신 캐시 시각으로 사용한다', async () => {
+    const firstTimestamp = '2026-07-30T01:00:00.000Z';
+    const secondTimestamp = '2026-07-30T01:05:00.000Z';
+    const { single } = mockDraftUpsert(firstTimestamp);
+
+    const first = await saveTradeDraft('update-user', profile, 'forwarder');
+    single.mockResolvedValueOnce({ data: { updated_at: secondTimestamp }, error: null });
+    const second = await saveTradeDraft(
+      'update-user',
+      { ...profile, itemName: '수정된 품목' },
+      'forwarder',
+    );
+    const unchanged = await saveTradeDraft(
+      'update-user',
+      { ...profile, itemName: '수정된 품목' },
+      'forwarder',
+    );
+
+    expect(first.updatedAt).toBe(firstTimestamp);
+    expect(second).toEqual({ saved: true, updatedAt: secondTimestamp });
+    expect(unchanged).toEqual({ saved: false, updatedAt: secondTimestamp });
+  });
+
+  it('DB 응답에 updated_at이 없으면 저장 성공으로 처리하지 않는다', async () => {
+    mockDraftUpsert();
+
+    await expect(saveTradeDraft('missing-timestamp-user', profile, 'shipper'))
+      .rejects.toThrow('초안 저장 후 서버 수정 시각을 확인하지 못했습니다.');
   });
 });
