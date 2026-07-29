@@ -84,6 +84,7 @@ export function mapPackingListToSchema(pl: PackingListData): PackingListSchema {
   const inc = s(d.incoterms).toUpperCase();
   const incPort = DEST_INCOTERMS.has(inc) ? s(d.dischargePort) : s(d.loadPort);
   const remarks = [
+    s(d.otherReferences) ? `OTHER REFERENCES: ${s(d.otherReferences)}` : '',
     s(d.paymentTerms) ? `PAYMENT: ${s(d.paymentTerms)}` : '',
     inc ? `INCOTERMS: ${[inc, incPort].filter(Boolean).join(' ')}` : '',
   ].filter(Boolean).join('  /  ');
@@ -102,9 +103,9 @@ export function mapPackingListToSchema(pl: PackingListData): PackingListSchema {
   });
 
   return {
-    shipper: [s(seller.name), s(seller.address), tel(seller.contact)].filter(Boolean).slice(0, 3),
-    consignee: [s(consignee.name), s(consignee.address), tel(consignee.contact)].filter(Boolean).slice(0, 3),
-    notify: s(d.notifyPartyName) || 'SAME AS ABOVE',
+    shipper: [s(seller.name), s(seller.address), s(seller.country), tel(seller.contact)].filter(Boolean).slice(0, 3),
+    consignee: [s(consignee.name), s(consignee.address), s(consignee.country), tel(consignee.contact)].filter(Boolean).slice(0, 3),
+    notify: s(d.notifyPartyName),
     portOfLoading: s(d.loadPort),
     finalDestination: s(d.dischargePort),
     carrier: s(d.carrier) || s(d.vessel),

@@ -18,6 +18,16 @@ type OpenAIAction =
 interface HSCodeRequest {
   action: "suggest-hs-code";
   itemName?: string;
+  candidateCodes?: unknown;
+  itemDetails?: unknown;
+  discoveryMode?: unknown;
+}
+
+interface HSCodeCandidate {
+  code: string;
+  koreanName: string;
+  englishName: string;
+  classificationName: string;
 }
 
 interface FeedbackProfile {
@@ -45,16 +55,19 @@ interface DocumentRequest {
   profile?: DocumentProfile;
 }
 
-type AssistantRequest =
-  | HSCodeRequest
-  | FeedbackRequest
-  | DocumentRequest;
-
 interface HSCodeSuggestion {
   code: string;
   description: string;
   confidence: string;
   reasoning: string;
+  distinguishingFactors?: string[];
+  missingInformation?: string[];
+}
+
+interface HSCodeDecision {
+  suggestions: HSCodeSuggestion[];
+  additionalInformationRequired: boolean;
+  requiredAdditionalInfo: string[];
 }
 
 interface DocumentFields {
@@ -244,6 +257,21 @@ function isHSCodeSuggestion(
   );
 }
 
+function normalizeStringList(
+  value: unknown,
+  limit = 6,
+): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is string =>
+          typeof item === "string"
+        )
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .slice(0, limit)
+    : [];
+}
+
 function normalizeHSCodeSuggestions(
   value: unknown,
 ): HSCodeSuggestion[] {
@@ -271,6 +299,210 @@ function normalizeHSCodeSuggestions(
   }
 
   return suggestions;
+}
+
+function cleanHSCode(value: string): string {
+  return value.replace(/[\s.-]/g, "");
+}
+
+function normalizeHSPrefixes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(
+    new Set(
+      value
+        .filter((item): item is string =>
+          typeof item === "string"
+        )
+        .map(cleanHSCode)
+        .filter((item) => /^(\d{4}|\d{6})$/.test(item)),
+    ),
+  ).slice(0, 3);
+}
+
+function normalizeCandidateCodes(
+  value: unknown,
+): HSCodeCandidate[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const seen = new Set<string>();
+  const candidates: HSCodeCandidate[] = [];
+
+  for (const entry of value.slice(0, 30)) {
+    if (!isRecord(entry)) continue;
+
+    const code = cleanHSCode(getString(entry.code, 30));
+    const koreanName = getString(entry.koreanName, 300);
+    const englishName = getString(entry.englishName, 300);
+    const classificationName = getString(
+      entry.classificationName,
+      300,
+    );
+
+    if (!/^\d{10}$/.test(code) || seen.has(code)) continue;
+    seen.add(code);
+    candidates.push({
+      code,
+      koreanName,
+      englishName,
+      classificationName,
+    });
+  }
+
+  return candidates;
+}
+
+function normalizeItemDetails(
+  value: unknown,
+): Record<string, string> {
+  if (!isRecord(value)) return {};
+
+  const allowedFields = [
+    "material",
+    "fabricConstruction",
+    "intendedUse",
+    "productForm",
+    "processingState",
+    "ageGroup",
+  ];
+  const details: Record<string, string> = {};
+
+  for (const field of allowedFields) {
+    const detail = getString(value[field], 300);
+    if (detail) details[field] = detail;
+  }
+  return details;
+}
+
+function normalizeHSCodeDecision(
+  value: unknown,
+  allowedCodes: Set<string>,
+): HSCodeDecision {
+  if (!isRecord(value)) {
+    throw new Error(
+      "HS CODE 추천 판단 응답이 객체 형식이 아닙니다.",
+    );
+  }
+
+  const rawSuggestions = Array.isArray(value.suggestions)
+    ? value.suggestions
+    : [];
+  const seenDescriptions = new Set<string>();
+  const seenReasonings = new Set<string>();
+  const suggestions = rawSuggestions
+    .filter(isHSCodeSuggestion)
+    .map((item) => ({
+      code: cleanHSCode(item.code),
+      description: item.description.trim(),
+      confidence: item.confidence.trim(),
+      reasoning: item.reasoning.trim(),
+      distinguishingFactors: normalizeStringList(
+        item.distinguishingFactors,
+      ),
+      missingInformation: normalizeStringList(
+        item.missingInformation,
+      ),
+    }))
+    .filter((item) =>
+      /^\d{10}$/.test(item.code) &&
+      allowedCodes.has(item.code) &&
+      ["높음", "high", "보통", "medium", "moderate"].includes(
+        item.confidence.toLowerCase(),
+      )
+    )
+    .filter((item) => {
+      const descriptionKey = item.description
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+      const reasoningKey = item.reasoning
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+      if (
+        !descriptionKey ||
+        !reasoningKey ||
+        seenDescriptions.has(descriptionKey) ||
+        seenReasonings.has(reasoningKey)
+      ) {
+        return false;
+      }
+
+      seenDescriptions.add(descriptionKey);
+      seenReasonings.add(reasoningKey);
+      return true;
+    })
+    .slice(0, 3);
+
+  const requiredAdditionalInfo = Array.from(
+    new Set([
+      ...normalizeStringList(value.requiredAdditionalInfo),
+      ...suggestions.flatMap((item) =>
+        item.missingInformation
+      ),
+    ]),
+  ).slice(0, 6);
+
+  const additionalInformationRequired =
+    value.additionalInformationRequired === true ||
+    requiredAdditionalInfo.length > 0 ||
+    suggestions.length === 0;
+
+  return {
+    suggestions,
+    additionalInformationRequired,
+    requiredAdditionalInfo,
+  };
+}
+
+function ensureApparelConfirmationInfo(
+  decision: HSCodeDecision,
+  itemName: string,
+  itemDetails: Record<string, string>,
+): HSCodeDecision {
+  if (
+    !decision.suggestions.some(({ code }) =>
+      /^(61|62)/.test(code)
+    )
+  ) {
+    return decision;
+  }
+
+  const providedDetails = [
+    itemName,
+    ...Object.values(itemDetails),
+  ].join(" ");
+  const hasCompositionRatio =
+    /\d+(?:\.\d+)?\s*%/.test(providedDetails);
+  const hasOuterShellBasis =
+    /(겉감|outer\s*shell|shell\s*fabric)/i.test(
+      providedDetails,
+    );
+  const alreadyRequestsComposition =
+    decision.requiredAdditionalInfo.some((info) =>
+      /(겉감|outer\s*shell|shell\s*fabric)/i.test(info) &&
+      /(조성|함량|composition|content|percentage)/i.test(info)
+    );
+
+  if (
+    alreadyRequestsComposition ||
+    (hasCompositionRatio && hasOuterShellBasis)
+  ) {
+    return decision;
+  }
+
+  const confirmation =
+    "주된 겉감의 재질인지와 정확한 섬유 조성비";
+
+  return {
+    ...decision,
+    additionalInformationRequired: true,
+    requiredAdditionalInfo: Array.from(
+      new Set([
+        ...decision.requiredAdditionalInfo,
+        confirmation,
+      ]),
+    ).slice(0, 6),
+  };
 }
 
 function normalizeDocumentFields(
@@ -325,6 +557,202 @@ async function handleHSCodeSuggestion(
       },
       400,
     );
+  }
+
+  /*
+   * candidateCodes가 전달된 경우에만 입력 폼용 근거 제한 모드로 동작합니다.
+   * 필드가 없는 기존 HSCodeAgent 호출은 아래의 기존 프롬프트와 배열 응답을
+   * 그대로 사용하므로 하위 호환됩니다.
+   */
+  const candidateCodes =
+    normalizeCandidateCodes(body.candidateCodes);
+
+  if (candidateCodes !== null) {
+    const itemDetails = normalizeItemDetails(
+      body.itemDetails,
+    );
+
+    if (body.discoveryMode === true) {
+      const discoveryPrompt = `
+당신은 한국 관세청 HSK 품목분류를 지원하는 전문가입니다.
+법적 확정이 아니라 관련 10자리 HSK 후보를 찾기 위한 HS 6자리 방향 탐색 단계입니다.
+
+사용자 품목명과 상세정보를 기준으로 가장 관련 있는 HS 6자리 subheading prefix를 1~3개 반환하세요. 정확한 6자리를 판단하기 어려우면 관련 HS 4자리 heading을 fallback으로 반환할 수 있습니다.
+- 제공된 candidateCodes는 문자열 검색 참고자료일 뿐이며 그 목록의 prefix로 제한되지 않습니다.
+- 완제품 입력에는 부품ㆍ원재료ㆍ스크랩 prefix를 선택하지 마세요.
+- 명시된 재질과 충돌하는 재질의 prefix를 선택하지 마세요.
+- 제품의 핵심 명사와 기능을 재질 단어보다 우선하세요. 티셔츠를 코트ㆍ슈트로, 완제품 노트북을 케이스ㆍCPU 같은 부품으로, 식사용 스푼을 철강 스크랩ㆍ원재료로 분류하지 마세요.
+- candidateCodes에서 classificationName이 사용자 제품 종류와 직접 일치하는 후보가 있으면, 재질만 일치하고 제품 종류가 다른 후보보다 그 후보의 6자리 방향을 우선하세요.
+- 성별이 명시되지 않은 의류처럼 실제로 서로 다른 방향이 가능한 경우에는 의미 있게 다른 방향을 함께 반환하세요.
+- 성별, 직물/편물, 재질, 용도, 완제품/부분품, 가공 상태와 품종을 실제 분류 조건으로 적용하세요.
+- 정보가 부족해 의미 있게 다른 방향이 가능하면 최대 3개를 반환하고 확인할 정보를 함께 작성하세요.
+- 품목명이 무의미하거나 지나치게 일반적일 때만 prefix를 비우세요.
+- 10자리 코드는 반환하지 마세요. 6자리 subheading을 우선하고 불가능할 때만 4자리 heading을 반환하세요.
+- 반드시 JSON 객체만 출력하세요.
+
+출력 형식:
+{
+  "suggestedPrefixes": ["6자리 또는 fallback 4자리 숫자"],
+  "additionalInformationRequired": true,
+  "requiredAdditionalInfo": ["방향을 좁히기 위해 확인할 정보"]
+}
+`.trim();
+      const discoveryMessage = `
+사용자 품목명:
+${itemName}
+
+현재 제공된 상세정보:
+${JSON.stringify(itemDetails)}
+
+로컬 문자열 검색 참고 후보:
+${JSON.stringify(candidateCodes)}
+`.trim();
+      const discoveryText = await callOpenAI(
+        apiKey,
+        discoveryPrompt,
+        discoveryMessage,
+      );
+
+      let discovery: unknown;
+      try {
+        discovery = JSON.parse(
+          extractJson(discoveryText),
+        );
+      } catch {
+        throw new Error(
+          "OpenAI의 HS 6자리 방향 응답이 올바른 JSON 형식이 아닙니다.",
+        );
+      }
+      if (!isRecord(discovery)) {
+        throw new Error(
+          "OpenAI의 HS 6자리 방향 응답이 객체 형식이 아닙니다.",
+        );
+      }
+
+      const suggestedPrefixes = normalizeHSPrefixes(
+        discovery.suggestedPrefixes,
+      );
+      const requiredAdditionalInfo = normalizeStringList(
+        discovery.requiredAdditionalInfo,
+      );
+
+      return jsonResponse({
+        success: true,
+        action: "suggest-hs-code",
+        itemName,
+        suggestedPrefixes,
+        additionalInformationRequired:
+          discovery.additionalInformationRequired === true ||
+          requiredAdditionalInfo.length > 0,
+        requiredAdditionalInfo,
+        source: "openai",
+      });
+    }
+
+    if (candidateCodes.length === 0) {
+      return jsonResponse({
+        success: true,
+        action: "suggest-hs-code",
+        itemName,
+        suggestions: [],
+        additionalInformationRequired: true,
+        requiredAdditionalInfo: [
+          "관세청 데이터에서 관련 분류 후보를 찾을 수 있도록 더 구체적인 품목명",
+        ],
+        source: "openai",
+      });
+    }
+
+    const systemPrompt = `
+당신은 한국 관세청 HSK 품목분류를 지원하는 전문가입니다.
+이 기능은 법적 확정이 아니라 사용자가 검토할 유력 후보를 제공하는 입력 지원 기능입니다.
+사용자 정보와 candidateCodes를 비교하여 제공된 목록 안에서만 10자리 HSK 후보를 최대 3개 반환하세요.
+
+판단 절차:
+1. 품목명에서 가장 관련 있는 HS 6자리 방향을 판단하세요.
+2. candidateCodes 중 그 방향과 공식 한글명ㆍ영문명ㆍ분류명이 합리적으로 관련된 10자리 후보를 비교하세요.
+3. 재질, 성별, 직물/편물, 용도, 완제품/부분품, 가공 상태, 제품 종류처럼 실제 분류에 영향을 주는 조건을 적용하세요.
+
+추천 정책:
+- 정보가 부족해도 관련성이 합리적이면 confidence "보통" 후보를 반환하고 부족한 정보는 별도로 표시하세요.
+- 매우 유력하면 "높음", 추가정보에 따라 달라질 수 있지만 충분히 관련 있으면 "보통"을 사용하세요.
+- "낮음" 후보는 반환하지 마세요. confidence는 법적 정확도나 통계적 확률이 아니라 추천 강도입니다.
+- additionalInformationRequired가 true여도 suggestions를 비우지 마세요. 후보와 추가정보 필요 상태는 동시에 존재할 수 있습니다.
+- 다음 경우에만 suggestions를 비우세요: 품목명이 무의미하거나 지나치게 일반적임, 관련 관세청 후보가 없음, 판단한 6자리 방향의 10자리 후보가 없음, 입력과 후보의 관련성이 매우 낮음.
+- 단순히 재질ㆍ성별ㆍ규격 등이 부족하다는 이유만으로 관련 후보를 숨기지 마세요.
+- 품목의 핵심 명사와 기능을 재질 일치보다 우선하세요. 완제품 입력에는 부품ㆍ원재료ㆍ스크랩 후보를 추천하지 말고, 명시된 제품 종류와 다른 의류ㆍ도구ㆍ기계 후보도 제외하세요.
+- candidateCodes의 classificationName이 사용자 제품 종류와 직접 일치하면 이를 강한 제품 형태 근거로 사용하세요. koreanName이나 englishName의 재질만 일치하고 classificationName의 제품 종류가 다른 후보보다 우선합니다.
+- 사용자가 명시한 성별ㆍ재질ㆍ직물/편물ㆍ제품 종류를 누락 정보라고 다시 요구하지 마세요.
+- 유력 후보가 하나면 1개만, 의미 있게 다른 후보가 있으면 최대 3개까지 반환하세요.
+- 설명과 분류 조건이 같은 후보를 개수 채우기용으로 반복하지 마세요.
+- description에는 candidateCodes의 공식 명칭과 해당 코드만의 분류 조건을 반영하고 공식 데이터에 없는 특성을 만들지 마세요.
+- reasoning에는 유력한 이유, 다른 후보와 구분되는 조건, 현재 부족한 정보를 구체적으로 쓰세요.
+- distinguishingFactors에는 후보를 구분하는 조건을, missingInformation에는 해당 후보를 최종 확인하려면 필요한 정보를 쓰세요.
+- requiredAdditionalInfo에는 모든 후보에 공통으로 추가 확인할 정보를 중복 없이 쓰세요.
+- missingInformation 또는 requiredAdditionalInfo가 하나라도 있으면 additionalInformationRequired를 true로 설정하세요.
+- 반드시 JSON 객체만 출력하고 마크다운이나 설명을 덧붙이지 마세요.
+
+반드시 다음 JSON 객체만 출력하세요:
+{
+  "suggestions": [
+    {
+      "code": "10자리 코드",
+      "description": "후보별 고유 설명",
+      "confidence": "높음 또는 보통",
+      "reasoning": "후보별 고유 근거와 차이",
+      "distinguishingFactors": ["후보를 구분하는 조건"],
+      "missingInformation": ["이 후보의 최종 확인에 필요한 정보"]
+    }
+  ],
+  "additionalInformationRequired": true,
+  "requiredAdditionalInfo": ["최종 확정 전 확인할 정보"]
+}
+`.trim();
+
+    const userMessage = `
+사용자 품목명:
+${itemName}
+
+현재 제공된 상세정보:
+${JSON.stringify(itemDetails)}
+
+관세청 10자리 HSK 후보:
+${JSON.stringify(candidateCodes)}
+
+법적 확정이 아니라 검토용 후보를 고르는 요청입니다. 합리적으로 관련된 높음 또는 보통 후보를 표시하고, 부족한 정보는 후보를 숨기지 말고 별도로 반환하세요.
+`.trim();
+
+    const outputText = await callOpenAI(
+      apiKey,
+      systemPrompt,
+      userMessage,
+    );
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(extractJson(outputText));
+    } catch {
+      throw new Error(
+        "OpenAI의 HS CODE 추천 판단 응답이 올바른 JSON 형식이 아닙니다.",
+      );
+    }
+
+    const decision = ensureApparelConfirmationInfo(
+      normalizeHSCodeDecision(
+        parsed,
+        new Set(candidateCodes.map((candidate) => candidate.code)),
+      ),
+      itemName,
+      itemDetails,
+    );
+
+    return jsonResponse({
+      success: true,
+      action: "suggest-hs-code",
+      itemName,
+      ...decision,
+      source: "openai",
+    });
   }
 
   const systemPrompt = `
@@ -630,7 +1058,7 @@ export default {
     try {
       const apiKey = Deno.env.get(
         "OPENAI_API_KEY",
-      );
+      )?.trim();
 
       if (!apiKey) {
         throw new Error(
@@ -691,7 +1119,7 @@ export default {
             {
               success: false,
               error:
-                "지원하지 않는 action입니다. suggest-hs-code, generate-feedback, auto-fill-document 중 하나를 사용하세요.",
+                "지원하지 않는 action입니다.",
             },
             400,
           );

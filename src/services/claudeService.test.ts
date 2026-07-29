@@ -10,6 +10,7 @@ import {
   autoFillDocumentFields,
   generateContextualFeedback,
   suggestHSCode,
+  suggestHSCodeFromCandidates,
 } from './claudeService';
 
 beforeEach(() => {
@@ -60,6 +61,41 @@ describe('openai-assistant Edge Function 서비스', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await expect(suggestHSCode('노트북')).resolves.toEqual([]);
+  });
+
+  it('후보 기반 호출은 선택 필드를 추가하고 판단 보류 응답을 매핑한다', async () => {
+    const candidateCodes = [{
+      code: '6109101000',
+      koreanName: '면으로 만든 것',
+      englishName: 'Of cotton',
+      classificationName: '(티셔츠)',
+    }];
+    invokeMock.mockResolvedValue({
+      data: {
+        success: true,
+        action: 'suggest-hs-code',
+        suggestions: [],
+        additionalInformationRequired: true,
+        requiredAdditionalInfo: ['직물/편물 여부', '성인용/아동용 여부'],
+        source: 'openai',
+      },
+      error: null,
+    });
+
+    await expect(
+      suggestHSCodeFromCandidates('아동용 면 셔츠', candidateCodes)
+    ).resolves.toEqual({
+      suggestions: [],
+      additionalInformationRequired: true,
+      requiredAdditionalInfo: ['직물/편물 여부', '성인용/아동용 여부'],
+    });
+    expect(invokeMock).toHaveBeenCalledWith('openai-assistant', {
+      body: {
+        action: 'suggest-hs-code',
+        itemName: '아동용 면 셔츠',
+        candidateCodes,
+      },
+    });
   });
 
   it('자연어 피드백 body를 그대로 전달하고 문자열을 반환한다', async () => {

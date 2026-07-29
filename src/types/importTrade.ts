@@ -6,9 +6,16 @@ export type ImportDocumentType =
   | 'commercial_invoice'
   | 'packing_list'
   | 'bill_of_lading'
+  | 'certificate_of_origin'
+  | 'other'
   | 'unknown';
-export type ImportAnalysisStatus = 'classifying' | 'ready' | 'error';
-export type RiskLevel = 'low' | 'medium' | 'high';
+export type ImportAnalysisStatus =
+  | 'classifying'
+  | 'ready'
+  | 'analyzing'
+  | 'analyzed'
+  | 'error';
+export type RiskLevel = 'low' | 'medium' | 'high' | 'info';
 export type CargoLookupStatus = 'idle' | 'loading' | 'success' | 'empty' | 'error' | 'simulation';
 
 export interface ImportDocumentMeta {
@@ -18,6 +25,11 @@ export interface ImportDocumentMeta {
   mimeType: string;
   type: ImportDocumentType;
   status: ImportAnalysisStatus;
+  uploadStatus?: 'ready' | 'uploaded' | 'error';
+  analysisStatus?: 'pending' | 'analyzing' | 'success' | 'error';
+  analysisSuccess?: boolean;
+  errorMessage?: string;
+  sourceId?: string;
 }
 
 export interface ArrivalNoticeMeta {
@@ -28,7 +40,37 @@ export interface ArrivalNoticeMeta {
   uploadedAt: string;
 }
 
+export interface ImportParty {
+  name: string;
+  address: string;
+  country: string;
+  contactName: string;
+  phone: string;
+  email: string;
+}
+
+export interface ImportItem {
+  id: string;
+  description: string;
+  koreanDescription: string;
+  documentHSCode: string;
+  confirmedHSCode: string;
+  modelName: string;
+  specification: string;
+  material: string;
+  composition: string;
+  intendedUse: string;
+  originCountry: string;
+  quantity: string;
+  quantityUnit: string;
+  unitPrice: string;
+  currency: string;
+  amount: string;
+  sourceDocumentIds: string[];
+}
+
 export interface ImportExtractedFields {
+  // Legacy flat fields are retained for stored draft/snapshot compatibility.
   shipper: string;
   consignee: string;
   notifyParty: string;
@@ -49,6 +91,27 @@ export interface ImportExtractedFields {
   sealNo: string;
   vesselName: string;
   voyageNo: string;
+
+  exporterDetails: ImportParty;
+  importerDetails: ImportParty;
+  consigneeDetails: ImportParty;
+  notifyPartyDetails: ImportParty;
+  invoiceDate: string;
+  incoterms: string;
+  paymentTerms: string;
+  shipmentDate: string;
+  estimatedArrivalDate: string;
+  containerNumbers: string[];
+  sealNumbers: string[];
+  items: ImportItem[];
+  certificateOfOriginAvailable: boolean;
+  totalPackageCount: string;
+  packageUnit: string;
+  grossWeightUnit: string;
+  netWeightUnit: string;
+  freight: string;
+  insurance: string;
+  otherAdditions: string;
 }
 
 export interface ImportValidation {
@@ -57,6 +120,7 @@ export interface ImportValidation {
   message: string;
   severity: ValidationSeverity;
   documents: ImportDocumentType[];
+  values?: Array<{ documentId: string; value: string }>;
 }
 
 export interface ImportComparisonRow {
@@ -64,6 +128,7 @@ export interface ImportComparisonRow {
   invoice: string;
   packingList: string;
   billOfLading: string;
+  certificateOfOrigin?: string;
   matches: boolean;
   detail: string;
 }
@@ -79,13 +144,17 @@ export interface ImportDocumentClassification {
   type: ImportDocumentType;
   confidence: number;
   summary: string;
+  sourceId?: string;
 }
 
 export interface ImportHSCodeSuggestion {
+  itemId?: string;
   code: string;
   description: string;
   reasoning: string;
   confidence: number;
+  missingInformation?: string[];
+  source?: 'ai_recommendation';
 }
 
 export interface ImportDocumentAnalysisResponse {
@@ -96,17 +165,33 @@ export interface ImportDocumentAnalysisResponse {
   model: string;
 }
 
+export interface ImportDutyItemEstimate {
+  itemId: string;
+  hsCode: string;
+  customsValue: number;
+  basicRate: number;
+  basicDuty: number;
+}
+
 export interface ImportDutyEstimate {
+  status: 'calculated';
+  invoiceCurrency: string;
+  invoiceAmount: number;
+  exchangeRate: number;
+  exchangeRateDate: string;
+  convertedInvoiceKrw: number;
   customsValue: number;
   basicRate: number;
   basicDuty: number;
   ftaAgreement: string;
-  ftaRate: number;
-  ftaDuty: number;
-  estimatedSavings: number;
+  ftaRate: number | null;
+  ftaDuty: number | null;
+  estimatedSavings: number | null;
   vat: number;
+  otherTaxes: number | null;
   totalTax: number;
-  source: 'api' | 'simulation';
+  items: ImportDutyItemEstimate[];
+  source: 'api';
 }
 
 export interface ImportRisk {
@@ -116,7 +201,8 @@ export interface ImportRisk {
   cause: string;
   recommendation: string;
   relatedDocuments: string[];
-  status: string;
+  differentValues?: string[];
+  status: 'unresolved' | 'resolved';
 }
 
 export interface CargoTimelineItem {

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ShipperItem } from '../types';
-import { calculateShipperItemAmount, isGrossWeightBelowNet, summarizeShipperItems } from './shipperForm';
+import {
+  calculateShipperItemAmount,
+  EMPTY_GOODS_DESCRIPTION_MESSAGE,
+  getGoodsDescriptionValidationMessage,
+  isGrossWeightBelowNet,
+  NON_ENGLISH_GOODS_DESCRIPTION_MESSAGE,
+  summarizeShipperItems,
+} from './shipperForm';
 
 const item = (currency: ShipperItem['currency'], quantity: number, unitPrice: number): ShipperItem => ({
   id: `${currency}-${quantity}`,
@@ -36,5 +43,19 @@ describe('화주 품목 금액 계산', () => {
   it('총중량이 순중량보다 작으면 경고 대상으로 판정한다', () => {
     expect(isGrossWeightBelowNet(90, 100)).toBe(true);
     expect(isGrossWeightBelowNet(100, 90)).toBe(false);
+  });
+
+  it('모든 품목의 영문 품명을 문서 생성 전에 검증한다', () => {
+    expect(getGoodsDescriptionValidationMessage([
+      item('USD', 1, 1),
+      { ...item('USD', 1, 1), id: 'empty', itemName: '' },
+    ])).toBe(EMPTY_GOODS_DESCRIPTION_MESSAGE);
+    expect(getGoodsDescriptionValidationMessage([
+      { ...item('USD', 1, 1), itemName: 'Cotton 티셔츠' },
+    ])).toBe(NON_ENGLISH_GOODS_DESCRIPTION_MESSAGE);
+    expect(getGoodsDescriptionValidationMessage([
+      { ...item('USD', 1, 1), itemName: 'Cotton T-shirts' },
+      { ...item('USD', 1, 1), id: 'second', itemName: 'Kitchen Tongs' },
+    ])).toBeNull();
   });
 });

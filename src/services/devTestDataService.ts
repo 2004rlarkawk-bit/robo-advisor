@@ -41,6 +41,15 @@ function createPerfectDefaults(now: Date): TradeProfile {
     issuePlace: 'Busan, Korea',
     issueDate: invoiceDate,
     itemName: "Women's Cashmere Coats",
+    shipperItems: [{
+      id: 'primary-item',
+      itemName: "Women's Cashmere Coats",
+      hsCode: '620211',
+      quantity: 100,
+      unit: 'EA',
+      unitPrice: 250,
+      currency: 'USD',
+    }],
     hsCode: '620211',
     countryOfOrigin: 'South Korea',
     quantity: 100,
@@ -71,6 +80,7 @@ function createPerfectDefaults(now: Date): TradeProfile {
     sealNo: 'SEAL1001',
     incoterms: 'FOB',
     paymentTerms: 'T/T in advance',
+    otherReferences: 'PO-TEST-2026-001',
     reasonForExport: 'Sale of goods',
     freightTerms: 'Prepaid',
     freightCharges: 'Prepaid',
@@ -98,6 +108,15 @@ function createPerfectDefaults(now: Date): TradeProfile {
     signerPosition: 'Export Manager',
     insuranceConfirmed: false,
     coIssuanceConfirmed: true,
+    shipperSupplemental: {
+      buyerMatchesConsignee: true,
+      consigneeMatchesNotifyParty: true,
+      incotermsPlace: 'Busan Port',
+      originCriterion: '세번변경기준',
+      isSignerSameAsCompany: false,
+      hasNoShippingMarks: false,
+      shippingMarksBeforeNoMarks: '',
+    },
   };
 }
 

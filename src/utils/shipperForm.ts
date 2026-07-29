@@ -1,20 +1,19 @@
-import type { NumericInput, ShipperCurrency, ShipperItem, ShipperItemUnit, TradeProfile } from '../types';
+import type { NumericInput, ShipperCurrency, ShipperItem, ShipperItemUnit, ShipperSupplementalState, TradeProfile } from '../types';
 
 export const SHIPPER_ITEM_UNITS: ShipperItemUnit[] = ['EA', 'PCS', 'SET', 'CTN', 'BOX', 'KG', 'TON', 'M', 'M2', 'M3', 'L'];
 export const SHIPPER_CURRENCIES: ShipperCurrency[] = ['USD', 'EUR', 'JPY', 'CNY', 'KRW', 'GBP'];
-
-export interface ShipperSupplementalState {
-  buyerMatchesConsignee: boolean;
-  consigneeMatchesNotifyParty: boolean;
-  incotermsPlace: string;
-  originCriterion: '' | '세번변경기준' | '부가가치기준' | '완전생산기준';
-}
+export const EMPTY_GOODS_DESCRIPTION_MESSAGE = '영문 품명 Goods Description을 입력해주세요.';
+export const NON_ENGLISH_GOODS_DESCRIPTION_MESSAGE = '상업송장과 포장명세서에 표시할 영문 품명을 입력해주세요.';
 
 export const EMPTY_SHIPPER_SUPPLEMENTAL_STATE: ShipperSupplementalState = {
   buyerMatchesConsignee: false,
   consigneeMatchesNotifyParty: false,
   incotermsPlace: '',
   originCriterion: '',
+  isSignerSameAsCompany: false,
+  signerNameBeforeCompany: '',
+  hasNoShippingMarks: false,
+  shippingMarksBeforeNoMarks: '',
 };
 
 function toNumericInput(value: TradeProfile['quantity'] | undefined): NumericInput {
@@ -42,7 +41,15 @@ export function tradeProfileToPrimaryShipperItem(profile: TradeProfile): Shipper
 }
 
 export function createEmptyShipperItem(id: string): ShipperItem {
-  return { id, itemName: '', hsCode: '', quantity: '', unit: 'EA', unitPrice: '', currency: 'KRW' };
+  return {
+    id,
+    itemName: '',
+    hsCode: '',
+    quantity: '',
+    unit: 'EA',
+    unitPrice: '',
+    currency: 'KRW',
+  };
 }
 
 export function calculateShipperItemAmount(item: ShipperItem): number {
@@ -79,4 +86,14 @@ export function primaryShipperItemToTradeProfile(item: ShipperItem): Partial<Tra
     totalAmount: amount,
     invoiceAmount: amount,
   };
+}
+
+export function getGoodsDescriptionValidationMessage(items: ShipperItem[]): string | null {
+  if (items.some((item) => !item.itemName.trim())) {
+    return EMPTY_GOODS_DESCRIPTION_MESSAGE;
+  }
+  if (items.some((item) => /[가-힣]/.test(item.itemName))) {
+    return NON_ENGLISH_GOODS_DESCRIPTION_MESSAGE;
+  }
+  return null;
 }

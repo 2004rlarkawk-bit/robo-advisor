@@ -8,6 +8,10 @@
  */
 
 import { supabase } from '../lib/supabase';
+import type {
+  HSCodeCandidateContext,
+  HSCodeItemDetails,
+} from '../types/hsCodeSuggestion';
 
 /**
  * unknown 타입의 값이 일반 객체인지 확인합니다.
@@ -40,8 +44,16 @@ async function invokeOpenAIAssistant(
     );
 
   if (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
     throw new Error(
-      error.message ||
+      (typeof error === 'object' &&
+      error !== null &&
+      'message' in error &&
+      typeof error.message === 'string'
+        ? error.message
+        : '') ||
         'OpenAI Assistant Edge Function 요청에 실패했습니다.'
     );
   }
@@ -89,6 +101,78 @@ export interface HSCodeSuggestion {
   description: string;
   confidence: string;
   reasoning: string;
+  distinguishingFactors?: string[];
+  missingInformation?: string[];
+}
+
+export interface HSCodeRecommendationDecision {
+  suggestions: HSCodeSuggestion[];
+  additionalInformationRequired: boolean;
+  requiredAdditionalInfo: string[];
+}
+
+export interface HSCodePrefixDiscovery {
+  suggestedPrefixes: string[];
+  additionalInformationRequired: boolean;
+  requiredAdditionalInfo: string[];
+}
+
+function parseHSCodeSuggestions(
+  value: unknown
+): HSCodeSuggestion[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const suggestions: HSCodeSuggestion[] = [];
+  for (const candidate of value) {
+    if (
+      !isRecord(candidate) ||
+      typeof candidate.code !== 'string' ||
+      typeof candidate.description !== 'string' ||
+      typeof candidate.confidence !== 'string' ||
+      typeof candidate.reasoning !== 'string'
+    ) {
+      return null;
+    }
+
+    const code = candidate.code.trim();
+    if (!code) continue;
+    const distinguishingFactors = Array.isArray(
+      candidate.distinguishingFactors
+    )
+      ? candidate.distinguishingFactors
+          .filter((value): value is string =>
+            typeof value === 'string'
+          )
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .slice(0, 6)
+      : null;
+    const missingInformation = Array.isArray(
+      candidate.missingInformation
+    )
+      ? candidate.missingInformation
+          .filter((value): value is string =>
+            typeof value === 'string'
+          )
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .slice(0, 6)
+      : null;
+
+    suggestions.push({
+      code,
+      description: candidate.description.trim(),
+      confidence: candidate.confidence.trim(),
+      reasoning: candidate.reasoning.trim(),
+      ...(distinguishingFactors
+        ? { distinguishingFactors }
+        : {}),
+      ...(missingInformation
+        ? { missingInformation }
+        : {}),
+    });
+  }
+  return suggestions;
 }
 
 /**
@@ -127,48 +211,150 @@ export async function suggestHSCode(
     return [];
   }
 
-  const suggestions: HSCodeSuggestion[] =
-    [];
-
-  for (const value of data.suggestions) {
-    if (
-      !isRecord(value) ||
-      typeof value.code !== 'string' ||
-      typeof value.description !==
-        'string' ||
-      typeof value.confidence !==
-        'string' ||
-      typeof value.reasoning !== 'string'
-    ) {
-      console.warn(
-        '[OpenAI HS Code] 후보 데이터 형식이 올바르지 않아 관세청 사전 검색으로 폴백합니다.'
-      );
-
-      return [];
-    }
-
-    const code = value.code.trim();
-
-    /*
-     * 코드가 없는 후보는 실제 HS Code 추천값으로 사용할 수 없으므로
-     * 결과에서 제외합니다.
-     */
-    if (!code) {
-      continue;
-    }
-
-    suggestions.push({
-      code,
-      description:
-        value.description.trim(),
-      confidence:
-        value.confidence.trim(),
-      reasoning:
-        value.reasoning.trim(),
-    });
+  const suggestions = parseHSCodeSuggestions(data.suggestions);
+  if (!suggestions) {
+    console.warn(
+      '[OpenAI HS Code] 후보 데이터 형식이 올바르지 않아 관세청 사전 검색으로 폴백합니다.'
+    );
+    return [];
   }
 
   return suggestions;
+}
+
+/**
+ * 관세청 로컬 검색으로 좁힌 후보 안에서 OpenAI가 추천 여부를 판단합니다.
+ * 기존 suggestHSCode 호출 계약은 변경하지 않고 입력 폼 전용 계약을 분리합니다.
+ */
+export async function suggestHSCodeFromCandidates(
+  itemName: string,
+  candidateCodes: HSCodeCandidateContext[],
+  itemDetails?: HSCodeItemDetails,
+  debugItemId?: string
+): Promise<HSCodeRecommendationDecision> {
+  const normalizedItemName = itemName.trim();
+  if (!normalizedItemName) {
+    return {
+      suggestions: [],
+      additionalInformationRequired: true,
+      requiredAdditionalInfo: [],
+    };
+  }
+
+  const data = await invokeOpenAIAssistant({
+    action: 'suggest-hs-code',
+    itemName: normalizedItemName,
+    candidateCodes,
+    ...(itemDetails ? { itemDetails } : {}),
+  });
+
+  if (import.meta.env.DEV) {
+    const rawSuggestions = Array.isArray(data.suggestions)
+      ? data.suggestions
+      : Array.isArray(data.candidates)
+        ? data.candidates
+        : [];
+    console.debug(
+      `[HS Suggest][${debugItemId ?? 'unknown'}] OpenAI response:`,
+      {
+        keys: Object.keys(data),
+        suggestionsField: Array.isArray(data.suggestions),
+        candidatesField: Array.isArray(data.candidates),
+        rawCount: rawSuggestions.length,
+        candidates: rawSuggestions.map((value) =>
+          isRecord(value)
+            ? {
+                code: value.code,
+                hsCode: value.hsCode,
+                confidence: value.confidence,
+                description: value.description,
+                needsMoreInformation:
+                  value.needsMoreInformation,
+                requiredAdditionalInfo:
+                  value.requiredAdditionalInfo,
+              }
+            : { invalidType: typeof value }
+        ),
+        additionalInformationRequired:
+          data.additionalInformationRequired,
+        requiredAdditionalInfo:
+          data.requiredAdditionalInfo,
+      }
+    );
+  }
+
+  if (
+    data.action !== 'suggest-hs-code' ||
+    data.source !== 'openai'
+  ) {
+    throw new Error('OpenAI HS Code 추천 응답 형식이 올바르지 않습니다.');
+  }
+
+  const suggestions = parseHSCodeSuggestions(data.suggestions);
+  if (!suggestions) {
+    throw new Error('OpenAI HS Code 후보 데이터 형식이 올바르지 않습니다.');
+  }
+
+  const requiredAdditionalInfo = Array.isArray(data.requiredAdditionalInfo)
+    ? data.requiredAdditionalInfo
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .slice(0, 6)
+    : [];
+
+  return {
+    suggestions,
+    additionalInformationRequired:
+      data.additionalInformationRequired === true,
+    requiredAdditionalInfo,
+  };
+}
+
+export async function discoverHSCodePrefixes(
+  itemName: string,
+  candidateCodes: HSCodeCandidateContext[],
+  itemDetails?: HSCodeItemDetails
+): Promise<HSCodePrefixDiscovery> {
+  const data = await invokeOpenAIAssistant({
+    action: 'suggest-hs-code',
+    itemName: itemName.trim(),
+    candidateCodes,
+    discoveryMode: true,
+    ...(itemDetails ? { itemDetails } : {}),
+  });
+
+  if (
+    data.action !== 'suggest-hs-code' ||
+    data.source !== 'openai'
+  ) {
+    throw new Error('OpenAI HS Code 방향 응답 형식이 올바르지 않습니다.');
+  }
+
+  const suggestedPrefixes = Array.isArray(data.suggestedPrefixes)
+    ? Array.from(new Set(
+        data.suggestedPrefixes
+          .filter((value): value is string =>
+            typeof value === 'string'
+          )
+          .map((value) => value.replace(/[\s.-]/g, ''))
+          .filter((value) => /^(\d{4}|\d{6})$/.test(value))
+      )).slice(0, 3)
+    : [];
+  const requiredAdditionalInfo = Array.isArray(data.requiredAdditionalInfo)
+    ? data.requiredAdditionalInfo
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .slice(0, 6)
+    : [];
+
+  return {
+    suggestedPrefixes,
+    additionalInformationRequired:
+      data.additionalInformationRequired === true,
+    requiredAdditionalInfo,
+  };
 }
 
 /**

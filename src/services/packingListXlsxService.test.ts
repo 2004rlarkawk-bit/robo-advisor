@@ -34,8 +34,8 @@ describe('mapPackingListToSchema — 상업송장과 공유하는 거래 데이�
     expect(s.finalDestination).toBe('OSAKA, JAPAN');
   });
 
-  it('Notify 미입력이면 기본값 "SAME AS ABOVE"', () => {
-    expect(mapPackingListToSchema(basePL()).notify).toBe('SAME AS ABOVE');
+  it('Notify 미입력이면 선택값 정책에 따라 공란', () => {
+    expect(mapPackingListToSchema(basePL()).notify).toBe('');
   });
 
   it('remarks는 결제조건+인코텀즈로 조립하고, 도착지 지칭이면 도착항을 붙인다', () => {

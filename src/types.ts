@@ -27,6 +27,17 @@ export interface ShipperItem {
   currency: ShipperCurrency;
 }
 
+export interface ShipperSupplementalState {
+  buyerMatchesConsignee: boolean;
+  consigneeMatchesNotifyParty: boolean;
+  incotermsPlace: string;
+  originCriterion: '' | '세번변경기준' | '부가가치기준' | '완전생산기준';
+  isSignerSameAsCompany?: boolean;
+  signerNameBeforeCompany?: string;
+  hasNoShippingMarks?: boolean;
+  shippingMarksBeforeNoMarks?: string;
+}
+
 // 2026-07-23 편의성 업그레이드: 포워더용 선적 및 부킹 입력 폼 추가
 export type BookingStatus = 'requested' | 'confirmed' | 'cancelled';
 export type ForwarderLoadingMode = 'FCL' | 'LCL';
@@ -56,6 +67,7 @@ export interface TradeProfile {
   invoiceNo?: string;
   invoiceDate?: string;
   referenceNo?: string;
+  otherReferences?: string;
 
   blNo?: string;
   issuePlace?: string;
@@ -121,6 +133,10 @@ export interface TradeProfile {
   insuranceConfirmed?: boolean;
   /** 원산지증명서 발급 요청을 확인 (co-required 이슈 해소 — 원산지 판정 로직 도입 전 단계) */
   coIssuanceConfirmed?: boolean;
+
+  /** 수출 화주 폼 전용 JSON 상태. 기존 profile JSON 저장/복원 흐름을 그대로 사용한다. */
+  shipperItems?: ShipperItem[];
+  shipperSupplemental?: ShipperSupplementalState;
 }
 
 // 주의: '| string'을 붙이면 유니언이 사실상 string으로 붕괴되어 오타를 컴파일이 못 잡는다

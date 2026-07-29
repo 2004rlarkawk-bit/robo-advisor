@@ -44,6 +44,98 @@ describe('사용자별 거래 초안 localStorage', () => {
     expect(loadDraftFromLocal('user-b')?.profile.itemName).toBe('다른 사용자');
   });
 
+  it('화주 신규 필드와 단일 영문 품명을 새로고침 후 복원한다', () => {
+    const extended: TradeProfile = {
+      ...profile,
+      itemName: 'Custom Cotton T-shirts',
+      signedBy: 'KIM JIMIN',
+      otherReferences: 'PO-77',
+      shippingMarks: 'N/M',
+      vesselOrFlight: 'OCEAN STAR',
+      shipperItems: [{
+        id: 'primary-item',
+        itemName: 'Custom Cotton T-shirts',
+        hsCode: '6109100000',
+        quantity: 5,
+        unit: 'EA',
+        unitPrice: 12,
+        currency: 'USD',
+      }],
+      shipperSupplemental: {
+        buyerMatchesConsignee: false,
+        consigneeMatchesNotifyParty: false,
+        incotermsPlace: 'Busan Port',
+        originCriterion: '',
+        isSignerSameAsCompany: false,
+        hasNoShippingMarks: true,
+        shippingMarksBeforeNoMarks: 'SEOUL / C/NO. 1',
+      },
+    };
+    saveDraftToLocal('extended', extended);
+    expect(loadDraftFromLocal('extended')?.profile).toMatchObject(extended);
+  });
+
+  it('기존 영문 품명을 itemName으로 우선 복원하고 신규 저장에서는 레거시 키를 제거한다', () => {
+    const legacyProfile = {
+      ...profile,
+      itemName: '코튼티셔츠',
+      shipperItems: [{
+        id: 'primary-item',
+        itemName: '코튼티셔츠',
+        englishDescription: 'Custom Cotton T-shirts',
+        englishDescriptionManuallyEdited: true,
+        hsCode: '6109100000',
+        quantity: 5,
+        unit: 'EA',
+        unitPrice: 12,
+        currency: 'USD',
+      }],
+    };
+    localStorage.setItem(getTradeDraftCacheKey('legacy-description'), JSON.stringify({
+      version: 2,
+      updatedAt: '2026-07-01T00:00:00.000Z',
+      profile: legacyProfile,
+    }));
+
+    const restored = loadDraftFromLocal('legacy-description')!.profile;
+    expect(restored.itemName).toBe('Custom Cotton T-shirts');
+    expect(restored.shipperItems?.[0].itemName).toBe('Custom Cotton T-shirts');
+    expect(restored.shipperItems?.[0]).not.toHaveProperty('englishDescription');
+    expect(restored.shipperItems?.[0]).not.toHaveProperty('englishDescriptionManuallyEdited');
+
+    saveDraftToLocal('legacy-description', restored);
+    const saved = JSON.parse(
+      localStorage.getItem(getTradeDraftCacheKey('legacy-description')) || '{}'
+    );
+    expect(saved.profile.shipperItems[0]).toEqual(expect.objectContaining({
+      itemName: 'Custom Cotton T-shirts',
+    }));
+    expect(saved.profile.shipperItems[0]).not.toHaveProperty('englishDescription');
+  });
+
+  it('기존 영문 품명이 없으면 기존 itemName을 잃지 않고 복원한다', () => {
+    const legacyProfile = {
+      ...profile,
+      shipperItems: [{
+        id: 'primary-item',
+        itemName: '기존 한국어 품명',
+        hsCode: '',
+        quantity: 1,
+        unit: 'EA',
+        unitPrice: 1,
+        currency: 'USD',
+      }],
+    };
+    localStorage.setItem(getTradeDraftCacheKey('legacy-name-only'), JSON.stringify({
+      version: 2,
+      updatedAt: '2026-07-01T00:00:00.000Z',
+      profile: legacyProfile,
+    }));
+
+    expect(loadDraftFromLocal('legacy-name-only')?.profile.shipperItems?.[0].itemName)
+      .toBe('기존 한국어 품명');
+  });
+
   it('기존 v1 savedAt 캐시를 updatedAt 형식으로 복원한다', () => {
     localStorage.setItem(getTradeDraftCacheKey('legacy'), JSON.stringify({ version: 1, savedAt: '2026-07-01T00:00:00.000Z', profile }));
     expect(loadDraftFromLocal('legacy')?.updatedAt).toBe('2026-07-01T00:00:00.000Z');

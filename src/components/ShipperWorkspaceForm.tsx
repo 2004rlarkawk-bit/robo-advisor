@@ -1,16 +1,19 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { FileSignature, FileText, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from '../constants/ports';
-import type { Incoterms, NumericInput, ShipperItem, TradeProfile } from '../types';
+import type { Incoterms, NumericInput, ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
 import CountrySelect from './CountrySelect';
+import { useShipperHSCodeSuggestions } from '../hooks/useShipperHSCodeSuggestions';
 import {
   calculateShipperItemAmount,
   createEmptyShipperItem,
+  EMPTY_GOODS_DESCRIPTION_MESSAGE,
+  getGoodsDescriptionValidationMessage,
   isGrossWeightBelowNet,
+  NON_ENGLISH_GOODS_DESCRIPTION_MESSAGE,
   SHIPPER_CURRENCIES,
   SHIPPER_ITEM_UNITS,
   summarizeShipperItems,
-  type ShipperSupplementalState,
 } from '../utils/shipperForm';
 
 interface Props {
@@ -20,6 +23,7 @@ interface Props {
   isProcessing: boolean;
   toolbar?: ReactNode;
   statusContent?: ReactNode;
+  profileSignerDefault?: string;
   onProfilePatch: (patch: Partial<TradeProfile>) => void;
   onItemsChange: (items: ShipperItem[]) => void;
   onSupplementalChange: (state: ShipperSupplementalState) => void;
@@ -28,7 +32,7 @@ interface Props {
 }
 
 const INCOTERMS_OPTIONS: Exclude<Incoterms, ''>[] = ['EXW', 'FOB', 'CFR', 'CIF', 'DDP'];
-const PAYMENT_TERM_OPTIONS = ['T/T', 'L/C', 'D/P', 'D/A'] as const;
+const PAYMENT_TERM_OPTIONS = ['T/T', 'L/C', 'D/P', 'D/A', 'Open Account'] as const;
 const PACKAGE_TYPE_OPTIONS = ['CTNS', 'PALLETS', 'CASES', 'BOXES', 'BAGS', 'DRUMS'] as const;
 
 function numericValue(eventValue: string): NumericInput {
@@ -42,6 +46,7 @@ export default function ShipperWorkspaceForm({
   isProcessing,
   toolbar,
   statusContent,
+  profileSignerDefault = '',
   onProfilePatch,
   onItemsChange,
   onSupplementalChange,
@@ -50,6 +55,8 @@ export default function ShipperWorkspaceForm({
 }: Props) {
   const invoiceSummary = summarizeShipperItems(items);
   const hasInvalidWeight = isGrossWeightBelowNet(profile.grossWeight, profile.netWeight);
+  const hsCodeSuggestions = useShipperHSCodeSuggestions(items);
+  const [showItemValidation, setShowItemValidation] = useState(false);
 
   const updateItem = <K extends keyof ShipperItem>(id: string, field: K, value: ShipperItem[K]) => {
     onItemsChange(items.map((item) => item.id === id ? { ...item, [field]: value } : item));
@@ -62,6 +69,12 @@ export default function ShipperWorkspaceForm({
   const removeItem = (id: string) => {
     if (items.length <= 1) return;
     onItemsChange(items.filter((item) => item.id !== id));
+  };
+
+  const handleGenerateClick = () => {
+    setShowItemValidation(true);
+    if (getGoodsDescriptionValidationMessage(items)) return;
+    onGenerate();
   };
 
   const patchParty = (field: keyof TradeProfile, value: string) => {
@@ -128,11 +141,42 @@ export default function ShipperWorkspaceForm({
       <details className="form-section" open>
         <summary className="form-section-summary">1. 화주 기본정보</summary>
         <div className="form-grid">
-          <div className="form-group"><label className="form-label">회사명(상호명)</label><input className="form-input" value={profile.companyName} onChange={(event) => onProfilePatch({ companyName: event.target.value })} placeholder="ABC Logistics Co., Ltd." /></div>
+          <div className="form-group"><label className="form-label">회사명(상호명)</label><input className="form-input" value={profile.companyName} onChange={(event) => onProfilePatch({
+            companyName: event.target.value,
+            ...(supplemental.isSignerSameAsCompany ? { signedBy: event.target.value } : {}),
+          })} placeholder="ABC Logistics Co., Ltd." /></div>
           <div className="form-group"><label className="form-label">회사 주소</label><input className="form-input" value={profile.companyAddress ?? ''} onChange={(event) => onProfilePatch({ companyAddress: event.target.value })} placeholder="123 Teheran-ro, Gangnam-gu, Seoul, South Korea" /></div>
           <div className="form-group"><label className="form-label">국가</label><CountrySelect className="form-input" value={profile.companyCountry ?? ''} onChange={(value) => onProfilePatch({ companyCountry: value })} /></div>
           <div className="form-group"><label className="form-label">회사 연락처</label><input className="form-input" type="tel" value={profile.contact} onChange={(event) => onProfilePatch({ contact: event.target.value })} placeholder="+82-2-1234-5678" /></div>
           <div className="form-group"><label className="form-label">사업자등록번호</label><input className="form-input" value={profile.businessRegistrationNo ?? ''} onChange={(event) => onProfilePatch({ businessRegistrationNo: event.target.value, taxNo: event.target.value })} placeholder="123-45-67890" /></div>
+          <div className="form-group">
+            <label className="form-label">서명자 영문명</label>
+            <input
+              className="form-input"
+              value={profile.signedBy ?? ''}
+              readOnly={supplemental.isSignerSameAsCompany}
+              onChange={(event) => {
+                if (!supplemental.isSignerSameAsCompany) onProfilePatch({ signedBy: event.target.value });
+              }}
+              placeholder="Gildong Hong"
+            />
+            <label className="shipper-inline-checkbox"><input type="checkbox" checked={supplemental.isSignerSameAsCompany} onChange={(event) => {
+              const checked = event.target.checked;
+              const signerNameBeforeCompany = checked
+                ? (profile.signedBy ?? '')
+                : supplemental.signerNameBeforeCompany;
+              onSupplementalChange({
+                ...supplemental,
+                isSignerSameAsCompany: checked,
+                signerNameBeforeCompany,
+              });
+              onProfilePatch({
+                signedBy: checked
+                  ? profile.companyName
+                  : (supplemental.signerNameBeforeCompany || profileSignerDefault || profile.contactName || ''),
+              });
+            }} /> 회사명과 서명자 동일</label>
+          </div>
         </div>
       </details>
 
@@ -162,8 +206,124 @@ export default function ShipperWorkspaceForm({
             <div className="shipper-item-card" key={item.id}>
               <div className="shipper-item-heading"><strong>품목 {index + 1}</strong><button type="button" className="btn btn-secondary btn-sm" disabled={items.length === 1} onClick={() => removeItem(item.id)}><Trash2 size={14} /> 삭제</button></div>
               <div className="form-grid">
-                <div className="form-group"><label className="form-label">품명</label><input className="form-input" value={item.itemName} onChange={(e) => updateItem(item.id, 'itemName', e.target.value)} placeholder="Cotton T-Shirts" /></div>
-                <div className="form-group"><label className="form-label">HS Code</label><input className="form-input" value={item.hsCode} onChange={(e) => updateItem(item.id, 'hsCode', e.target.value)} placeholder={index === 0 ? 'e.g. 6109.10' : ''} /></div>
+                <div className="form-group">
+                  <label className="form-label">영문 품명 Goods Description <span aria-hidden="true">*</span></label>
+                  <input
+                    className="form-input"
+                    value={item.itemName}
+                    onChange={(event) => updateItem(item.id, 'itemName', event.target.value)}
+                    placeholder="Women's 100% Cotton T-shirts, Black"
+                    required
+                    aria-invalid={!item.itemName.trim() || /[가-힣]/.test(item.itemName)}
+                  />
+                  {/[가-힣]/.test(item.itemName) && (
+                    <small className="form-help form-help-error" role="alert">
+                      {NON_ENGLISH_GOODS_DESCRIPTION_MESSAGE}
+                    </small>
+                  )}
+                  {showItemValidation && !item.itemName.trim() && (
+                    <small className="form-help form-help-error" role="alert">
+                      {EMPTY_GOODS_DESCRIPTION_MESSAGE}
+                    </small>
+                  )}
+                </div>
+                <div className="form-group"><label className="form-label">HS Code</label><input className="form-input" value={item.hsCode} onChange={(e) => {
+                  hsCodeSuggestions.markHSCodeManuallyEdited(item.id);
+                  updateItem(item.id, 'hsCode', e.target.value);
+                }} placeholder={index === 0 ? 'e.g. 6109.10' : ''} /></div>
+                {(() => {
+                  const state = hsCodeSuggestions.getState(item.id);
+                  const applied =
+                    state.appliedSuggestionCode !== null &&
+                    state.appliedSuggestionCode === item.hsCode.replace(/[\s.-]/g, '');
+                  const hasPanel =
+                    state.loading ||
+                    state.error !== null ||
+                    state.suggestions.length > 0 ||
+                    state.additionalInformationRequired ||
+                    applied;
+
+                  if (!hasPanel) return null;
+
+                  return (
+                    <div className="shipper-hs-suggestion-panel" aria-live="polite">
+                      {state.loading && (
+                        <div className="shipper-hs-loading">관세청 후보와 품목 정보를 비교하고 있습니다.</div>
+                      )}
+
+                      {state.error && (
+                        <div className="shipper-hs-error">
+                          <span>{state.error}</span>
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => hsCodeSuggestions.retry(item.id)}>재시도</button>
+                        </div>
+                      )}
+
+                      {state.suggestions.length > 0 && (
+                        <>
+                          <div className="shipper-hs-suggestion-heading">
+                            <strong>관세청 데이터로 확인된 AI 추천</strong>
+                            <small>추천 근거 수준이며 법적 품목분류 결정이나 정확도 수치가 아닙니다.</small>
+                          </div>
+                          <div className="shipper-hs-suggestion-list">
+                            {state.suggestions.map((suggestion) => (
+                              <article className="shipper-hs-suggestion" key={suggestion.code}>
+                                <div>
+                                  <strong>{suggestion.formattedCode}</strong>
+                                  <span className={`shipper-hs-confidence${suggestion.confidenceLabel === '보통' ? ' is-medium' : ''}`}>
+                                    {suggestion.confidenceLabel === '높음'
+                                      ? '높은 일치 가능성'
+                                      : '추가 확인 필요'}
+                                  </span>
+                                </div>
+                                <p>{suggestion.koreanName}{suggestion.classificationName ? ` ${suggestion.classificationName}` : ''}</p>
+                                {suggestion.englishName && <small>{suggestion.englishName}</small>}
+                                <small>{suggestion.reasoning}</small>
+                                {(suggestion.distinguishingFactors?.length ?? 0) > 0 && (
+                                  <small>구분 조건: {suggestion.distinguishingFactors?.join(', ')}</small>
+                                )}
+                                {(suggestion.missingInformation?.length ?? 0) > 0 && (
+                                  <small>후보 확인사항: {suggestion.missingInformation?.join(', ')}</small>
+                                )}
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-sm"
+                                  onClick={() => {
+                                    updateItem(item.id, 'hsCode', suggestion.code);
+                                    hsCodeSuggestions.markSuggestionApplied(item.id, suggestion.code);
+                                  }}
+                                >
+                                  {item.hsCode && item.hsCode.replace(/[\s.-]/g, '') !== suggestion.code
+                                    ? '이 코드로 변경'
+                                    : '적용'}
+                                </button>
+                              </article>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {state.additionalInformationRequired && !state.loading && !state.error && (
+                        <div className="shipper-hs-additional-info">
+                          <strong>추가 확인사항</strong>
+                          {state.suggestions.length === 0 && (
+                            <p>현재 입력과 충분히 관련된 관세청 HS Code 후보를 찾지 못했습니다. 품목명, 재질, 용도 또는 제품 형태를 더 구체적으로 입력해주세요.</p>
+                          )}
+                          {state.requiredAdditionalInfo.length > 0 && (
+                            <ul>
+                              {state.requiredAdditionalInfo.map((info) => (
+                                <li key={info}>{info}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+
+                      {applied && (
+                        <div className="shipper-hs-applied">추천 HS Code가 적용되었습니다.</div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="form-group"><label className="form-label">수량</label><input type="number" min="0" className="form-input" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', numericValue(e.target.value))} /></div>
                 <div className="form-group"><label className="form-label">단위</label><select className="form-input" value={item.unit} onChange={(e) => updateItem(item.id, 'unit', e.target.value as ShipperItem['unit'])}>{SHIPPER_ITEM_UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></div>
                 <div className="form-group"><label className="form-label">단가</label><input type="number" min="0" step="any" className="form-input" value={item.unitPrice} onChange={(e) => updateItem(item.id, 'unitPrice', numericValue(e.target.value))} /></div>
@@ -187,6 +347,11 @@ export default function ShipperWorkspaceForm({
           <div className="form-group"><label className="form-label">Incoterms</label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
           <div className="form-group"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Incoterms 지정 장소 또는 항만</label><input className="form-input" value={supplemental.incotermsPlace} onChange={(e) => onSupplementalChange({ ...supplemental, incotermsPlace: e.target.value })} placeholder="Busan Port" /></div>
+          {profile.paymentTerms === 'L/C' && <>
+            <div className="form-group"><label className="form-label">L/C No.</label><input className="form-input" value={profile.lcNo ?? ''} onChange={(e) => onProfilePatch({ lcNo: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label">L/C Date</label><input type="date" className="form-input" value={profile.lcDate ?? ''} onChange={(e) => onProfilePatch({ lcDate: e.target.value })} /></div>
+          </>}
+          <div className="form-group"><label className="form-label">기타 참조번호 Other References <span className="optional-label">(선택)</span></label><input className="form-input" value={profile.otherReferences ?? ''} onChange={(e) => onProfilePatch({ otherReferences: e.target.value })} placeholder="P/O No., Contract No. 등" /></div>
         </div>
       </details>
 
@@ -198,6 +363,19 @@ export default function ShipperWorkspaceForm({
           <div className="form-group"><label className="form-label">총중량 G.W. (kg)</label><input type="number" min="0" step="any" className="form-input" value={profile.grossWeight ?? ''} onChange={(e) => onProfilePatch({ grossWeight: numericValue(e.target.value), weight: numericValue(e.target.value) })} /></div>
           <div className="form-group"><label className="form-label">순중량 N.W. (kg)</label><input type="number" min="0" step="any" className="form-input" value={profile.netWeight ?? ''} onChange={(e) => onProfilePatch({ netWeight: numericValue(e.target.value) })} /></div>
           <div className="form-group"><label className="form-label">CBM</label><input className="form-input" value={profile.measurement ?? ''} onChange={(e) => onProfilePatch({ measurement: e.target.value })} /></div>
+          <div className="form-group">
+            <label className="form-label">Shipping Marks <span className="optional-label">(선택)</span></label>
+            <textarea className="form-input" rows={3} value={profile.shippingMarks ?? ''} readOnly={supplemental.hasNoShippingMarks} onChange={(e) => onProfilePatch({ shippingMarks: e.target.value })} />
+            <label className="shipper-inline-checkbox"><input type="checkbox" checked={supplemental.hasNoShippingMarks} onChange={(event) => {
+              const checked = event.target.checked;
+              onSupplementalChange({
+                ...supplemental,
+                hasNoShippingMarks: checked,
+                shippingMarksBeforeNoMarks: checked ? (profile.shippingMarks ?? '') : supplemental.shippingMarksBeforeNoMarks,
+              });
+              onProfilePatch({ shippingMarks: checked ? 'N/M' : supplemental.shippingMarksBeforeNoMarks });
+            }} /> 화인 없음</label>
+          </div>
         </div>
         {hasInvalidWeight && <div className="form-message error" role="alert">총중량 G.W.은 순중량 N.W.보다 작을 수 없습니다.</div>}
       </details>
@@ -208,6 +386,7 @@ export default function ShipperWorkspaceForm({
           <div className="form-group"><label className="form-label">선적항 POL</label><select className="form-input" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })}><option value="">선적항을 선택하세요</option>{LOAD_PORT_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}</select></div>
           <div className="form-group"><label className="form-label">도착항 POD</label><select className="form-input" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })}><option value="">도착항을 선택하세요</option>{DISCHARGE_PORT_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}</select></div>
           <div className="form-group"><label className="form-label">희망 출항일</label><input type="date" className="form-input" value={profile.departureDate} onChange={(e) => onProfilePatch({ departureDate: e.target.value })} /></div>
+          <div className="form-group"><label className="form-label">선박명 Vessel <span className="optional-label">(선택)</span></label><input className="form-input" value={profile.vesselOrFlight ?? ''} onChange={(e) => onProfilePatch({ vesselOrFlight: e.target.value })} placeholder="OCEAN STAR V.1001" /></div>
         </div>
       </details>
 
@@ -223,7 +402,7 @@ export default function ShipperWorkspaceForm({
 
       <div className="form-actions">
         <button type="button" className="btn btn-secondary" onClick={onReset}><RotateCcw size={16} /> 초기화</button>
-        <button type="button" className="btn btn-primary" onClick={onGenerate} disabled={isProcessing}><FileText size={16} />{isProcessing ? '생성 중...' : '필요 서류 자동 생성'}</button>
+        <button type="button" className="btn btn-primary" onClick={handleGenerateClick} disabled={isProcessing}><FileText size={16} />{isProcessing ? '생성 중...' : '필요 서류 자동 생성'}</button>
       </div>
     </div>
   );

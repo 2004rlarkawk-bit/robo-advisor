@@ -116,6 +116,45 @@ export async function getCustomsExchangeRate(
   return { ...simulatedRate(currency), tradeType, effectiveDate: aplyBgnDt };
 }
 
+/**
+ * 수입 예상세액처럼 임의 환율로 계산하면 안 되는 흐름에서 사용한다.
+ * API 실패·형식 오류를 그대로 호출자에게 전달하며 simulation 값을 만들지 않는다.
+ */
+export async function getCustomsExchangeRateStrict(
+  currency: string,
+  tradeType: 'export' | 'import' = 'import',
+  date?: string,
+): Promise<ExchangeRate> {
+  const { data, error } = await supabase.functions.invoke<CustomsExchangeRateFunctionResponse>(
+    'customs-exchange-rate',
+    { body: { currency, tradeType, date } },
+  );
+  if (error) throw error;
+  if (!data || data.success !== true) {
+    throw new Error(typeof data?.error === 'string' ? data.error : '환율 API가 실패 응답을 반환했습니다.');
+  }
+  if (
+    typeof data.currency !== 'string'
+    || typeof data.currencyName !== 'string'
+    || typeof data.rate !== 'number'
+    || !Number.isFinite(data.rate)
+    || data.rate <= 0
+    || typeof data.effectiveDate !== 'string'
+    || (data.tradeType !== 'export' && data.tradeType !== 'import')
+    || data.source !== 'api'
+  ) {
+    throw new Error('환율 API 응답 형식이 올바르지 않습니다.');
+  }
+  return {
+    currency: data.currency,
+    currencyName: data.currencyName,
+    rate: data.rate,
+    effectiveDate: data.effectiveDate,
+    tradeType: data.tradeType,
+    source: 'api',
+  };
+}
+
 function simulatedRate(currency: string): Omit<ExchangeRate, 'tradeType' | 'effectiveDate'> {
   const table: Record<string, { rate: number; name: string }> = {
     USD: { rate: 1385.5, name: '미국 달러' },

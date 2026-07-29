@@ -33,6 +33,7 @@ import {
   InvoiceData,
   PackingListData,
   type ShipperItem,
+  type ShipperSupplementalState,
 } from './types';
 import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
 import { buildPackingListXlsx, mapPackingListToSchema, renderPackingListPreviewHtml } from './services/packingListXlsxService';
@@ -82,9 +83,9 @@ import { decideGeneratedTradeWrite } from './services/tradePersistencePolicy';
 import { resolveWorkspaceRole, type WorkspaceRole } from './utils/workspaceRole';
 import {
   EMPTY_SHIPPER_SUPPLEMENTAL_STATE,
+  getGoodsDescriptionValidationMessage,
   primaryShipperItemToTradeProfile,
   tradeProfileToPrimaryShipperItem,
-  type ShipperSupplementalState,
 } from './utils/shipperForm';
 import { createEmptyForwarderFormState, type ForwarderFormState } from './utils/forwarderForm';
 
@@ -259,6 +260,7 @@ const emptyProfile: TradeProfile = {
   invoiceNo: '',
   invoiceDate: '',
   referenceNo: '',
+  otherReferences: '',
 
   blNo: '',
   issuePlace: '',
@@ -333,22 +335,7 @@ const emptyProfile: TradeProfile = {
 };
 
 const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
-  const [additionalShipperItems, setAdditionalShipperItems] = useState<ShipperItem[]>([]);
-  const [shipperSupplemental, setShipperSupplemental] = useState<ShipperSupplementalState>(EMPTY_SHIPPER_SUPPLEMENTAL_STATE);
   const [forwarderForm, setForwarderForm] = useState<ForwarderFormState>(() => createEmptyForwarderFormState());
-  const hydratedProfileUserRef = useRef<string | null>(null);
-
-  // 로그인 직후에만 회사 프로필을 거래 입력 기본값으로 옮긴다.
-  // 이후 거래 화면에서 사용자가 수정한 값은 프로필 재조회로 덮어쓰지 않는다.
-  useEffect(() => {
-    if (!user) {
-      hydratedProfileUserRef.current = null;
-      return;
-    }
-    if (!userProfile || needsOnboarding || user.onboardingPending || hydratedProfileUserRef.current === user.id) return;
-    setProfile((current) => ({ ...current, ...userProfileToTradeDefaults(userProfile) }));
-    hydratedProfileUserRef.current = user.id;
-  }, [needsOnboarding, user, userProfile]);
 
   const tradeDraftDefaultProfile: TradeProfile = {
     ...emptyProfile,
@@ -500,12 +487,21 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     });
   };
 
-  const shipperItems = [tradeProfileToPrimaryShipperItem(profile), ...additionalShipperItems];
+  const shipperItems = profile.shipperItems?.length
+    ? profile.shipperItems
+    : [tradeProfileToPrimaryShipperItem(profile)];
+  const shipperSupplemental: ShipperSupplementalState = {
+    ...EMPTY_SHIPPER_SUPPLEMENTAL_STATE,
+    ...profile.shipperSupplemental,
+  };
   const handleShipperItemsChange = (items: ShipperItem[]) => {
     if (items.length === 0) return;
-    const [primaryItem, ...additionalItems] = items;
-    setProfile((current) => ({ ...current, ...primaryShipperItemToTradeProfile(primaryItem) }));
-    setAdditionalShipperItems(additionalItems);
+    const [primaryItem] = items;
+    setProfile((current) => ({
+      ...current,
+      ...primaryShipperItemToTradeProfile(primaryItem),
+      shipperItems: items,
+    }));
   };
 
   const handleFillPerfectTestData = () => {
@@ -536,8 +532,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
    ...emptyProfile,
    ...(userProfile ? userProfileToTradeDefaults(userProfile) : {}),
  });
-  setAdditionalShipperItems([]);
-  setShipperSupplemental(EMPTY_SHIPPER_SUPPLEMENTAL_STATE);
   setForwarderForm(createEmptyForwarderFormState());
   setHasGenerated(false);
   setDocuments([]);
@@ -590,6 +584,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         generatedDocs: {
           htmlTemplates: result.documents?.htmlTemplates || {},
           invoice: result.documents?.generatedDocs?.invoice,
+          packingList: result.documents?.generatedDocs?.packingList,
           overrides: ov,
           overrideRecords,
         },
@@ -642,6 +637,11 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
   const handleGenerateDocuments = async () => {
     if (isProcessing) return;
+    const goodsDescriptionError = getGoodsDescriptionValidationMessage(shipperItems);
+    if (goodsDescriptionError) {
+      alert(goodsDescriptionError);
+      return;
+    }
     const writeMode = decideGeneratedTradeWrite(currentTradeIdRef.current, currentTradeStatus);
     if (hasSubmittedTradeRef.current || writeMode === 'blocked_submitted') {
       alert('이미 최종 제출된 거래입니다. 수정하려면 신규 거래 복사를 이용해주세요.');
@@ -743,8 +743,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setCurrentTradeStatus('submitted');
     hasSubmittedTradeRef.current = true;
     setProfile(t.profile);
-    setAdditionalShipperItems([]);
-    setShipperSupplemental(EMPTY_SHIPPER_SUPPLEMENTAL_STATE);
     setDocuments(t.documents);
     setIssues(t.issues);
     setHtmlTemplates((t.generatedDocs?.htmlTemplates as Record<string, string>) || {});
@@ -784,8 +782,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     setTradeDirection('export');
     startNewDraft();
     setProfile(createProfileForNewTrade(t.profile));
-    setAdditionalShipperItems([]);
-    setShipperSupplemental(EMPTY_SHIPPER_SUPPLEMENTAL_STATE);
     setDocuments([]);
     setIssues([]);
     setHtmlTemplates({});
@@ -1484,7 +1480,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             {tradeDirection === 'import' ? (
               workspaceRole === 'forwarder'
                 ? <ImportForwarderFlow userId={user.id} onComplete={handleImportComplete} />
-                : <ImportShipperFlow userId={user.id} onComplete={handleImportComplete} />
+                : <ImportShipperFlow userId={user.id} importerCompanyName={userProfile.company_name ?? ''} onComplete={handleImportComplete} />
             ) : workspaceRole === 'forwarder' ? (
               <ForwarderWorkspaceForm state={forwarderForm} onChange={setForwarderForm} />
             ) : !hasGenerated ? (
@@ -1495,9 +1491,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                   items={shipperItems}
                   supplemental={shipperSupplemental}
                   isProcessing={isProcessing}
+                  profileSignerDefault={userProfile.contact_name?.trim() || ''}
                   onProfilePatch={(patch) => setProfile((current) => ({ ...current, ...patch }))}
                   onItemsChange={handleShipperItemsChange}
-                  onSupplementalChange={setShipperSupplemental}
+                  onSupplementalChange={(state) => setProfile((current) => ({ ...current, shipperSupplemental: state }))}
                   onReset={handleReset}
                   onGenerate={() => void handleGenerateDocuments()}
                   toolbar={IS_DEV_TEST_ENABLED ? (

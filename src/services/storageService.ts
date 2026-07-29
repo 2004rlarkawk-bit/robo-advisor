@@ -101,6 +101,13 @@ export interface GeneratedTradeData {
   generatedDocs?: GeneratedDocuments;
 }
 
+function toSupportedIncoterms(value: string): TradeProfile['incoterms'] {
+  const code = value.trim().toUpperCase().split(/[\s-]/)[0];
+  return ['FOB', 'CFR', 'CIF', 'EXW', 'DDP', 'DAP', 'FCA'].includes(code)
+    ? code as TradeProfile['incoterms']
+    : '';
+}
+
 /** 수입 플로우 완료 결과를 기존 trades 테이블에 저장합니다.
  * 신규 방향/역할 컬럼 마이그레이션이 적용된 환경에서만 호출됩니다.
  */
@@ -109,17 +116,17 @@ export async function createCompletedImportTrade(snapshot: ImportTradeSnapshot):
   const profile: TradeProfile = {
     tradeType: 'import',
     itemName: snapshot.analysis.extracted.productDescription,
-    hsCode: snapshot.selectedHSCode?.code ?? '',
+    hsCode: snapshot.analysis.extracted.items[0]?.confirmedHSCode ?? snapshot.selectedHSCode?.code ?? '',
     loadPort: snapshot.analysis.extracted.loadPort,
     dischargePort: snapshot.analysis.extracted.dischargePort,
-    incoterms: '',
+    incoterms: toSupportedIncoterms(snapshot.analysis.extracted.incoterms),
     quantity: Number.parseFloat(snapshot.analysis.extracted.quantity) || '',
     weight: Number.parseFloat(snapshot.analysis.extracted.grossWeight) || '',
-    departureDate: '',
-    arrivalDate: '',
+    departureDate: snapshot.analysis.extracted.shipmentDate,
+    arrivalDate: snapshot.analysis.extracted.estimatedArrivalDate,
     companyName: snapshot.analysis.extracted.importer,
     contact: '',
-    partnerName: snapshot.analysis.extracted.shipper,
+    partnerName: snapshot.analysis.extracted.exporterDetails.name || snapshot.analysis.extracted.shipper,
     currency: snapshot.analysis.extracted.currency,
     invoiceAmount: Number(snapshot.analysis.extracted.totalAmount) || '',
     invoiceNo: snapshot.analysis.extracted.invoiceNo,

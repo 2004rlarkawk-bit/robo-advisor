@@ -138,7 +138,10 @@ export function useTradeDraft({ userId, enabled, tradeDirection, tradeRole, prof
 
   useEffect(() => {
     clearTimer();
-    if (!userId || !enabled || !isDraftRestored || !activeRef.current) return;
+    // enabled가 false→true로 바뀐 첫 effect 주기에는 이전 render의
+    // isDraftRestored=true가 남아 있을 수 있다. restore effect가 즉시 false로 바꾼
+    // ref도 함께 확인해, 프로필/DB 초안을 읽기 전에 빈 profile을 저장하지 않는다.
+    if (!userId || !enabled || !isDraftRestored || !restoredRef.current || !activeRef.current) return;
 
     try {
       saveDraftToLocal(userId, profile, tradeRole);

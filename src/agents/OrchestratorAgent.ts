@@ -122,9 +122,14 @@ export class OrchestratorAgent implements Agent<{ profile: TradeProfile; useLLM?
         throw new Error(`HS Code 검증 실패: ${errorMsg}`);
       }
 
-      if (!hsResult || !hsResult.topCode) {
-        logs.push(createLog(this.name, "HS Code 검증 결과가 유효하지 않습니다.", "error"));
+      if (!hsResult || typeof hsResult.topCode !== "string") {
+        logs.push(createLog(this.name, "HS Code 검증 결과가 없습니다.", "error"));
         throw new Error("HS Code 검증 결과 없음");
+      }
+      if (!hsResult.topCode) {
+        // 후보 없음은 호출 실패가 아니다. ComplianceAgent가 hscode-missing 오류로 내려
+        // 사용자가 직접 수정/override할 수 있게 하고 나머지 문서 조립은 계속한다.
+        logs.push(createLog(this.name, "HS Code 후보가 없어 공란으로 문서 검증을 계속합니다.", "warning"));
       }
 
       const updatedProfile: TradeProfile = {

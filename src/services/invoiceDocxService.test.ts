@@ -86,4 +86,19 @@ describe('invoiceDocxService — mapInvoiceToSchema', () => {
     expect(s.marks_line4).toBe('');
     expect(s.marks_line5).toBe('');
   });
+
+  it('L/C 일자·기타 참조번호·포장·서명자를 실제 DOCX 키에 매핑한다', () => {
+    const s = mapInvoiceToSchema(makeInvoice({
+      lcNo: 'LC-77',
+      lcDate: '2026-07-29',
+      otherReferences: 'PO-2026-99',
+      packageCount: 10,
+      packageType: 'CTNS',
+      signedBy: 'KIM JIMIN',
+    } as any));
+    expect(s.lc_no_and_date).toBe('LC-77 / 2026-07-29');
+    expect(s.other_references).toBe('PO-2026-99');
+    expect(s.packages).toBe('10 CTNS');
+    expect(s.signed_by).toBe('KIM JIMIN');
+  });
 });

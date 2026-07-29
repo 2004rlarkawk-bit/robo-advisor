@@ -31,6 +31,7 @@ export const RULE_POLICY = {
   'r10-packing-desc-mismatch':{ severity: 'warning', overridable: false },
   'r11-payment-lc-conflict':  { severity: 'error',   overridable: true },
   'r11-lc-missing':           { severity: 'warning', overridable: false },
+  'r11-lc-date-missing':      { severity: 'warning', overridable: false },
 } as const satisfies Record<string, RulePolicy>;
 
 export type ComplianceRuleId = keyof typeof RULE_POLICY;
@@ -231,6 +232,10 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
   } else if (isLcPayment(profile.paymentTerms) && !(profile.lcNo || '').trim()) {
     issues.push(mk('r11-lc-missing', 'invoice', 'lcNo',
       `결제조건이 L/C인데 L/C 번호가 비어 있습니다. 신용장 번호(예: LC-2026-0001)를 입력하세요.`));
+  }
+  if (isLcPayment(profile.paymentTerms) && !(profile.lcDate || '').trim()) {
+    issues.push(mk('r11-lc-date-missing', 'invoice', 'lcDate',
+      '결제조건이 L/C인데 L/C Date가 비어 있습니다.'));
   }
 
   // ── R8. 금액 산술 (error) ───────────────────────────

@@ -17,14 +17,17 @@ export interface InvoiceSchema {
   buyer_name: string; buyer_address1: string;
   buyer_address2: string; buyer_address3: string;
   invoice_no: string; invoice_date: string; lc_no_and_date: string;
+  other_references: string;
   country_of_origin: string; departure_date: string;
   vessel_flight: string; from_port: string; to_port: string;
   terms_of_delivery: string; terms_of_payment: string;
   marks_line1: string; marks_line2: string; marks_line3: string;
   marks_line4: string; marks_line5: string;
+  packages: string;
   goods_description: string; goods_spec: string;
   goods_note1: string; goods_note2: string; goods_note3: string;
   quantity: string; net_weight: string; unit_price: string; amount: string;
+  signed_by: string;
 }
 
 const ZERO_DECIMAL_CCY = new Set(['KRW', 'JPY']);
@@ -53,11 +56,12 @@ const DEST_INCOTERMS = new Set(['CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP']
  */
 export function mapInvoiceToSchema(inv: InvoiceData): InvoiceSchema {
   const d = inv as Record<string, any>;
-  const item = (inv.items?.[0] as Record<string, any>) || {};
+  const items = (inv.items || []) as Record<string, any>[];
+  const item = items[0] || {};
   const currency = inv.currency || '';
   const seller = inv.seller || { name: '', address: '', contact: '' };
   const consignee = inv.consignee || { name: '', address: '', contact: '' };
-  const buyer = d.buyer as { name?: string; address?: string; contact?: string } | undefined;
+  const buyer = d.buyer as { name?: string; address?: string; contact?: string; country?: string } | undefined;
   const marks = splitLines(d.shippingMarks, 5);
 
   return {
@@ -68,14 +72,15 @@ export function mapInvoiceToSchema(inv: InvoiceData): InvoiceSchema {
     consignee_name: consignee.name || '',
     consignee_address1: consignee.address || '',
     consignee_address2: tel(consignee.contact),
-    consignee_address3: '',
+    consignee_address3: consignee.country || '',
     buyer_name: buyer?.name || '',
     buyer_address1: buyer?.address || '',
     buyer_address2: tel(buyer?.contact),
-    buyer_address3: '',
+    buyer_address3: buyer?.country || '',
     invoice_no: inv.invoiceNo || '',
     invoice_date: inv.invoiceDate || '',
-    lc_no_and_date: d.lcNo || '',
+    lc_no_and_date: [d.lcNo, d.lcDate].filter(Boolean).join(' / '),
+    other_references: d.otherReferences || '',
     country_of_origin: item.countryOfOrigin || d.countryOfOrigin || '',
     departure_date: inv.departureDate || '',
     vessel_flight: d.vessel || '',
@@ -83,18 +88,20 @@ export function mapInvoiceToSchema(inv: InvoiceData): InvoiceSchema {
     to_port: inv.dischargePort || '',
     terms_of_delivery: [
       inv.incoterms,
-      DEST_INCOTERMS.has((inv.incoterms || '').toUpperCase()) ? inv.dischargePort : inv.loadPort,
+      d.incotermsPlace || (DEST_INCOTERMS.has((inv.incoterms || '').toUpperCase()) ? inv.dischargePort : inv.loadPort),
     ].filter(Boolean).join(' '),
     terms_of_payment: d.paymentTerms || '',
     marks_line1: marks[0], marks_line2: marks[1], marks_line3: marks[2],
     marks_line4: marks[3], marks_line5: marks[4],
-    goods_description: item.description || '',
-    goods_spec: item.hsCode ? `HS CODE: ${item.hsCode}` : '',
+    packages: d.packageCount ? `${d.packageCount} ${d.packageType || ''}`.trim() : '',
+    goods_description: items.map((value) => value.description || '').filter(Boolean).join('\n'),
+    goods_spec: items.map((value) => value.hsCode ? `HS CODE: ${value.hsCode}` : '').filter(Boolean).join('\n'),
     goods_note1: '', goods_note2: '', goods_note3: '',
-    quantity: item.quantity ? `${Number(item.quantity).toLocaleString()}${item.unit ? ' ' + item.unit : ''}` : '',
+    quantity: items.map((value) => value.quantity ? `${Number(value.quantity).toLocaleString()}${value.unit ? ' ' + value.unit : ''}` : '').filter(Boolean).join('\n'),
     net_weight: item.netWeight ? `${Number(item.netWeight).toLocaleString()} KG` : '',
-    unit_price: item.unitPrice ? fmtMoney(Number(item.unitPrice), currency) : '',
-    amount: item.amount ? fmtMoney(Number(item.amount), currency) : '',
+    unit_price: items.map((value) => value.unitPrice ? fmtMoney(Number(value.unitPrice), currency) : '').filter(Boolean).join('\n'),
+    amount: items.map((value) => value.amount ? fmtMoney(Number(value.amount), currency) : '').filter(Boolean).join('\n'),
+    signed_by: d.signedBy || '',
   };
 }
 

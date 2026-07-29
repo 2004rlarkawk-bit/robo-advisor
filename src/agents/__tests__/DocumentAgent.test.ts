@@ -4,6 +4,7 @@ import { escapeHtml } from '../templates/escapeHtml';
 import { HSCodeResult, AgentLog } from '../types';
 import { TradeProfile } from '../../types';
 import { mapPackingListToSchema, renderPackingListPreviewHtml } from '../../services/packingListXlsxService';
+import { mapInvoiceToSchema } from '../../services/invoiceDocxService';
 
 const hsResult: HSCodeResult = {
   topCode: '8471.30',
@@ -171,7 +172,7 @@ describe('DocumentAgent — 문서번호 건(shipment) 단위 파생·안정성'
 });
 
 describe('DocumentAgent — Buyer 영문 국가 연결', () => {
-  it('Buyer 국가를 같은 buyer 객체와 인보이스 HTML에 전달한다', async () => {
+  it('Buyer 국가를 같은 buyer 객체와 인보이스 DOCX payload에 전달한다', async () => {
     const result = await runAgent({
       buyerName: 'Global Import LLC',
       buyerAddress: '250 Market Street, Los Angeles, CA',
@@ -179,7 +180,62 @@ describe('DocumentAgent — Buyer 영문 국가 연결', () => {
     });
 
     expect(result.generatedDocs.invoice?.buyer?.country).toBe('United States');
-    expect(result.htmlTemplates?.invoice).toContain('United States');
+    expect(mapInvoiceToSchema(result.generatedDocs.invoice!).buyer_address3).toBe('United States');
+  });
+});
+
+describe('DocumentAgent — 수출 화주 신규 문서 필드', () => {
+  it('영문 품명·기타 참조번호·Vessel·서명자를 C/I와 P/L에 함께 전달한다', async () => {
+    const result = await runAgent({
+      signedBy: 'KIM JIMIN',
+      otherReferences: 'PO-2026-77',
+      vesselOrFlight: 'OCEAN STAR V.1001',
+      shipperItems: [{
+        id: 'primary-item',
+        itemName: 'Cotton T-shirts',
+        hsCode: '6109100000',
+        quantity: 20,
+        unit: 'EA',
+        unitPrice: 15,
+        currency: 'USD',
+      }, {
+        id: 'second-item',
+        itemName: 'Stainless Steel Kitchen Tongs',
+        hsCode: '8215990000',
+        quantity: 10,
+        unit: 'EA',
+        unitPrice: 8,
+        currency: 'USD',
+      }],
+    });
+
+    const invoice = result.generatedDocs.invoice!;
+    const packingList = result.generatedDocs.packingList!;
+    expect(invoice.items[0].description).toBe('Cotton T-shirts');
+    expect(invoice.items[1].description).toBe('Stainless Steel Kitchen Tongs');
+    expect(packingList.items[0].description).toBe('Cotton T-shirts');
+    expect(packingList.items[1].description).toBe('Stainless Steel Kitchen Tongs');
+    expect((invoice as any).otherReferences).toBe('PO-2026-77');
+    expect((packingList as any).otherReferences).toBe('PO-2026-77');
+    expect((invoice as any).vessel).toBe('OCEAN STAR V.1001');
+    expect((packingList as any).vessel).toBe('OCEAN STAR V.1001');
+    expect(invoice.signedBy).toBe('KIM JIMIN');
+    expect((packingList as any).signedBy).toBe('KIM JIMIN');
+  });
+
+  it('단일 itemName 값을 문서 품명으로 그대로 사용한다', async () => {
+    const result = await runAgent({
+      shipperItems: [{
+        id: 'primary-item',
+        itemName: 'Sample Goods',
+        hsCode: '8471300000',
+        quantity: 1,
+        unit: 'EA',
+        unitPrice: 10,
+        currency: 'USD',
+      }],
+    });
+    expect(result.generatedDocs.invoice?.items[0].description).toBe('Sample Goods');
   });
 });
 
