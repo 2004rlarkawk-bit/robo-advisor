@@ -65,12 +65,20 @@ export function determineRequiredDocuments(profile: TradeProfile): DocumentStatu
   }
 
   // 4. 통관신고 관련 서류 - 세관 신고 후 발급(수출신고필증). 화주가 생성하는 문서가 아님.
-  docs.push({
-    id: 'customs_dec',
-    name: '통관신고 관련 서류',
-    status: 'external_pending',
-    statusText: '신고 준비',
-  });
+  const hasCustomsInfo = !!(
+  profile.hsCode &&
+  profile.itemName &&
+  profile.companyName &&
+  profile.incoterms
+);
+
+docs.push({
+  id: 'customs_dec',
+  name: '통관신고 관련 서류',
+  status: hasCustomsInfo ? 'completed' : 'not_started',
+  statusText: hasCustomsInfo ? '생성 완료' : '작성 필요',
+  lastReviewed: hasCustomsInfo ? timestamp : undefined,
+});
 
   // 5. 원산지증명서 (C/O) - 상공회의소/세관 발급. 화주가 생성하지 않고 발급을 신청한다.
   const isExport = profile.tradeType === 'export';
