@@ -2849,6 +2849,22 @@ body {
 .rv-hero-msg { font-size: 14px; color: var(--text-dark); font-weight: 500; }
 .rv-hero-msg b { color: var(--primary-color); }
 .rv-hero-next { margin: 10px 0 0; font-size: 12.5px; color: var(--text-light); }
+.rv-hero-ext { margin: 12px 0 0; font-size: 12.5px; color: var(--text-light); line-height: 1.5; }
+.rv-hero-ext b { color: var(--text-dark); font-weight: 700; }
+
+/* 차단 상태 히어로 — 100% 대신 해결 유도 (색·문구로 "아직 제출 불가" 명확히) */
+.rv-hero-blocked {
+  display: flex; align-items: flex-start; gap: 14px;
+  background: var(--warning-bg); border: 1px solid #fcd9a5;
+}
+.rv-hero-blocked-ic {
+  width: 40px; height: 40px; flex-shrink: 0; border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; color: var(--warning-color); border: 1px solid #fcd9a5;
+}
+.rv-hero-blocked-title { font-size: 16px; font-weight: 800; color: #7c4a06; line-height: 1.4; }
+.rv-hero-blocked-title b { color: var(--warning-color); }
+.rv-hero-blocked-sub { margin: 6px 0 0; font-size: 13px; color: #8a5a1c; line-height: 1.55; }
 
 /* 3) 서류 현황 — 표처럼 4열 고정 정렬 */
 .rv-panel {
@@ -2895,11 +2911,12 @@ body {
   .rv-view { padding: 8px 11px; }
 }
 
-/* 서류 현황 — 실물이 외부 발급이라 내려받을 파일이 없는 완료 서류 표시 */
+/* 서류 현황 — 내려받을 파일이 없는 서류(외부 발행 등) 표시 */
 .rv-act-note {
-  font-size: 12px; font-weight: 600; color: var(--success-color);
-  background: var(--success-bg); border-radius: 7px; padding: 6px 12px; white-space: nowrap;
+  font-size: 12px; font-weight: 600; color: var(--text-light);
+  background: #f1f5f9; border-radius: 7px; padding: 6px 12px; white-space: nowrap;
 }
+.rv-act-note.ext { color: var(--text-light); background: #f1f5f9; }
 
 /* ============================================================
    해결 워크스페이스 v9 — 문제 문구는 크게·진하게(헤드라인),
