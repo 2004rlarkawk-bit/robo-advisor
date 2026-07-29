@@ -219,8 +219,11 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
     }
 
     // 5. Certificate of Origin 데이터 조립
+    // C/O는 상공회의소/세관이 발급(external_pending) — 화주가 여기서 생성하지 않는다.
+    // 화주 서류는 C/I·P/L만. external_pending이면 초안·HTML·로그를 만들지 않는다.
+    // (향후 인증수출자 자율발급 경로가 생겨 status가 external_pending이 아니게 되면 그때 조립된다.)
     const coDoc = requiredDocs.find(d => d.id === 'co');
-    if (coDoc && coDoc.status !== 'not_needed' && profile.tradeType === 'export') {
+    if (coDoc && coDoc.status !== 'not_needed' && coDoc.status !== 'external_pending' && profile.tradeType === 'export') {
       logs.push(createLog(this.name, '원산지증명서(C/O) 데이터 조립 중...', 'info'));
       
       const coIssueDate = new Date().toISOString().split('T')[0];
