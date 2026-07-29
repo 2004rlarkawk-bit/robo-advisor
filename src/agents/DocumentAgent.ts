@@ -1,12 +1,12 @@
 import { Agent, DocumentResult, HSCodeResult, AgentLog, createLog } from './types';
-import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, InsuranceData, Shipment } from '../types';
+import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, InsuranceData, CustomsDeclarationData, Shipment } from '../types';
 import { tradeItemAmount } from '../utils/shipment';
 import { determineRequiredDocuments } from '../harness/rulesEngine';
 import { autoFillDocumentFields } from '../services/claudeService';
 import { isLcPayment } from './paymentTerms';
 import { renderCertificateOfOriginHTML } from './templates/co';
 import { renderInsuranceHTML } from './templates/insurance';
-
+import { renderCustomsDeclarationHTML } from './templates/customsDeclaration';
 export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCodeResult; useLLM?: boolean; logs: AgentLog[] }, DocumentResult> {
   readonly name = 'Document Agent';
 
@@ -291,7 +291,43 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
       generatedDocs.insurance = insurance;
       logs.push(createLog(this.name, `적하보험증권 초안 조립 완료 (부보금액: ${inv.currency} ${insuredAmount.toLocaleString()})`, 'success'));
     }
+    // 7. 통관신고 관련 서류 데이터 조립
+    const customsDoc = requiredDocs.find(d => d.id === 'customs_dec');
+    if (customsDoc && customsDoc.status !== 'not_needed' && customsDoc.status !== 'external_pending') {
+      logs.push(createLog(this.name, '통관신고 관련 서류 데이터 조립 중...', 'info'));
 
+      const customsExporter = generatedDocs.invoice?.seller || { name: profile.companyName || '', address: profile.companyAddress || '', contact: profile.contact || '' };
+      const customsImporter = generatedDocs.invoice?.consignee || { name: profile.partnerName || '', address: profile.partnerAddress || '', contact: profile.partnerContact || '' };
+      const totalQuantity = items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
+      const totalWeight = items.reduce((sum, it) => sum + (Number(it.grossWeight) || 0), 0);
+      const invoiceAmount = generatedDocs.invoice?.totalAmount || Number(profile.invoiceAmount || profile.totalAmount) || 0;
+
+      const customsDeclaration: CustomsDeclarationData = {
+        declarationNo: docNo('CD'),
+        declarationDate: new Date().toISOString().split('T')[0],
+        tradeType: profile.tradeType,
+        exporter: customsExporter,
+        importer: customsImporter,
+        itemName: itemDescription || profile.itemName || '',
+        hsCode: profile.hsCode || hsResult.topCode || '',
+        quantity: totalQuantity || Number(profile.quantity) || 0,
+        unit: profile.unit || items[0]?.unit || '',
+        weight: totalWeight || Number(profile.grossWeight || profile.weight) || 0,
+        currency: profile.currency || currency,
+        invoiceAmount,
+        incoterms: profile.incoterms || '',
+        loadPort: profile.loadPort || '',
+        dischargePort: profile.dischargePort || '',
+        countryOfOrigin: profile.countryOfOrigin || '',
+        customsValue: invoiceAmount,
+        dutyRate: '',
+        dutyAmount: 0,
+        signedBy: profile.signedBy || profile.signerName || ''
+      };
+
+      generatedDocs.customsDeclaration = customsDeclaration;
+      logs.push(createLog(this.name, '통관신고 관련 서류 초안 조립 완료', 'success'));
+    }
     // HTML 템플릿 렌더링 적용
     // 상업송장은 고정 docx 템플릿(invoiceDocxService)에서 생성·미리보기하므로 HTML을 만들지 않는다.
     // (미리보기 = 다운로드 docx 단일 소스. generatedDocs.invoice 구조 데이터만 넘긴다.)
@@ -304,7 +340,9 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
     if (generatedDocs.insurance) {
       htmlTemplates.insurance = renderInsuranceHTML(generatedDocs.insurance);
     }
-
+    if (generatedDocs.customsDeclaration) {
+      htmlTemplates.customs_dec = renderCustomsDeclarationHTML(generatedDocs.customsDeclaration);
+    }
     logs.push(createLog(this.name, '문서 생성 에이전트 작업 완료.', 'success'));
 
     return {
