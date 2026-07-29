@@ -2697,7 +2697,42 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                             <div className="mfc-head">
                               <span className="mfc-dot" />
                               <div className="mfc-text">
-                                <div className="mfc-headline">{issue.message}</div>
+                                {(() => {
+                                  // 메시지에서 근거 접미사와 마지막 (부연설명)을 분리해 3층으로 렌더한다.
+                                  // - 헤드라인: 본문 (근거·부연 제거)
+                                  // - 부연: 마지막 괄호 안 문장 — 한 줄 띄우고 흐리게 표시
+                                  // - 근거: issue.basis 우선, 없으면 message 접미사에서 파싱 — 접이식으로 조문 요약 노출
+                                  const rawMsg = issue.message || '';
+                                  const basisMatch = rawMsg.match(/\s*\[근거:\s*([^\]]+)\]\s*$/);
+                                  const withoutBasis = basisMatch ? rawMsg.slice(0, basisMatch.index).trimEnd() : rawMsg;
+                                  const parenMatch = withoutBasis.match(/\s*\(([^()]+)\)\s*$/);
+                                  const mainLine = parenMatch ? withoutBasis.slice(0, parenMatch.index).trimEnd() : withoutBasis;
+                                  const detailLine = parenMatch ? parenMatch[1].trim() : '';
+                                  const basisLaw = issue.basis?.law || (basisMatch ? basisMatch[1].trim() : '');
+                                  const basisSummary = issue.basis?.summary || '';
+                                  return (
+                                    <>
+                                      <div className="mfc-headline">{mainLine}</div>
+                                      {detailLine && (
+                                        <div className="mfc-detail" style={{ marginTop: 6, fontSize: 13, color: '#475569', lineHeight: 1.45 }}>
+                                          ({detailLine})
+                                        </div>
+                                      )}
+                                      {basisLaw && (
+                                        <details className="mfc-basis" style={{ marginTop: 8 }}>
+                                          <summary style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600, cursor: 'pointer', listStyle: 'none' }}>
+                                            [근거: {basisLaw}] {basisSummary ? '▸' : ''}
+                                          </summary>
+                                          {basisSummary && (
+                                            <div style={{ marginTop: 6, padding: '8px 10px', borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: 12, color: '#334155', lineHeight: 1.5 }}>
+                                              {basisSummary}
+                                            </div>
+                                          )}
+                                        </details>
+                                      )}
+                                    </>
+                                  );
+                                })()}
                                 <div className="mfc-sub">
                                   {issue.docType === 'invoice' ? '상업송장' :
                                    issue.docType === 'packing_list' ? '패킹리스트' :

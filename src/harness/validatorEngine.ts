@@ -303,6 +303,7 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
           id: 'bizno-invalid',
           docType: 'customs_dec',
           severity: 'error',
+          overridable: true, // 국세청 실조회 실패 시 사용자가 통제 불가 — 사유 기록 후 계속 진행 가능
           message: `사업자등록번호 확인 필요: ${biz.statusText} (통관 신고인 정보 불일치 시 세관 반려 사유가 됩니다.)`,
           field: 'businessRegistrationNo'
         });
@@ -322,9 +323,15 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
   }
 
   // 8. 근거 법령 표기 (법제처 매핑 — 해당 이슈 유형에만)
+  // 구조화 basis 필드에 조문 요약까지 담아 UI가 접이식으로 렌더할 수 있게 한다.
+  // message 문자열은 기존 UI/알림 백워드 호환을 위해 그대로 유지한다.
   for (const issue of issues) {
     const law = getRelatedLawForIssue(issue.id);
-    if (law && !issue.message.includes('근거:')) {
+    if (!law) continue;
+    if (!issue.basis) {
+      issue.basis = { label: '근거', law: `${law.lawName} ${law.article}`, summary: law.summary };
+    }
+    if (!issue.message.includes('근거:')) {
       issue.message += ` [근거: ${law.lawName} ${law.article}]`;
     }
   }

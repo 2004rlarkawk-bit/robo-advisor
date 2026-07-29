@@ -52,7 +52,8 @@ export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents
       const law = getRelatedLawForIssue(issue.id);
       if (law) {
         // 구조화 근거(배지 렌더용) — card가 이미 자체 basis를 가지면 덮어쓰지 않는다.
-        if (!issue.basis && !issue.card) issue.basis = { label: '근거', law: `${law.lawName} ${law.article}` };
+        // summary 를 함께 넘겨 UI 에서 접이식 상세 조문 설명을 노출한다.
+        if (!issue.basis && !issue.card) issue.basis = { label: '근거', law: `${law.lawName} ${law.article}`, summary: law.summary };
         // 문자열 접미사(레거시 내러티브·테스트 호환)
         if (!issue.message.includes('근거:')) issue.message += ` [근거: ${law.lawName} ${law.article}]`;
       }

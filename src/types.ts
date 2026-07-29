@@ -186,10 +186,12 @@ export interface ValidationIssue {
 // 3층 분리: 숫자·법근거(결정론) / 구조·어떤 카드·체크(룰) / 산문 설명(룰→GPT 교체).
 // GPT는 리포트 저자가 아니라 빈 산문 슬롯을 채우는 필러 — 금액·법조문은 못 지어낸다.
 
-/** 근거 배지 — 예: { label: '근거', law: '관세법 제30조' } */
+/** 근거 배지 — 예: { label: '근거', law: '관세법 제30조', summary: '과세가격 결정의 원칙' } */
 export interface FeedbackBasis {
   label: string;
   law?: string;
+  /** 조문 간략 설명(펼침 UI용). 사용자가 배지를 클릭해 펼치면 표시. */
+  summary?: string;
 }
 
 /** 계산 결과 사실 카드 — 과세가격 환산 등. 값은 실 API/룰에서 결정론적으로 산출. */
@@ -365,6 +367,32 @@ export interface CustomsDeclarationData {
   dutyRate?: string;
   dutyAmount?: number;
   signedBy?: string;
+
+  // ── 수출신고서(초안) docx 전환용 확장 필드 (기존 HTML 필드는 그대로 유지) ──
+  // 갑지=items[0], 을지=items.slice(1). 서비스가 포맷/공란/FOB환산을 담당한다.
+  items?: TradeItem[];
+  // 관세청 수출환율(원/외화 1단위). null이면 환율 미확보 → FOB 원화 공란.
+  fobRate?: number | null;
+  // 당사자(소스 있는 것만; 통관고유부호·대표자 등 소스 없는 건 서비스에서 공란).
+  ownerAddress?: string;
+  ownerBizNo?: string;
+  makerName?: string;
+  buyerName?: string;
+  buyerCountry?: string;
+  // 선적 정보
+  destCountry?: string;
+  carrier?: string;
+  vessel?: string;
+  departureDate?: string;
+  transportType?: string;
+  lcNo?: string;
+  // 합계·기타
+  totalWeight?: number;
+  totalPackages?: number;
+  paymentAmount?: number;
+  containerNo?: string;
+  invoiceNo?: string;
+  invoiceDate?: string;
 
   [key: string]: any;
 }
