@@ -147,8 +147,11 @@ export function useTradeDraft({
       if (restoreSequenceRef.current !== sequence) return;
       try {
         const newest = selectNewestDraft(localDraft, databaseDraft);
-        setProfile(newest ? { ...defaultProfile, ...newest.profile } : defaultProfile);
-        if (setAttachments) setAttachments(newest?.formData.attachments ?? []);
+        const activeTradeId = tradeIdRef.current;
+        if (!activeTradeId) {
+          setProfile(newest ? { ...defaultProfile, ...newest.profile } : defaultProfile);
+          if (setAttachments) setAttachments(newest?.formData.attachments ?? []);
+        }
         if (newest) {
           setLastSavedAt(newest.updatedAt);
           setSaveStatus(newest.source === 'database' ? 'saved' : 'local');

@@ -63,7 +63,7 @@ import type { TradeAttachment } from './types/tradeFormData';
 import { deleteCurrentAccount, getCurrentAuthUser, markOnboardingCompleted, onAuthStateChange, signOutUser, type AuthSessionUser } from './services/authService';
 import { useUserProfile } from './hooks/useUserProfile';
 import { useTradeDraft } from './hooks/useTradeDraft';
-import { removeDraftFromLocal } from './services/draftCacheService';
+import { removeDraftFromLocal, saveTradeDraft } from './services/draftCacheService';
 import { userProfileToTradeDefaults } from './services/profileService';
 import {
   createPerfectTestProfile,
@@ -121,6 +121,7 @@ export default function App() {
   const [tradeDirection, setTradeDirection] = useState<TradeDirection>('export');
   const [currentTradeId, setCurrentTradeId] = useState<string | null>(null);
   const [workspaceCurrentStep, setWorkspaceCurrentStep] = useState(1);
+  const [importWorkspaceVersion, setImportWorkspaceVersion] = useState(0);
   const [pendingResumeTradeId, setPendingResumeTradeId] = useState<string | null>(null);
   const [isWorkspaceRestored, setIsWorkspaceRestored] = useState(false);
   const restoredWorkspaceUserRef = useRef<string | null>(null);
@@ -202,11 +203,16 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   };
 
   const handleImportComplete = async (snapshot: ImportTradeSnapshot): Promise<SavedTrade> => {
-    const completedTrade = await createCompletedImportTrade(snapshot);
-    setCurrentTradeId(completedTrade.id);
-    setCurrentTradeStatus(completedTrade.status ?? null);
+    return createCompletedImportTrade(snapshot);
+  };
+
+  const handleImportSaved = (completedTrade: SavedTrade) => {
+    setCurrentTradeId(null);
+    setCurrentTradeStatus(null);
+    setWorkspaceCurrentStep(1);
+    setPendingResumeTradeId(null);
+    clearWorkspaceSession();
     setActiveMenu(completedTrade.status === 'submitted' ? 'docs' : 'trades');
-    return completedTrade;
   };
 
   const handleImportGenerate = async (snapshot: ImportTradeSnapshot): Promise<string> => {
@@ -656,6 +662,11 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         });
         await updateGeneratedTrade(saved.id, { ...data, attachments: scopedAttachments });
         setForwarderAttachments(scopedAttachments);
+        await saveTradeDraft(user.id, data.profile, 'forwarder', {
+          attachments: scopedAttachments,
+          currentStep: 2,
+          tradeId: saved.id,
+        });
       }
       setCurrentTradeId(saved.id);
       setCurrentTradeStatus('generated');
@@ -1010,6 +1021,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         tradeId: t.id,
         existingStatus: t.status,
       }));
+      setImportWorkspaceVersion((version) => version + 1);
       setCurrentTradeId(t.id);
       setCurrentTradeStatus(t.status ?? 'generated');
       setWorkspaceCurrentStep(3);
@@ -1091,6 +1103,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         arrivalNotice: null,
         generatedAt: null,
       }));
+      setImportWorkspaceVersion((version) => version + 1);
       setCurrentTradeId(null);
       setCurrentTradeStatus(null);
       setWorkspaceCurrentStep(1);
@@ -1869,21 +1882,23 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             {tradeDirection === 'import' ? (
               workspaceRole === 'forwarder'
                 ? <ImportForwarderFlow
-                  key={`import-forwarder-${user.id}`}
+                  key={`import-forwarder-${user.id}-${importWorkspaceVersion}`}
                   userId={user.id}
                   onGenerate={handleImportGenerate}
                   onComplete={handleImportComplete}
+                  onSaved={handleImportSaved}
                   onWorkspaceStateChange={({ currentStep, tradeId }) => {
                     setWorkspaceCurrentStep(currentStep);
                     setCurrentTradeId(tradeId);
                   }}
                 />
                 : <ImportShipperFlow
-                  key={`import-shipper-${user.id}`}
+                  key={`import-shipper-${user.id}-${importWorkspaceVersion}`}
                   userId={user.id}
                   importerCompanyName={userProfile.company_name ?? ''}
                   onGenerate={handleImportGenerate}
                   onComplete={handleImportComplete}
+                  onSaved={handleImportSaved}
                   onWorkspaceStateChange={({ currentStep, tradeId }) => {
                     setWorkspaceCurrentStep(currentStep);
                     setCurrentTradeId(tradeId);

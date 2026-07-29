@@ -83,8 +83,10 @@ describe('포워더용 선적 및 부킹 입력 폼', () => {
   it('수출 포워더 첨부 영역과 허용 파일 input을 표시한다', () => {
     const rendered = renderForm();
     const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
-    expect(rendered.container.textContent).toContain('파일 첨부');
+    expect(rendered.container.textContent).toContain('여러 파일 선택');
+    expect(rendered.container.textContent).toContain('AI 분석 및 빈 필드 자동입력');
     expect(rendered.container.textContent).toContain('첨부된 파일이 없습니다.');
     expect(input?.accept).toBe('.pdf,.png,.jpg,.jpeg');
+    expect(input?.multiple).toBe(true);
   });
 });

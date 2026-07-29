@@ -8,6 +8,7 @@ import {
 } from '../utils/forwarderForm';
 import type { TradeAttachment } from '../types/tradeFormData';
 import TradeAttachmentUploader from './TradeAttachmentUploader';
+import { mergeForwarderAutoFill } from '../services/forwarderDocumentAnalysisService';
 
 interface Props {
   state: ForwarderFormState;
@@ -68,6 +69,11 @@ export default function ForwarderWorkspaceForm({
           scopeId={attachmentScopeId}
           attachments={attachments}
           onChange={onAttachmentsChange}
+          onApplyAnalysis={(values, sourceFiles) => {
+            const merged = mergeForwarderAutoFill(state, values, sourceFiles);
+            onChange(merged.state);
+            return merged.conflicts;
+          }}
         />
       </details>
 
