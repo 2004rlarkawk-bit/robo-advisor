@@ -763,17 +763,18 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       const canBypass = IS_DEV_TEST_ENABLED && devTestMode !== null;
       const blockers = unresolvedBlockers(issuesList, overrides);
       if (blockers.length > 0 && !canBypass) {
-        // 차단 중에도 검증 결과와 override UI는 보여준다. 문서 자체는 공개·저장하지 않는다.
-        setHtmlTemplates({});
-        setInvoiceData(null);
+        // 차단이라도 파이프라인이 조립한 초안 문서는 볼 수 있게 공개한다(미리보기·다운로드).
+        // 단, 최종 제출·거래 저장은 막는다: blockedGenRef 유지 + "전체 문서 전송"은 blockingIssuesCount로 비활성.
+        setHtmlTemplates(result.documents?.htmlTemplates || {});
+        setInvoiceData(result.documents?.generatedDocs?.invoice || null);
         invoiceDocxCacheRef.current = null;
-        setPackingListData(null);
+        setPackingListData(result.documents?.generatedDocs?.packingList || null);
         packingXlsxCacheRef.current = null;
         setHasGenerated(true);
         blockedGenRef.current = { result, generationProfile, writeMode };
         const overridable = blockers.filter((blocker) => blocker.overridable).length;
         alert(
-          `생성이 차단되었습니다 — 해결해야 할 오류 ${blockers.length}건.` +
+          `초안이 생성되었습니다. 제출 전 해결해야 할 오류 ${blockers.length}건이 있어요 — 미리보기·다운로드는 가능하지만 최종 제출은 보류됩니다.` +
           (overridable > 0
             ? `\n(그중 ${overridable}건은 아래 검증 결과에서 "사유 입력 후 override"로 진행 가능)`
             : '')
@@ -1587,7 +1588,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
           <div className="workspace-area">
             {activeMenu === 'about' ? <AboutPanel onStart={() => setActiveMenu('dashboard')} />
             : activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
-            : activeMenu === 'guide' ? <GuidePanel />
+            : activeMenu === 'guide' ? <GuidePanel onNavigate={setActiveMenu} />
             : activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'analysis' ? <DataAnalysisPanel />
             : activeMenu === 'trades' ? <TradeManagerPanel onLoad={handleLoadSavedTrade} />   
@@ -2538,10 +2539,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                     <span className="rv-hero-blocked-ic"><AlertTriangle size={22} /></span>
                     <div>
                       <div className="rv-hero-blocked-title">
-                        제출 전 <b>{blockingIssuesCount}건</b>을 해결해야 서류가 생성돼요
+                        제출 전 <b>{blockingIssuesCount}건</b>을 해결해야 최종 제출할 수 있어요
                       </div>
                       <p className="rv-hero-blocked-sub">
-                        아래 “해결하면 제출” 목록에서 바로 수정할 수 있어요. 해결하면 상업송장·패킹리스트가 자동으로 만들어집니다.
+                        상업송장·패킹리스트 <b>초안은 아래에서 미리보기·다운로드</b>할 수 있어요. 다만 아래 “해결하면 제출” 목록의 항목을 수정해야 최종 제출이 가능합니다.
                       </p>
                     </div>
                   </div>
@@ -2576,19 +2577,25 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       : doc.id === 'insurance' ? '보험' : '서류';
                     const fileReady = hasDoc(doc.id);
                     const isOwnDoc = doc.id === 'invoice' || doc.id === 'packing_list';
-                    // 화주 서류인데 실제 파일이 없으면(차단·미생성) '생성 완료'로 표기하지 않는다
-                    const blockedOwn = isOwnDoc && doc.status === 'completed' && !fileReady;
-                    const displayText = blockedOwn ? '생성 대기' : doc.statusText;
-                    const sbClass = blockedOwn ? 'na'
-                      : doc.status === 'completed' ? 'ok'
+                    // 표시 상태 규칙:
+                    //  - 화주 서류 + 파일 있음 + 차단 중  → '초안' (볼 수 있지만 제출 전 검토 필요)
+                    //  - 화주 서류 + completed + 파일 없음 → '생성 대기' (아직 미생성)
+                    //  - 그 외 → rulesEngine 상태문구 그대로
+                    let displayText = doc.statusText;
+                    let sbClass = doc.status === 'completed' ? 'ok'
                       : doc.status === 'review_required' ? 'rev' : 'na';
+                    if (isOwnDoc && fileReady && isGenerationBlocked) {
+                      displayText = '초안'; sbClass = 'rev';
+                    } else if (isOwnDoc && doc.status === 'completed' && !fileReady) {
+                      displayText = '생성 대기'; sbClass = 'na';
+                    }
                     return (
                       <div className="rv-row" key={doc.id}>
                         <span className={`rv-abbr ${fileReady ? '' : 'gray'}`}>{abbr}</span>
                         <span className="rv-nm">{doc.name}</span>
                         <span className={`rv-sb rv-sb-${sbClass}`}>{displayText}</span>
                         <div className="rv-act">
-                          {fileReady ? (
+                          {fileReady && (
                             <>
                               <button className="rv-view" onClick={() => setPreviewDocId(doc.id)}>
                                 <Eye size={15} /> 보기
@@ -2601,10 +2608,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                 <Download size={17} />
                               </button>
                             </>
-                          ) : doc.status === 'external_pending' ? (
-                            // 선사·관세사·상공회의소 등 외부에서 발행하는 서류
-                            <span className="rv-act-note ext">외부 발행</span>
-                          ) : null}
+                          )}
                         </div>
                       </div>
                     );
