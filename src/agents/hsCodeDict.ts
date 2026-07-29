@@ -316,155 +316,112 @@ export function isFishSpecies(name: string): boolean {
  * - 어류가 아니면 null
  * - 어류이면 추가 확인이 필요한 안내 후보 반환
  */
-export function classifyFishHS(
-  name: string
-): HSCodeDictEntry[] | null {
-  if (!isFishSpecies(name)) {
-    return null;
-  }
+export interface FishHSCandidate {
+  code: string;
+  description: string;
+  confidence: HSCodeDictEntry['confidence'];
+  reasoning: string;
+}
+export interface FishStateOption {
+  key: string;
+  label: string;
+  candidates: FishHSCandidate[];
+}
+export interface FishClassification {
+  species: string;
+  resolved?: FishHSCandidate[];
+  disambiguation?: {
+    question: string;
+    note: string;
+    options: FishStateOption[];
+  };
+}
 
-  const normalizedName = normalizeItemName(name);
+// 보존·가공 상태별 표준 HS 후보 (상태당 최대 3개, confidence 내림차순).
+// 통관 안전: 류·소호(4~6자리)까지만, 정확한 10자리는 관세청 품목분류로 확인 안내.
+const FISH_STATE_CANDIDATES: Record<string, FishHSCandidate[]> = {
+  live: [
+    { code: '0301.99', description: '활어 (기타)', confidence: '보통',
+      reasoning: '살아있는 어류는 HS 제0301호(활어)로 분류됩니다. 어종·용도에 따라 세부 소호가 달라지므로 정확한 10자리는 관세청 품목분류로 확인하세요.' },
+  ],
+  fresh: [
+    { code: '0302.89', description: '신선·냉장 어류 (기타, 통째)', confidence: '보통',
+      reasoning: '신선하거나 냉장된 통어류는 HS 제0302호입니다. 어종이 별도 소호에 없으면 0302.89(기타)를 검토합니다.' },
+    { code: '0304.49', description: '신선·냉장 필레', confidence: '낮음 (확인 필요)',
+      reasoning: '필레·어육 형태이면 통어류(0302)가 아니라 HS 제0304호(필레)가 적용됩니다. 필레 여부를 확인하세요.' },
+  ],
+  frozen: [
+    { code: '0303.89', description: '냉동 어류 (기타, 통째)', confidence: '보통',
+      reasoning: '냉동 통어류는 HS 제0303호입니다. 어종이 별도 소호에 없으면 0303.89(기타)를 검토합니다.' },
+    { code: '0304.89', description: '냉동 필레', confidence: '낮음 (확인 필요)',
+      reasoning: '냉동 필레·어육이면 HS 제0304호가 적용됩니다. 필레 여부를 확인하세요.' },
+  ],
+  dried_salted: [
+    { code: '0305.59', description: '건조 어류 (기타)', confidence: '보통',
+      reasoning: '건조 어류는 HS 제0305호입니다. 건조품은 0305.59(기타 건조)를 검토합니다.' },
+    { code: '0305.69', description: '염장·염수장 어류 (기타)', confidence: '낮음 (확인 필요)',
+      reasoning: '염장 또는 염수장 어류이면 0305.6x를 검토합니다. 건조인지 염장인지 확인하세요.' },
+  ],
+  smoked: [
+    { code: '0305.49', description: '훈제 어류 (기타)', confidence: '보통',
+      reasoning: '훈제 어류는 HS 제0305호(훈제 소호)입니다. 조리 여부·어종에 따라 세부 소호가 달라질 수 있습니다.' },
+  ],
+  prepared: [
+    { code: '1604.19', description: '조제·저장처리 어류 (기타, 통째·절단)', confidence: '보통',
+      reasoning: '통조림·양념·조리 등 조제·저장처리된 어류는 제3류가 아니라 HS 제1604호입니다. 조리방법·포장을 확인하세요.' },
+    { code: '1604.20', description: '기타 조제 어류 (어묵 등)', confidence: '낮음 (확인 필요)',
+      reasoning: '어육 반죽·성형품(어묵 등)은 1604.20을 검토합니다.' },
+  ],
+};
 
-  /*
-   * 조제 또는 통조림 여부를 먼저 확인합니다.
-   *
-   * 조제·보존처리된 어류는 일반적으로 제3류가 아닌
-   * 제16류 검토가 필요할 수 있습니다.
-   */
-  if (
-    /통조림|캔|조제|양념|소스|튀김|구이|익힌|canned|prepared|seasoned|cooked|fried|grilled/.test(
-      normalizedName
-    )
-  ) {
-    return [
-      {
-        keywords: [],
-        code: '',
-        description: '조제·보존처리 어류 — 세부 분류 확인 필요',
-        confidence: '낮음 (확인 필요)',
-        reasoning:
-          '통조림, 조리, 양념 또는 소스 처리된 어류는 제3류가 아닌 HS 제16류에 분류될 수 있습니다. 어종, 조리방법, 배합비율과 포장형태를 확인해야 합니다.'
-      }
-    ];
-  }
+const FISH_DISAMBIG_KEYS: { key: string; label: string }[] = [
+  { key: 'fresh',        label: '신선·냉장' },
+  { key: 'frozen',       label: '냉동' },
+  { key: 'dried_salted', label: '건조·염장' },
+  { key: 'smoked',       label: '훈제' },
+  { key: 'prepared',     label: '조제·통조림' },
+];
 
-  /*
-   * 어육, 필레, 다진 어육 등은 통어류와 분류가 달라질 수 있으므로
-   * 정확한 세번을 임의로 추천하지 않습니다.
-   */
-  if (
-    /필레|포|살코기|어육|다진|연육|fillet|fish meat|minced|surimi/.test(
-      normalizedName
-    )
-  ) {
-    return [
-      {
-        keywords: [],
-        code: '',
-        description: '어류 필레·어육 — 형태 및 보존상태 확인 필요',
-        confidence: '낮음 (확인 필요)',
-        reasoning:
-          '어류 필레와 기타 어육은 통째 또는 절단된 어류와 다른 HS 소호가 적용될 수 있습니다. 어종, 냉동 여부, 뼈 포함 여부와 가공형태를 확인해야 합니다.'
-      }
-    ];
-  }
-
-  /*
-   * 냉동 어류
-   */
-  if (/냉동|frozen/.test(normalizedName)) {
-    return [
-      {
-        keywords: [],
-        code: '',
-        description: '냉동 어류 — HS 0303류 검토',
-        confidence: '낮음 (확인 필요)',
-        reasoning:
-          '냉동 어류는 일반적으로 HS 0303류를 검토합니다. 다만 정확한 6자리 및 10자리 코드는 어종, 필레 여부, 절단 여부와 기타 가공상태에 따라 달라지므로 관세청 사전 또는 AI 분석으로 세부 코드를 확인해야 합니다.'
-      }
-    ];
-  }
-
-  /*
-   * 신선 또는 냉장 어류
-   *
-   * 활어는 0301류일 수 있으므로 별도로 처리합니다.
-   */
-  if (/활어|살아있는|live fish|live/.test(normalizedName)) {
-    return [
-      {
-        keywords: [],
-        code: '',
-        description: '활어 — HS 0301류 검토',
-        confidence: '낮음 (확인 필요)',
-        reasoning:
-          '살아있는 어류는 일반적으로 HS 0301류를 검토합니다. 정확한 코드는 어종과 용도에 따라 달라질 수 있습니다.'
-      }
-    ];
-  }
-
-  if (/신선|생물|냉장|fresh|chilled/.test(normalizedName)) {
-    return [
-      {
-        keywords: [],
-        code: '',
-        description: '신선·냉장 어류 — HS 0302류 검토',
-        confidence: '낮음 (확인 필요)',
-        reasoning:
-          '신선하거나 냉장된 어류는 일반적으로 HS 0302류를 검토합니다. 정확한 세부 코드는 어종, 필레 여부와 절단상태에 따라 달라집니다.'
-      }
-    ];
-  }
-
-  /*
-   * 훈제 어류
-   */
-  if (/훈제|smoked/.test(normalizedName)) {
-    return [
-      {
-        keywords: [],
-        code: '',
-        description: '훈제 어류 — HS 0305류 검토',
-        confidence: '낮음 (확인 필요)',
-        reasoning:
-          '훈제 어류는 일반적으로 HS 0305류를 검토합니다. 조리 여부, 어종과 세부 가공상태에 따라 정확한 소호가 달라질 수 있습니다.'
-      }
-    ];
-  }
-
-  /*
-   * 건조 또는 염장 어류
-   */
-  if (
-    /건조|말린|반건조|염장|소금에 절인|dried|salted|in brine/.test(
-      normalizedName
-    )
-  ) {
-    return [
-      {
-        keywords: [],
-        code: '',
-        description: '건조·염장 어류 — HS 0305류 검토',
-        confidence: '낮음 (확인 필요)',
-        reasoning:
-          '건조 또는 염장한 어류는 일반적으로 HS 0305류를 검토합니다. 건조, 염장, 염수처리 여부와 어종에 따라 세부 소호가 달라집니다.'
-      }
-    ];
-  }
-
-  /*
-   * 보존상태가 기재되지 않은 경우 임의로 추정하지 않습니다.
-   */
-  return [
-    {
-      keywords: [],
-      code: '',
-      description: '어류 — 보존상태 미기재',
-      confidence: '낮음 (확인 필요)',
-      reasoning:
-        '어류는 보존상태와 가공형태에 따라 HS 분류가 달라집니다. 품목명에 활어, 신선, 냉장, 냉동, 건조, 염장, 훈제, 필레 또는 조제 여부를 포함해 주세요. 예: FROZEN HAIRTAIL.'
+const FISH_KO_NAME: Record<string, string> = {
+  hairtail: '갈치', mackerel: '고등어', pollock: '명태', pollack: '명태', tuna: '참치',
+  salmon: '연어', cod: '대구', herring: '청어', anchovy: '멸치', 'spanish mackerel': '삼치',
+  yellowtail: '방어', croaker: '조기', flatfish: '광어', flounder: '광어', sole: '가자미',
+};
+function detectFishSpecies(normalized: string): string {
+  for (const sp of FISH_SPECIES) {
+    if (normalized.includes(sp.toLowerCase())) {
+      return /[가-힣]/.test(sp) ? sp : (FISH_KO_NAME[sp.toLowerCase()] || sp);
     }
-  ];
+  }
+  return '어류';
+}
+
+/**
+ * 어류 품목을 보존·가공 상태에 따라 분류한다.
+ * - 품목명에 상태(냉동·신선 등)가 있으면 → 해당 상태의 실제 HS 후보(resolved)
+ * - 상태가 불명확하면 → 사용자가 상태를 고르도록 선택지(disambiguation) 반환(빈 코드 금지)
+ */
+export function classifyFishHS(name: string): FishClassification | null {
+  if (!isFishSpecies(name)) return null;
+  const n = normalizeItemName(name);
+  const species = detectFishSpecies(n);
+  const resolve = (key: string): FishClassification => ({ species, resolved: FISH_STATE_CANDIDATES[key] });
+
+  if (/통조림|캔|조제|양념|소스|튀김|구이|익힌|canned|prepared|seasoned|cooked|fried|grilled/.test(n)) return resolve('prepared');
+  if (/훈제|smoked/.test(n)) return resolve('smoked');
+  if (/건조|말린|반건조|염장|소금에 절인|dried|salted|in brine/.test(n)) return resolve('dried_salted');
+  if (/냉동|frozen/.test(n)) return resolve('frozen');
+  if (/활어|살아있는|live fish|live/.test(n)) return resolve('live');
+  if (/신선|생물|냉장|fresh|chilled/.test(n)) return resolve('fresh');
+
+  return {
+    species,
+    disambiguation: {
+      question: '정확한 분류를 위해 보존·가공 상태를 선택해 주세요',
+      note: species + ' · 보존 상태와 가공 형태에 따라 HS CODE가 달라집니다. 아래에서 해당 상태를 선택하면 적합한 코드를 추천해 드립니다.',
+      options: FISH_DISAMBIG_KEYS.map((o) => ({ key: o.key, label: o.label, candidates: FISH_STATE_CANDIDATES[o.key] })),
+    },
+  };
 }
 
 /**

@@ -38,6 +38,25 @@ export interface HSCodeResult {
   status?: 'valid' | 'needs_review' | 'invalid' | 'suggested';
   formattedCode?: string;
   validationMessage?: string;
+  /**
+   * 보존·가공 상태가 불명확한 어류 등 — 코드를 바로 추천하는 대신
+   * 사용자가 상태를 선택하면 그 상태의 실제 HS 후보를 보여준다.
+   * 존재하면 candidates는 비어 있고(선택 전), UI가 선택지를 렌더한다.
+   */
+  disambiguation?: {
+    question: string;
+    note: string;
+    options: {
+      key: string;
+      label: string;
+      candidates: {
+        code: string;
+        description: string;
+        confidence: string;
+        reasoning: string;
+      }[];
+    }[];
+  };
 }
 
 // DocumentAgent 출력

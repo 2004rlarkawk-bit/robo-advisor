@@ -75,6 +75,8 @@ export class HSCodeAgent
      * 4) 내장 HS Code 사전
      */
     let candidates: HSCodeResult['candidates'] = [];
+    // 어류 등 보존·가공 상태가 불명확하면 코드 대신 선택 안내를 담는다(설정 시 폴백 검색 건너뜀).
+    let disambiguation: HSCodeResult['disambiguation'];
 
     if (itemName && itemName.trim() !== '') {
       const trimmedItemName = itemName.trim();
@@ -101,33 +103,48 @@ export class HSCodeAgent
          * - 냉동: 0303
          * - 건조·염장: 0305
          */
-        const fishHS = classifyFishHS(trimmedItemName);
+        const fishClass = classifyFishHS(trimmedItemName);
 
-        if (fishHS && fishHS.length > 0) {
-          candidates = fishHS.map(candidate => ({
-            code: formatHSCode(candidate.code),
-            description: candidate.description,
-            confidence: candidate.confidence,
-            reasoning: candidate.reasoning
-          }));
-
-           if (candidates.length === 0) {
+        if (fishClass) {
+          if (fishClass.resolved && fishClass.resolved.length > 0) {
+            // 품목명에 보존상태가 있어 바로 실제 HS 후보로 확정
+            candidates = fishClass.resolved.map(candidate => ({
+              code: formatHSCode(candidate.code),
+              description: candidate.description,
+              confidence: candidate.confidence,
+              reasoning: candidate.reasoning
+            }));
             logs.push(
               createLog(
                 this.name,
-                fishHS[0].reasoning,
-                'warning'
+                `${fishClass.species} 보존상태 인식 — HS 후보 ${candidates.length}건 생성`,
+                'success'
+              )
+            );
+          } else if (fishClass.disambiguation) {
+            // 보존상태 불명 — 코드 대신 선택 안내(상태별 실제 후보를 옵션에 담아 전달)
+            disambiguation = {
+              question: fishClass.disambiguation.question,
+              note: fishClass.disambiguation.note,
+              options: fishClass.disambiguation.options.map(o => ({
+                key: o.key,
+                label: o.label,
+                candidates: o.candidates.map(candidate => ({
+                  code: formatHSCode(candidate.code),
+                  description: candidate.description,
+                  confidence: candidate.confidence,
+                  reasoning: candidate.reasoning
+                }))
+              }))
+            };
+            logs.push(
+              createLog(
+                this.name,
+                `${fishClass.species} — 보존·가공 상태 확인 필요(선택지 ${disambiguation.options.length}건 안내)`,
+                'info'
               )
             );
           }
-
-          logs.push(
-            createLog(
-              this.name,
-              `어종 감지 — 보존상태 기준 HS(0302/0303/0305) 후보 ${candidates.length}건 생성`,
-              'success'
-            )
-          );
         }
 
         /*
@@ -138,7 +155,7 @@ export class HSCodeAgent
          * OpenAI 호출에 실패하더라도 전체 추천 작업을 중단하지 않고
          * 관세청 HS 사전 검색으로 넘어갑니다.
          */
-        if (candidates.length === 0 && useLLM) {
+        if (candidates.length === 0 && !disambiguation && useLLM) {
           try {
             const suggestions = await suggestHSCode(trimmedItemName);
 
@@ -175,7 +192,7 @@ export class HSCodeAgent
         /*
          * 1-3. 관세청 HS부호 로컬 사전 검색
          */
-        if (candidates.length === 0) {
+        if (candidates.length === 0 && !disambiguation) {
           const dbResults = await searchHSByKeyword(trimmedItemName);
 
           if (dbResults.length > 0) {
@@ -206,7 +223,7 @@ export class HSCodeAgent
          *
          * 관세청 사전 로딩 실패 또는 검색 결과가 없는 경우 사용합니다.
          */
-        if (candidates.length === 0) {
+        if (candidates.length === 0 && !disambiguation) {
           const localSuggestions =
             findHSCodesByItemName(trimmedItemName);
 
@@ -447,6 +464,25 @@ export class HSCodeAgent
      *
      * 품목명을 이용해 추천한 후보를 반환합니다.
      */
+    // 3-0. 보존·가공 상태 확인이 필요하면 코드 대신 선택 안내를 반환한다.
+    if (disambiguation) {
+      logs.push(
+        createLog(
+          this.name,
+          '보존·가공 상태 선택 안내를 반환합니다(코드 미확정).',
+          'info'
+        )
+      );
+      return {
+        topCode: '',
+        candidates: [],
+        status: 'needs_review',
+        formattedCode: '',
+        validationMessage: disambiguation.question,
+        disambiguation
+      };
+    }
+
     if (candidates.length > 0) {
       const topCandidate = candidates[0];
       const topCode = topCandidate.code;
