@@ -27,6 +27,11 @@ function renderForm(overrides: Partial<ForwarderFormState> = {}) {
       <ForwarderWorkspaceForm
         state={{ ...createEmptyForwarderFormState(), ...overrides }}
         onChange={onChange}
+        status={null}
+        busy={false}
+        onSave={vi.fn()}
+        onSubmit={vi.fn()}
+        onReset={vi.fn()}
       />,
     );
   });

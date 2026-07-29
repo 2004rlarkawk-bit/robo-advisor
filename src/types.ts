@@ -88,6 +88,12 @@ export interface TradeProfile {
 
   vesselOrFlight?: string;
   carrier?: string;
+  exportDeclarationNo?: string;
+  bookingNo?: string;
+  bookingStatus?: BookingStatus;
+  loadingMode?: ForwarderLoadingMode;
+  containerSize?: ContainerSize;
+  containerQuantity?: NumericInput;
 
   placeOfReceipt?: string;
   placeOfDelivery?: string;
@@ -162,14 +168,14 @@ export type DocumentStatusType =
   // 타 주체(포워더/세관/상공회의소)가 발급 — 화주가 여기서 생성하지 않고 대기하는 서류.
   | 'external_pending';
 
-export type TradeStatus =
-  | 'draft'
-  | 'generating'
+export type PersistedTradeStatus =
   | 'generated'
-  | 'submitting'
   | 'in_progress'
   | 'submitted'
   | 'failed';
+
+export type TradeUiStatus = 'draft' | 'generating' | 'submitting';
+export type TradeStatus = PersistedTradeStatus | TradeUiStatus;
 
 export interface DocumentStatus {
   id: string;
@@ -435,13 +441,13 @@ export interface SavedTrade {
   profile: TradeProfile;
   tradeDirection?: TradeType;
   tradeRole?: TradeRole;
-  arrivalNotice?: Record<string, unknown> | null;
-  analysisResult?: Record<string, unknown>;
+  arrivalNotice?: object | null;
+  analysisResult?: object;
   riskSummary?: unknown[];
-  customsProgress?: Record<string, unknown>;
+  customsProgress?: object;
   documents: DocumentStatus[];
   issues: ValidationIssue[];
-  status?: TradeStatus;
+  status?: PersistedTradeStatus;
   generatedDocs?: GeneratedDocuments;
   generatedAt?: string | null;
   submittedAt?: string | null;

@@ -18,7 +18,7 @@ interface Props {
   documents: ImportDocumentMeta[];
   onChange: (documents: ImportDocumentMeta[]) => void;
   onFilesAdded: (files: Array<{ id: string; file: File }>) => void;
-  onFileRemoved: (id: string) => void;
+  onFileRemoved: (document: ImportDocumentMeta) => Promise<void>;
   description: string;
   structured?: boolean;
 }
@@ -69,10 +69,15 @@ export default function ImportDocumentUploader({
     onChange([...documents, ...classified]);
   };
 
-  const remove = (document: ImportDocumentMeta) => {
+  const remove = async (document: ImportDocumentMeta) => {
     if (!window.confirm(`${document.name} 파일을 목록에서 삭제할까요?`)) return;
-    onFileRemoved(document.id);
-    onChange(documents.filter((item) => item.id !== document.id));
+    setMessage('');
+    try {
+      await onFileRemoved(document);
+      onChange(documents.filter((item) => item.id !== document.id));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '파일을 삭제하지 못했습니다.');
+    }
   };
 
   const renderFiles = (type?: ImportDocumentType) => {
@@ -103,7 +108,7 @@ export default function ImportDocumentUploader({
             <option key={value} value={value}>{label}</option>
           ))}
         </select>
-        <button type="button" className="icon-btn import-delete" title="파일 삭제" aria-label={`${document.name} 삭제`} onClick={() => remove(document)}>
+        <button type="button" className="icon-btn import-delete" title="파일 삭제" aria-label={`${document.name} 삭제`} onClick={() => void remove(document)}>
           <Trash2 size={16} />
         </button>
       </div>

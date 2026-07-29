@@ -1,6 +1,8 @@
 import { supabase } from '../lib/supabase';
 import type { DocumentStatus, TradeProfile, TradeRole, TradeStatus, TradeType, ValidationIssue } from '../types';
+import type { TradeFormDataV3 } from '../types/tradeFormData';
 import { sanitizeTradeProfile } from '../utils/tradeProfile';
+import { tradeFormDataToProfile, tradeProfileToFormData } from './tradeDataMapper';
 
 const DRAFT_CACHE_VERSION = 2;
 const LEGACY_DRAFT_CACHE_VERSION = 1;
@@ -12,10 +14,14 @@ export interface LocalTradeDraft {
 }
 
 export interface TradeDraftRow {
+  id?: string;
   user_id: string;
-  trade_direction?: TradeType;
-  trade_role?: TradeRole;
-  status?: TradeStatus;
+  direction?: TradeType;
+  role?: TradeRole;
+  trade_id?: string | null;
+  schema_version?: number;
+  current_step?: number;
+  form_data?: TradeFormDataV3;
   profile: TradeProfile;
   created_at?: string;
   updated_at: string;
@@ -132,16 +138,20 @@ function draftIdentity(userId: string, direction: TradeType, role: TradeRole): s
 export async function loadTradeDraft(userId: string, direction: TradeType = 'export', role: TradeRole = 'shipper'): Promise<TradeDraftRow | null> {
   const { data, error } = await supabase
     .from('trade_drafts')
-    .select('user_id, trade_direction, trade_role, status, profile, created_at, updated_at')
+    .select('id, user_id, direction, role, trade_id, schema_version, current_step, form_data, created_at, updated_at')
     .eq('user_id', userId)
-    .eq('trade_direction', direction)
-    .eq('trade_role', role)
+    .eq('direction', direction)
+    .eq('role', role)
     .maybeSingle();
 
   if (error) throw error;
-  if (!data || !isObject(data.profile) || typeof data.updated_at !== 'string') return null;
+  if (!data || !isObject(data.form_data) || typeof data.updated_at !== 'string') return null;
 
-  const row = { ...data, profile: sanitizeTradeProfile(data.profile as unknown as TradeProfile) } as unknown as TradeDraftRow;
+  const row = {
+    ...data,
+    form_data: data.form_data as unknown as TradeFormDataV3,
+    profile: tradeFormDataToProfile(data.form_data as unknown as TradeFormDataV3),
+  } as TradeDraftRow;
   lastDatabaseSnapshots.set(draftIdentity(userId, direction, role), {
     signature: profileSignature(row.profile),
     updatedAt: row.updated_at,
@@ -164,26 +174,27 @@ export async function saveTradeDraft(userId: string, profile: TradeProfile, role
     return { saved: false, updatedAt: previous.updatedAt };
   }
 
-  const updatedAt = new Date().toISOString();
   const { data, error } = await supabase
     .from('trade_drafts')
     .upsert(
       {
         user_id: userId,
-        trade_direction: direction,
-        trade_role: role,
-        status: 'draft',
-        profile: cleanProfile,
+        direction,
+        role,
+        schema_version: 3,
         current_step: 1,
-        updated_at: updatedAt,
+        form_data: tradeProfileToFormData(cleanProfile, role),
       },
-      { onConflict: 'user_id,trade_direction,trade_role' },
+      { onConflict: 'user_id,direction,role' },
     )
     .select('updated_at')
     .single();
 
   if (error) throw error;
-  const savedAt = typeof data?.updated_at === 'string' ? data.updated_at : updatedAt;
+  if (typeof data?.updated_at !== 'string' || data.updated_at.trim() === '') {
+    throw new Error('초안 저장 후 서버 수정 시각을 확인하지 못했습니다.');
+  }
+  const savedAt = data.updated_at;
   lastDatabaseSnapshots.set(identity, { signature, updatedAt: savedAt });
   return { saved: true, updatedAt: savedAt };
 }
@@ -193,8 +204,8 @@ export async function deleteTradeDraft(userId: string, direction: TradeType = 'e
     .from('trade_drafts')
     .delete()
     .eq('user_id', userId)
-    .eq('trade_direction', direction)
-    .eq('trade_role', role);
+    .eq('direction', direction)
+    .eq('role', role);
 
   if (error) throw error;
   lastDatabaseSnapshots.delete(draftIdentity(userId, direction, role));

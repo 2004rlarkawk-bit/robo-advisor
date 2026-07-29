@@ -1,15 +1,19 @@
-/**
- * localStorage 기반 저장 서비스
- * 
- * 거래 프로필, 생성 문서, 이력 등을 localStorage에 저장합니다.
- * 추후 백엔드 DB 연동 시 이 인터페이스만 교체하면 됩니다.
- */
-/*수정했습니다
-*/
+/** Supabase v3 거래 persistence와 레거시 localStorage 조회 유틸리티입니다. */
 import { supabase } from '../lib/supabase';
-import type { SavedTrade, TradeProfile, DocumentStatus, GeneratedDocuments, TradeRole, TradeStatus, TradeType, ValidationIssue } from '../types';
-import type { ImportTradeSnapshot } from '../types/importTrade';
+import type { SavedTrade, TradeProfile, DocumentStatus, GeneratedDocuments, PersistedTradeStatus, TradeRole, TradeType, ValidationIssue } from '../types';
+import type { ImportDocumentMeta, ImportTradeSnapshot } from '../types/importTrade';
+import type { TradeAttachment, TradeDocumentData, TradeFormDataV3, TradeWorkflowData } from '../types/tradeFormData';
 import { sanitizeTradeProfile } from '../utils/tradeProfile';
+import {
+  findArrivalNotice,
+  generatedDocumentsToData,
+  hasValidStoragePath,
+  importSnapshotToPersistence,
+  reconstructImportSnapshot,
+  tradeFormDataToProfile,
+  tradeProfileToFormData,
+} from './tradeDataMapper';
+import { removeTradeAttachments } from './tradeAttachmentStorageService';
 
 const STORAGE_KEY = 'portai_saved_trades';
 const SETTINGS_KEY = 'portai_settings';
@@ -19,17 +23,15 @@ const SETTINGS_KEY = 'portai_settings';
 // [EDIT: Trade Persistence] Supabase trades 테이블에서 읽어오는 row 형태입니다.
 interface TradeRow {
   id: string;
-  trade_direction?: TradeType | null;
-  trade_role?: TradeRole | null;
-  arrival_notice?: Record<string, unknown> | null;
-  profile: TradeProfile;
-  documents: DocumentStatus[] | null;
-  generated_docs: GeneratedDocuments | null;
+  direction: TradeType;
+  role: TradeRole;
+  schema_version: number;
+  form_data: TradeFormDataV3;
+  workflow_data: TradeWorkflowData | null;
+  documents: unknown[] | null;
+  document_data: TradeDocumentData | null;
   issues: ValidationIssue[] | null;
-  analysis_result?: Record<string, unknown> | null;
-  risk_summary?: unknown[] | null;
-  customs_progress?: Record<string, unknown> | null;
-  status: TradeStatus | null;
+  status: PersistedTradeStatus;
   generated_at?: string | null;
   submitted_at?: string | null;
   flow_completed_at?: string | null;
@@ -37,21 +39,51 @@ interface TradeRow {
   updated_at?: string;
 }
 
+function importDocumentsToStatuses(documents: ImportDocumentMeta[]): DocumentStatus[] {
+  return documents.map((document) => {
+    const completed = document.analysisStatus === 'success' || document.analysisSuccess === true;
+    const failed = document.analysisStatus === 'error' || document.status === 'error';
+    return {
+      id: document.id,
+      name: document.name,
+      status: completed ? 'completed' : failed ? 'review_required' : 'not_started',
+      statusText: completed ? '분석 완료' : failed ? '검토 필요' : '분석 대기',
+    };
+  });
+}
+
 // [EDIT: Trade Persistence] Supabase trades row를 SavedTrade 타입으로 변환하는 공통 함수입니다.
 function mapTradeRow(row: TradeRow): SavedTrade {
+  const formData = row.form_data;
+  const workflowData = row.workflow_data ?? {};
+  const importDocuments = row.direction === 'import'
+    ? row.documents as ImportDocumentMeta[]
+    : [];
+  const importSnapshot = reconstructImportSnapshot(
+    formData,
+    workflowData,
+    importDocuments,
+    row.id,
+  );
+  const generatedDocuments = row.document_data?.generatedDocuments;
   return {
     id: row.id,
-    tradeDirection: row.trade_direction ?? row.profile?.tradeType ?? 'export',
-    tradeRole: row.trade_role ?? undefined,
-    arrivalNotice: row.arrival_notice ?? null,
-    profile: sanitizeTradeProfile(row.profile),
-    documents: row.documents || [],
-    generatedDocs: row.generated_docs ?? undefined,
+    tradeDirection: row.direction,
+    tradeRole: row.role,
+    arrivalNotice: findArrivalNotice(formData),
+    profile: tradeFormDataToProfile(formData),
+    documents: row.direction === 'export'
+      ? row.documents as DocumentStatus[]
+      : importDocumentsToStatuses(importDocuments),
+    generatedDocs: {
+      ...(generatedDocuments ?? {}),
+      ...(importSnapshot ? { importTrade: importSnapshot } : {}),
+    },
     issues: row.issues || [],
-    analysisResult: row.analysis_result ?? {},
-    riskSummary: row.risk_summary ?? [],
-    customsProgress: row.customs_progress ?? {},
-    status: row.status ?? 'generated',
+    analysisResult: importSnapshot?.analysis ?? {},
+    riskSummary: importSnapshot?.risks ?? [],
+    customsProgress: importSnapshot?.cargo ?? {},
+    status: row.status,
     generatedAt: row.generated_at ?? null,
     submittedAt: row.submitted_at ?? null,
     flowCompletedAt: row.flow_completed_at ?? null,
@@ -101,66 +133,61 @@ export interface GeneratedTradeData {
   generatedDocs?: GeneratedDocuments;
 }
 
-function toSupportedIncoterms(value: string): TradeProfile['incoterms'] {
-  const code = value.trim().toUpperCase().split(/[\s-]/)[0];
-  return ['FOB', 'CFR', 'CIF', 'EXW', 'DDP', 'DAP', 'FCA'].includes(code)
-    ? code as TradeProfile['incoterms']
-    : '';
+function importTradePayload(
+  userId: string,
+  snapshot: ImportTradeSnapshot,
+  status: PersistedTradeStatus,
+) {
+  const persistence = importSnapshotToPersistence(snapshot);
+  return {
+    user_id: userId,
+    direction: 'import' as const,
+    role: snapshot.role,
+    status,
+    schema_version: 3,
+    form_data: persistence.formData,
+    workflow_data: persistence.workflowData,
+    documents: persistence.documents,
+    document_data: null,
+    issues: snapshot.analysis.validations,
+    generated_at: snapshot.generatedAt,
+    submitted_at: status === 'submitted' ? new Date().toISOString() : null,
+    flow_completed_at: snapshot.flowCompletedAt ?? null,
+  };
 }
 
-/** 수입 플로우 완료 결과를 기존 trades 테이블에 저장합니다.
- * 신규 방향/역할 컬럼 마이그레이션이 적용된 환경에서만 호출됩니다.
- */
+export function getCompletedImportStatus(
+  role: TradeRole,
+  arrivalNotice: { storagePath?: string } | null | undefined,
+): PersistedTradeStatus {
+  return role === 'forwarder' && !hasValidStoragePath(arrivalNotice)
+    ? 'in_progress'
+    : 'submitted';
+}
+
+/** 수입 확인 단계 성공 시 DB에 generated 상태를 기록합니다. */
+export async function createGeneratedImportTrade(snapshot: ImportTradeSnapshot): Promise<SavedTrade> {
+  const userId = await getRequiredUserId();
+  const payload = importTradePayload(userId, snapshot, 'generated');
+  const query = snapshot.tradeId
+    ? supabase
+      .from('trades')
+      .update(payload)
+      .eq('id', snapshot.tradeId)
+      .eq('user_id', userId)
+      .in('status', ['generated', 'in_progress'])
+    : supabase.from('trades').insert(payload);
+  const { data, error } = await query.select().single();
+  if (error) throw error;
+  return mapTradeRow(data as TradeRow);
+}
+
+/** 수입 플로우 완료 결과를 v3 trades 테이블에 저장합니다. */
 export async function createCompletedImportTrade(snapshot: ImportTradeSnapshot): Promise<SavedTrade> {
   const userId = await getRequiredUserId();
-  const profile: TradeProfile = {
-    tradeType: 'import',
-    itemName: snapshot.analysis.extracted.productDescription,
-    hsCode: snapshot.analysis.extracted.items[0]?.confirmedHSCode ?? snapshot.selectedHSCode?.code ?? '',
-    loadPort: snapshot.analysis.extracted.loadPort,
-    dischargePort: snapshot.analysis.extracted.dischargePort,
-    incoterms: toSupportedIncoterms(snapshot.analysis.extracted.incoterms),
-    quantity: Number.parseFloat(snapshot.analysis.extracted.quantity) || '',
-    weight: Number.parseFloat(snapshot.analysis.extracted.grossWeight) || '',
-    departureDate: snapshot.analysis.extracted.shipmentDate,
-    arrivalDate: snapshot.analysis.extracted.estimatedArrivalDate,
-    companyName: snapshot.analysis.extracted.importer,
-    contact: '',
-    partnerName: snapshot.analysis.extracted.exporterDetails.name || snapshot.analysis.extracted.shipper,
-    currency: snapshot.analysis.extracted.currency,
-    invoiceAmount: Number(snapshot.analysis.extracted.totalAmount) || '',
-    invoiceNo: snapshot.analysis.extracted.invoiceNo,
-    blNo: snapshot.analysis.extracted.blNo,
-    countryOfOrigin: snapshot.analysis.extracted.originCountry,
-    netWeight: Number.parseFloat(snapshot.analysis.extracted.netWeight) || '',
-    grossWeight: Number.parseFloat(snapshot.analysis.extracted.grossWeight) || '',
-    containerNo: snapshot.analysis.extracted.containerNo,
-    sealNo: snapshot.analysis.extracted.sealNo,
-    vesselOrFlight: snapshot.analysis.extracted.vesselName,
-    voyageNo: snapshot.analysis.extracted.voyageNo,
-    notifyPartyName: snapshot.analysis.extracted.notifyParty,
-  };
-  const flowCompletedAt = snapshot.flowCompletedAt;
-  const needsArrivalNotice = snapshot.role === 'forwarder' && !snapshot.arrivalNotice;
-  const initialStatus: TradeStatus = needsArrivalNotice ? 'in_progress' : 'submitting';
-  const payload = {
-      user_id: userId,
-      trade_direction: 'import',
-      trade_role: snapshot.role,
-      profile: sanitizeTradeProfile(profile),
-      documents: snapshot.documents,
-      arrival_notice: snapshot.arrivalNotice ?? null,
-      issues: snapshot.analysis.validations,
-      generated_docs: { importTrade: snapshot },
-      analysis_result: snapshot.analysis,
-      risk_summary: snapshot.risks,
-      customs_progress: snapshot.cargo ?? {},
-      status: initialStatus,
-      generated_at: snapshot.generatedAt,
-      submitted_at: null,
-      flow_completed_at: flowCompletedAt,
-  };
-  let row: TradeRow;
+  const completedStatus = getCompletedImportStatus(snapshot.role, snapshot.arrivalNotice);
+  const payload = importTradePayload(userId, snapshot, completedStatus);
+
   if (snapshot.tradeId) {
     const { data, error } = await supabase
       .from('trades')
@@ -171,54 +198,34 @@ export async function createCompletedImportTrade(snapshot: ImportTradeSnapshot):
       .select()
       .single();
     if (error) throw error;
-    row = data;
-  } else {
-    // 확인 단계가 끝난 상태를 먼저 기록한 뒤 완료 처리 상태로 전환합니다.
-    const { data: generated, error: generatedError } = await supabase
-      .from('trades')
-      .insert({ ...payload, status: 'generated', submitted_at: null, flow_completed_at: null })
-      .select()
-      .single();
-    if (generatedError) throw generatedError;
-    const { data, error } = await supabase
-      .from('trades')
-      .update({ status: initialStatus, flow_completed_at: flowCompletedAt })
-      .eq('id', generated.id)
-      .eq('user_id', userId)
-      .eq('status', 'generated')
-      .select()
-      .single();
-    if (error) throw error;
-    row = data;
+    if (!data) throw new Error('수정할 수입 거래를 찾지 못했습니다.');
+    return mapTradeRow(data as TradeRow);
   }
-  if (initialStatus === 'in_progress') return mapTradeRow(row);
 
-  const submittedAt = new Date().toISOString();
-  const { data: submitted, error: submitError } = await supabase
+  const { data, error } = await supabase
     .from('trades')
-    .update({ status: 'submitted', submitted_at: submittedAt })
-    .eq('id', row.id)
-    .eq('user_id', userId)
-    .eq('status', 'submitting')
+    .insert(payload)
     .select()
     .single();
-  if (submitError) {
-    await supabase.from('trades').update({ status: 'failed' }).eq('id', row.id).eq('user_id', userId);
-    throw submitError;
-  }
-  return mapTradeRow(submitted);
+  if (error) throw error;
+  return mapTradeRow(data as TradeRow);
 }
 
 function generatedTradePayload(data: GeneratedTradeData) {
+  const direction = data.tradeDirection ?? data.profile.tradeType;
+  const role = data.tradeRole ?? 'shipper';
   return {
-    ...(data.tradeDirection ? { trade_direction: data.tradeDirection } : {}),
-    ...(data.tradeRole ? { trade_role: data.tradeRole } : {}),
-    profile: sanitizeTradeProfile(data.profile),
+    direction,
+    role,
+    schema_version: 3,
+    form_data: tradeProfileToFormData(data.profile, role),
+    workflow_data: {},
     documents: data.documents,
-    generated_docs: data.generatedDocs,
+    document_data: generatedDocumentsToData(data.generatedDocs),
     issues: data.issues,
     status: 'generated' as const,
     generated_at: new Date().toISOString(),
+    flow_completed_at: null,
     submitted_at: null,
   };
 }
@@ -279,6 +286,7 @@ export async function markTradeAsSubmitted(
   tradeId: string,
   latestData: {
     profile: TradeProfile;
+    tradeRole?: TradeRole;
     documents: DocumentStatus[];
     issues: ValidationIssue[];
     generatedDocs?: GeneratedDocuments;
@@ -287,14 +295,15 @@ export async function markTradeAsSubmitted(
   const userId = await getRequiredUserId();
   const submittedAt = new Date().toISOString();
 
-  const { data: submitting, error: submittingError } = await supabase
+  const { data, error } = await supabase
     .from('trades')
     .update({
-      profile: sanitizeTradeProfile(latestData.profile),
+      form_data: tradeProfileToFormData(latestData.profile, latestData.tradeRole ?? 'shipper'),
       documents: latestData.documents,
-      generated_docs: latestData.generatedDocs,
+      document_data: generatedDocumentsToData(latestData.generatedDocs),
       issues: latestData.issues,
-      status: 'submitting',
+      status: 'submitted',
+      submitted_at: submittedAt,
     })
     .eq('id', tradeId)
     .eq('user_id', userId)
@@ -302,30 +311,15 @@ export async function markTradeAsSubmitted(
     .select()
     .maybeSingle();
 
-  if (submittingError) {
-    console.error('Supabase 전송 준비 상태 업데이트 실패:', submittingError);
-    throw submittingError;
-  }
-  if (!submitting) throw new Error('이미 최종 제출되었거나 제출할 수 없는 거래입니다.');
-
-  const { data, error } = await supabase
-    .from('trades')
-    .update({ status: 'submitted', submitted_at: submittedAt })
-    .eq('id', tradeId)
-    .eq('user_id', userId)
-    .eq('status', 'submitting')
-    .select()
-    .maybeSingle();
   if (error || !data) {
-    await supabase.from('trades').update({ status: 'failed' }).eq('id', tradeId).eq('user_id', userId);
     if (error) throw error;
     throw new Error('최종 전송 상태를 저장하지 못했습니다.');
   }
-  return mapTradeRow(data);
+  return mapTradeRow(data as TradeRow);
 }
 
 // [EDIT: Document Management] 문서관리 목록은 Supabase 조회 단계에서 status를 필터링할 수 있습니다.
-export async function fetchSavedTrades(status?: TradeStatus | TradeStatus[]): Promise<SavedTrade[]> {
+export async function fetchSavedTrades(status?: PersistedTradeStatus | PersistedTradeStatus[]): Promise<SavedTrade[]> {
   let query = supabase
     .from('trades')
     .select('*')
@@ -346,10 +340,27 @@ export async function fetchSavedTrades(status?: TradeStatus | TradeStatus[]): Pr
 
 // [EDIT: Supabase Auth] RLS 정책에 따라 본인 trade만 삭제됩니다.
 export async function deleteSavedTrade(id: string): Promise<void> {
+  const userId = await getRequiredUserId();
+  const { data: row, error: readError } = await supabase
+    .from('trades')
+    .select('form_data')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (!row) return;
+
+  const formData = row.form_data as Partial<TradeFormDataV3> | null;
+  const attachments = Array.isArray(formData?.attachments)
+    ? formData.attachments as TradeAttachment[]
+    : [];
+  await removeTradeAttachments(attachments);
+
   const { error } = await supabase
     .from('trades')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('user_id', userId);
 
   if (error) throw error;
 }
@@ -360,12 +371,9 @@ export async function clearSavedTrades(): Promise<void> {
   const trades = await fetchSavedTrades(['submitted', 'in_progress']);
   if (trades.length === 0) return;
 
-  const { error } = await supabase
-    .from('trades')
-    .delete()
-    .in('id', trades.map((trade) => trade.id));
-
-  if (error) throw error;
+  for (const trade of trades) {
+    await deleteSavedTrade(trade.id);
+  }
 }
 
 export function deleteTrade(id: string): void {

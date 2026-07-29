@@ -32,7 +32,7 @@ import {
   DocumentStatus,
   ValidationIssue,
   SavedTrade,
-  TradeStatus,
+  PersistedTradeStatus,
   InvoiceData,
   PackingListData,
   type ShipperItem,
@@ -83,6 +83,7 @@ import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
 import {
   createGeneratedTrade,
+  createGeneratedImportTrade,
   createCompletedImportTrade,
   markTradeAsSubmitted,
   updateGeneratedTrade,
@@ -96,7 +97,14 @@ import {
   primaryShipperItemToTradeProfile,
   tradeProfileToPrimaryShipperItem,
 } from './utils/shipperForm';
-import { createEmptyForwarderFormState, type ForwarderFormState } from './utils/forwarderForm';
+import {
+  createEmptyForwarderFormState,
+  forwarderFormToTradeProfile,
+  isBookingNumberRequired,
+  isEtaBeforeEtd,
+  tradeProfileToForwarderFormState,
+  type ForwarderFormState,
+} from './utils/forwarderForm';
 
 const IS_DEV_TEST_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
 
@@ -129,11 +137,20 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const handleTradeDirectionChange = (direction: TradeDirection) => {
     setTradeDirection(direction);
     setProfile((current) => ({ ...current, tradeType: direction }));
+    currentTradeIdRef.current = null;
+    setCurrentTradeStatus(null);
+    hasSubmittedTradeRef.current = false;
+    setHasGenerated(false);
   };
 
   const handleImportComplete = async (snapshot: ImportTradeSnapshot) => {
     await createCompletedImportTrade(snapshot);
     setActiveMenu('docs');
+  };
+
+  const handleImportGenerate = async (snapshot: ImportTradeSnapshot): Promise<string> => {
+    const trade = await createGeneratedImportTrade(snapshot);
+    return trade.id;
   };
 /*
   // 첫 로그인 온보딩 (사용 목적·회사·업종) — 저장되면 다음 로그인부터 건너뜀
@@ -345,6 +362,7 @@ const emptyProfile: TradeProfile = {
 
 const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const [forwarderForm, setForwarderForm] = useState<ForwarderFormState>(() => createEmptyForwarderFormState());
+  const [isForwarderSaving, setIsForwarderSaving] = useState(false);
 
   const tradeDraftDefaultProfile: TradeProfile = {
     ...emptyProfile,
@@ -457,7 +475,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewDocId, invoiceData]);
 
   // 패킹리스트도 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
@@ -476,7 +493,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewDocId, packingListData]);
 
   // 수출신고서(초안)도 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
@@ -557,14 +573,87 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       setHighlightHint('');
     }, 5000);
     return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightField, hasGenerated]);
 
   const consoleEndRef = useRef<HTMLDivElement>(null);
   const currentTradeIdRef = useRef<string | null>(null);
-  const [currentTradeStatus, setCurrentTradeStatus] = useState<TradeStatus | null>(null);
+  const [currentTradeStatus, setCurrentTradeStatus] = useState<PersistedTradeStatus | null>(null);
   const isSubmittingTradeRef = useRef(false);
   const hasSubmittedTradeRef = useRef(false);
+
+  const handleSaveForwarderTrade = async () => {
+    if (isForwarderSaving) return;
+    if (!forwarderForm.companyName.trim() || !forwarderForm.itemName.trim()) {
+      alert('Shipper 회사명과 Description of Goods를 입력해 주세요.');
+      return;
+    }
+    if (isBookingNumberRequired(forwarderForm) || isEtaBeforeEtd(forwarderForm.departureDate, forwarderForm.arrivalDate)) return;
+    if (currentTradeStatus === 'submitted') {
+      alert('이미 전송이 완료된 거래입니다.');
+      return;
+    }
+
+    setIsForwarderSaving(true);
+    try {
+      const data = {
+        profile: forwarderFormToTradeProfile(forwarderForm),
+        tradeDirection: 'export' as const,
+        tradeRole: 'forwarder' as const,
+        documents: [],
+        issues: [],
+      };
+      const tradeId = currentTradeIdRef.current;
+      const saved = tradeId && currentTradeStatus === 'generated'
+        ? await updateGeneratedTrade(tradeId, data)
+        : await createGeneratedTrade(data);
+      currentTradeIdRef.current = saved.id;
+      setCurrentTradeStatus('generated');
+      hasSubmittedTradeRef.current = false;
+      alert('선적·부킹 정보가 저장되었습니다.');
+    } catch (error) {
+      console.error('[Forwarder Export] generated 저장 실패:', error);
+      alert('선적·부킹 정보를 저장하지 못했습니다.');
+    } finally {
+      setIsForwarderSaving(false);
+    }
+  };
+
+  const handleSubmitForwarderTrade = async () => {
+    const tradeId = currentTradeIdRef.current;
+    if (!tradeId || currentTradeStatus !== 'generated' || isForwarderSaving) return;
+    setIsForwarderSaving(true);
+    try {
+      await markTradeAsSubmitted(tradeId, {
+        profile: forwarderFormToTradeProfile(forwarderForm),
+        tradeRole: 'forwarder',
+        documents: [],
+        issues: [],
+      });
+      setCurrentTradeStatus('submitted');
+      hasSubmittedTradeRef.current = true;
+      alert('포워더 거래가 전송 완료 상태로 저장되었습니다.');
+    } catch (error) {
+      console.error('[Forwarder Export] submitted 저장 실패:', error);
+      alert('전체 문서 전송 상태를 저장하지 못했습니다.');
+    } finally {
+      setIsForwarderSaving(false);
+    }
+  };
+
+  const handleResetForwarderTrade = () => {
+    setForwarderForm(createEmptyForwarderFormState());
+    currentTradeIdRef.current = null;
+    setCurrentTradeStatus(null);
+    hasSubmittedTradeRef.current = false;
+  };
+
+  const handleWorkspaceRoleChange = (role: WorkspaceRole) => {
+    setIntegratedWorkspaceRole(role);
+    currentTradeIdRef.current = null;
+    setCurrentTradeStatus(null);
+    hasSubmittedTradeRef.current = false;
+    setHasGenerated(false);
+  };
 
   // 재검증(rerunAgents) 동시 실행 제어 — 마지막 요청의 결과만 반영한다
   const rerunSeqRef = useRef(0);
@@ -863,13 +952,24 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       setActiveMenu('dashboard');
       return;
     }
+    if ((t.tradeDirection ?? t.profile.tradeType) === 'export' && t.tradeRole === 'forwarder') {
+      setTradeDirection('export');
+      setIntegratedWorkspaceRole('forwarder');
+      setForwarderForm(tradeProfileToForwarderFormState(t.profile));
+      currentTradeIdRef.current = t.id;
+      setCurrentTradeStatus(t.status ?? 'generated');
+      hasSubmittedTradeRef.current = t.status === 'submitted';
+      setActiveMenu('dashboard');
+      return;
+    }
     setTradeDirection('export');
+    setIntegratedWorkspaceRole(t.tradeRole ?? 'shipper');
     pauseDraftSaving();
     setDevTestMode(null);
     setDevTestMessage('');
     currentTradeIdRef.current = t.id;
-    setCurrentTradeStatus('submitted');
-    hasSubmittedTradeRef.current = true;
+    setCurrentTradeStatus(t.status ?? 'generated');
+    hasSubmittedTradeRef.current = t.status === 'submitted';
     setProfile(t.profile);
     setDocuments(t.documents);
     setIssues(t.issues);
@@ -896,7 +996,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       setIntegratedWorkspaceRole(role);
       localStorage.setItem(`portai_import_draft:${user.id}:${role}`, JSON.stringify({
         step: 1,
-        documents: importSnapshot.documents,
+        documents: [],
         analysis: null,
         suggestions: [],
         selectedCode: '',
@@ -909,7 +1009,18 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       setActiveMenu('dashboard');
       return;
     }
+    if ((t.tradeDirection ?? t.profile.tradeType) === 'export' && t.tradeRole === 'forwarder') {
+      setTradeDirection('export');
+      setIntegratedWorkspaceRole('forwarder');
+      setForwarderForm(tradeProfileToForwarderFormState(t.profile));
+      currentTradeIdRef.current = null;
+      setCurrentTradeStatus(null);
+      hasSubmittedTradeRef.current = false;
+      setActiveMenu('dashboard');
+      return;
+    }
     setTradeDirection('export');
+    setIntegratedWorkspaceRole(t.tradeRole ?? 'shipper');
     startNewDraft();
     setProfile(createProfileForNewTrade(t.profile));
     setDocuments([]);
@@ -1244,6 +1355,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         : { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, customsDeclaration: customsDeclarationData ?? undefined, overrides };
       await markTradeAsSubmitted(tradeId, {
         profile,
+        tradeRole: workspaceRole,
         documents,
         issues,
         generatedDocs,
@@ -1691,16 +1803,24 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
               <TradeRoleSelector
                 value={workspaceRole}
                 allowedRoles={userProfile.service_role === 'integrated' ? ['shipper', 'forwarder'] : [workspaceRole]}
-                onChange={setIntegratedWorkspaceRole}
+                onChange={handleWorkspaceRoleChange}
               />
             </div>
 
             {tradeDirection === 'import' ? (
               workspaceRole === 'forwarder'
-                ? <ImportForwarderFlow userId={user.id} onComplete={handleImportComplete} />
-                : <ImportShipperFlow userId={user.id} importerCompanyName={userProfile.company_name ?? ''} onComplete={handleImportComplete} />
+                ? <ImportForwarderFlow userId={user.id} onGenerate={handleImportGenerate} onComplete={handleImportComplete} />
+                : <ImportShipperFlow userId={user.id} importerCompanyName={userProfile.company_name ?? ''} onGenerate={handleImportGenerate} onComplete={handleImportComplete} />
             ) : workspaceRole === 'forwarder' ? (
-              <ForwarderWorkspaceForm state={forwarderForm} onChange={setForwarderForm} />
+              <ForwarderWorkspaceForm
+                state={forwarderForm}
+                onChange={setForwarderForm}
+                status={currentTradeStatus}
+                busy={isForwarderSaving}
+                onSave={handleSaveForwarderTrade}
+                onSubmit={handleSubmitForwarderTrade}
+                onReset={handleResetForwarderTrade}
+              />
             ) : !hasGenerated ? (
               /* --- 거래 정보 입력 모드 --- */
               <div className="dashboard-grid">
