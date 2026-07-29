@@ -2921,19 +2921,21 @@ body {
 }
 .rv-panel-head { font-size: 15px; font-weight: 700; padding: 16px 0 10px; border-bottom: 1px solid #eef2f7; }
 .rv-row {
-  display: grid; grid-template-columns: 48px minmax(0, 1fr) 108px 120px; align-items: center; gap: 12px;
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) 156px 120px; align-items: center; gap: 12px;
 
   padding: 15px 0; border-top: 1px solid #f2f5f9;
 }
 .rv-row:first-of-type { border-top: none; }
 .rv-abbr {
-  width: 50px; height: 38px; font-size: 11px; font-weight: 800;
+  width: 50px; height: 38px; font-size: 12px; font-weight: 800; letter-spacing: 0.2px;
   color: var(--primary-color); background: var(--primary-light); border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
 }
 .rv-abbr.gray { color: var(--text-light); background: #f1f5f9; }
 .rv-nm { font-size: 14.5px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rv-sb { font-size: 11.5px; font-weight: 700; padding: 5px 8px; border-radius: 7px; text-align: center; width: 100%; white-space: nowrap; }
+/* 긴 상태 문구(예: "EXW 조건 - 매수인 측 처리", "관세사·신고인 처리 대기")가 잘리지 않도록
+   두 줄까지 자연스럽게 감싸 표시한다. */
+.rv-sb { font-size: 11.5px; font-weight: 700; padding: 5px 8px; border-radius: 7px; text-align: center; width: 100%; white-space: normal; line-height: 1.35; word-break: keep-all; overflow-wrap: anywhere; }
 
 .rv-sb-ok { background: var(--success-bg); color: var(--success-color); }
 .rv-sb-rev { background: var(--warning-bg); color: var(--warning-color); }

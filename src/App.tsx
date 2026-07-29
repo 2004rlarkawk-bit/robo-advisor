@@ -2570,12 +2570,14 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                 <div className="rv-panel">
                   <div className="rv-panel-head">서류 현황 · {documents.length}건</div>
                   {documents.map((doc) => {
-                    const abbr = doc.id === 'invoice' ? '송장'
-                      : doc.id === 'packing_list' ? '포장'
-                      : doc.id === 'bl' ? '선하'
-                      : doc.id === 'customs_dec' ? '신고'
-                      : doc.id === 'co' ? '원산'
-                      : doc.id === 'insurance' ? '보험' : '서류';
+                    // 정식 무역 서류 약어(C/I·P/L·B/L·E/D·C/O)로 표기 — 감사·심사위원에게 익숙한 표준 코드.
+                    // 수입 거래는 신고를 I/D로 노출한다.
+                    const abbr = doc.id === 'invoice' ? 'C/I'
+                      : doc.id === 'packing_list' ? 'P/L'
+                      : doc.id === 'bl' ? 'B/L'
+                      : doc.id === 'customs_dec' ? (profile.tradeType === 'import' ? 'I/D' : 'E/D')
+                      : doc.id === 'co' ? 'C/O'
+                      : doc.id === 'insurance' ? 'I/P' : '서류';
                     const fileReady = hasDoc(doc.id);
                     const isOwnDoc = doc.id === 'invoice' || doc.id === 'packing_list';
                     // 표시 상태 규칙:
