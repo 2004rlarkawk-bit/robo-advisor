@@ -511,7 +511,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewDocId, customsDeclarationData]);
 
   // Mobile simulator inputs
