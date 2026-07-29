@@ -2865,6 +2865,7 @@ body {
 .rv-hero-blocked-title { font-size: 16px; font-weight: 800; color: #7c4a06; line-height: 1.4; }
 .rv-hero-blocked-title b { color: var(--warning-color); }
 .rv-hero-blocked-sub { margin: 6px 0 0; font-size: 13px; color: #8a5a1c; line-height: 1.55; }
+.rv-hero-blocked-sub b { color: #7c4a06; font-weight: 700; }
 
 /* 3) 서류 현황 — 표처럼 4열 고정 정렬 */
 .rv-panel {
@@ -2872,7 +2873,7 @@ body {
 }
 .rv-panel-head { font-size: 15px; font-weight: 700; padding: 16px 0 10px; border-bottom: 1px solid #eef2f7; }
 .rv-row {
-  display: grid; grid-template-columns: 50px 1fr 78px 128px; align-items: center; gap: 16px;
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) 108px 120px; align-items: center; gap: 12px;
   padding: 15px 0; border-top: 1px solid #f2f5f9;
 }
 .rv-row:first-of-type { border-top: none; }
@@ -2883,7 +2884,7 @@ body {
 }
 .rv-abbr.gray { color: var(--text-light); background: #f1f5f9; }
 .rv-nm { font-size: 14.5px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rv-sb { font-size: 11.5px; font-weight: 700; padding: 5px 0; border-radius: 7px; text-align: center; width: 100%; }
+.rv-sb { font-size: 11.5px; font-weight: 700; padding: 5px 8px; border-radius: 7px; text-align: center; width: 100%; white-space: nowrap; }
 .rv-sb-ok { background: var(--success-bg); color: var(--success-color); }
 .rv-sb-rev { background: var(--warning-bg); color: var(--warning-color); }
 .rv-sb-na { background: #f1f5f9; color: var(--text-light); }
@@ -3010,3 +3011,88 @@ body {
   font-size: 15px; cursor: pointer; padding: 2px 4px; line-height: 1;
 }
 .field-fix-banner .ffb-close:hover { color: #fff; }
+
+/* ============================================================
+   사용 안내 — "시작하기" 스타일 (매뉴얼 톤 제거)
+   ============================================================ */
+.gs-hero {
+  display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  background: linear-gradient(135deg, #eef4fd 0%, #f6f9fe 100%);
+  border: 1px solid #d5e3f5; border-radius: 18px;
+  padding: 30px 32px; margin-bottom: 28px;
+}
+.gs-hero-text { min-width: 0; }
+.gs-hero-eyebrow {
+  display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 0.02em;
+  color: var(--primary-color); background: var(--primary-light);
+  padding: 4px 11px; border-radius: 999px; margin-bottom: 12px;
+}
+.gs-hero-title { font-size: 23px; font-weight: 800; color: var(--text-dark); line-height: 1.35; margin: 0; }
+.gs-hero-sub { margin: 10px 0 20px; font-size: 14.5px; color: var(--text-light); line-height: 1.55; }
+.gs-cta {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--primary-color); color: #fff; border: none;
+  border-radius: 11px; padding: 12px 20px; font-size: 15px; font-weight: 700;
+  font-family: inherit; cursor: pointer; transition: filter 0.15s, transform 0.05s;
+}
+.gs-cta:hover { filter: brightness(1.06); }
+.gs-cta:active { transform: translateY(1px); }
+.gs-hero-badge {
+  flex-shrink: 0; width: 92px; height: 92px; border-radius: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; color: var(--primary-color); border: 1px solid #d5e3f5;
+}
+
+.gs-section-title { font-size: 15px; font-weight: 800; color: var(--text-dark); margin: 0 0 14px; }
+
+/* 진행 스텝 카드 */
+.gs-steps {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px; margin-bottom: 28px;
+}
+.gs-step {
+  background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px;
+}
+.gs-step-ic {
+  width: 40px; height: 40px; border-radius: 11px; margin-bottom: 12px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--primary-light); color: var(--primary-color);
+}
+.gs-step-no { font-size: 11px; font-weight: 800; color: var(--primary-color); letter-spacing: 0.04em; margin-bottom: 5px; }
+.gs-step-title { font-size: 14.5px; font-weight: 700; color: var(--text-dark); margin-bottom: 6px; }
+.gs-step-desc { font-size: 12.5px; color: var(--text-light); line-height: 1.55; margin: 0; }
+
+/* 바로가기 (클릭 가능한 메뉴 카드) */
+.gs-shortcuts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px; margin-bottom: 28px;
+}
+.gs-shortcut {
+  display: flex; align-items: center; gap: 13px; text-align: left; width: 100%;
+  background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px;
+  padding: 15px 16px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, background 0.15s;
+}
+.gs-shortcut:hover { border-color: var(--primary-color); background: #fbfdff; }
+.gs-shortcut-ic {
+  width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--primary-light); color: var(--primary-color);
+}
+.gs-shortcut-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gs-shortcut-label { font-size: 14px; font-weight: 700; color: var(--text-dark); }
+.gs-shortcut-desc { font-size: 12px; color: var(--text-light); }
+.gs-shortcut-arrow { color: var(--text-light); flex-shrink: 0; }
+.gs-shortcut:hover .gs-shortcut-arrow { color: var(--primary-color); }
+
+/* 팁 */
+.gs-tips { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.gs-tips li {
+  position: relative; padding-left: 24px; font-size: 13px; color: var(--text-light); line-height: 1.55;
+}
+.gs-tips li::before { content: '💡'; position: absolute; left: 0; top: 0; font-size: 13px; }
+
+@media (max-width: 620px) {
+  .gs-hero { flex-direction: column; align-items: flex-start; padding: 24px; }
+  .gs-hero-badge { display: none; }
+  .gs-hero-title { font-size: 20px; }
+}
