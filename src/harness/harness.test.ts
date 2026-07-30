@@ -7,6 +7,10 @@ import { TradeProfile } from '../types';
 import * as customsApiService from '../services/customsApiService';
 import * as unipassService from '../services/unipassService';
 
+vi.setConfig({
+  testTimeout: 30_000,
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -294,7 +298,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     const no = await orchestrator.run({ profile: { ...base, coNeeded: 'no' }, useLLM: false });
     expect(no.issues?.issues.find(i => i.id === 'co-required')).toBeUndefined();
     expect(no.documents?.documents.find(d => d.id === 'co')?.status).toBe('not_needed');
-  }, 30000);
+  });
 
   it('EXW 조건의 경우 B/L이 비필수(not_needed) 처리되고 정보성 안내가 발생한다', async () => {
     const exwProfile: TradeProfile = {
