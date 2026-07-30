@@ -135,8 +135,15 @@ export interface TradeProfile {
   signerName?: string;
   signerPosition?: string;
 
-  /** CIF 조건에서 적하보험증권을 준비했음을 사용자가 확인 (insurance-missing 이슈 해소) */
+  /** 적하보험증권을 준비했음을 사용자가 확인 (insurance-missing 이슈 해소) */
   insuranceConfirmed?: boolean;
+  /**
+   * 적하보험 필요 여부 — CIF처럼 매도인 부보가 의무가 아닌 조건(FOB 등)에서
+   * 계약상 매도인이 부보하기로 했는지 사용자의 답변.
+   * undefined = 미확인(질문 노출), 'yes' = 준비 확인 흐름, 'no' = 불필요 처리.
+   * CIF·CIP처럼 Incoterms상 의무인 조건에서는 질문 없이 항상 필요로 간주한다.
+   */
+  insuranceNeeded?: 'yes' | 'no';
   /**
    * 원산지증명서 필요 여부 — 구매자가 FTA 적용/증명서를 요청했는지 사용자의 답변.
    * undefined = 미확인(질문 노출), 'yes' = 신청자료 정리·발급기관 안내 노출, 'no' = 불필요 처리.

@@ -485,6 +485,14 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const [showConsole, setShowConsole] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState<AgentLog[]>([]);
   const [hasGenerated, setHasGenerated] = useState(false);
+
+  // 결과 리포트 진입 시 항상 페이지 최상단(거래 요약·준비도)부터 보이게 한다.
+  // 입력 폼에서 아래로 스크롤한 상태로 생성해도 스크롤 위치가 하단에 남지 않도록 초기화.
+  useEffect(() => {
+    if (!hasGenerated) return;
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.querySelector('.content-body')?.scrollTo?.(0, 0);
+  }, [hasGenerated]);
   
   const [documents, setDocuments] = useState<DocumentStatus[]>([]);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
@@ -1283,6 +1291,13 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
       ...profile,
       insuranceConfirmed: true
     };
+    setProfile(updatedProfile);
+    await rerunAgents(updatedProfile);
+  };
+
+  // 적하보험 필요 여부 답변(예/아니오) — C/O와 같은 패턴. 거래 상태에 저장돼 재진입 시 다시 묻지 않는다.
+  const handleInsuranceNeededAnswer = async (answer: 'yes' | 'no') => {
+    const updatedProfile = { ...profile, insuranceNeeded: answer };
     setProfile(updatedProfile);
     await rerunAgents(updatedProfile);
   };
@@ -3181,9 +3196,10 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                 })()}
                               </div>
                               {/* 입력수정 버튼 = 입력 폼 필드로 해소 가능한 이슈에 노출(도착예정일·항구 등 B/L 귀속 포함).
-                                  전용 해소 UI가 있는 것만 제외: C/O(필요 여부 질문)·보험(준비 확인)·중량·HS코드(인라인 입력). */}
+                                  전용 해소 UI가 있는 것만 제외: C/O·보험(필요 여부 질문/준비 확인)·중량·HS코드(인라인 입력). */}
                               {issue.docType !== 'co' &&
                                 issue.id !== 'insurance-missing' &&
+                                issue.id !== 'insurance-needed-check' &&
                                 issue.field !== 'weight' &&
                                 issue.field !== 'hsCode' && (
                                 <button className="fix-card__action" onClick={() => goToFieldFix(issue)}>
@@ -3378,9 +3394,37 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               </div>
                             )}
 
+                            {/* 적하보험 필요 여부 질문 — CIF가 아닌 조건에서 계약상 매도인 부보 여부를 먼저 묻는다.
+                                C/O 질문과 같은 무채색 선택 버튼(fix-choice)으로 통일한다. */}
+                            {issue.id === 'insurance-needed-check' && (
+                              <div className="mobile-input-group">
+                                <label className="mobile-input-label">계약상 매도인(우리 측)이 적하보험을 부보하기로 했나요?</label>
+                                <div className="fix-choice">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleInsuranceNeededAnswer('yes')}
+                                    disabled={isRevalidating}
+                                  >
+                                    예
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleInsuranceNeededAnswer('no')}
+                                    disabled={isRevalidating}
+                                  >
+                                    아니오
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
                             {issue.id === 'insurance-missing' && (
                               <div className="mobile-input-group">
-                                <label className="mobile-input-label">CIF 조건 필수 서류 — 적하보험증권을 준비하셨나요?</label>
+                                <label className="mobile-input-label">
+                                  {profile.incoterms === 'CIF'
+                                    ? 'CIF 조건 필수 서류 — 적하보험증권을 준비하셨나요?'
+                                    : '계약상 부보 조건 — 적하보험증권을 준비하셨나요?'}
+                                </label>
                                 <button className="mobile-btn mobile-btn-primary" onClick={handleSolveInsurance} disabled={isRevalidating}>
                                   {isRevalidating ? '재검증 중...' : '적하보험증권 준비 완료로 표시'}
                                 </button>
