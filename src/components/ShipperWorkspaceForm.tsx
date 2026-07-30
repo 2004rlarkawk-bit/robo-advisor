@@ -267,35 +267,39 @@ export default function ShipperWorkspaceForm({
                           <div className="shipper-hs-suggestion-list">
                             {state.suggestions.map((suggestion) => (
                               <article className="shipper-hs-suggestion" key={suggestion.code}>
-                                <div>
-                                  <strong>{suggestion.formattedCode}</strong>
-                                  <span className={`shipper-hs-confidence${suggestion.confidenceLabel === '보통' ? ' is-medium' : ''}`}>
-                                    {suggestion.confidenceLabel === '높음'
-                                      ? '높은 일치 가능성'
-                                      : '추가 확인 필요'}
-                                  </span>
+                                <header className="shipper-hs-suggestion__head">
+                                  <div className="shipper-hs-suggestion__code">
+                                    <strong>{suggestion.formattedCode}</strong>
+                                    <span className={`shipper-hs-confidence${suggestion.confidenceLabel === '보통' ? ' is-medium' : ''}`}>
+                                      {suggestion.confidenceLabel === '높음'
+                                        ? '높은 일치 가능성'
+                                        : '추가 확인 필요'}
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary btn-sm"
+                                    onClick={() => {
+                                      updateItem(item.id, 'hsCode', suggestion.code);
+                                      hsCodeSuggestions.markSuggestionApplied(item.id, suggestion.code);
+                                    }}
+                                  >
+                                    {item.hsCode && item.hsCode.replace(/[\s.-]/g, '') !== suggestion.code
+                                      ? '이 코드로 변경'
+                                      : '적용'}
+                                  </button>
+                                </header>
+                                <div className="shipper-hs-suggestion__body">
+                                  <p>{suggestion.koreanName}{suggestion.classificationName ? ` ${suggestion.classificationName}` : ''}</p>
+                                  {suggestion.englishName && <small className="shipper-hs-suggestion__eng">{suggestion.englishName}</small>}
+                                  <small>{suggestion.reasoning}</small>
+                                  {(suggestion.distinguishingFactors?.length ?? 0) > 0 && (
+                                    <small>구분 조건: {suggestion.distinguishingFactors?.join(', ')}</small>
+                                  )}
+                                  {(suggestion.missingInformation?.length ?? 0) > 0 && (
+                                    <small>후보 확인사항: {suggestion.missingInformation?.join(', ')}</small>
+                                  )}
                                 </div>
-                                <p>{suggestion.koreanName}{suggestion.classificationName ? ` ${suggestion.classificationName}` : ''}</p>
-                                {suggestion.englishName && <small>{suggestion.englishName}</small>}
-                                <small>{suggestion.reasoning}</small>
-                                {(suggestion.distinguishingFactors?.length ?? 0) > 0 && (
-                                  <small>구분 조건: {suggestion.distinguishingFactors?.join(', ')}</small>
-                                )}
-                                {(suggestion.missingInformation?.length ?? 0) > 0 && (
-                                  <small>후보 확인사항: {suggestion.missingInformation?.join(', ')}</small>
-                                )}
-                                <button
-                                  type="button"
-                                  className="btn btn-primary btn-sm"
-                                  onClick={() => {
-                                    updateItem(item.id, 'hsCode', suggestion.code);
-                                    hsCodeSuggestions.markSuggestionApplied(item.id, suggestion.code);
-                                  }}
-                                >
-                                  {item.hsCode && item.hsCode.replace(/[\s.-]/g, '') !== suggestion.code
-                                    ? '이 코드로 변경'
-                                    : '적용'}
-                                </button>
                               </article>
                             ))}
                           </div>

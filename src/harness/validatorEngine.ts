@@ -112,7 +112,8 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
         docType: 'invoice',
         severity: 'error',
         message: `금액 계산 불일치: 수량(${qty.toLocaleString()}) × 단가(${price.toLocaleString()}) = ${expected.toLocaleString()} 이지만, 입력된 금액은 ${total.toLocaleString()} 입니다. 값을 확인해 주세요.`,
-        field: 'totalAmount'
+        field: 'totalAmount',
+        amounts: { expected, actual: total, currency: profile.currency || 'USD' }
       });
     }
   }

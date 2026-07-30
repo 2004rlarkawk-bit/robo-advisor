@@ -25,6 +25,7 @@ import {
   Pencil,
   ArrowRight,
   Calculator,
+  Calendar,
   OctagonAlert
 } from 'lucide-react';
 import {
@@ -3077,12 +3078,41 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                             error: { label: '반드시 수정', hint: '제출 차단 · 먼저 해결', cls: 'sev-error', icon: <OctagonAlert size={17} strokeWidth={2.4} /> },
                             warning: { label: '보완 권장', hint: '해소 권장', cls: 'sev-warning', icon: <AlertTriangle size={17} strokeWidth={2.4} /> },
                           };
+                          const docLabelOf = (dt: string): string => (({
+                            invoice: '상업송장', packing_list: '패킹리스트', bl: '선하증권 B/L',
+                            customs_dec: '통관신고서', co: '원산지증명서', insurance: '적하보험증권',
+                          } as Record<string, string>)[dt] || '기타 서류');
+                          // 확인 항목 카드용 손질 카피 — 원 검증 메시지 대신 짧은 제목 + 명령형 설명.
+                          const present = (i: ValidationIssue): { title: string; desc: string } | null => {
+                            if (i.field === 'weight') return { title: '중량 입력', desc: '총 중량 또는 순중량 정보를 입력하세요.' };
+                            if (i.docType === 'co') return { title: '원산지증명서 필요 여부', desc: '구매자가 FTA 적용 또는 원산지증명서를 요청했는지 확인해 주세요.' };
+                            if (i.id === 'r2-departure-missing' || i.field === 'departureDate') return { title: '선적일 확인', desc: '선적일이 비어 있습니다. 확정 시 입력을 권장합니다.' };
+                            if (i.field === 'hsCode') return { title: 'HS CODE 확인', desc: '품목에 맞는 HS CODE를 확인·입력하세요.' };
+                            if (i.id === 'insurance-missing') return { title: '적하보험증권 준비', desc: 'CIF 조건에서는 적하보험증권이 필요합니다.' };
+                            return null;
+                          };
                           let lastSev: string | null = null;
+                          let warnSeq = 0; // 보완 권장 카드에 붙는 순번(1,2,3…)
                           return sorted.map((issue) => {
                             const showHeader = issue.severity !== lastSev;
                             lastSev = issue.severity;
                             const meta = sevMeta[issue.severity] ?? sevMeta.warning;
                             const count = sorted.filter((i) => i.severity === issue.severity).length;
+                            const isErr = issue.severity === 'error';
+                            const num = issue.severity === 'warning' ? ++warnSeq : 0;
+                            const fieldStr = String(issue.field || '');
+                            const errIcon =
+                              (issue.id === 'amount-calc-mismatch' || fieldStr === 'totalAmount' || fieldStr === 'unitPrice' || fieldStr === 'invoiceAmount')
+                                ? <Calculator size={17} />
+                                : (/date/i.test(fieldStr) || issue.id === 'input-date-order')
+                                  ? <Calendar size={17} />
+                                  : <FileText size={17} />;
+                            const actionLabel =
+                              issue.severity === 'warning' ? '입력 수정'
+                                : issue.id === 'amount-calc-mismatch' ? '금액 수정'
+                                : fieldStr === 'arrivalDate' ? '도착일 입력'
+                                : '입력 수정';
+                            const docLbl = docLabelOf(issue.docType);
                             return (
                               <Fragment key={issue.id}>
                                 {showHeader && (
@@ -3093,29 +3123,45 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                     {meta.hint && <span className="sev-section-hint">{meta.hint}</span>}
                                   </div>
                                 )}
-                          <div className={`mobile-fix-card sev-${issue.severity}`}>
-                            <div className="mfc-head">
-                              <span className="mfc-dot" />
-                              <div className="mfc-text">
+                          <div className={`mobile-fix-card fix-card sev-${issue.severity}`}>
+                            <div className="fix-card__head">
+                              <span className={`fix-card__marker fix-card__marker--${isErr ? 'icon' : 'num'}`}>
+                                {isErr ? errIcon : num}
+                              </span>
+                              <div className="fix-card__text">
                                 {(() => {
-                                  // 메시지에서 근거 접미사와 마지막 (부연설명)을 분리해 3층으로 렌더한다.
-                                  // - 헤드라인: 본문 (근거·부연 제거)
-                                  // - 부연: 마지막 괄호 안 문장 — 한 줄 띄우고 흐리게 표시
-                                  // - 근거: issue.basis 우선, 없으면 message 접미사에서 파싱 — 접이식으로 조문 요약 노출
+                                  // 메시지에서 근거 접미사와 마지막 (부연설명)을 분리해 렌더한다.
                                   const rawMsg = issue.message || '';
                                   const basisMatch = rawMsg.match(/\s*\[근거:\s*([^\]]+)\]\s*$/);
                                   const withoutBasis = basisMatch ? rawMsg.slice(0, basisMatch.index).trimEnd() : rawMsg;
                                   const parenMatch = withoutBasis.match(/\s*\(([^()]+)\)\s*$/);
-                                  const mainLine = parenMatch ? withoutBasis.slice(0, parenMatch.index).trimEnd() : withoutBasis;
-                                  const detailLine = parenMatch ? parenMatch[1].trim() : '';
+                                  let mainLine = parenMatch ? withoutBasis.slice(0, parenMatch.index).trimEnd() : withoutBasis;
+                                  let detailLine = parenMatch ? parenMatch[1].trim() : '';
                                   const basisLaw = issue.basis?.law || (basisMatch ? basisMatch[1].trim() : '');
                                   const basisSummary = issue.basis?.summary || '';
+                                  // 서류 칩이 이미 서류명을 보여주므로 제목 앞 "서류명:" 접두는 제거해 중복 방지.
+                                  mainLine = mainLine.replace(new RegExp('^' + docLbl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[:：]\\s*'), '');
+                                  // 알려진 이슈는 손질된 짧은 제목·명령형 설명으로 교체(도안 카피).
+                                  const pres = present(issue);
+                                  if (pres) { mainLine = pres.title; detailLine = pres.desc; }
+                                  // 금액 불일치는 칩으로 숫자를 보여주므로 제목을 짧게, 부연은 생략.
+                                  if (issue.amounts) { mainLine = '금액 계산이 일치하지 않습니다'; detailLine = ''; }
                                   return (
                                     <>
-                                      <div className="mfc-headline">{mainLine}</div>
-                                      {detailLine && (
-                                        <div className="mfc-detail" style={{ marginTop: 6, fontSize: 13, color: '#475569', lineHeight: 1.45 }}>
-                                          ({detailLine})
+                                      <div className="fix-card__titlerow">
+                                        <span className="fix-card__title">{mainLine}</span>
+                                        {!isErr && <span className="fix-card__doc">{docLbl}</span>}
+                                      </div>
+                                      {detailLine && <p className="fix-card__desc">{detailLine}</p>}
+                                      {isErr && (
+                                        <div className="fix-card__meta">
+                                          {issue.amounts && (
+                                            <>
+                                              <span className="fix-card__amt"><em>계산 금액</em><b>{issue.amounts.expected.toLocaleString()} {issue.amounts.currency}</b></span>
+                                              <span className="fix-card__amt fix-card__amt--in"><em>입력 금액</em><b>{issue.amounts.actual.toLocaleString()} {issue.amounts.currency}</b></span>
+                                            </>
+                                          )}
+                                          <span className="fix-card__doc fix-card__doc--file"><FileText size={12} />{docLbl}</span>
                                         </div>
                                       )}
                                       {basisLaw && (
@@ -3133,14 +3179,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                     </>
                                   );
                                 })()}
-                                <div className="mfc-sub">
-                                  {issue.docType === 'invoice' ? '상업송장' :
-                                   issue.docType === 'packing_list' ? '패킹리스트' :
-                                   issue.docType === 'bl' ? '선하증권(B/L)' :
-                                   issue.docType === 'customs_dec' ? '통관신고서' :
-                                   issue.docType === 'co' ? '원산지증명서' :
-                                   issue.docType === 'insurance' ? '적하보험증권' : '기타 서류'}
-                                </div>
                               </div>
                               {/* 입력수정 버튼 = 입력 폼 필드로 해소 가능한 이슈에 노출(도착예정일·항구 등 B/L 귀속 포함).
                                   전용 해소 UI가 있는 것만 제외: C/O(필요 여부 질문)·보험(준비 확인)·중량·HS코드(인라인 입력). */}
@@ -3148,25 +3186,26 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                                 issue.id !== 'insurance-missing' &&
                                 issue.field !== 'weight' &&
                                 issue.field !== 'hsCode' && (
-                                <button className="mfc-fix-btn" onClick={() => goToFieldFix(issue)}>
-                                  입력 수정 <ArrowRight size={14} />
+                                <button className="fix-card__action" onClick={() => goToFieldFix(issue)}>
+                                  {actionLabel} <ArrowRight size={14} />
                                 </button>
                               )}
                             </div>
 
                             {/* 이슈 유형별 즉시 보완 입력 */}
                             {issue.field === 'weight' && (
-                              <div className="mobile-input-group">
-                                <label className="mobile-input-label">화물 중량 입력 (kg)</label>
-                                <input
-                                  type="number"
-                                  className="mobile-input"
-                                  placeholder="예: 4500"
-                                  value={mobileWeight}
-                                  onChange={(e) => setMobileWeight(e.target.value)}
-                                />
-                                <button className="mobile-btn mobile-btn-primary" onClick={handleSolveWeight} disabled={isRevalidating}>
-                                  {isRevalidating ? '재검증 중...' : '중량 입력 및 보완 완료'}
+                              <div className="fix-inline-row">
+                                <div className="fix-input-suffix">
+                                  <input
+                                    type="number"
+                                    placeholder="예: 4500"
+                                    value={mobileWeight}
+                                    onChange={(e) => setMobileWeight(e.target.value)}
+                                  />
+                                  <span className="fix-input-unit">kg</span>
+                                </div>
+                                <button className="fix-inline-btn" onClick={handleSolveWeight} disabled={isRevalidating}>
+                                  {isRevalidating ? '확인 중…' : '입력 완료'}
                                 </button>
                               </div>
                             )}
@@ -3272,12 +3311,21 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                             {issue.docType === 'co' && profile.coNeeded !== 'yes' && (
                               <div className="mobile-input-group">
                                 <label className="mobile-input-label">구매자가 FTA 적용 또는 원산지증명서를 요청했나요?</label>
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                  <button className="mobile-btn mobile-btn-primary" style={{ flex: 1 }} onClick={() => handleCoNeededAnswer('yes')} disabled={isRevalidating}>
-                                    예 — 필요해요
+                                <div className="fix-choice">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCoNeededAnswer('yes')}
+                                    disabled={isRevalidating}
+                                  >
+                                    필요함
                                   </button>
-                                  <button className="mobile-btn mobile-btn-secondary" style={{ flex: 1 }} onClick={() => handleCoNeededAnswer('no')} disabled={isRevalidating}>
-                                    아니오 — 필요 없어요
+                                  <button
+                                    type="button"
+                                    className={profile.coNeeded === 'no' ? 'is-selected' : ''}
+                                    onClick={() => handleCoNeededAnswer('no')}
+                                    disabled={isRevalidating}
+                                  >
+                                    필요 없음
                                   </button>
                                 </div>
                               </div>

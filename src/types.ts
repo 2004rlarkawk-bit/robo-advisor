@@ -208,6 +208,11 @@ export interface ValidationIssue {
    * 금액·법근거는 여기서 결정론적으로 채워짐 — GPT가 나중 껴도 이 숫자는 안 바뀜.
    */
   card?: FeedbackFactCard;
+  /**
+   * 금액 계산 불일치 이슈의 구조화된 값 — 결과 카드에서 "계산 금액/입력 금액" 칩으로 렌더.
+   * message 문자열 파싱 대신 결정론적으로 채운다.
+   */
+  amounts?: { expected: number; actual: number; currency: string };
 }
 
 // ===== AI 검토 리포트 "틀" — 룰(지금)과 GPT(나중)가 같은 구조를 채운다 =====

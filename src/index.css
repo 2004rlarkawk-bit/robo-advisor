@@ -523,14 +523,21 @@ body {
 .shipper-hs-additional-info p { margin: 4px 0; }
 .shipper-hs-additional-info ul { margin: 5px 0 0; padding-left: 19px; color: var(--text-light); }
 .shipper-hs-additional-info small { display: block; color: var(--text-light); }
-.shipper-hs-suggestion-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.shipper-hs-suggestion-heading small { color: var(--text-light); text-align: right; }
+/* 제목 아래 부제를 세로로 쌓아 좌측 정렬 — 카드 첫인상에서 제목이 먼저 읽히게 */
+.shipper-hs-suggestion-heading { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.shipper-hs-suggestion-heading strong { font-size: 14.5px; }
+.shipper-hs-suggestion-heading small { color: var(--text-light); }
 .shipper-hs-suggestion-list { display: grid; gap: 8px; }
-.shipper-hs-suggestion { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; border: 1px solid var(--border-color); border-radius: 8px; padding: 11px; background: var(--card-bg); }
-.shipper-hs-suggestion > div { display: flex; align-items: center; gap: 8px; }
-.shipper-hs-suggestion p { grid-column: 1; margin: 0; font-size: 13px; }
-.shipper-hs-suggestion small { grid-column: 1; color: var(--text-light); }
-.shipper-hs-suggestion .btn { grid-column: 2; grid-row: 1 / span 4; align-self: center; }
+.shipper-hs-suggestion { display: flex; flex-direction: column; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg); }
+.shipper-hs-suggestion__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; }
+.shipper-hs-suggestion__code { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.shipper-hs-suggestion__code strong { font-size: 19px; font-weight: 800; letter-spacing: 0.2px; }
+.shipper-hs-suggestion__head .btn { flex-shrink: 0; }
+.shipper-hs-suggestion__body { display: flex; flex-direction: column; gap: 4px; padding: 11px 12px; border-top: 1px solid var(--border-color); }
+.shipper-hs-suggestion__body p { margin: 0; font-size: 13px; font-weight: 600; }
+.shipper-hs-suggestion__body small { color: var(--text-light); line-height: 1.45; }
+/* 영문 품명은 파란 톤으로 강조해 한글명과 구분 */
+.shipper-hs-suggestion__eng { color: var(--primary-color); font-weight: 600; }
 .shipper-hs-confidence { border-radius: 999px; padding: 2px 7px; background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 700; }
 .shipper-hs-confidence.is-medium { background: #fffbeb; color: #b45309; }
 .shipper-hs-applied { margin-top: 8px; color: #047857; font-size: 12px; font-weight: 700; }
@@ -3030,35 +3037,94 @@ body {
 .rv-done-title { font-size: 16px; font-weight: 800; color: #166534; }
 .rv-done-sub { margin: 4px 0 0; font-size: 13px; color: #3f6b4e; line-height: 1.5; }
 
-/* 보완 카드 — 심각도별 좌측 컬러 바 + 위계 있는 텍스트 */
-.mobile-fix-card.sev-error   { border-left: 3px solid var(--error-color); }
-.mobile-fix-card.sev-warning { border-left: 3px solid var(--warning-color); }
-.mobile-fix-card.sev-info    { border-left: 3px solid var(--border-color); background: #fbfdff; }
+/* 확인 항목 카드 — 심각도별 좌측 컬러 바 + 리딩 마커(번호/아이콘) + 서류 칩 */
+.mobile-fix-card.sev-error   { border-left: 4px solid var(--error-color); }
+.mobile-fix-card.sev-warning { border-left: 4px solid var(--warning-color); }
+.mobile-fix-card.sev-info    { border-left: 4px solid var(--border-color); background: #fbfdff; }
 
-.mfc-head { display: flex; align-items: flex-start; gap: 12px; }
-.mfc-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
-.sev-error   .mfc-dot { background: var(--error-color); }
-.sev-warning .mfc-dot { background: var(--warning-color); }
-.sev-info    .mfc-dot { background: #94a3b8; }
+.fix-card__head { display: flex; align-items: flex-start; gap: 12px; }
 
-.mfc-text { flex: 1; min-width: 0; }
-/* 문제 문구 = 헤드라인 (크고 진하게) */
-.mfc-headline { font-size: 14.5px; font-weight: 700; color: var(--text-dark); line-height: 1.45; }
-.sev-info .mfc-headline { font-size: 13.5px; font-weight: 600; color: #475569; }
-/* 서류명 = 서브라인 (작고 회색) */
-.mfc-sub { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+/* 리딩 마커 — 경고: 번호 원형 배지 / 오류: 아이콘 라운드 사각형 */
+.fix-card__marker {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; font-size: 14px; font-weight: 800; line-height: 1;
+}
+.fix-card__marker--num  { border-radius: 50%; }
+.fix-card__marker--icon { border-radius: 9px; }
+.sev-warning .fix-card__marker { background: #fdeccf; color: var(--warning-color); border: 1.5px solid #f6d29a; }
+.sev-error   .fix-card__marker { background: var(--error-bg);   color: var(--error-color); }
+.sev-info    .fix-card__marker { background: #eef2f7; color: #64748b; }
 
-/* 액션 버튼 — 작고 심각도 컬러 아웃라인 */
-.mfc-fix-btn {
+.fix-card__text { flex: 1; min-width: 0; }
+
+/* 제목 행 — 제목 + (경고 시) 인라인 서류 칩 */
+.fix-card__titlerow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.fix-card__title { font-size: 15px; font-weight: 800; color: var(--text-dark); line-height: 1.35; letter-spacing: -0.01em; }
+
+/* 설명 — 작고 회색 */
+.fix-card__desc { margin: 6px 0 0; font-size: 13px; color: var(--text-light); line-height: 1.5; }
+
+/* 서류 칩 */
+.fix-card__doc {
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
+}
+.sev-warning .fix-card__doc { background: var(--warning-bg); color: var(--warning-color); border: 1px solid #f2d19a; }
+.fix-card__doc--file { background: #f1f5f9; color: #64748b; border: 1px solid var(--border-color); }
+
+/* 오류 메타 행 — 금액 칩 + 서류 칩 */
+.fix-card__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.fix-card__amt {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 8px; background: #f8fafc; border: 1px solid #eef2f7; font-size: 12px;
+}
+.fix-card__amt em { font-style: normal; color: #94a3b8; font-weight: 600; }
+.fix-card__amt b  { color: var(--text-dark); font-weight: 800; font-variant-numeric: tabular-nums; }
+.fix-card__amt--in b { color: var(--error-color); }
+
+/* 우측 액션 버튼 — 작고 심각도 컬러 아웃라인 */
+.fix-card__action {
   flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px;
   font-family: inherit; font-size: 12.5px; font-weight: 700;
-  border-radius: 8px; padding: 7px 12px; cursor: pointer;
+  border-radius: 8px; padding: 8px 13px; cursor: pointer;
   background: #fff; transition: background 0.15s;
 }
-.sev-error   .mfc-fix-btn { border: 1px solid var(--error-color); color: var(--error-color); }
-.sev-error   .mfc-fix-btn:hover { background: var(--error-bg); }
-.sev-warning .mfc-fix-btn { border: 1px solid var(--warning-color); color: var(--warning-color); }
-.sev-warning .mfc-fix-btn:hover { background: var(--warning-bg); }
+.sev-error   .fix-card__action { border: 1px solid var(--error-color); color: var(--error-color); }
+.sev-error   .fix-card__action:hover { background: var(--error-bg); }
+/* 경고 카드의 액션 버튼은 주요 동작이므로 파랑(primary) — 마커·칩만 앰버 유지 */
+.sev-warning .fix-card__action { border: 1px solid var(--primary-color); color: var(--primary-color); }
+.sev-warning .fix-card__action:hover { background: #eef4fd; }
+
+/* ── 본문 즉시 보완 액션 — 도안(사진1) 스타일 ── */
+/* 인라인 입력 행: [입력 …단위][실행 버튼] 한 줄 */
+.fix-inline-row { display: flex; gap: 10px; align-items: stretch; margin-top: 2px; }
+.fix-input-suffix { position: relative; flex: 1; display: flex; align-items: center; min-width: 0; }
+.fix-input-suffix input {
+  width: 100%; box-sizing: border-box; padding: 11px 46px 11px 14px;
+  border: 1.5px solid var(--border-color); border-radius: 10px;
+  font-size: 14px; font-family: inherit; outline: none;
+}
+.fix-input-suffix input:focus { border-color: var(--primary-color); }
+.fix-input-unit { position: absolute; right: 14px; color: var(--text-light); font-size: 13px; font-weight: 600; pointer-events: none; }
+.fix-inline-btn {
+  flex-shrink: 0; padding: 0 20px; border: none; border-radius: 10px;
+  background: var(--primary-color); color: #fff; font-size: 13.5px; font-weight: 700;
+  cursor: pointer; font-family: inherit; transition: background 0.15s;
+}
+.fix-inline-btn:hover { background: var(--primary-dark); }
+.fix-inline-btn:disabled { opacity: 0.55; cursor: default; }
+
+/* 세그먼트 선택 (원산지 필요 여부 등): [필요함][필요 없음] */
+.fix-choice { display: flex; gap: 10px; margin-top: 2px; }
+.fix-choice button {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 13px; border-radius: 10px; border: 1.5px solid var(--border-color);
+  background: #fff; color: var(--text-dark); font-size: 13.5px; font-weight: 700;
+  cursor: pointer; font-family: inherit; transition: all 0.15s;
+}
+.fix-choice button:hover { border-color: #cbd5e1; }
+.fix-choice button.is-selected { border-color: var(--primary-color); background: #f5f8ff; color: var(--primary-color); }
+.fix-choice button:disabled { opacity: 0.6; cursor: default; }
 
 /* 입력 화면에서 강조되는 필드 — 색을 확실히 다르게 + 링 */
 .form-group.field-focus {
