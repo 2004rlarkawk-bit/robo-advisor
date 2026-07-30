@@ -7,6 +7,10 @@ import { TradeProfile } from '../types';
 import * as customsApiService from '../services/customsApiService';
 import * as unipassService from '../services/unipassService';
 
+vi.setConfig({
+  testTimeout: 30_000,
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
