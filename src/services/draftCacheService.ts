@@ -1,15 +1,19 @@
 import { supabase } from '../lib/supabase';
 import type { DocumentStatus, TradeProfile, TradeRole, TradeStatus, TradeType, ValidationIssue } from '../types';
-import type { TradeFormDataV3 } from '../types/tradeFormData';
+import type { TradeAttachment, TradeFormDataV3 } from '../types/tradeFormData';
 import { sanitizeTradeProfile } from '../utils/tradeProfile';
 import { tradeFormDataToProfile, tradeProfileToFormData } from './tradeDataMapper';
 
-const DRAFT_CACHE_VERSION = 2;
+const DRAFT_CACHE_VERSION = 3;
+const PREVIOUS_DRAFT_CACHE_VERSION = 2;
 const LEGACY_DRAFT_CACHE_VERSION = 1;
 
 export interface LocalTradeDraft {
   version: number;
   profile: TradeProfile;
+  formData: TradeFormDataV3;
+  currentStep: number;
+  tradeId: string | null;
   updatedAt: string;
 }
 
@@ -29,6 +33,9 @@ export interface TradeDraftRow {
 
 export interface DraftSnapshot {
   profile: TradeProfile;
+  formData: TradeFormDataV3;
+  currentStep: number;
+  tradeId: string | null;
   updatedAt: string;
   source: 'local' | 'database';
 }
@@ -70,10 +77,25 @@ function parseTimestamp(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function saveDraftToLocal(userId: string, profile: TradeProfile, role: TradeRole = 'shipper'): LocalTradeDraft {
+export interface TradeDraftSaveOptions {
+  attachments?: TradeAttachment[];
+  currentStep?: number;
+  tradeId?: string | null;
+}
+
+export function saveDraftToLocal(
+  userId: string,
+  profile: TradeProfile,
+  role: TradeRole = 'shipper',
+  options: TradeDraftSaveOptions = {},
+): LocalTradeDraft {
+  const cleanProfile = sanitizeTradeProfile(profile);
   const draft: LocalTradeDraft = {
     version: DRAFT_CACHE_VERSION,
-    profile: sanitizeTradeProfile(profile),
+    profile: cleanProfile,
+    formData: tradeProfileToFormData(cleanProfile, role, options.attachments ?? []),
+    currentStep: options.currentStep ?? 1,
+    tradeId: options.tradeId ?? null,
     updatedAt: new Date().toISOString(),
   };
   localStorage.setItem(getTradeDraftCacheKey(userId, profile.tradeType, role), JSON.stringify(draft));
@@ -87,11 +109,33 @@ export function loadDraftFromLocal(userId: string, direction: TradeType = 'expor
     const parsed: unknown = JSON.parse(raw);
     if (!isObject(parsed) || !isObject(parsed.profile)) return null;
 
-    if (parsed.version === DRAFT_CACHE_VERSION && typeof parsed.updatedAt === 'string') {
-      return { ...parsed, profile: sanitizeTradeProfile(parsed.profile as unknown as TradeProfile) } as unknown as LocalTradeDraft;
+    if (
+      (parsed.version === DRAFT_CACHE_VERSION || parsed.version === PREVIOUS_DRAFT_CACHE_VERSION)
+      && typeof parsed.updatedAt === 'string'
+    ) {
+      const profile = sanitizeTradeProfile(parsed.profile as unknown as TradeProfile);
+      const formData = isObject(parsed.formData)
+        ? parsed.formData as unknown as TradeFormDataV3
+        : tradeProfileToFormData(profile, role);
+      return {
+        version: DRAFT_CACHE_VERSION,
+        profile,
+        formData,
+        currentStep: typeof parsed.currentStep === 'number' ? parsed.currentStep : 1,
+        tradeId: typeof parsed.tradeId === 'string' ? parsed.tradeId : null,
+        updatedAt: parsed.updatedAt,
+      };
     }
     if (parsed.version === LEGACY_DRAFT_CACHE_VERSION && typeof parsed.savedAt === 'string') {
-      return { version: DRAFT_CACHE_VERSION, profile: sanitizeTradeProfile(parsed.profile as unknown as TradeProfile), updatedAt: parsed.savedAt };
+      const profile = sanitizeTradeProfile(parsed.profile as unknown as TradeProfile);
+      return {
+        version: DRAFT_CACHE_VERSION,
+        profile,
+        formData: tradeProfileToFormData(profile, role),
+        currentStep: 1,
+        tradeId: null,
+        updatedAt: parsed.savedAt,
+      };
     }
     return null;
   } catch (error) {
@@ -106,11 +150,35 @@ export function removeDraftFromLocal(userId: string, direction: TradeType = 'exp
 
 export function selectNewestDraft(local: LocalTradeDraft | null, database: TradeDraftRow | null): DraftSnapshot | null {
   if (!local && !database) return null;
-  if (!database) return { profile: sanitizeTradeProfile(local!.profile), updatedAt: local!.updatedAt, source: 'local' };
-  if (!local) return { profile: sanitizeTradeProfile(database.profile), updatedAt: database.updated_at, source: 'database' };
+  if (!database) {
+    return {
+      profile: sanitizeTradeProfile(local!.profile),
+      formData: local!.formData,
+      currentStep: local!.currentStep,
+      tradeId: local!.tradeId,
+      updatedAt: local!.updatedAt,
+      source: 'local',
+    };
+  }
+  const databaseSnapshot: DraftSnapshot = {
+    profile: sanitizeTradeProfile(database.profile),
+    formData: database.form_data!,
+    currentStep: database.current_step ?? 1,
+    tradeId: database.trade_id ?? null,
+    updatedAt: database.updated_at,
+    source: 'database',
+  };
+  if (!local) return databaseSnapshot;
   return parseTimestamp(local.updatedAt) >= parseTimestamp(database.updated_at)
-    ? { profile: sanitizeTradeProfile(local.profile), updatedAt: local.updatedAt, source: 'local' }
-    : { profile: sanitizeTradeProfile(database.profile), updatedAt: database.updated_at, source: 'database' };
+    ? {
+      profile: sanitizeTradeProfile(local.profile),
+      formData: local.formData,
+      currentStep: local.currentStep,
+      tradeId: local.tradeId,
+      updatedAt: local.updatedAt,
+      source: 'local',
+    }
+    : databaseSnapshot;
 }
 
 const lastDatabaseSnapshots = new Map<string, { signature: string; updatedAt: string }>();
@@ -127,8 +195,12 @@ function normalizeForSignature(value: unknown): unknown {
   return value;
 }
 
-function profileSignature(profile: TradeProfile): string {
-  return JSON.stringify(normalizeForSignature(profile));
+function draftSignature(
+  formData: TradeFormDataV3,
+  currentStep: number,
+  tradeId: string | null,
+): string {
+  return JSON.stringify(normalizeForSignature({ formData, currentStep, tradeId }));
 }
 
 function draftIdentity(userId: string, direction: TradeType, role: TradeRole): string {
@@ -153,7 +225,11 @@ export async function loadTradeDraft(userId: string, direction: TradeType = 'exp
     profile: tradeFormDataToProfile(data.form_data as unknown as TradeFormDataV3),
   } as TradeDraftRow;
   lastDatabaseSnapshots.set(draftIdentity(userId, direction, role), {
-    signature: profileSignature(row.profile),
+    signature: draftSignature(
+      row.form_data!,
+      row.current_step ?? 1,
+      row.trade_id ?? null,
+    ),
     updatedAt: row.updated_at,
   });
   return row;
@@ -164,11 +240,25 @@ export interface SaveTradeDraftResult {
   updatedAt: string;
 }
 
-export async function saveTradeDraft(userId: string, profile: TradeProfile, role: TradeRole = 'shipper'): Promise<SaveTradeDraftResult> {
-  const cleanProfile = sanitizeTradeProfile(profile);
-  const direction = cleanProfile.tradeType;
+export interface SaveTradeFormDraftInput {
+  userId: string;
+  direction: TradeType;
+  role: TradeRole;
+  formData: TradeFormDataV3;
+  currentStep?: number;
+  tradeId?: string | null;
+}
+
+export async function saveTradeFormDraft({
+  userId,
+  direction,
+  role,
+  formData,
+  currentStep = 1,
+  tradeId = null,
+}: SaveTradeFormDraftInput): Promise<SaveTradeDraftResult> {
   const identity = draftIdentity(userId, direction, role);
-  const signature = profileSignature(cleanProfile);
+  const signature = draftSignature(formData, currentStep, tradeId);
   const previous = lastDatabaseSnapshots.get(identity);
   if (previous?.signature === signature) {
     return { saved: false, updatedAt: previous.updatedAt };
@@ -181,9 +271,10 @@ export async function saveTradeDraft(userId: string, profile: TradeProfile, role
         user_id: userId,
         direction,
         role,
+        trade_id: tradeId,
         schema_version: 3,
-        current_step: 1,
-        form_data: tradeProfileToFormData(cleanProfile, role),
+        current_step: currentStep,
+        form_data: formData,
       },
       { onConflict: 'user_id,direction,role' },
     )
@@ -197,6 +288,23 @@ export async function saveTradeDraft(userId: string, profile: TradeProfile, role
   const savedAt = data.updated_at;
   lastDatabaseSnapshots.set(identity, { signature, updatedAt: savedAt });
   return { saved: true, updatedAt: savedAt };
+}
+
+export async function saveTradeDraft(
+  userId: string,
+  profile: TradeProfile,
+  role: TradeRole = 'shipper',
+  options: TradeDraftSaveOptions = {},
+): Promise<SaveTradeDraftResult> {
+  const cleanProfile = sanitizeTradeProfile(profile);
+  return saveTradeFormDraft({
+    userId,
+    direction: cleanProfile.tradeType,
+    role,
+    formData: tradeProfileToFormData(cleanProfile, role, options.attachments ?? []),
+    currentStep: options.currentStep,
+    tradeId: options.tradeId,
+  });
 }
 
 export async function deleteTradeDraft(userId: string, direction: TradeType = 'export', role: TradeRole = 'shipper'): Promise<void> {

@@ -1,7 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Layers, Trash2, FolderOpen, AlertTriangle, CheckCircle2, X, Clock, Search, StickyNote } from 'lucide-react';
 import type { SavedTrade } from '../types';
-import { deleteSavedTrade, fetchSavedTrades } from '../services/storageService';
+import { deleteSavedTrade, fetchTradeManagerTrades } from '../services/storageService';
+import { filterTradeManagerTrades } from '../services/tradeListPolicy';
 
 interface Props {
   onLoad: (trade: SavedTrade) => void; // 이어서 작업 (작업실로 불러오기)
@@ -62,7 +63,7 @@ export default function TradeManagerPanel({ onLoad }: Props) {
     setIsLoading(true);
     setError('');
     try {
-      setTrades(await fetchSavedTrades('generated'));
+      setTrades(filterTradeManagerTrades(await fetchTradeManagerTrades()));
     } catch (caught) {
       console.error('[Trade Manager] generated trades query failed:', caught);
       setError('진행 중인 거래를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
@@ -117,8 +118,8 @@ export default function TradeManagerPanel({ onLoad }: Props) {
         const db = deadlineInfo(b)?.days ?? 99999;
         return da - db;
       }
-      const ta = new Date(a.createdAt).getTime();
-      const tb = new Date(b.createdAt).getTime();
+      const ta = new Date(a.updatedAt ?? a.createdAt).getTime();
+      const tb = new Date(b.updatedAt ?? b.createdAt).getTime();
       return sortKey === 'oldest' ? ta - tb : tb - ta;
     });
     return list;
@@ -192,7 +193,7 @@ export default function TradeManagerPanel({ onLoad }: Props) {
                     <span className="document-trade-name">{trade.profile.itemName || '(품목명 없음)'}</span>
                     {trade.profile.hsCode && <span className="document-hs-code">HS {trade.profile.hsCode}</span>}
                     <span className="status-badge" style={isReview ? { background: '#fffbeb', color: '#b45309' } : { background: '#f0fdf4', color: '#15803d' }}>
-                      {isReview ? '검토 필요' : '제출 준비됨'}
+                      {trade.status === 'in_progress' ? '진행 중' : isReview ? '검토 필요' : '제출 준비됨'}
                     </span>
                     {dl && (
                       <span className="status-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: dl.urgent ? '#fef2f2' : '#f1f5f9', color: dl.urgent ? '#b91c1c' : '#64748b' }}>

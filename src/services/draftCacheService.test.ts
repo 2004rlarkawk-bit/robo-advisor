@@ -1,10 +1,12 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TradeProfile } from '../types';
+import { tradeProfileToFormData } from './tradeDataMapper';
 import {
   getTradeDraftCacheKey,
   loadDraftFromLocal,
   removeDraftFromLocal,
   saveDraftToLocal,
+  saveTradeFormDraft,
   saveTradeDraft,
   selectNewestDraft,
 } from './draftCacheService';
@@ -195,13 +197,27 @@ describe('사용자별 거래 초안 localStorage', () => {
 
 describe('로컬과 DB 초안 최신본 선택', () => {
   it('updatedAt이 더 최신인 로컬 초안을 선택한다', () => {
-    const local = { version: 2, profile, updatedAt: '2026-07-14T10:01:00.000Z' };
+    const local = {
+      version: 3,
+      profile,
+      formData: tradeProfileToFormData(profile, 'shipper'),
+      currentStep: 1,
+      tradeId: null,
+      updatedAt: '2026-07-14T10:01:00.000Z',
+    };
     const database = { user_id: 'user-a', profile: { ...profile, itemName: 'DB' }, updated_at: '2026-07-14T10:00:00.000Z' };
     expect(selectNewestDraft(local, database)?.source).toBe('local');
   });
 
   it('updated_at이 더 최신인 DB 초안을 선택한다', () => {
-    const local = { version: 2, profile, updatedAt: '2026-07-14T10:00:00.000Z' };
+    const local = {
+      version: 3,
+      profile,
+      formData: tradeProfileToFormData(profile, 'shipper'),
+      currentStep: 1,
+      tradeId: null,
+      updatedAt: '2026-07-14T10:00:00.000Z',
+    };
     const database = { user_id: 'user-a', profile: { ...profile, itemName: 'DB' }, updated_at: '2026-07-14T10:01:00.000Z' };
     expect(selectNewestDraft(local, database)?.profile.itemName).toBe('DB');
   });
@@ -267,5 +283,68 @@ describe('Supabase v3 초안 저장 timestamp', () => {
 
     await expect(saveTradeDraft('missing-timestamp-user', profile, 'shipper'))
       .rejects.toThrow('초안 저장 후 서버 수정 시각을 확인하지 못했습니다.');
+  });
+
+  it.each([
+    ['export', 'shipper'],
+    ['export', 'forwarder'],
+    ['import', 'shipper'],
+    ['import', 'forwarder'],
+  ] as const)('%s/%s 조합을 독립 conflict key와 v3 form_data로 저장한다', async (direction, role) => {
+    const { upsert } = mockDraftUpsert(`2026-07-30T02:0${fromMock.mock.calls.length}:00.000Z`);
+    const formData = tradeProfileToFormData({ ...profile, tradeType: direction }, role);
+
+    await saveTradeFormDraft({
+      userId: `four-combinations-${direction}-${role}`,
+      direction,
+      role,
+      formData,
+      currentStep: 3,
+      tradeId: `${direction}-${role}-trade`,
+    });
+
+    const [payload, options] = upsert.mock.calls[0];
+    expect(options).toEqual({ onConflict: 'user_id,direction,role' });
+    expect(payload).toMatchObject({
+      direction,
+      role,
+      trade_id: `${direction}-${role}-trade`,
+      schema_version: 3,
+      current_step: 3,
+      form_data: { schemaVersion: 3, direction, role },
+    });
+    expect(payload).not.toHaveProperty('profile');
+    expect(payload).not.toHaveProperty('status');
+  });
+
+  it('첨부 metadata와 storagePath만 local/DB 초안에 저장한다', async () => {
+    const attachment = {
+      id: 'attachment-1',
+      documentType: 'commercial_invoice' as const,
+      fileName: 'invoice.pdf',
+      storageBucket: 'trade-documents',
+      storagePath: 'user/draft-export-forwarder/commercial_invoice/attachment-1-invoice.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 100,
+      uploadedAt: '2026-07-30T02:00:00.000Z',
+    };
+    const local = saveDraftToLocal('attachment-user', profile, 'forwarder', {
+      attachments: [attachment],
+      currentStep: 2,
+      tradeId: 'trade-1',
+    });
+    expect(local.formData.attachments).toEqual([attachment]);
+    expect(JSON.stringify(local)).not.toContain('[object File]');
+
+    const { upsert } = mockDraftUpsert('2026-07-30T02:10:00.000Z');
+    await saveTradeDraft('attachment-db-user', profile, 'forwarder', {
+      attachments: [attachment],
+      currentStep: 2,
+      tradeId: 'trade-1',
+    });
+    const payload = upsert.mock.calls[0][0];
+    expect(payload.form_data.attachments).toEqual([attachment]);
+    expect(payload.current_step).toBe(2);
+    expect(payload.trade_id).toBe('trade-1');
   });
 });

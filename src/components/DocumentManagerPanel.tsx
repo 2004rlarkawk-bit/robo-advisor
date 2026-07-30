@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FolderKanban, Trash2, FolderOpen, AlertTriangle, CheckCircle2, Copy } from 'lucide-react';
 import type { SavedTrade } from '../types';
-import { clearSavedTrades, deleteSavedTrade, fetchSavedTrades } from '../services/storageService';
+import { clearSavedTrades, deleteSavedTrade, fetchSubmittedTrades } from '../services/storageService';
+import { filterDocumentManagerTrades } from '../services/tradeListPolicy';
 import { getTestSubmissionMeta } from '../services/devTestDataService';
 
 interface Props {
@@ -18,7 +19,7 @@ export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
     setIsLoading(true);
     setError('');
     try {
-      setTrades(await fetchSavedTrades(['submitted', 'in_progress']));
+      setTrades(filterDocumentManagerTrades(await fetchSubmittedTrades()));
     } catch (caught) {
       console.error('[Document Manager] submitted trades query failed:', caught);
       setError('제출된 문서를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
@@ -54,7 +55,7 @@ export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
     <div>
       <div className="page-heading">
         <h1 className="page-title document-manager-title"><FolderKanban size={26} /> 문서 관리</h1>
-        <p className="page-subtitle">진행 중이거나 최종 전송이 완료된 거래를 조회하고 신규 거래로 복사할 수 있습니다.</p>
+        <p className="page-subtitle">최종 전송이 완료된 거래의 문서를 조회하고 신규 거래로 복사할 수 있습니다.</p>
       </div>
 
       {error && <div className="form-message error" role="alert">{error}</div>}
@@ -75,7 +76,7 @@ export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
             const errorCount = trade.issues.filter((issue) => issue.severity === 'error').length;
             const doneCount = trade.documents.filter((document) => document.status === 'completed').length;
             const testMeta = getTestSubmissionMeta(trade.generatedDocs);
-            const created = new Date(trade.flowCompletedAt ?? trade.submittedAt ?? trade.createdAt);
+            const created = new Date(trade.submittedAt ?? trade.createdAt);
             const dateLabel = Number.isNaN(created.getTime())
               ? trade.createdAt
               : `${created.getFullYear()}.${String(created.getMonth() + 1).padStart(2, '0')}.${String(created.getDate()).padStart(2, '0')} ${String(created.getHours()).padStart(2, '0')}:${String(created.getMinutes()).padStart(2, '0')}`;

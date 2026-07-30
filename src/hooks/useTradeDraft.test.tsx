@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, useState } from 'react';
+import { act, useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { TradeProfile } from '../types';
@@ -55,8 +55,19 @@ const profileDefaults: TradeProfile = {
   signedBy: 'Jimin Kim',
 };
 
-function Harness({ enabled }: { enabled: boolean }) {
+function Harness({
+  enabled,
+  tradeId = null,
+  activeTradeProfile,
+}: {
+  enabled: boolean;
+  tradeId?: string | null;
+  activeTradeProfile?: TradeProfile;
+}) {
   const [profile, setProfile] = useState(emptyProfile);
+  useEffect(() => {
+    if (tradeId && activeTradeProfile) setProfile(activeTradeProfile);
+  }, [activeTradeProfile, tradeId]);
   useTradeDraft({
     userId: 'user-1',
     enabled,
@@ -65,6 +76,7 @@ function Harness({ enabled }: { enabled: boolean }) {
     profile,
     defaultProfile: profileDefaults,
     setProfile,
+    tradeId,
   });
   return <span>{profile.companyName}|{profile.signedBy}</span>;
 }
@@ -115,6 +127,52 @@ describe('useTradeDraft 프로필 비동기 초기화', () => {
       'user-1',
       expect.objectContaining({ companyName: 'Saved Draft Company', signedBy: 'Saved Signer' }),
       'shipper',
+      { attachments: [], currentStep: 1, tradeId: null },
     );
+  });
+
+  it('거래 이어쓰기가 시작된 뒤 도착한 draft 응답은 현재 거래 form을 덮어쓰지 않는다', async () => {
+    let resolveDatabase!: (value: {
+      user_id: string;
+      profile: TradeProfile;
+      updated_at: string;
+    }) => void;
+    loadDraftFromLocalMock.mockReturnValue(null);
+    loadTradeDraftMock.mockReturnValue(new Promise((resolve) => {
+      resolveDatabase = resolve;
+    }));
+    const activeTradeProfile = {
+      ...profileDefaults,
+      companyName: 'Current Trade Company',
+      signedBy: 'Current Trade Signer',
+    };
+
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    act(() => root?.render(<Harness enabled />));
+    act(() => root?.render(
+      <Harness
+        enabled
+        tradeId="trade-1"
+        activeTradeProfile={activeTradeProfile}
+      />,
+    ));
+
+    await act(async () => {
+      resolveDatabase({
+        user_id: 'user-1',
+        profile: {
+          ...profileDefaults,
+          companyName: 'Stale Draft Company',
+          signedBy: 'Stale Draft Signer',
+        },
+        updated_at: '2026-07-29T00:00:00.000Z',
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toBe('Current Trade Company|Current Trade Signer');
   });
 });

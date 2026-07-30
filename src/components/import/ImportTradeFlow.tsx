@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Eye, RefreshCw, Search } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
@@ -18,9 +18,20 @@ import {
 } from '../../services/importDeclarationService';
 import type { ImportDeclarationDownloadFormat } from '../../services/importDeclarationService';
 import { lookupImportCargo } from '../../services/cargoProgressService';
-import { hasValidStoragePath } from '../../services/tradeDataMapper';
 import {
+  arrivalNoticeToAttachment,
+  findArrivalNotice,
+  hasValidStoragePath,
+  importDocumentToAttachment,
+  importSnapshotToPersistence,
+  tradeAttachmentToImportDocument,
+  tradeProfileToFormData,
+} from '../../services/tradeDataMapper';
+import {
+  loadTradeAttachmentFile,
+  moveTradeAttachmentsToScope,
   removeTradeAttachment,
+  TradeAttachmentDownloadError,
   uploadTradeAttachment,
 } from '../../services/tradeAttachmentStorageService';
 import type {
@@ -35,16 +46,42 @@ import type {
   ImportTradeSnapshot,
   UserTradeRole,
 } from '../../types/importTrade';
-import type { PersistedTradeStatus } from '../../types';
+import type { PersistedTradeStatus, SavedTrade, TradeProfile } from '../../types';
+import type { TradeFormDataV3 } from '../../types/tradeFormData';
+import type { TradeDraftRow } from '../../services/draftCacheService';
+import { saveTradeFormDraft } from '../../services/draftCacheService';
+import { useFormDataDraft } from '../../hooks/useFormDataDraft';
 
 interface Props {
   role: UserTradeRole;
   userId: string;
   importerCompanyName?: string;
   onGenerate: (snapshot: ImportTradeSnapshot) => Promise<string>;
-  onComplete: (snapshot: ImportTradeSnapshot) => Promise<void>;
+  onComplete: (snapshot: ImportTradeSnapshot) => Promise<SavedTrade>;
+  onSaved?: (trade: SavedTrade) => void;
+  onWorkspaceStateChange?: (state: { currentStep: number; tradeId: string | null }) => void;
 }
-interface CachedState {
+
+export interface ImportFileResolutionFailure {
+  documentId: string;
+  fileName: string;
+  message: string;
+  code: string;
+  bucket: string;
+  maskedStoragePath: string;
+  status: string;
+}
+
+export class ImportFileResolutionError extends Error {
+  readonly failures: ImportFileResolutionFailure[];
+
+  constructor(failures: ImportFileResolutionFailure[]) {
+    super('저장된 첨부파일 원본을 불러오지 못했습니다. 파일 정보는 유지됩니다. 해당 파일을 다시 첨부한 뒤 분석해 주세요.');
+    this.name = 'ImportFileResolutionError';
+    this.failures = failures;
+  }
+}
+export interface CachedState {
   step: number;
   documents: ImportDocumentMeta[];
   analysis: ImportAnalysisResult | null;
@@ -105,18 +142,211 @@ function loadCached(key: string): CachedState {
   }
 }
 
-export default function ImportTradeFlow({ role, userId, importerCompanyName = '', onGenerate, onComplete }: Props) {
+function emptyImportProfile(): TradeProfile {
+  return {
+    tradeType: 'import',
+    itemName: '',
+    hsCode: '',
+    loadPort: '',
+    dischargePort: '',
+    incoterms: '',
+    quantity: '',
+    weight: '',
+    departureDate: '',
+    arrivalDate: '',
+    companyName: '',
+    contact: '',
+  };
+}
+
+export function importDraftFormData(
+  state: CachedState,
+  role: UserTradeRole,
+): TradeFormDataV3 {
+  if (state.analysis) {
+    const selectedHS = state.suggestions.find((item) =>
+      item.code === state.selectedCode
+      || state.analysis?.extracted.items.some((entry) => entry.confirmedHSCode === item.code));
+    return importSnapshotToPersistence({
+      tradeId: state.tradeId,
+      direction: 'import',
+      role,
+      documents: state.documents,
+      arrivalNotice: state.arrivalNotice ?? undefined,
+      analysis: state.analysis,
+      selectedHSCode: selectedHS,
+      duty: state.duty ?? undefined,
+      risks: state.risks,
+      cargo: state.cargo ?? undefined,
+      generatedAt: state.generatedAt ?? '',
+    }).formData;
+  }
+
+  const attachments = state.documents
+    .map(importDocumentToAttachment)
+    .filter((attachment): attachment is NonNullable<typeof attachment> => attachment !== null);
+  const arrivalNotice = arrivalNoticeToAttachment(state.arrivalNotice);
+  if (arrivalNotice) attachments.push(arrivalNotice);
+  return tradeProfileToFormData(emptyImportProfile(), role, attachments);
+}
+
+export function hydrateImportDraft(
+  current: CachedState,
+  draft: TradeDraftRow | null,
+): CachedState {
+  if (!draft?.form_data) return current;
+  const persistedDocuments = draft.form_data.attachments
+    .map(tradeAttachmentToImportDocument)
+    .filter((document): document is ImportDocumentMeta => document !== null);
+  const persistedById = new Map(persistedDocuments.map((document) => [document.id, document]));
+  const persistedFingerprint = (document: ImportDocumentMeta) => [
+    document.name,
+    document.size,
+    document.mimeType,
+    document.type === 'unknown' ? 'other' : document.type,
+  ].join('\u0000');
+  const findPersistedDocument = (document: ImportDocumentMeta) => {
+    const sameId = persistedById.get(document.id);
+    if (sameId) return sameId;
+
+    const fingerprint = persistedFingerprint(document);
+    const candidates = [...persistedById.values()]
+      .filter((candidate) => persistedFingerprint(candidate) === fingerprint);
+    return candidates.length === 1 ? candidates[0] : undefined;
+  };
+  const currentTradeIsAuthoritative = Boolean(
+    current.tradeId
+    && draft.trade_id
+    && current.tradeId === draft.trade_id,
+  );
+  const documents = current.documents.map((document) => {
+    const persisted = findPersistedDocument(document);
+    if (!persisted) return document;
+    persistedById.delete(persisted.id);
+    const useCurrentStorage = currentTradeIsAuthoritative && hasValidStoragePath(document);
+    return {
+      ...persisted,
+      ...document,
+      storageBucket: useCurrentStorage ? document.storageBucket : persisted.storageBucket,
+      storagePath: useCurrentStorage ? document.storagePath : persisted.storagePath,
+      uploadedAt: useCurrentStorage ? document.uploadedAt : persisted.uploadedAt,
+    };
+  });
+  if (!currentTradeIsAuthoritative) documents.push(...persistedById.values());
+  return {
+    ...current,
+    step: currentTradeIsAuthoritative ? current.step : draft.current_step ?? current.step,
+    tradeId: draft.trade_id ?? current.tradeId,
+    documents,
+    arrivalNotice: current.arrivalNotice && hasValidStoragePath(current.arrivalNotice)
+      ? current.arrivalNotice
+      : findArrivalNotice(draft.form_data),
+  };
+}
+
+type AttachmentFileLoader = typeof loadTradeAttachmentFile;
+
+export interface ImportFileResolutionResult {
+  files: Record<string, File>;
+  failures: ImportFileResolutionFailure[];
+}
+
+export async function resolveImportAnalysisFiles(
+  documents: ImportDocumentMeta[],
+  sourceFiles: Record<string, File>,
+  loader: AttachmentFileLoader = loadTradeAttachmentFile,
+  expectedUserId?: string,
+): Promise<ImportFileResolutionResult> {
+  const resolved = { ...sourceFiles };
+  const failures: ImportFileResolutionFailure[] = [];
+
+  for (const document of documents) {
+    if (resolved[document.id]) continue;
+    if (!hasValidStoragePath(document)) {
+      failures.push({
+        documentId: document.id,
+        fileName: document.name,
+        message: '업로드 전 원본 파일을 찾을 수 없습니다.',
+        code: 'PENDING_FILE_MISSING',
+        bucket: document.storageBucket || 'trade-documents',
+        maskedStoragePath: '',
+        status: '',
+      });
+      continue;
+    }
+    try {
+      resolved[document.id] = await loader({
+        storageBucket: document.storageBucket || 'trade-documents',
+        storagePath: document.storagePath!,
+        fileName: document.name,
+        mimeType: document.mimeType,
+        documentType: document.type === 'unknown' ? 'other' : document.type,
+      }, expectedUserId);
+    } catch (error) {
+      const downloadError = error instanceof TradeAttachmentDownloadError ? error : null;
+      failures.push({
+        documentId: document.id,
+        fileName: document.name,
+        message: downloadError?.message
+          || (error instanceof Error ? error.message : 'Storage download 실패'),
+        code: downloadError?.code || 'STORAGE_DOWNLOAD_FAILED',
+        bucket: downloadError?.bucket || document.storageBucket || 'trade-documents',
+        maskedStoragePath: downloadError?.maskedStoragePath || '<user>/…',
+        status: downloadError?.status || '',
+      });
+    }
+  }
+
+  return { files: resolved, failures };
+}
+
+export default function ImportTradeFlow({
+  role,
+  userId,
+  importerCompanyName = '',
+  onGenerate,
+  onComplete,
+  onSaved,
+  onWorkspaceStateChange,
+}: Props) {
   const cacheKey = `portai_import_draft:${userId}:${role}`;
   const [state, setState] = useState<CachedState>(() => loadCached(cacheKey));
   const [sourceFiles, setSourceFiles] = useState<Record<string, File>>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState(false);
+  const [showInProgressConfirmation, setShowInProgressConfirmation] = useState(false);
+  const skipNextLocalCacheWriteRef = useRef(false);
   const [downloadFormat, setDownloadFormat] = useState<ImportDeclarationDownloadFormat>('pdf');
   const selectedHS = useMemo(() => {
     const firstCode = state.analysis?.extracted.items.find((item) => item.confirmedHSCode)?.confirmedHSCode;
     return state.suggestions.find((item) => item.code === firstCode || item.code === state.selectedCode);
   }, [state.analysis, state.selectedCode, state.suggestions]);
+  const draftFormData = useMemo(() => importDraftFormData(state, role), [role, state]);
+  const handleDraftRestore = useCallback((draft: TradeDraftRow | null) => {
+    setState((current) => hydrateImportDraft(current, draft));
+  }, []);
+  const {
+    isHydrated: isDraftHydrated,
+    saveStatus: draftSaveStatus,
+    completeDraft,
+  } = useFormDataDraft({
+    userId,
+    enabled: Boolean(userId),
+    direction: 'import',
+    role,
+    formData: draftFormData,
+    currentStep: state.step,
+    tradeId: state.tradeId ?? null,
+    onRestore: handleDraftRestore,
+  });
+
+  useEffect(() => {
+    onWorkspaceStateChange?.({
+      currentStep: state.step,
+      tradeId: state.tradeId ?? null,
+    });
+  }, [onWorkspaceStateChange, state.step, state.tradeId]);
 
   const persistImportDocuments = async (): Promise<ImportDocumentMeta[]> => {
     const missingFiles = state.documents.filter((document) =>
@@ -125,7 +355,7 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
       throw new Error('새로고침 후 파일 내용은 복원할 수 없습니다. Storage에 저장되지 않은 문서를 다시 첨부해 주세요.');
     }
 
-    const scopeId = state.tradeId ?? `draft-${crypto.randomUUID()}`;
+    const scopeId = state.tradeId ?? `draft-import-${role}`;
     const persisted = [...state.documents];
     for (let index = 0; index < persisted.length; index += 1) {
       const document = persisted[index];
@@ -150,6 +380,10 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
   };
 
   useEffect(() => {
+    if (skipNextLocalCacheWriteRef.current) {
+      skipNextLocalCacheWriteRef.current = false;
+      return;
+    }
     try {
       localStorage.setItem(cacheKey, JSON.stringify(state));
     } catch (error) {
@@ -168,17 +402,47 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
         return setMessage(`필수 기본서류를 첨부해 주세요: ${missing.map((type) => labels[type]).join(', ')}`);
       }
     }
-    const missingFiles = state.documents.filter((document) => !sourceFiles[document.id]);
-    if (missingFiles.length) return setMessage(`원본 파일을 다시 선택해 주세요: ${missingFiles.map((document) => document.name).join(', ')}`);
     setBusy(true);
+    if (import.meta.env.DEV) {
+      console.debug('[Import Document Analysis] attachment resolution', state.documents.map((document) => ({
+        id: `${document.id.slice(0, 6)}…`,
+        fileName: document.name,
+        hasPendingFile: Boolean(sourceFiles[document.id]),
+        hasStoragePath: hasValidStoragePath(document),
+        documentType: document.type,
+      })));
+    }
     setState((current) => ({
       ...current,
       documents: current.documents.map((document) => ({ ...document, status: 'analyzing', analysisStatus: 'analyzing', errorMessage: undefined })),
     }));
     try {
-      const result = await analyzeImportDocuments(state.documents, sourceFiles);
+      const { files: resolvedFiles, failures } = await resolveImportAnalysisFiles(
+        state.documents,
+        sourceFiles,
+        loadTradeAttachmentFile,
+        userId,
+      );
+      const analyzableDocuments = state.documents.filter(
+        (document) => Boolean(resolvedFiles[document.id]),
+      );
+      if (analyzableDocuments.length === 0) {
+        throw new ImportFileResolutionError(failures);
+      }
+      setSourceFiles(resolvedFiles);
+      const result = await analyzeImportDocuments(analyzableDocuments, resolvedFiles);
+      const failedIds = new Set(failures.map((failure) => failure.documentId));
       setState((current) => {
         const documents = current.documents.map((document) => {
+          if (failedIds.has(document.id)) {
+            return {
+              ...document,
+              status: 'error' as const,
+              analysisStatus: 'error' as const,
+              analysisSuccess: false,
+              errorMessage: '저장된 원본 파일을 불러오지 못했습니다.',
+            };
+          }
           const classification = result.classifications.find((item) => item.id === document.id);
           return {
             ...document,
@@ -209,17 +473,52 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
           risks: assessImportRisks(documents, analysis, suggestions, '', importerCompanyName),
         };
       });
+      if (failures.length > 0) {
+        setMessage(
+          `${state.documents.length}개 파일 중 ${failures.length}개를 불러오지 못했습니다. `
+          + `나머지 ${analyzableDocuments.length}개 파일로 분석을 계속했습니다.`,
+        );
+        console.warn('[Import Document Analysis] partial download failure', {
+          files: failures.map(({
+            fileName, code, status, bucket, maskedStoragePath,
+          }) => ({
+            fileName,
+            code,
+            status,
+            bucket,
+            storagePath: maskedStoragePath,
+          })),
+        });
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '문서 분석에 실패했습니다.';
-      console.error('[Import Document Analysis] failed', { error, message: errorMessage });
+      const failedIds = new Set(
+        error instanceof ImportFileResolutionError
+          ? error.failures.map((failure) => failure.documentId)
+          : state.documents.map((document) => document.id),
+      );
+      console.error('[Import Document Analysis] failed', {
+        message: errorMessage,
+        files: error instanceof ImportFileResolutionError
+          ? error.failures.map(({
+            fileName, code, status, bucket, maskedStoragePath,
+          }) => ({
+            fileName,
+            code,
+            status,
+            bucket,
+            storagePath: maskedStoragePath,
+          }))
+          : undefined,
+      });
       setState((current) => ({
         ...current,
         documents: current.documents.map((document) => ({
           ...document,
-          status: 'error',
-          analysisStatus: 'error',
-          analysisSuccess: false,
-          errorMessage,
+          status: failedIds.has(document.id) ? 'error' : 'ready',
+          analysisStatus: failedIds.has(document.id) ? 'error' : 'pending',
+          analysisSuccess: failedIds.has(document.id) ? false : document.analysisSuccess,
+          errorMessage: failedIds.has(document.id) ? errorMessage : undefined,
         })),
       }));
       setMessage(errorMessage);
@@ -258,8 +557,8 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
     const risks = assessImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName);
     const generatedAt = new Date().toISOString();
     try {
-      const persistedDocuments = await persistImportDocuments();
-      const tradeId = await onGenerate({
+      let persistedDocuments = await persistImportDocuments();
+      const generatedSnapshot: ImportTradeSnapshot = {
         tradeId: state.tradeId,
         direction: 'import',
         role,
@@ -271,9 +570,39 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
         risks,
         cargo: state.cargo ?? undefined,
         generatedAt,
-      });
-      setState((current) => ({
-        ...current,
+      };
+      const tradeId = await onGenerate(generatedSnapshot);
+      setState((current) => ({ ...current, tradeId }));
+      if (!state.tradeId) {
+        const originalAttachments = persistedDocuments
+          .map(importDocumentToAttachment)
+          .filter((attachment): attachment is NonNullable<typeof attachment> => attachment !== null);
+        if (originalAttachments.length > 0) {
+          const scopedAttachments = await moveTradeAttachmentsToScope({
+            userId,
+            scopeId: tradeId,
+            attachments: originalAttachments,
+          });
+          const scopedById = new Map(scopedAttachments.map((attachment) => [attachment.id, attachment]));
+          persistedDocuments = persistedDocuments.map((document) => {
+            const attachment = scopedById.get(document.id);
+            return attachment ? {
+              ...document,
+              storageBucket: attachment.storageBucket,
+              storagePath: attachment.storagePath,
+              uploadedAt: attachment.uploadedAt,
+              uploadStatus: 'uploaded',
+            } : document;
+          });
+          await onGenerate({
+            ...generatedSnapshot,
+            tradeId,
+            documents: persistedDocuments,
+          });
+        }
+      }
+      const nextState: CachedState = {
+        ...state,
         documents: persistedDocuments,
         step: 3,
         duty,
@@ -282,7 +611,16 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
         generatedAt,
         tradeId,
         existingStatus: 'generated',
-      }));
+      };
+      setState(nextState);
+      await saveTradeFormDraft({
+        userId,
+        direction: 'import',
+        role,
+        formData: importDraftFormData(nextState, role),
+        currentStep: nextState.step,
+        tradeId,
+      });
       setMessage(dutyError ? `${dutyError} 사유를 표시한 상태로 다음 단계로 이동했습니다.` : '');
     } catch (error) {
       console.error('[Import Trade] generated 상태 저장 실패:', error);
@@ -329,10 +667,21 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
     const unresolvedHigh = state.risks.filter((risk) => risk.level === 'high' && risk.status !== 'resolved');
     if (unresolvedHigh.length && !window.confirm(`미해결 HIGH 리스크가 ${unresolvedHigh.length}건 있습니다. 내용을 확인했으며 계속 진행할까요?`)) return;
     if (state.dutyError && !window.confirm(`예상세액이 계산되지 않았습니다.\n${state.dutyError}\n사유를 확인했으며 계속 진행할까요?`)) return;
-    if (!window.confirm('수입 거래를 최종 완료하고 저장할까요?')) return;
+    if (role === 'forwarder' && !hasValidStoragePath(state.arrivalNotice)) {
+      setShowInProgressConfirmation(true);
+      return;
+    }
+    if (!window.confirm('수입 거래를 최종 제출할까요?')) return;
+    await persistCompletedTrade();
+  };
+
+  const persistCompletedTrade = async () => {
+    if (!state.analysis || busy || !state.generatedAt) return;
+    setShowInProgressConfirmation(false);
     setBusy(true);
+    let tradeSaved = false;
     try {
-      await onComplete({
+      const completedTrade = await onComplete({
         tradeId: state.tradeId,
         direction: 'import',
         role,
@@ -346,13 +695,20 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
         generatedAt: state.generatedAt,
         flowCompletedAt: new Date().toISOString(),
       });
+      tradeSaved = true;
+      await completeDraft();
+      skipNextLocalCacheWriteRef.current = true;
       localStorage.removeItem(cacheKey);
       setState(EMPTY);
       setSourceFiles({});
-      setMessage('수입 거래를 완료했습니다.');
+      setMessage('');
+      onWorkspaceStateChange?.({ currentStep: 1, tradeId: null });
+      onSaved?.(completedTrade);
     } catch (error) {
       console.error(error);
-      setMessage('거래 저장에 실패했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
+      setMessage(tradeSaved
+        ? '거래는 저장했지만 작업실 초안을 정리하지 못했습니다. 입력 상태를 유지합니다.'
+        : '거래 저장에 실패했습니다. 입력과 첨부는 유지됩니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
     } finally {
       setBusy(false);
     }
@@ -360,6 +716,7 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
 
   const reset = () => {
     if (!window.confirm('현재 수입 거래의 단계와 분석 결과를 모두 초기화할까요?')) return;
+    skipNextLocalCacheWriteRef.current = true;
     localStorage.removeItem(cacheKey);
     setState(EMPTY);
     setSourceFiles({});
@@ -387,6 +744,20 @@ export default function ImportTradeFlow({ role, userId, importerCompanyName = ''
         onMove={(step) => setState((current) => ({ ...current, step }))}
       />
       {message && <div className={`form-message ${state.dutyError && state.step === 3 ? 'warning' : 'error'}`} role="alert">{message}</div>}
+      {!isDraftHydrated && <div className="draft-save-status saving" role="status">초안 복원 중...</div>}
+      {draftSaveStatus === 'error' && <div className="form-message error" role="alert">초안 자동 저장에 실패했습니다.</div>}
+      {showInProgressConfirmation && (
+        <div className="confirmation-backdrop" role="presentation">
+          <section className="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="in-progress-title">
+            <h3 id="in-progress-title">진행 중 상태로 저장할까요?</h3>
+            <p>D/O 또는 도착통지서가 아직 첨부되지 않았습니다. 현재 입력 내용을 진행 중 거래로 저장하고 거래관리로 이동합니다. 이후 거래관리에서 이어서 작성할 수 있습니다.</p>
+            <div className="confirmation-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowInProgressConfirmation(false)}>취소</button>
+              <button type="button" className="btn btn-primary" onClick={() => void persistCompletedTrade()}>진행 중으로 저장</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {state.step === 1 && (
         <>
