@@ -149,11 +149,14 @@ export function determineRequiredDocuments(
   }
 
   // 6. 적하보험증권(Insurance Policy)
-  // Incoterms 규칙상 보험이 필요한 경우에만 표시한다.
-  if (
-    rule &&
-    rule.requiredDocuments.includes('insurance')
-  ) {
+  // CIF처럼 Incoterms상 매도인 부보가 의무인 조건은 질문 없이 항상 준비 대상.
+  // 그 외 조건(FOB 등)은 계약에 따라 갈리므로 C/O처럼 필요 여부(insuranceNeeded)를
+  // 먼저 묻고 — yes면 준비 확인 흐름, no면 불필요로 정리한다.
+  const insuranceMandatory = Boolean(
+    rule && rule.requiredDocuments.includes('insurance')
+  );
+
+  if (insuranceMandatory || profile.insuranceNeeded === 'yes') {
     docs.push({
       id: 'insurance',
       name: '적하보험증권(Insurance Policy)',
@@ -162,10 +165,27 @@ export function determineRequiredDocuments(
         : 'not_started',
       statusText: profile.insuranceConfirmed
         ? '준비 완료 확인됨'
-        : 'CIF 조건 - 준비 필요',
+        : insuranceMandatory
+          ? 'CIF 조건 - 준비 필요'
+          : '계약상 부보 - 준비 필요',
       lastReviewed: profile.insuranceConfirmed
         ? timestamp
         : undefined,
+    });
+  } else if (profile.insuranceNeeded === 'no') {
+    docs.push({
+      id: 'insurance',
+      name: '적하보험증권(Insurance Policy)',
+      status: 'not_needed',
+      statusText: '불필요 (부보 의무 없음)',
+    });
+  } else if (isExport) {
+    // 미확인 — 화주가 만들 서류는 아니고 보험사가 발급하므로 준비도 분모에서 제외.
+    docs.push({
+      id: 'insurance',
+      name: '적하보험증권(Insurance Policy)',
+      status: 'external_pending',
+      statusText: '필요 여부 확인',
     });
   }
 

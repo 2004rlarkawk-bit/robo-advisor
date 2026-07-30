@@ -202,15 +202,14 @@ describe('DocumentAgent — 문서번호 건(shipment) 단위 파생·안정성'
     const r = await runAgent(shipProfile);
     const inv = r.generatedDocs.invoice! as any;
     const pl = r.generatedDocs.packingList! as any;
-    const ins = r.generatedDocs.insurance! as any;
 
     expect(inv.invoiceNo).toBe('INV-2026-123456');
     expect(pl.plNo).toBe('PL-2026-123456');
-    expect(ins.certNo).toBe('INS-2026-123456');
     // 교차참조도 같은 invoiceNo를 가리킨다
     expect(pl.invoiceNo).toBe(inv.invoiceNo);
-    // C/O는 상공회의소 발급(external_pending) — 화주가 생성하지 않는다.
+    // C/O는 상공회의소, 적하보험증권은 보험사 발급 — 화주가 생성하지 않는다.
     expect(r.generatedDocs.certificateOfOrigin).toBeUndefined();
+    expect(r.generatedDocs.insurance).toBeUndefined();
   });
 
   it('같은 documentNo로 재생성해도 모든 번호가 유지된다', async () => {
@@ -218,7 +217,6 @@ describe('DocumentAgent — 문서번호 건(shipment) 단위 파생·안정성'
     const b = await runAgent(shipProfile);
     expect((b.generatedDocs.invoice as any).invoiceNo).toBe((a.generatedDocs.invoice as any).invoiceNo);
     expect((b.generatedDocs.packingList as any).plNo).toBe((a.generatedDocs.packingList as any).plNo);
-    expect((b.generatedDocs.insurance as any).certNo).toBe((a.generatedDocs.insurance as any).certNo);
   });
 });
 

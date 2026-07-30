@@ -519,9 +519,11 @@ body {
 .shipper-hs-suggestion-panel { grid-column: 1 / -1; border: 1px solid var(--border-color); border-radius: 9px; padding: 12px; background: var(--background-color); }
 .shipper-hs-loading { color: var(--text-light); font-size: 13px; }
 .shipper-hs-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #b91c1c; font-size: 13px; }
-.shipper-hs-additional-info { color: var(--text-color); font-size: 13px; line-height: 1.5; }
+/* 추천 카드와 1.5줄 정도 띄워 섹션 경계를 분명히 한다 */
+.shipper-hs-additional-info { color: var(--text-color); font-size: 13px; line-height: 1.5; margin-top: 20px; }
 .shipper-hs-additional-info p { margin: 4px 0; }
-.shipper-hs-additional-info ul { margin: 5px 0 0; padding-left: 19px; color: var(--text-light); }
+.shipper-hs-additional-info ul { margin: 7px 0 0; padding-left: 19px; color: var(--text-light); }
+.shipper-hs-additional-info li + li { margin-top: 4px; }
 .shipper-hs-additional-info small { display: block; color: var(--text-light); }
 /* 제목 아래 부제를 세로로 쌓아 좌측 정렬 — 카드 첫인상에서 제목이 먼저 읽히게 */
 .shipper-hs-suggestion-heading { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }

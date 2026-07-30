@@ -1,12 +1,11 @@
 import { Agent, DocumentResult, HSCodeResult, AgentLog, createLog } from './types';
-import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, InsuranceData, CustomsDeclarationData, Shipment } from '../types';
+import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, CustomsDeclarationData, Shipment } from '../types';
 import { tradeItemAmount } from '../utils/shipment';
 import { determineRequiredDocuments } from '../harness/rulesEngine';
 import { autoFillDocumentFields } from '../services/claudeService';
 import { getCustomsExchangeRate } from '../services/customsApiService';
 import { isLcPayment } from './paymentTerms';
 import { renderCertificateOfOriginHTML } from './templates/co';
-import { renderInsuranceHTML } from './templates/insurance';
 export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCodeResult; useLLM?: boolean; logs: AgentLog[] }, DocumentResult> {
   readonly name = 'Document Agent';
 
@@ -309,36 +308,9 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
       logs.push(createLog(this.name, '원산지증명서 초안 조립 완료 (원산지: 대한민국)', 'success'));
     }
 
-    // 6. 적하보험증권 (Insurance) 데이터 조립 — CIF 등 부보 의무 조건일 때만
-    const insuranceDoc = requiredDocs.find(d => d.id === 'insurance');
-    if (insuranceDoc && generatedDocs.invoice) {
-      logs.push(createLog(this.name, '적하보험증권(Cargo Insurance) 초안 조립 중...', 'info'));
-
-      const inv = generatedDocs.invoice;
-      // 부보금액은 통상 송장금액(CIF)의 110%로 산정한다.
-      const insuredAmount = Math.round((inv.totalAmount || 0) * 1.1 * 100) / 100;
-
-      const insurance: InsuranceData = {
-        certNo: docNo('INS'),
-        assured: inv.seller,
-        invoiceNo: inv.invoiceNo,
-        amountInsured: insuredAmount,
-        insuredRate: `${inv.currency} ${(inv.totalAmount || 0).toLocaleString()} × 110%`,
-        currency: inv.currency,
-        conditions: 'INSTITUTE CARGO CLAUSE (A)',
-        vesselName: profile.vesselOrFlight || '',
-        fromPort: profile.loadPort || '',
-        toPort: profile.dischargePort || '',
-        sailingOn: profile.departureDate || '',
-        goods: itemDescription,
-        placeAndDateSigned: `${profile.loadPort ? profile.loadPort + ' ' : ''}${new Date().toISOString().split('T')[0]}`,
-        noOfCertificates: 'TWO',
-        signedBy: profile.signedBy || profile.signerName || ''
-      };
-
-      generatedDocs.insurance = insurance;
-      logs.push(createLog(this.name, `적하보험증권 초안 조립 완료 (부보금액: ${inv.currency} ${insuredAmount.toLocaleString()})`, 'success'));
-    }
+    // 6. 적하보험증권 (Insurance)
+    // 증권은 보험사가 발급(external_pending) — 화주가 여기서 생성하지 않는다(B/L·C/O와 동일 원칙).
+    // 초안·HTML을 만들지 않아 서류 현황에는 상태 뱃지만 노출된다.
     // 7. 통관신고 관련 서류 데이터 조립
     const customsDoc = requiredDocs.find(d => d.id === 'customs_dec');
     if (customsDoc && customsDoc.status !== 'not_needed' && customsDoc.status !== 'external_pending') {
@@ -415,12 +387,10 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
     // (미리보기 = 다운로드 docx 단일 소스. generatedDocs.invoice 구조 데이터만 넘긴다.)
     // 패킹리스트도 고정 xlsx 템플릿(packingListXlsxService)에서 생성·미리보기하므로 HTML을 만들지 않는다.
     // (미리보기 = 다운로드 xlsx 단일 소스. generatedDocs.packingList 구조 데이터만 넘긴다.)
+    // 적하보험증권은 보험사 발급이라 초안·HTML을 만들지 않는다 (상태 뱃지만).
     const htmlTemplates: Record<string, string> = {};
     if (generatedDocs.certificateOfOrigin) {
       htmlTemplates.co = renderCertificateOfOriginHTML(generatedDocs.certificateOfOrigin);
-    }
-    if (generatedDocs.insurance) {
-      htmlTemplates.insurance = renderInsuranceHTML(generatedDocs.insurance);
     }
     // 수출신고서(초안)는 고정 docx 템플릿(exportDeclarationDocxService)에서 생성·미리보기한다.
     // (미리보기 = 다운로드 docx 단일 소스. HTML은 만들지 않는다. customsDeclaration.ts는 @deprecated.)

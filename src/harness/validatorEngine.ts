@@ -193,9 +193,11 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
   // 5. Incoterms 조건별 검증 규칙 추가
   const rule = getIncotermsRule(profile.incoterms);
   if (rule) {
-    // CIF 조건인 경우 적하보험증권 준비 확인 — 사용자가 준비 완료로 표시하면 해소된다.
+    // 적하보험증권 — CIF는 Incoterms상 매도인 부보 의무라 질문 없이 준비 확인을 요구하고,
+    // 그 외 조건은 C/O처럼 필요 여부(insuranceNeeded)를 먼저 묻는다.
     // (error로 두면 해소 수단 없이 제출이 영구 차단되므로 warning + 해소 플래그 방식 사용)
-    if (rule.incoterm === 'CIF' && !profile.insuranceConfirmed) {
+    const insuranceMandatory = rule.requiredDocuments.includes('insurance');
+    if (insuranceMandatory && !profile.insuranceConfirmed) {
       issues.push({
         id: 'insurance-missing',
         docType: 'insurance',
@@ -203,6 +205,25 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
         message: '적하보험증권: 준비 확인 필요 (CIF 조건은 적하보험증권이 필수입니다. 증권 준비 후 완료로 표시해 주세요.)',
         field: 'insuranceConfirmed'
       });
+    } else if (!insuranceMandatory && profile.tradeType === 'export') {
+      if (profile.insuranceNeeded === undefined) {
+        issues.push({
+          id: 'insurance-needed-check',
+          docType: 'insurance',
+          severity: 'warning',
+          message: '적하보험증권: 보험 필요 여부 확인 (계약상 매도인이 적하보험을 부보하기로 했는지 확인해 주세요.)',
+          field: 'insuranceNeeded'
+        });
+      } else if (profile.insuranceNeeded === 'yes' && !profile.insuranceConfirmed) {
+        issues.push({
+          id: 'insurance-missing',
+          docType: 'insurance',
+          severity: 'warning',
+          message: '적하보험증권: 준비 확인 필요 (계약상 매도인 부보 조건입니다. 증권 준비 후 완료로 표시해 주세요.)',
+          field: 'insuranceConfirmed'
+        });
+      }
+      // 'no'면 이슈 미발행 — 확인 목록에서 제외.
     }
 
     // EXW 조건인 경우 정보성 알림
