@@ -124,6 +124,64 @@ describe('수입 초안 attachment hydration', () => {
     expect(hydrated.step).toBe(3);
   });
 
+  it('같은 거래의 로컬 표시 ID가 달라도 동일 metadata의 DB storagePath를 복원한다', () => {
+    const hydrated = hydrateImportDraft({
+      ...baseState,
+      tradeId: 'import-trade',
+      documents: [{
+        id: 'local-pending-id',
+        name: attachment.fileName,
+        size: attachment.sizeBytes,
+        mimeType: attachment.mimeType,
+        type: attachment.documentType,
+        status: 'ready',
+        uploadStatus: 'uploaded',
+        analysisStatus: 'pending',
+        storageBucket: 'trade-documents',
+        storagePath: '',
+      }],
+    }, draft('forwarder'));
+
+    expect(hydrated.documents).toHaveLength(1);
+    expect(hydrated.documents[0]).toMatchObject({
+      id: 'local-pending-id',
+      storageBucket: attachment.storageBucket,
+      storagePath: attachment.storagePath,
+      uploadedAt: attachment.uploadedAt,
+    });
+  });
+
+  it('모호한 파일 metadata는 다른 persisted 경로에 임의 연결하지 않는다', () => {
+    const duplicate = {
+      ...attachment,
+      id: 'ci-2',
+      storagePath: 'user/import-trade/commercial_invoice/ci-2-invoice.pdf',
+    };
+    const baseDraft = draft('forwarder');
+    const hydrated = hydrateImportDraft({
+      ...baseState,
+      tradeId: 'import-trade',
+      documents: [{
+        id: 'local-pending-id',
+        name: attachment.fileName,
+        size: attachment.sizeBytes,
+        mimeType: attachment.mimeType,
+        type: attachment.documentType,
+        status: 'ready',
+        storagePath: '',
+      }],
+    }, {
+      ...baseDraft,
+      form_data: {
+        ...baseDraft.form_data!,
+        attachments: [attachment, duplicate],
+      },
+    });
+
+    expect(hydrated.documents).toHaveLength(1);
+    expect(hydrated.documents[0].storagePath).toBe('');
+  });
+
   it('DB form_data에는 Storage 경로가 있는 metadata만 포함한다', () => {
     const formData = importDraftFormData({
       ...baseState,
@@ -229,6 +287,76 @@ describe('수입 초안 attachment hydration', () => {
     expect(resolved.files.pending).toBe(file);
     expect(resolved.failures).toEqual([]);
     expect(loader).not.toHaveBeenCalled();
+  });
+
+  it('source File과 storagePath가 모두 없는 경우에만 PENDING_FILE_MISSING을 반환한다', async () => {
+    const result = await resolveImportAnalysisFiles([{
+      id: 'missing',
+      name: 'missing.pdf',
+      size: 10,
+      mimeType: 'application/pdf',
+      type: 'commercial_invoice',
+      status: 'ready',
+      storageBucket: 'trade-documents',
+      storagePath: '',
+    }], {}, vi.fn());
+
+    expect(result.files).toEqual({});
+    expect(result.failures).toEqual([
+      expect.objectContaining({
+        documentId: 'missing',
+        code: 'PENDING_FILE_MISSING',
+        maskedStoragePath: '',
+      }),
+    ]);
+  });
+
+  it('ID가 달랐던 persisted 3개를 hydration한 뒤 각각 실제 storagePath로 download한다', async () => {
+    const types = ['commercial_invoice', 'packing_list', 'bill_of_lading'] as const;
+    const attachments = types.map((documentType, index) => ({
+      ...attachment,
+      id: `persisted-${index}`,
+      documentType,
+      fileName: `${documentType}.pdf`,
+      storagePath: `user/import-trade/${documentType}/persisted-${index}.pdf`,
+    }));
+    const baseDraft = draft('shipper');
+    const hydrated = hydrateImportDraft({
+      ...baseState,
+      tradeId: 'import-trade',
+      documents: attachments.map((item, index) => ({
+        id: `local-${index}`,
+        name: item.fileName,
+        size: item.sizeBytes,
+        mimeType: item.mimeType,
+        type: item.documentType,
+        status: 'ready' as const,
+        uploadStatus: 'uploaded' as const,
+        analysisStatus: 'pending' as const,
+        storageBucket: 'trade-documents',
+        storagePath: '',
+      })),
+    }, {
+      ...baseDraft,
+      form_data: {
+        ...baseDraft.form_data!,
+        attachments,
+      },
+    });
+    const loader = vi.fn(async (input: { fileName: string }) =>
+      new File(['pdf'], input.fileName, { type: 'application/pdf' }));
+
+    const result = await resolveImportAnalysisFiles(hydrated.documents, {}, loader, 'user');
+
+    expect(loader).toHaveBeenCalledTimes(3);
+    attachments.forEach((item) => {
+      expect(loader).toHaveBeenCalledWith(
+        expect.objectContaining({ storagePath: item.storagePath }),
+        'user',
+      );
+    });
+    expect(result.failures).toEqual([]);
+    expect(Object.keys(result.files)).toEqual(['local-0', 'local-1', 'local-2']);
   });
 
   it('3개 중 1개 download 실패 시 성공한 2개 File과 실패 metadata를 함께 반환한다', async () => {

@@ -199,15 +199,30 @@ export function hydrateImportDraft(
     .map(tradeAttachmentToImportDocument)
     .filter((document): document is ImportDocumentMeta => document !== null);
   const persistedById = new Map(persistedDocuments.map((document) => [document.id, document]));
+  const persistedFingerprint = (document: ImportDocumentMeta) => [
+    document.name,
+    document.size,
+    document.mimeType,
+    document.type === 'unknown' ? 'other' : document.type,
+  ].join('\u0000');
+  const findPersistedDocument = (document: ImportDocumentMeta) => {
+    const sameId = persistedById.get(document.id);
+    if (sameId) return sameId;
+
+    const fingerprint = persistedFingerprint(document);
+    const candidates = [...persistedById.values()]
+      .filter((candidate) => persistedFingerprint(candidate) === fingerprint);
+    return candidates.length === 1 ? candidates[0] : undefined;
+  };
   const currentTradeIsAuthoritative = Boolean(
     current.tradeId
     && draft.trade_id
     && current.tradeId === draft.trade_id,
   );
   const documents = current.documents.map((document) => {
-    const persisted = persistedById.get(document.id);
+    const persisted = findPersistedDocument(document);
     if (!persisted) return document;
-    persistedById.delete(document.id);
+    persistedById.delete(persisted.id);
     const useCurrentStorage = currentTradeIsAuthoritative && hasValidStoragePath(document);
     return {
       ...persisted,
@@ -388,6 +403,15 @@ export default function ImportTradeFlow({
       }
     }
     setBusy(true);
+    if (import.meta.env.DEV) {
+      console.debug('[Import Document Analysis] attachment resolution', state.documents.map((document) => ({
+        id: `${document.id.slice(0, 6)}…`,
+        fileName: document.name,
+        hasPendingFile: Boolean(sourceFiles[document.id]),
+        hasStoragePath: hasValidStoragePath(document),
+        documentType: document.type,
+      })));
+    }
     setState((current) => ({
       ...current,
       documents: current.documents.map((document) => ({ ...document, status: 'analyzing', analysisStatus: 'analyzing', errorMessage: undefined })),

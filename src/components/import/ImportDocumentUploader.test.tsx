@@ -86,4 +86,40 @@ describe('수입 persisted 첨부 표시', () => {
     expect(onFilesAdded).toHaveBeenCalledWith([]);
     expect(onChange).toHaveBeenCalledWith([persisted]);
   });
+
+  it('persisted 문서 종류를 변경해도 Storage metadata를 보존한다', () => {
+    const onChange = vi.fn();
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <ImportDocumentUploader
+          documents={[persisted]}
+          onChange={onChange}
+          onFilesAdded={vi.fn()}
+          onFileRemoved={vi.fn()}
+          description="수입 서류"
+        />,
+      );
+    });
+
+    const select = container.querySelector<HTMLSelectElement>('select')!;
+    act(() => {
+      select.value = 'packing_list';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: persisted.id,
+        type: 'packing_list',
+        storageBucket: persisted.storageBucket,
+        storagePath: persisted.storagePath,
+        uploadedAt: persisted.uploadedAt,
+        mimeType: persisted.mimeType,
+        size: persisted.size,
+      }),
+    ]);
+  });
 });
