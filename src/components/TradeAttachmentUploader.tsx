@@ -135,7 +135,7 @@ export default function TradeAttachmentUploader({
     setMessage('첨부 문서를 AI로 분석하고 있습니다.');
     setConflicts([]);
     try {
-      const result = await analyzeForwarderAttachments(attachments, pendingFiles);
+      const result = await analyzeForwarderAttachments(attachments, pendingFiles, userId);
       const reclassified = attachments.map((attachment) => ({
         ...attachment,
         documentType: result.classifications[attachment.id] ?? attachment.documentType,

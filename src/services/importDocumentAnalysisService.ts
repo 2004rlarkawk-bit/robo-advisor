@@ -192,10 +192,18 @@ function readFileAsDataUrl(file: File, mimeType: string): Promise<string> {
   });
 }
 
-export async function analyzeImportDocuments(
+export interface ImportAnalysisRequestDocument {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  documentType: ImportDocumentType;
+  dataUrl: string;
+}
+
+export async function buildImportAnalysisRequestDocuments(
   documents: ImportDocumentMeta[],
   filesById: Record<string, File>,
-): Promise<ImportDocumentAnalysisResponse> {
+): Promise<ImportAnalysisRequestDocument[]> {
   if (documents.length === 0) throw new Error('분석할 파일을 먼저 업로드해 주세요.');
 
   const files = documents.map((document) => {
@@ -211,13 +219,20 @@ export async function analyzeImportDocuments(
     throw new Error('분석할 파일의 전체 크기는 25MB 이하여야 합니다.');
   }
 
-  const payload = await Promise.all(files.map(async ({ document, file, mimeType }) => ({
+  return Promise.all(files.map(async ({ document, file, mimeType }) => ({
     id: document.id,
     fileName: file.name,
     mimeType,
     documentType: document.type,
     dataUrl: await readFileAsDataUrl(file, mimeType),
   })));
+}
+
+export async function analyzeImportDocuments(
+  documents: ImportDocumentMeta[],
+  filesById: Record<string, File>,
+): Promise<ImportDocumentAnalysisResponse> {
+  const payload = await buildImportAnalysisRequestDocuments(documents, filesById);
 
   const { data, error } = await supabase.functions.invoke('import-document-analysis', {
     body: { documents: payload },

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest';
 import { tradeProfileToFormData } from '../../services/tradeDataMapper';
+import { buildImportAnalysisRequestDocuments } from '../../services/importDocumentAnalysisService';
 import type { TradeDraftRow } from '../../services/draftCacheService';
 import {
   hydrateImportDraft,
@@ -170,26 +171,34 @@ describe('수입 초안 attachment hydration', () => {
     const document = hydrateImportDraft(baseState, draft('shipper')).documents[0];
     const loader = vi.fn().mockResolvedValue(file);
 
-    const resolved = await resolveImportAnalysisFiles([document], {}, loader);
+    const resolved = await resolveImportAnalysisFiles(
+      [document],
+      {},
+      loader,
+      'user',
+    );
 
-    expect(loader).toHaveBeenCalledWith(expect.objectContaining({
-      storageBucket: 'trade-documents',
-      storagePath: attachment.storagePath,
-      fileName: 'invoice.pdf',
-    }));
-    expect(resolved[document.id]).toBe(file);
+    expect(loader).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storageBucket: 'trade-documents',
+        storagePath: attachment.storagePath,
+        fileName: 'invoice.pdf',
+      }),
+      'user',
+    );
+    expect(resolved.files[document.id]).toBe(file);
+    expect(resolved.failures).toEqual([]);
   });
 
-  it('download 실패 시 metadata를 변경하지 않고 파일별 안전한 오류를 제공한다', async () => {
+  it('download 실패 시 metadata를 변경하지 않고 파일별 안전한 오류를 반환한다', async () => {
     const document = hydrateImportDraft(baseState, draft('shipper')).documents[0];
     const before = JSON.stringify(document);
     const loader = vi.fn().mockRejectedValue(new Error('Object not found'));
 
-    const error = await resolveImportAnalysisFiles([document], {}, loader)
-      .catch((caught) => caught);
+    const result = await resolveImportAnalysisFiles([document], {}, loader);
 
-    expect(error).toBeInstanceOf(ImportFileResolutionError);
-    expect(error.failures).toEqual([
+    expect(result.files).toEqual({});
+    expect(result.failures).toEqual([
       expect.objectContaining({
         documentId: document.id,
         fileName: 'invoice.pdf',
@@ -217,7 +226,83 @@ describe('수입 초안 attachment hydration', () => {
       loader,
     );
 
-    expect(resolved.pending).toBe(file);
+    expect(resolved.files.pending).toBe(file);
+    expect(resolved.failures).toEqual([]);
     expect(loader).not.toHaveBeenCalled();
+  });
+
+  it('3개 중 1개 download 실패 시 성공한 2개 File과 실패 metadata를 함께 반환한다', async () => {
+    const documents = ['ci', 'pl', 'bl'].map((id, index) => ({
+      id,
+      name: `${id}.pdf`,
+      size: 3,
+      mimeType: 'application/pdf',
+      type: [
+        'commercial_invoice',
+        'packing_list',
+        'bill_of_lading',
+      ][index] as 'commercial_invoice' | 'packing_list' | 'bill_of_lading',
+      status: 'ready' as const,
+      storageBucket: 'trade-documents',
+      storagePath: `user/draft-import-forwarder/${id}/${id}.pdf`,
+    }));
+    const loader = vi.fn(async (input: { fileName: string }) => {
+      if (input.fileName === 'pl.pdf') throw new Error('download failed');
+      return new File(['pdf'], input.fileName, { type: 'application/pdf' });
+    });
+
+    const result = await resolveImportAnalysisFiles(documents, {}, loader);
+
+    expect(Object.keys(result.files)).toEqual(['ci', 'bl']);
+    expect(result.failures).toEqual([
+      expect.objectContaining({ documentId: 'pl', fileName: 'pl.pdf' }),
+    ]);
+    expect(documents[1].storagePath).toBe(
+      'user/draft-import-forwarder/pl/pl.pdf',
+    );
+  });
+
+  it('모든 persisted download가 실패하면 분석 중단용 오류에 실패 목록을 보존한다', async () => {
+    const document = hydrateImportDraft(baseState, draft('shipper')).documents[0];
+    const result = await resolveImportAnalysisFiles(
+      [document],
+      {},
+      vi.fn().mockRejectedValue(new Error('download failed')),
+    );
+
+    expect(() => {
+      if (Object.keys(result.files).length === 0) {
+        throw new ImportFileResolutionError(result.failures);
+      }
+    }).toThrow(ImportFileResolutionError);
+    expect(result.failures).toHaveLength(1);
+  });
+
+  it('새로고침 전 pending File과 새로고침 후 복원 File이 동일 분석 요청 구조를 만든다', async () => {
+    const document = hydrateImportDraft(baseState, draft('shipper')).documents[0];
+    const pending = new File(['same-pdf'], document.name, {
+      type: document.mimeType,
+    });
+    const restored = new File(['same-pdf'], document.name, {
+      type: document.mimeType,
+    });
+
+    const beforeRefresh = await buildImportAnalysisRequestDocuments(
+      [document],
+      { [document.id]: pending },
+    );
+    const afterRefresh = await buildImportAnalysisRequestDocuments(
+      [document],
+      { [document.id]: restored },
+    );
+
+    expect(afterRefresh).toEqual(beforeRefresh);
+    expect(afterRefresh[0]).toMatchObject({
+      id: document.id,
+      fileName: document.name,
+      mimeType: document.mimeType,
+      documentType: document.type,
+    });
+    expect(afterRefresh[0].dataUrl).toMatch(/^data:application\/pdf;base64,/);
   });
 });

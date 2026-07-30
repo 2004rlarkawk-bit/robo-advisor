@@ -69,13 +69,14 @@ export interface ImportFileResolutionFailure {
   code: string;
   bucket: string;
   maskedStoragePath: string;
+  status: string;
 }
 
 export class ImportFileResolutionError extends Error {
   readonly failures: ImportFileResolutionFailure[];
 
   constructor(failures: ImportFileResolutionFailure[]) {
-    super('저장된 파일 내용을 불러오지 못했습니다. 파일 정보는 유지되며 필요하면 다시 업로드할 수 있습니다.');
+    super('저장된 첨부파일 원본을 불러오지 못했습니다. 파일 정보는 유지됩니다. 해당 파일을 다시 첨부한 뒤 분석해 주세요.');
     this.name = 'ImportFileResolutionError';
     this.failures = failures;
   }
@@ -230,11 +231,17 @@ export function hydrateImportDraft(
 
 type AttachmentFileLoader = typeof loadTradeAttachmentFile;
 
+export interface ImportFileResolutionResult {
+  files: Record<string, File>;
+  failures: ImportFileResolutionFailure[];
+}
+
 export async function resolveImportAnalysisFiles(
   documents: ImportDocumentMeta[],
   sourceFiles: Record<string, File>,
   loader: AttachmentFileLoader = loadTradeAttachmentFile,
-): Promise<Record<string, File>> {
+  expectedUserId?: string,
+): Promise<ImportFileResolutionResult> {
   const resolved = { ...sourceFiles };
   const failures: ImportFileResolutionFailure[] = [];
 
@@ -248,6 +255,7 @@ export async function resolveImportAnalysisFiles(
         code: 'PENDING_FILE_MISSING',
         bucket: document.storageBucket || 'trade-documents',
         maskedStoragePath: '',
+        status: '',
       });
       continue;
     }
@@ -258,7 +266,7 @@ export async function resolveImportAnalysisFiles(
         fileName: document.name,
         mimeType: document.mimeType,
         documentType: document.type === 'unknown' ? 'other' : document.type,
-      });
+      }, expectedUserId);
     } catch (error) {
       const downloadError = error instanceof TradeAttachmentDownloadError ? error : null;
       failures.push({
@@ -269,12 +277,12 @@ export async function resolveImportAnalysisFiles(
         code: downloadError?.code || 'STORAGE_DOWNLOAD_FAILED',
         bucket: downloadError?.bucket || document.storageBucket || 'trade-documents',
         maskedStoragePath: downloadError?.maskedStoragePath || '<user>/…',
+        status: downloadError?.status || '',
       });
     }
   }
 
-  if (failures.length > 0) throw new ImportFileResolutionError(failures);
-  return resolved;
+  return { files: resolved, failures };
 }
 
 export default function ImportTradeFlow({
@@ -385,11 +393,32 @@ export default function ImportTradeFlow({
       documents: current.documents.map((document) => ({ ...document, status: 'analyzing', analysisStatus: 'analyzing', errorMessage: undefined })),
     }));
     try {
-      const resolvedFiles = await resolveImportAnalysisFiles(state.documents, sourceFiles);
+      const { files: resolvedFiles, failures } = await resolveImportAnalysisFiles(
+        state.documents,
+        sourceFiles,
+        loadTradeAttachmentFile,
+        userId,
+      );
+      const analyzableDocuments = state.documents.filter(
+        (document) => Boolean(resolvedFiles[document.id]),
+      );
+      if (analyzableDocuments.length === 0) {
+        throw new ImportFileResolutionError(failures);
+      }
       setSourceFiles(resolvedFiles);
-      const result = await analyzeImportDocuments(state.documents, resolvedFiles);
+      const result = await analyzeImportDocuments(analyzableDocuments, resolvedFiles);
+      const failedIds = new Set(failures.map((failure) => failure.documentId));
       setState((current) => {
         const documents = current.documents.map((document) => {
+          if (failedIds.has(document.id)) {
+            return {
+              ...document,
+              status: 'error' as const,
+              analysisStatus: 'error' as const,
+              analysisSuccess: false,
+              errorMessage: '저장된 원본 파일을 불러오지 못했습니다.',
+            };
+          }
           const classification = result.classifications.find((item) => item.id === document.id);
           return {
             ...document,
@@ -420,6 +449,23 @@ export default function ImportTradeFlow({
           risks: assessImportRisks(documents, analysis, suggestions, '', importerCompanyName),
         };
       });
+      if (failures.length > 0) {
+        setMessage(
+          `${state.documents.length}개 파일 중 ${failures.length}개를 불러오지 못했습니다. `
+          + `나머지 ${analyzableDocuments.length}개 파일로 분석을 계속했습니다.`,
+        );
+        console.warn('[Import Document Analysis] partial download failure', {
+          files: failures.map(({
+            fileName, code, status, bucket, maskedStoragePath,
+          }) => ({
+            fileName,
+            code,
+            status,
+            bucket,
+            storagePath: maskedStoragePath,
+          })),
+        });
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '문서 분석에 실패했습니다.';
       const failedIds = new Set(
@@ -430,9 +476,12 @@ export default function ImportTradeFlow({
       console.error('[Import Document Analysis] failed', {
         message: errorMessage,
         files: error instanceof ImportFileResolutionError
-          ? error.failures.map(({ fileName, code, bucket, maskedStoragePath }) => ({
+          ? error.failures.map(({
+            fileName, code, status, bucket, maskedStoragePath,
+          }) => ({
             fileName,
             code,
+            status,
             bucket,
             storagePath: maskedStoragePath,
           }))

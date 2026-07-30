@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   getSessionMock,
+  getUserMock,
   downloadMock,
   moveMock,
   getPublicUrlMock,
 } = vi.hoisted(() => ({
   getSessionMock: vi.fn(),
+  getUserMock: vi.fn(),
   downloadMock: vi.fn(),
   moveMock: vi.fn(),
   getPublicUrlMock: vi.fn(),
@@ -15,7 +17,7 @@ const {
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
-    auth: { getSession: getSessionMock },
+    auth: { getSession: getSessionMock, getUser: getUserMock },
     storage: {
       from: vi.fn(() => ({
         download: downloadMock,
@@ -30,6 +32,7 @@ import {
   loadTradeAttachmentFile,
   maskStoragePath,
   moveTradeAttachmentsToScope,
+  normalizeStorageObjectPath,
   TradeAttachmentDownloadError,
 } from './tradeAttachmentStorageService';
 import type { TradeAttachment } from '../types/tradeFormData';
@@ -47,7 +50,14 @@ const attachment: TradeAttachment = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getSessionMock.mockResolvedValue({ data: { session: { access_token: 'masked' } }, error: null });
+  getSessionMock.mockResolvedValue({
+    data: { session: { access_token: 'masked', user: { id: 'user-secret' } } },
+    error: null,
+  });
+  getUserMock.mockResolvedValue({
+    data: { user: { id: 'user-secret' } },
+    error: null,
+  });
 });
 
 describe('private trade attachment download', () => {
@@ -57,9 +67,10 @@ describe('private trade attachment download', () => {
       error: null,
     });
 
-    const file = await loadTradeAttachmentFile(attachment);
+    const file = await loadTradeAttachmentFile(attachment, 'user-secret');
 
     expect(getSessionMock).toHaveBeenCalledOnce();
+    expect(getUserMock).not.toHaveBeenCalled();
     expect(downloadMock).toHaveBeenCalledWith(attachment.storagePath);
     expect(getPublicUrlMock).not.toHaveBeenCalled();
     expect(file).toBeInstanceOf(File);
@@ -69,6 +80,10 @@ describe('private trade attachment download', () => {
 
   it('세션이 없으면 Storage 요청 전에 안전한 오류를 반환하고 사용자 ID를 마스킹한다', async () => {
     getSessionMock.mockResolvedValue({ data: { session: null }, error: null });
+    getUserMock.mockResolvedValue({
+      data: { user: null },
+      error: { message: 'Auth session missing' },
+    });
 
     await expect(loadTradeAttachmentFile(attachment)).rejects.toMatchObject({
       name: 'TradeAttachmentDownloadError',
@@ -79,17 +94,56 @@ describe('private trade attachment download', () => {
     expect(downloadMock).not.toHaveBeenCalled();
   });
 
+  it('새로고침 직후 로컬 session 판독이 실패해도 getUser가 복원한 사용자로 download한다', async () => {
+    getSessionMock.mockRejectedValue(new Error('session lock unavailable'));
+    getUserMock.mockResolvedValue({
+      data: { user: { id: 'user-secret' } },
+      error: null,
+    });
+    downloadMock.mockResolvedValue({
+      data: new Blob(['pdf'], { type: 'application/pdf' }),
+      error: null,
+    });
+
+    const file = await loadTradeAttachmentFile(attachment, 'user-secret');
+
+    expect(getUserMock).toHaveBeenCalledOnce();
+    expect(downloadMock).toHaveBeenCalledWith(attachment.storagePath);
+    expect(file.name).toBe(attachment.fileName);
+  });
+
+  it('현재 인증 사용자와 다른 첫 segment 경로는 Storage 요청 전에 차단한다', async () => {
+    const otherUserAttachment = {
+      ...attachment,
+      storagePath: 'other-user/trade-1/commercial_invoice/attachment-1.pdf',
+    };
+
+    await expect(loadTradeAttachmentFile(
+      otherUserAttachment,
+      'user-secret',
+    )).rejects.toMatchObject({
+      code: 'STORAGE_PATH_USER_MISMATCH',
+      maskedStoragePath: '<user>/trade-1/commercial_invoice/attachment-1.pdf',
+    });
+    expect(downloadMock).not.toHaveBeenCalled();
+  });
+
   it('stale Storage 경로 오류에 파일 metadata와 마스킹 경로를 유지한다', async () => {
     downloadMock.mockResolvedValue({
       data: null,
-      error: { code: '404', message: 'Object not found' },
+      error: {
+        error: 'NoSuchKey',
+        message: 'Object not found',
+        statusCode: '404',
+      },
     });
 
     const error = await loadTradeAttachmentFile(attachment).catch((caught) => caught);
 
     expect(error).toBeInstanceOf(TradeAttachmentDownloadError);
     expect(error).toMatchObject({
-      code: '404',
+      code: 'NoSuchKey',
+      status: '404',
       fileName: 'invoice.pdf',
       bucket: 'trade-documents',
       maskedStoragePath: '<user>/draft-export-forwarder/commercial_invoice/attachment-1.pdf',
@@ -100,6 +154,23 @@ describe('private trade attachment download', () => {
   it('Storage 경로 첫 segment만 마스킹한다', () => {
     expect(maskStoragePath('user-id/trade-id/other/file.pdf'))
       .toBe('<user>/trade-id/other/file.pdf');
+  });
+
+  it('bucket과 object path를 분리하고 선행 slash만 정규화한다', () => {
+    expect(normalizeStorageObjectPath(
+      'trade-documents',
+      '/user-secret/draft-import-forwarder/commercial_invoice/한글 파일 (1).pdf',
+    )).toBe(
+      'user-secret/draft-import-forwarder/commercial_invoice/한글 파일 (1).pdf',
+    );
+    expect(() => normalizeStorageObjectPath(
+      'trade-documents',
+      'trade-documents/user-secret/file.pdf',
+    )).toThrow('bucket 내부 상대 경로');
+    expect(() => normalizeStorageObjectPath(
+      'trade-documents',
+      'https://example.test/storage/object.pdf',
+    )).toThrow('bucket 내부 상대 경로');
   });
 });
 

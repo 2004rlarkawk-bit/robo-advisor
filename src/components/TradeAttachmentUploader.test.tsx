@@ -187,6 +187,25 @@ describe('수출 포워더 첨부 uploader', () => {
     expect(container?.textContent).toContain('PDF, PNG, JPEG');
   });
 
+  it('Storage upload 실패 시 persisted metadata와 완료 UI를 만들지 않는다', async () => {
+    uploadMock.mockRejectedValue(new Error('upload failed'));
+    const { onChange } = renderUploader();
+    const input = container!.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const file = new File(['pdf'], 'failed.pdf', { type: 'application/pdf' });
+    Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(uploadMock).toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(container?.textContent).toContain('업로드하지 못했습니다');
+    expect(container?.textContent).not.toContain('failed.pdf 업로드 완료');
+  });
+
   it('persisted 첨부 삭제 시 Storage 삭제 후 metadata를 제거한다', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     removeMock.mockResolvedValue(undefined);
@@ -223,7 +242,7 @@ describe('수출 포워더 첨부 uploader', () => {
       await Promise.resolve();
     });
 
-    expect(analyzeMock).toHaveBeenCalledWith([persisted], {});
+    expect(analyzeMock).toHaveBeenCalledWith([persisted], {}, 'user');
     expect(onApplyAnalysis).toHaveBeenCalledWith(
       { companyName: 'AI Exporter', itemName: 'Cotton shirts' },
       { companyName: 'invoice.pdf', itemName: 'invoice.pdf' },

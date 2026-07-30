@@ -107,8 +107,14 @@ function isFilled(value: ForwarderFormState[keyof ForwarderFormState] | undefine
 export async function analyzeForwarderAttachments(
   attachments: TradeAttachment[],
   pendingFiles: Record<string, File>,
-  dependencies: AnalysisDependencies = DEFAULT_DEPENDENCIES,
+  dependenciesOrUserId: AnalysisDependencies | string = DEFAULT_DEPENDENCIES,
 ): Promise<ForwarderAttachmentAnalysis> {
+  const dependencies = typeof dependenciesOrUserId === 'string'
+    ? DEFAULT_DEPENDENCIES
+    : dependenciesOrUserId;
+  const expectedUserId = typeof dependenciesOrUserId === 'string'
+    ? dependenciesOrUserId
+    : undefined;
   const values: Partial<ForwarderFormState> = {};
   const classifications: Record<string, TradeAttachment['documentType']> = {};
   const sourceFiles: Record<string, string> = {};
@@ -117,7 +123,8 @@ export async function analyzeForwarderAttachments(
 
   for (const attachment of attachments) {
     try {
-      const file = pendingFiles[attachment.id] ?? await dependencies.loadFile(attachment);
+      const file = pendingFiles[attachment.id]
+        ?? await dependencies.loadFile(attachment, expectedUserId);
       const document = importDocument(attachment);
       const result = await dependencies.analyze([document], { [attachment.id]: file });
       const mapped = mapExtractedFieldsToForwarderForm(result.analysis.extracted);
