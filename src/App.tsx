@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, Fragment, type SetStateAction } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment, type SetStateAction } from 'react';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -81,6 +81,7 @@ import {
 import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from './constants/ports';
 import CountrySelect from './components/CountrySelect';
 import { calculateReadiness } from './harness/rulesEngine';
+import { validateRequiredInputs } from './harness/validatorEngine';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
 import {
@@ -1561,6 +1562,25 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const completedDocsCount = documents.filter(d => d.status === 'completed').length;
   // 차단(제출/생성 게이트) = 미해결 error만.
   const blockingIssuesCount = unresolvedBlockers(issues, overrides).length;
+
+  // 입력 화면 오른쪽 "고칠 항목" 체크리스트 —
+  // 마지막 생성에서 나온 오류·보완을 한 번에 보여주고, 항목 클릭 시 해당 입력칸으로 이동한다.
+  // 순수 입력 검증(validateRequiredInputs)이 내는 이슈는 현재 입력값으로 실시간 재평가해
+  // 사용자가 채우는 즉시 ✓(해결)로 표시한다. 그 외 이슈는 재생성 시 재검증된다.
+  const fixListIssues = useMemo(
+    () => [...issues]
+      .filter(i => i.severity !== 'info')
+      .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1)),
+    [issues]
+  );
+  const LIVE_CHECK_ID = /^(input-missing-|input-nan-|input-nonpositive-)|^(amount-calc-mismatch|input-date-order|invoice-date-after-shipment)$/;
+  const liveInputIssueIds = useMemo(
+    () => new Set(validateRequiredInputs(profile).map(i => i.id)),
+    [profile]
+  );
+  const isIssueLiveResolved = (issue: ValidationIssue) =>
+    LIVE_CHECK_ID.test(issue.id) && !liveInputIssueIds.has(issue.id);
+  const fixListResolvedCount = fixListIssues.filter(isIssueLiveResolved).length;
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 
@@ -2882,6 +2902,53 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                         </div>
                       );
                     })()
+                  ) : fixListIssues.length > 0 ? (
+                    /* 고칠 항목 체크리스트 — 결과↔입력 왕복 없이 이 화면에서 전부 수정 */
+                    <div className="fixlist">
+                      <h3 className="info-title">고칠 항목 {fixListIssues.length}건</h3>
+                      <p className="fixlist-sub">
+                        {fixListResolvedCount >= fixListIssues.length
+                          ? '모두 해결! [다시 생성해 재검증]을 눌러 반영하세요.'
+                          : fixListResolvedCount > 0
+                            ? `${fixListResolvedCount}건 해결됨 — 나머지도 항목을 누르면 입력칸으로 이동해요.`
+                            : '항목을 누르면 해당 입력칸으로 이동해요.'}
+                      </p>
+                      <ul className="fixlist-items">
+                        {fixListIssues.map((issue) => {
+                          const resolved = isIssueLiveResolved(issue);
+                          const docLabel =
+                            issue.docType === 'invoice' ? '상업송장' :
+                            issue.docType === 'packing_list' ? '패킹리스트' :
+                            issue.docType === 'bl' ? '선하증권(B/L)' :
+                            issue.docType === 'customs_dec' ? '통관신고서' :
+                            issue.docType === 'co' ? '원산지증명서' :
+                            issue.docType === 'insurance' ? '적하보험증권' : '기타 서류';
+                          return (
+                            <li key={issueKey(issue)}>
+                              <button
+                                type="button"
+                                className={`fixlist-item ${issue.severity}${resolved ? ' resolved' : ''}`}
+                                onClick={() => goToFieldFix(issue)}
+                              >
+                                <span className="fixlist-dot" aria-hidden="true">{resolved ? '✓' : ''}</span>
+                                <span className="fixlist-body">
+                                  <span className="fixlist-msg">{issue.message}</span>
+                                  <span className="fixlist-doc">{docLabel}</span>
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <div className="fixlist-actions">
+                        <button className="btn btn-primary btn-sm" onClick={() => void handleGenerateDocuments()} disabled={isProcessing}>
+                          다시 생성해 재검증
+                        </button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setHasGenerated(true)}>
+                          결과 화면 보기
+                        </button>
+                      </div>
+                    </div>
                   ) : documents.some(d => d.status !== 'not_started') ? (
                     <div className="info-result">
                       <h3 className="info-title">최근 생성 결과</h3>
