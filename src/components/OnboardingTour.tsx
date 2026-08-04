@@ -41,7 +41,7 @@ const STEPS: Step[] = [
     find: () => findMenuByText('통관 작업실'),
     chip: 'STEP 1',
     title: '여기가 메인 작업 공간이에요',
-    desc: '통관 작업실에서 거래 정보를 입력하고 서류를 만들어요. [다음]을 누르면 작업실로 들어가 볼게요.',
+    desc: 'AI 통관 작업실에서 거래 정보를 입력하고 서류를 만들어요. [다음]을 누르면 작업실로 들어가 볼게요.',
   },
   {
     goto: gotoWorkspace,

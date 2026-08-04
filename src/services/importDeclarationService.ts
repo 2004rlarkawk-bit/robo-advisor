@@ -1,5 +1,3 @@
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import PizZip from 'pizzip';
 import type { ImportDutyEstimate, ImportExtractedFields, ImportRisk } from '../types/importTrade';
 
@@ -229,6 +227,10 @@ export function createImportDeclarationDocx(data: ImportDeclarationData): Blob {
 }
 
 async function downloadImportDeclarationPdf(data: ImportDeclarationData): Promise<void> {
+  const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+    import('jspdf'),
+    import('html2canvas'),
+  ]);
   const sheet = document.createElement('div');
   sheet.style.cssText = 'position:fixed;left:-10000px;top:0;background:#fff;';
   sheet.innerHTML = generateImportDeclarationHtml(data);

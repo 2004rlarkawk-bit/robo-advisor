@@ -10,7 +10,6 @@ import {
   Download,
   ArrowRight,
   LayoutDashboard,
-  Layers,
   FolderKanban,
   BarChart3,
 } from 'lucide-react';
@@ -43,8 +42,7 @@ const STEPS = [
 ];
 
 const SHORTCUTS: { menu: string; icon: typeof FileText; label: string; desc: string }[] = [
-  { menu: 'dashboard', icon: LayoutDashboard, label: '통관 작업실', desc: '거래 입력 · 서류 생성 · 검증' },
-  { menu: 'trades', icon: Layers, label: '거래 관리', desc: '진행 중 · 완료 거래 관리' },
+  { menu: 'dashboard', icon: LayoutDashboard, label: 'AI 통관 작업실', desc: '거래 입력 · 서류 생성 · 검증 · 임시보관함' },
   { menu: 'docs', icon: FolderKanban, label: '문서 관리', desc: '생성 문서 조회 · 다운로드' },
   { menu: 'analysis', icon: BarChart3, label: '데이터 분석', desc: '내 품목 수출입 통계 조회' },
 ];

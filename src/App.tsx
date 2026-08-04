@@ -1,15 +1,16 @@
-import { useState, useEffect, useRef, useCallback, useMemo, Fragment, type SetStateAction } from 'react';
+import {
+  Fragment,
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type SetStateAction,
+} from 'react';
 import { 
-  LayoutDashboard, 
-  BarChart3,
   FileText, 
-  FolderKanban, 
-  Layers,
-  FileCheck2,
-  Settings, 
-  PhoneCall, 
-  Bell, 
-  HelpCircle,
   RotateCcw,
   FileSignature,
   AlertTriangle,
@@ -17,11 +18,6 @@ import {
   Terminal,
   Download,
   Eye,
-  PanelLeftClose,
-  PanelLeftOpen,
-  UserRound,
-  Anchor,
-  BookOpen,
   Pencil,
   ArrowRight,
   Calculator,
@@ -42,26 +38,14 @@ import {
   type CustomsDeclarationData,
 } from './types';
 import './styles/feedbackReport.css';
-import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
-import { buildPackingListDocx, renderPackingListDocxPreview } from './services/packingListDocxService';
-import { buildExportDeclarationDocx, renderExportDeclarationDocxPreview } from './services/exportDeclarationDocxService';
-import SettingsPanel from './components/SettingsPanel';
-import GuidePanel from './components/GuidePanel';
-import AboutPanel from './components/AboutPanel';
-import DataAnalysisPanel from './components/DataAnalysisPanel';
-import DocumentManagerPanel from './components/DocumentManagerPanel';
-import TradeManagerPanel from './components/TradeManagerPanel';
-import CustomsHistoryPanel from './components/CustomsHistoryPanel';
 import AuthPage from './components/AuthPage';
 import OnboardingPage from './components/OnboardingPage';
-import ProfileSettingsPage from './components/ProfileSettingsPage';
-import ForwarderWorkspaceForm from './components/ForwarderWorkspaceForm';
 import ShipperWorkspaceForm from './components/ShipperWorkspaceForm';
 import OnboardingTour from './components/OnboardingTour';
 import TradeDirectionSelector from './components/trade/TradeDirectionSelector';
 import TradeRoleSelector from './components/trade/TradeRoleSelector';
-import ImportShipperFlow from './components/import/ImportShipperFlow';
-import ImportForwarderFlow from './components/import/ImportForwarderFlow';
+import AppHeader from './components/layout/AppHeader';
+import AppSidebar from './components/layout/AppSidebar';
 import type { ImportTradeSnapshot, TradeDirection } from './types/importTrade';
 import type { TradeAttachment } from './types/tradeFormData';
 import { deleteCurrentAccount, getCurrentAuthUser, markOnboardingCompleted, onAuthStateChange, signOutUser, type AuthSessionUser } from './services/authService';
@@ -79,6 +63,7 @@ import {
   type DevTestMode,
 } from './services/devTestDataService';
 import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from './constants/ports';
+import { EMPTY_TRADE_PROFILE } from './constants/tradeProfile';
 import CountrySelect from './components/CountrySelect';
 import { calculateReadiness } from './harness/rulesEngine';
 import { validateRequiredInputs } from './harness/validatorEngine';
@@ -116,6 +101,24 @@ import {
   tradeProfileToForwarderFormState,
   type ForwarderFormState,
 } from './utils/forwarderForm';
+import {
+  issueKey,
+  issueToFieldKey,
+  shortIssueLabel,
+  unresolvedBlockers,
+} from './utils/validationIssues';
+
+const AboutPanel = lazy(() => import('./components/AboutPanel'));
+const CustomsHistoryPanel = lazy(() => import('./components/CustomsHistoryPanel'));
+const DataAnalysisPanel = lazy(() => import('./components/DataAnalysisPanel'));
+const DocumentManagerPanel = lazy(() => import('./components/DocumentManagerPanel'));
+const ForwarderWorkspaceForm = lazy(() => import('./components/ForwarderWorkspaceForm'));
+const GuidePanel = lazy(() => import('./components/GuidePanel'));
+const ImportForwarderFlow = lazy(() => import('./components/import/ImportForwarderFlow'));
+const ImportShipperFlow = lazy(() => import('./components/import/ImportShipperFlow'));
+const ProfileSettingsPage = lazy(() => import('./components/ProfileSettingsPage'));
+const SettingsPanel = lazy(() => import('./components/SettingsPanel'));
+const TradeManagerPanel = lazy(() => import('./components/TradeManagerPanel'));
 
 const IS_DEV_TEST_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
 
@@ -217,7 +220,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setWorkspaceCurrentStep(1);
     setPendingResumeTradeId(null);
     clearWorkspaceSession();
-    setActiveMenu(completedTrade.status === 'submitted' ? 'docs' : 'trades');
+    // 임시저장(미제출) 거래는 작업실 내 임시보관함에서 이어가도록 작업실로 돌려보낸다.
+    setActiveMenu(completedTrade.status === 'submitted' ? 'docs' : 'dashboard');
   };
 
   const handleImportGenerate = async (snapshot: ImportTradeSnapshot): Promise<string> => {
@@ -356,93 +360,13 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   };
   
   // Trade profile state
-const emptyProfile: TradeProfile = {
-  tradeType: 'export',
-  documentNo: '',
-  invoiceNo: '',
-  invoiceDate: '',
-  referenceNo: '',
-  otherReferences: '',
-
-  blNo: '',
-  issuePlace: '',
-  issueDate: '',
-
-  itemName: '',
-  hsCode: '',
-  countryOfOrigin: '',
-  quantity: '',
-  unit: 'EA',
-
-  currency: 'USD',
-  unitPrice: '',
-  totalAmount: '',
-  invoiceAmount: '',
-
-  packageCount: '',
-  packageType: '',
-  netWeight: '',
-  grossWeight: '',
-  weight: '',
-  measurement: '',
-  shippingMarks: '',
-
-  loadPort: '',
-  dischargePort: '',
-  departureDate: '',
-  arrivalDate: '',
-  vesselOrFlight: '',
-  carrier: '',
-
-  placeOfReceipt: '',
-  placeOfDelivery: '',
-  finalDestination: '',
-  voyageNo: '',
-  flag: '',
-
-  containerNo: '',
-  sealNo: '',
-
-  incoterms: '',
-  paymentTerms: '',
-  reasonForExport: '',
-  freightTerms: '',
-  freightCharges: '',
-  freightPrepaidAt: '',
-  freightPayableAt: '',
-
-  companyName: '',
-  companyAddress: '',
-  companyCountry: '',
-  contact: '',
-  taxNo: '',
-  businessRegistrationNo: '',
-
-  partnerName: '',
-  partnerAddress: '',
-  partnerCountry: '',
-  partnerContact: '',
-
-  buyerName: '',
-  buyerAddress: '',
-  buyerCountry: '',
-
-  notifyPartyName: '',
-  notifyPartyAddress: '',
-  notifyPartyContact: '',
-
-  signedBy: '',
-  signerName: '',
-  signerPosition: ''
-};
-
-const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
+  const [profile, setProfile] = useState<TradeProfile>(EMPTY_TRADE_PROFILE);
   const [forwarderForm, setForwarderForm] = useState<ForwarderFormState>(() => createEmptyForwarderFormState());
   const [forwarderAttachments, setForwarderAttachments] = useState<TradeAttachment[]>([]);
   const [isForwarderSaving, setIsForwarderSaving] = useState(false);
 
   const tradeDraftDefaultProfile: TradeProfile = {
-    ...emptyProfile,
+    ...EMPTY_TRADE_PROFILE,
     ...(userProfile ? userProfileToTradeDefaults(userProfile) : {}),
   };
   const workspaceDraftProfile = workspaceRole === 'forwarder'
@@ -502,10 +426,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const [overrideTarget, setOverrideTarget] = useState<ValidationIssue | null>(null);
   const [overrideReason, setOverrideReason] = useState('');
   const blockedGenRef = useRef<{ result: any; generationProfile: TradeProfile; writeMode: ReturnType<typeof decideGeneratedTradeWrite> } | null>(null);
-  const issueKey = (i: ValidationIssue) => `${i.id}::${String(i.field)}`;
-  // 미해결 차단 이슈 = error 중 (overridable+사유입력)으로 우회되지 않은 것
-  const unresolvedBlockers = (list: ValidationIssue[], ov: Record<string, string>) =>
-    list.filter(i => i.severity === 'error' && !(i.overridable && ov[issueKey(i)]));
   const [feedbackReport, setFeedbackReport] = useState<FeedbackReport | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [htmlTemplates, setHtmlTemplates] = useState<Record<string, string>>({});
@@ -530,6 +450,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     if (!invoiceData) return null;
     const sig = JSON.stringify(invoiceData);
     if (invoiceDocxCacheRef.current?.sig === sig) return invoiceDocxCacheRef.current.blob;
+    const { buildInvoiceDocx } = await import('./services/invoiceDocxService');
     const blob = await buildInvoiceDocx(invoiceData);
     invoiceDocxCacheRef.current = { sig, blob };
     return blob;
@@ -540,6 +461,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     if (!packingListData) return null;
     const sig = JSON.stringify(packingListData);
     if (packingXlsxCacheRef.current?.sig === sig) return packingXlsxCacheRef.current.blob;
+    const { buildPackingListDocx } = await import('./services/packingListDocxService');
     const blob = await buildPackingListDocx(packingListData);
     packingXlsxCacheRef.current = { sig, blob };
     return blob;
@@ -550,6 +472,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     if (!customsDeclarationData) return null;
     const sig = JSON.stringify(customsDeclarationData);
     if (customsDocxCacheRef.current?.sig === sig) return customsDocxCacheRef.current.blob;
+    const { buildExportDeclarationDocx } = await import('./services/exportDeclarationDocxService');
     const blob = await buildExportDeclarationDocx(customsDeclarationData);
     customsDocxCacheRef.current = { sig, blob };
     return blob;
@@ -571,6 +494,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         const blob = await getInvoiceBlob();
         const host = docxPreviewRef.current;
         if (!blob || cancelled || !host) return;
+        const { renderInvoiceDocxPreview } = await import('./services/invoiceDocxService');
         await renderInvoiceDocxPreview(blob, host);
       } catch {
         const host = docxPreviewRef.current;
@@ -589,6 +513,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         const blob = await getPackingListBlob();
         const host = packingDocxPreviewRef.current;
         if (!blob || cancelled || !host) return;
+        const { renderPackingListDocxPreview } = await import('./services/packingListDocxService');
         await renderPackingListDocxPreview(blob, host);
       } catch {
         const host = packingDocxPreviewRef.current;
@@ -607,6 +532,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
         const blob = await getCustomsDeclBlob();
         const host = customsDocxPreviewRef.current;
         if (!blob || cancelled || !host) return;
+        const { renderExportDeclarationDocxPreview } = await import('./services/exportDeclarationDocxService');
         await renderExportDeclarationDocxPreview(blob, host);
       } catch {
         const host = customsDocxPreviewRef.current;
@@ -632,13 +558,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const [highlightField, setHighlightField] = useState<string | null>(null);
   const [highlightHint, setHighlightHint] = useState<string>('');
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // 이슈 → 입력 폼 data-field 키. 전용 필드명이 다른 경우만 보정.
-  const issueToFieldKey = (issue: ValidationIssue): string => {
-    const f = String(issue.field);
-    if (f === 'invoiceAmount') return 'totalAmount';
-    return f;
-  };
 
   const clearFieldHighlight = () => {
     if (highlightTimerRef.current) { clearTimeout(highlightTimerRef.current); highlightTimerRef.current = null; }
@@ -867,7 +786,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   setDevTestMode(null);
   setDevTestMessage('');
  setProfile({
-   ...emptyProfile,
+   ...EMPTY_TRADE_PROFILE,
    ...(userProfile ? userProfileToTradeDefaults(userProfile) : {}),
  });
   setForwarderForm(createEmptyForwarderFormState());
@@ -1346,6 +1265,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     const host = idoc.getElementById('pdf-host') as HTMLElement | null;
     if (!host) { document.body.removeChild(iframe); return; }
     // 같은 docx Blob을 인쇄 iframe 문서에 렌더(스타일도 그 문서에 주입됨).
+    const { renderInvoiceDocxPreview } = await import('./services/invoiceDocxService');
     await renderInvoiceDocxPreview(blob, host);
 
     const win = iframe.contentWindow!;
@@ -1581,18 +1501,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const isIssueLiveResolved = (issue: ValidationIssue) =>
     LIVE_CHECK_ID.test(issue.id) && !liveInputIssueIds.has(issue.id);
   const fixListResolvedCount = fixListIssues.filter(isIssueLiveResolved).length;
-  // 체크리스트용 한 줄 요약 — 근거·예시·괄호를 걷어내고 핵심만. 전체 문구는 클릭 시 배너로 안내.
-  const shortIssueLabel = (issue: ValidationIssue): string => {
-    const m = issue.message.replace(/\[[^\]]*\]/g, '').replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
-    const missing = m.match(/^(.+?)이 ?입력되지 않았습니다/);
-    if (missing) return `${missing[1].trim()} 입력`;
-    const korean = m.match(/^(.+?)에 한글이 포함되어/);
-    if (korean) return `${korean[1].trim()} 영문으로 수정`;
-    const sentence = m.split('.')[0].trim();
-    const colon = sentence.split(':');
-    if (colon.length > 1 && colon[0].trim().length >= 6) return colon[0].trim();
-    return sentence;
-  };
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 
@@ -1831,167 +1739,32 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
     <div className="app-container">
       <OnboardingTour />
       {/* 1. Left Navigation Sidebar */}
-      <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-        <div className="logo-section">
-          <div className="logo-icon">🚢</div>
-          <div>
-            <div className="logo-text">PortAI</div>
-            <div className="logo-sub">스마트 물류 & 통관 자동화 플랫폼</div>
-          </div>
-        </div>
-
-        <ul className="menu-list">
-          <li>
-            <div
-              className={`menu-item ${activeMenu === 'about' ? 'active' : ''}`}
-              onClick={() => setActiveMenu('about')}
-            >
-              <Anchor size={18} />
-              서비스 소개
-            </div>
-          </li>
-          <li>
-            <div
-              className={`menu-item ${activeMenu === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setActiveMenu('dashboard')}
-            >
-              <LayoutDashboard size={18} />
-              통관 작업실
-            </div>
-          </li>
-          <li>
-            <div
-              className={`menu-item ${activeMenu === 'docs' ? 'active' : ''}`}
-              onClick={() => setActiveMenu('docs')}
-            >
-              <FolderKanban size={18} />
-              문서 관리
-            </div>
-          </li>
-          {/* 미구현 메뉴 — 구현 완료 시 onClick 연결 후 disabled/배지 제거 */}
-                    <li>
-            <div
-              className={`menu-item ${activeMenu === 'trades' ? 'active' : ''}`}
-              onClick={() => setActiveMenu('trades')}
-            >
-              <Layers size={18} />
-              거래 관리
-            </div>
-          </li>
-          <li>
-            <div
-  className={`menu-item ${activeMenu === 'customs_history' ? 'active' : ''}`}
-  onClick={() => setActiveMenu('customs_history')}
->
-  <FileCheck2 size={18} />
-  통관 내역
-</div>
-          </li>
-          <li>
-            <div
-              className={`menu-item ${activeMenu === 'analysis' ? 'active' : ''}`}
-              onClick={() => setActiveMenu('analysis')}
-            >
-              <BarChart3 size={18} />
-              데이터 분석
-            </div>
-          </li>
-          <li>
-            <div
-              className={`menu-item ${activeMenu === 'profile' ? 'active' : ''}`}
-              onClick={() => setActiveMenu('profile')}
-            >
-              <UserRound size={18} />
-              프로필 관리
-            </div>
-          </li>
-          <li>
-            <div
-              className={`menu-item ${activeMenu === 'guide' ? 'active' : ''}`}
-              onClick={() => setActiveMenu('guide')}
-            >
-              <BookOpen size={18} />
-              사용 안내
-            </div>
-          </li>
-          <li>
-            <div
-              className={`menu-item ${activeMenu === 'settings' ? 'active' : ''}`}
-              onClick={() => setActiveMenu('settings')}
-            >
-              <Settings size={18} />
-              설정
-            </div>
-          </li>
-        </ul>
-
-        <div className="support-card">
-          <div className="support-title">
-            <PhoneCall size={14} />
-            고객지원센터
-          </div>
-          <div className="support-phone">02-1234-5678</div>
-          <div className="support-time">평일 09:00 - 18:00</div>
-        </div>
-      </aside>
+      <AppSidebar
+        activeMenu={activeMenu}
+        collapsed={sidebarCollapsed}
+        onNavigate={setActiveMenu}
+      />
 
       {/* 2. Main Portal Contents */}
       <div className="main-wrapper">
-        <header className="header">
-          <div className="header-title-sec">
-            <button
-              className="icon-btn sidebar-toggle"
-              onClick={() => setSidebarCollapsed(prev => !prev)}
-              title={sidebarCollapsed ? '메뉴 펼치기' : '메뉴 접기'}
-            >
-              {sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
-            </button>
-            <span className="platform-badge">Mentoring Project 2026</span>
-          </div>
-
-          <div className="header-actions">
-            <button className="icon-btn">
-              <Bell size={20} />
-              <span className="badge-dot"></span>
-            </button>
-            <button
-              className="icon-btn"
-              type="button"
-              onClick={() => setActiveMenu('guide')}
-              title="사용 안내"
-              aria-label="사용 안내 페이지로 이동"
-            >
-              <HelpCircle size={20} />
-            </button>
-            <div className="user-info-section">
-              <button type="button" className="user-profile" onClick={() => setActiveMenu('profile')} title="프로필 관리" aria-label="프로필 관리 페이지로 이동">
-                <div className="user-avatar">
-                  {(() => {
-                    // 아바타는 회사명·담당자명·이메일 순으로 첫 글자를 노출한다.
-                    // 아무 정보도 없을 때만 회원/비회원 이니셜 폴백.
-                    const label = userProfile.company_name || userProfile.contact_name || user.email || '';
-                    const first = label.trim().charAt(0);
-                    return first || (user.type === 'member' ? '회' : '비');
-                  })()}
-                </div>
-                <span>{userProfile.company_name || userProfile.contact_name || user.email} 님</span>
-              </button>
-              <button className="btn-logout" onClick={handleLogout}>
-                로그아웃
-              </button>
-            </div>
-          </div>
-        </header>
+        <AppHeader
+          collapsed={sidebarCollapsed}
+          user={user}
+          profile={userProfile}
+          onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
+          onNavigate={setActiveMenu}
+          onLogout={() => void handleLogout()}
+        />
 
         <main className="content-body">
           <div className="workspace-area">
+            <Suspense fallback={<div className="workspace-loading">화면을 불러오는 중입니다.</div>}>
             {activeMenu === 'about' ? <AboutPanel onStart={() => setActiveMenu('dashboard')} />
             : activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
             : activeMenu === 'guide' ? <GuidePanel onNavigate={(menu) => setActiveMenu(menu as AppMenu)} />
             : activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'customs_history' ? <CustomsHistoryPanel onLoad={handleLoadSavedTrade} />
             : activeMenu === 'analysis' ? <DataAnalysisPanel currentItem={{ hsCode: profile.hsCode, itemName: profile.itemName }} />
-            : activeMenu === 'trades' ? <TradeManagerPanel onLoad={handleLoadSavedTrade} />   
             : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
             : <>
             {/* Page Title & Subtitle */}
@@ -3579,7 +3352,11 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
 
               </div>
             )}
+
+            {/* 임시보관함 — 핵심 작업 영역(입력·생성·검토) 아래, 접힌 아코디언으로 배치 */}
+            <TradeManagerPanel embedded onLoad={handleLoadSavedTrade} />
             </>}
+            </Suspense>
           </div>
         </main>
       </div>

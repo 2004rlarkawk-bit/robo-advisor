@@ -577,7 +577,7 @@ export default function AboutPanel({
           className="about-cta-button"
           onClick={onStart}
         >
-          통관 작업실로 이동 →
+          AI 통관 작업실로 이동 →
         </button>
       </section>
     </div>

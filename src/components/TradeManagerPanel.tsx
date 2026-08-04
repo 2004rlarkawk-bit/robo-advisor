@@ -1,11 +1,13 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { Layers, Trash2, FolderOpen, AlertTriangle, CheckCircle2, X, Clock, Search, StickyNote } from 'lucide-react';
+import { Layers, Trash2, FolderOpen, AlertTriangle, CheckCircle2, X, Clock, Search, StickyNote, ChevronDown } from 'lucide-react';
 import type { SavedTrade } from '../types';
 import { deleteSavedTrade, fetchTradeManagerTrades } from '../services/storageService';
 import { filterTradeManagerTrades } from '../services/tradeListPolicy';
 
 interface Props {
   onLoad: (trade: SavedTrade) => void; // 이어서 작업 (작업실로 불러오기)
+  /** AI 통관 작업실 내 임시보관함 모드 — 최근 3건만 컴팩트하게 표시 */
+  embedded?: boolean;
 }
 
 const MEMO_KEY = 'portai_trade_memos_v1';
@@ -39,6 +41,17 @@ function deadlineInfo(trade: SavedTrade): { days: number; label: string; urgent:
 function errorCountOf(t: SavedTrade) {
   return t.issues.filter((i) => i.severity === 'error').length;
 }
+// 임시보관함 상태 칩: 색 + 문구를 함께 노출 (빨강 필수오류·마감임박 > 주황 보완 > 회색 입력 중 > 초록 준비 완료)
+function trayStatusOf(t: SavedTrade): { text: string; color: string; bg: string; accent: string } {
+  const errors = errorCountOf(t);
+  const warns = t.issues.filter((i) => i.severity === 'warning').length;
+  const dl = deadlineInfo(t);
+  if (errors > 0) return { text: `필수 오류 ${errors}건`, color: '#b91c1c', bg: '#fef2f2', accent: '#ef4444' };
+  if (dl?.urgent) return { text: dl.label, color: '#b91c1c', bg: '#fef2f2', accent: '#ef4444' };
+  if (warns > 0) return { text: `보완 필요 ${warns}건`, color: '#b45309', bg: '#fffbeb', accent: '#f59e0b' };
+  if (t.status === 'in_progress') return { text: '입력 중', color: '#64748b', bg: '#f1f5f9', accent: '#cbd5e1' };
+  return { text: '생성 준비 완료', color: '#15803d', bg: '#f0fdf4', accent: '#22c55e' };
+}
 function doneCountOf(t: SavedTrade) {
   return t.documents.filter((d) => d.status === 'completed').length;
 }
@@ -48,7 +61,7 @@ function fmtDate(iso: string) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export default function TradeManagerPanel({ onLoad }: Props) {
+export default function TradeManagerPanel({ onLoad, embedded }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -58,6 +71,9 @@ export default function TradeManagerPanel({ onLoad }: Props) {
   const [detail, setDetail] = useState<SavedTrade | null>(null);
   const [memos, setMemos] = useState<Record<string, string>>(loadMemos);
   const [editingMemo, setEditingMemo] = useState<string | null>(null);
+  // 임시보관함(임베드) 전용: 접힘 상태 · 전체 보기
+  const [trayOpen, setTrayOpen] = useState(false);
+  const [trayShowAll, setTrayShowAll] = useState(false);
 
   const loadTrades = useCallback(async () => {
     setIsLoading(true);
@@ -125,10 +141,77 @@ export default function TradeManagerPanel({ onLoad }: Props) {
     return list;
   }, [trades, search, statusFilter, sortKey, memos]);
 
+  // 임시보관함(작업실 하단 임베드): 접힌 아코디언. 펼치면 최근 3건, [전체 보기]로 확장. 없으면 렌더하지 않는다.
+  if (embedded) {
+    if (isLoading || trades.length === 0) return null;
+    const sorted = [...trades].sort((a, b) =>
+      new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime()
+    );
+    const recent = trayShowAll ? sorted : sorted.slice(0, 3);
+    return (
+      <section className="draft-tray" aria-label="임시보관함">
+        <button
+          type="button"
+          className="draft-tray-header"
+          aria-expanded={trayOpen}
+          onClick={() => setTrayOpen((v) => !v)}
+        >
+          <div className="draft-tray-head-main">
+            <span className="draft-tray-title">
+              <Layers size={15} /> 임시보관함
+              <span className="draft-tray-count">{trades.length}건</span>
+            </span>
+            <span className="draft-tray-sub">작성 중인 거래를 이어서 작업할 수 있어요.</span>
+          </div>
+          <ChevronDown size={18} className={`draft-tray-chevron ${trayOpen ? 'open' : ''}`} />
+        </button>
+
+        {trayOpen && (
+          <div className="draft-tray-body">
+            {error && <div className="form-message error" role="alert">{error}</div>}
+            {recent.map((trade) => {
+              const st = trayStatusOf(trade);
+              const p = trade.profile;
+              const country = p.partnerCountry || p.buyerCountry || '';
+              const ports = [p.loadPort, p.dischargePort].filter(Boolean).join(' → ');
+              const route = [country, ports, p.incoterms].filter(Boolean).join(' · ');
+              return (
+                <div key={trade.id} className="draft-tray-item" style={{ borderLeftColor: st.accent }}>
+                  <div className="draft-tray-info">
+                    <div className="draft-tray-line1">
+                      <span className={`trade-type-badge ${p.tradeType}`}>{p.tradeType === 'export' ? '수출' : '수입'}</span>
+                      <span className="draft-tray-name">{p.itemName || '(품목명 없음)'}</span>
+                      <span className="draft-tray-status" style={{ color: st.color, background: st.bg }}>{st.text}</span>
+                    </div>
+                    {route && <span className="draft-tray-route">{route}</span>}
+                    <span className="draft-tray-time">{fmtDate(trade.updatedAt ?? trade.createdAt)}</span>
+                  </div>
+                  <div className="draft-tray-actions">
+                    <button type="button" className="draft-tray-resume" onClick={() => onLoad(trade)}>
+                      <FolderOpen size={13} /> 이어서 작업
+                    </button>
+                    <button type="button" className="draft-tray-delete" aria-label="거래 삭제" onClick={() => void handleDelete(trade.id)}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            {trades.length > 3 && (
+              <button type="button" className="draft-tray-more" onClick={() => setTrayShowAll((v) => !v)}>
+                {trayShowAll ? '최근 3건만 보기' : `전체 보기 (${trades.length}건)`}
+              </button>
+            )}
+          </div>
+        )}
+      </section>
+    );
+  }
+
   return (
     <div>
       <div className="page-heading">
-        <h1 className="page-title document-manager-title"><Layers size={26} /> 거래 관리</h1>
+        <h1 className="page-title document-manager-title"><Layers size={26} /> 임시보관함</h1>
         <p className="page-subtitle">아직 제출하지 않은 작업 중인 거래를 이어서 진행하거나 정리하세요.</p>
       </div>
 
@@ -173,7 +256,7 @@ export default function TradeManagerPanel({ onLoad }: Props) {
       ) : trades.length === 0 ? (
         <div className="form-card document-empty">
           <FolderOpen size={36} />
-          아직 진행 중인 거래가 없습니다. 통관 작업실에서 새 거래를 시작해 보세요.
+          아직 진행 중인 거래가 없습니다. AI 통관 작업실에서 새 거래를 시작해 보세요.
         </div>
       ) : visible.length === 0 ? (
         <div className="form-card document-empty">검색·필터 조건에 맞는 거래가 없습니다.</div>
