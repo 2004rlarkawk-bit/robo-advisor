@@ -2932,13 +2932,19 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                           const m = issue.message.replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim();
                           const ex = m.match(/예[:：]\s*([^.]+)/);
                           if (ex) return `예: ${ex[1].trim()}`;
+                          // 괄호 속 설명이 실질적 안내인 경우가 많다 (조건·기준 등)
+                          const paren = m.match(/\(([^)]{8,})\)/);
+                          if (paren) return paren[1].trim();
                           const colon = m.split(':');
                           if (colon.length > 1) return colon.slice(1).join(':').split('.')[0].trim();
                           return null;
                         };
                         const renderRow = (issue: ValidationIssue) => {
                           const resolved = isIssueLiveResolved(issue);
-                          const hint = fixHint(issue);
+                          const label = shortIssueLabel(issue);
+                          let hint = fixHint(issue);
+                          // 제목에 이미 들어간 문구는 설명에서 반복하지 않는다
+                          if (hint && label.includes(hint.replace(/\.$/, ''))) hint = null;
                           return (
                             <li key={issueKey(issue)}>
                               <button
@@ -2949,7 +2955,7 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                               >
                                 <span className="fixlist-dot" aria-hidden="true">{resolved ? '✓' : ''}</span>
                                 <span className="fixlist-body">
-                                  <span className="fixlist-msg">{shortIssueLabel(issue)}</span>
+                                  <span className="fixlist-msg">{label}</span>
                                   {hint && <span className="fixlist-hint">{hint}</span>}
                                 </span>
                               </button>
