@@ -1581,6 +1581,18 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
   const isIssueLiveResolved = (issue: ValidationIssue) =>
     LIVE_CHECK_ID.test(issue.id) && !liveInputIssueIds.has(issue.id);
   const fixListResolvedCount = fixListIssues.filter(isIssueLiveResolved).length;
+  // 체크리스트용 한 줄 요약 — 근거·예시·괄호를 걷어내고 핵심만. 전체 문구는 클릭 시 배너로 안내.
+  const shortIssueLabel = (issue: ValidationIssue): string => {
+    const m = issue.message.replace(/\[[^\]]*\]/g, '').replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+    const missing = m.match(/^(.+?)이 ?입력되지 않았습니다/);
+    if (missing) return `${missing[1].trim()} 입력`;
+    const korean = m.match(/^(.+?)에 한글이 포함되어/);
+    if (korean) return `${korean[1].trim()} 영문으로 수정`;
+    const sentence = m.split('.')[0].trim();
+    const colon = sentence.split(':');
+    if (colon.length > 1 && colon[0].trim().length >= 6) return colon[0].trim();
+    return sentence;
+  };
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 
@@ -2913,33 +2925,56 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                             ? `${fixListResolvedCount}건 해결됨 — 나머지도 항목을 누르면 입력칸으로 이동해요.`
                             : '항목을 누르면 해당 입력칸으로 이동해요.'}
                       </p>
-                      <ul className="fixlist-items">
-                        {fixListIssues.map((issue) => {
+                      {(() => {
+                        // 한 줄 요약 행 — 전체 문구는 title 툴팁 + 클릭 시 상단 배너로.
+                        // 요약 아래엔 "어떻게 고치는지"(예시·조건)만 작게 남긴다. 근거 조문은 결과 화면 담당.
+                        const fixHint = (issue: ValidationIssue): string | null => {
+                          const m = issue.message.replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim();
+                          const ex = m.match(/예[:：]\s*([^.]+)/);
+                          if (ex) return `예: ${ex[1].trim()}`;
+                          const colon = m.split(':');
+                          if (colon.length > 1) return colon.slice(1).join(':').split('.')[0].trim();
+                          return null;
+                        };
+                        const renderRow = (issue: ValidationIssue) => {
                           const resolved = isIssueLiveResolved(issue);
-                          const docLabel =
-                            issue.docType === 'invoice' ? '상업송장' :
-                            issue.docType === 'packing_list' ? '패킹리스트' :
-                            issue.docType === 'bl' ? '선하증권(B/L)' :
-                            issue.docType === 'customs_dec' ? '통관신고서' :
-                            issue.docType === 'co' ? '원산지증명서' :
-                            issue.docType === 'insurance' ? '적하보험증권' : '기타 서류';
+                          const hint = fixHint(issue);
                           return (
                             <li key={issueKey(issue)}>
                               <button
                                 type="button"
                                 className={`fixlist-item ${issue.severity}${resolved ? ' resolved' : ''}`}
+                                title={issue.message}
                                 onClick={() => goToFieldFix(issue)}
                               >
                                 <span className="fixlist-dot" aria-hidden="true">{resolved ? '✓' : ''}</span>
                                 <span className="fixlist-body">
-                                  <span className="fixlist-msg">{issue.message}</span>
-                                  <span className="fixlist-doc">{docLabel}</span>
+                                  <span className="fixlist-msg">{shortIssueLabel(issue)}</span>
+                                  {hint && <span className="fixlist-hint">{hint}</span>}
                                 </span>
                               </button>
                             </li>
                           );
-                        })}
-                      </ul>
+                        };
+                        const errorIssues = fixListIssues.filter(i => i.severity === 'error');
+                        const warningIssues = fixListIssues.filter(i => i.severity !== 'error');
+                        return (
+                          <>
+                            {errorIssues.length > 0 && (
+                              <div className="fixlist-group">
+                                <div className="fixlist-group-head err">반드시 수정 {errorIssues.length}</div>
+                                <ul className="fixlist-items">{errorIssues.map(renderRow)}</ul>
+                              </div>
+                            )}
+                            {warningIssues.length > 0 && (
+                              <details className="fixlist-group" open={errorIssues.length === 0}>
+                                <summary className="fixlist-group-head warn">보완 권장 {warningIssues.length}</summary>
+                                <ul className="fixlist-items">{warningIssues.map(renderRow)}</ul>
+                              </details>
+                            )}
+                          </>
+                        );
+                      })()}
                       <div className="fixlist-actions">
                         <button className="btn btn-primary btn-sm" onClick={() => void handleGenerateDocuments()} disabled={isProcessing}>
                           다시 생성해 재검증
