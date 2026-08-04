@@ -316,6 +316,43 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+// 항구 문자열 → 국가 코드/한글명. 'ROTTERDAM, NETHERLANDS' 형식과 구버전 'Rotterdam Port' 형식 모두 지원.
+const COUNTRY_BY_NAME: Record<string, { code: string; ko: string }> = {
+  KOREA: { code: 'KR', ko: '한국' },
+  JAPAN: { code: 'JP', ko: '일본' },
+  CHINA: { code: 'CN', ko: '중국' },
+  USA: { code: 'US', ko: '미국' },
+  VIETNAM: { code: 'VN', ko: '베트남' },
+  GERMANY: { code: 'DE', ko: '독일' },
+  NETHERLANDS: { code: 'NL', ko: '네덜란드' },
+  SINGAPORE: { code: 'SG', ko: '싱가포르' },
+};
+const LEGACY_PORT_COUNTRY: Record<string, string> = {
+  'Los Angeles Port': 'USA',
+  'Long Beach Port': 'USA',
+  'New York Port': 'USA',
+  'Rotterdam Port': 'NETHERLANDS',
+  'Hamburg Port': 'GERMANY',
+  'Shanghai Port': 'CHINA',
+  'Qingdao Port': 'CHINA',
+  'Singapore Port': 'SINGAPORE',
+  'Tokyo Port': 'JAPAN',
+  'Osaka Port': 'JAPAN',
+  'Busan Port': 'KOREA',
+  'Incheon Port': 'KOREA',
+  'Gwangyang Port': 'KOREA',
+  'Ulsan Port': 'KOREA',
+  'Pyeongtaek Port': 'KOREA',
+};
+function portToCountry(port: string): { code: string; ko: string } | null {
+  const p = (port || '').trim();
+  if (!p) return null;
+  const nameKey = p.includes(',')
+    ? p.split(',').pop()!.trim().toUpperCase()
+    : (LEGACY_PORT_COUNTRY[p] ?? '');
+  return COUNTRY_BY_NAME[nameKey] ?? null;
+}
+
 interface DataAnalysisPanelProps {
   /** 통관 작업실에서 작성 중인 품목 — 있으면 품목 트렌드 초기값으로 사용 */
   currentItem?: { hsCode: string; itemName: string };
@@ -368,38 +405,85 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
     // eslint 미사용 규칙 없음 — currentHs/currentItem은 마운트 후 불변 가정
   }, [myTrades, currentHs, currentItem]);
 
-  // 내 무역 현황 집계 — 건수·상태·통화별 금액·주요 품목·주요 도착지·월별 추이
+  // 내 무역 현황 집계 — 품목별 그룹·통화별 금액·도착 국가·월별 추이
   const myStats = useMemo(() => {
     if (!myTrades || myTrades.length === 0) return null;
     const submitted = myTrades.filter((t) => t.status === 'submitted').length;
     const byCurrency = new Map<string, number>();
-    const byItem = new Map<string, number>();
-    const byDest = new Map<string, number>();
     const byMonth = new Map<string, number>();
+    type ItemAgg = { name: string; hsCode: string; count: number; amounts: Map<string, number>; dests: Set<string> };
+    const itemMap = new Map<string, ItemAgg>();
+    const countryMap = new Map<string, { ko: string; ports: Set<string>; count: number }>();
     for (const t of myTrades) {
       const amount = Number(t.profile?.totalAmount) || 0;
-      if (amount > 0) {
-        const cur = (t.profile?.currency || 'USD').toUpperCase();
-        byCurrency.set(cur, (byCurrency.get(cur) ?? 0) + amount);
-      }
-      const item = t.profile?.itemName?.trim();
-      if (item) byItem.set(item, (byItem.get(item) ?? 0) + 1);
+      const cur = (t.profile?.currency || 'USD').toUpperCase();
+      if (amount > 0) byCurrency.set(cur, (byCurrency.get(cur) ?? 0) + amount);
+
+      const name = t.profile?.itemName?.trim() || '(품목명 없음)';
+      const code = cleanHsCode(t.profile?.hsCode ?? '');
+      const key = `${name}::${code}`;
+      const agg = itemMap.get(key) ?? { name, hsCode: code, count: 0, amounts: new Map<string, number>(), dests: new Set<string>() };
+      agg.count += 1;
+      if (amount > 0) agg.amounts.set(cur, (agg.amounts.get(cur) ?? 0) + amount);
       const dest = t.profile?.dischargePort?.trim();
-      if (dest) byDest.set(dest, (byDest.get(dest) ?? 0) + 1);
+      if (dest) {
+        agg.dests.add(dest);
+        const country = portToCountry(dest);
+        if (country && country.code !== 'KR') {
+          const c = countryMap.get(country.code) ?? { ko: country.ko, ports: new Set<string>(), count: 0 };
+          c.ports.add(dest);
+          c.count += 1;
+          countryMap.set(country.code, c);
+        }
+      }
+      itemMap.set(key, agg);
+
       const month = (t.createdAt || '').slice(0, 7);
       if (month) byMonth.set(month, (byMonth.get(month) ?? 0) + 1);
     }
-    const top = (m: Map<string, number>, n: number) => [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
     return {
       total: myTrades.length,
       submitted,
       inProgress: myTrades.length - submitted,
-      amounts: top(byCurrency, 2),
-      topItems: top(byItem, 3),
-      topDests: top(byDest, 3),
+      amounts: [...byCurrency.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2),
+      items: [...itemMap.values()].sort((a, b) => b.count - a.count),
+      destCountries: [...countryMap.entries()].map(([code, v]) => ({ code, ...v })),
       months: [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-6),
     };
   }, [myTrades]);
+
+  // 내 시장 리포트 — 내 도착 국가를 이미 로드된 관세청 국가별 통계와 조인
+  const marketReport = useMemo(() => {
+    if (!myStats || myStats.destCountries.length === 0 || countryState.status !== 'success') return [];
+    const periods = [...new Set(countryState.records.map((r) => r.period))].sort();
+    if (periods.length === 0) return [];
+    const firstPeriod = periods[0];
+    const lastPeriod = periods[periods.length - 1];
+    const agg = new Map<string, { name: string; total: number; first: number; last: number }>();
+    for (const r of countryState.records) {
+      const cur = agg.get(r.countryCode) ?? { name: r.countryName || r.countryCode, total: 0, first: 0, last: 0 };
+      cur.total += r.exportAmount;
+      if (r.period === firstPeriod) cur.first += r.exportAmount;
+      if (r.period === lastPeriod) cur.last += r.exportAmount;
+      agg.set(r.countryCode, cur);
+    }
+    const rankOf = new Map([...agg.entries()].sort((a, b) => b[1].total - a[1].total).map(([code], i) => [code, i + 1]));
+    return myStats.destCountries.flatMap((dc) => {
+      const stat = agg.get(dc.code);
+      if (!stat) return [];
+      const trendPct = stat.first > 0 ? Math.round(((stat.last - stat.first) / stat.first) * 100) : null;
+      return [{
+        code: dc.code,
+        ko: dc.ko,
+        ports: [...dc.ports],
+        tradeCount: dc.count,
+        rank: rankOf.get(dc.code) ?? null,
+        rankTotal: agg.size,
+        lastExport: stat.last,
+        trendPct,
+      }];
+    });
+  }, [myStats, countryState]);
 
   const loadTotal = useCallback(async () => {
     setTotalState({ status: 'loading', records: [], source: null, latestPeriod: null, error: null });
@@ -509,82 +593,99 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
         <p className="page-subtitle">관세청 수출입 무역통계 · 조회 기간 {rangeLabel} (통계는 약 1개월 지연 공표)</p>
       </div>
 
-      {/* 내 무역 현황 — 저장된 내 거래 데이터를 집계한 개인화 섹션 */}
+      {/* 내 무역 현황 — 저장된 내 거래를 품목별로 묶고, 도착 국가는 관세청 통계와 조인 */}
       {myStats && (
         <ChartCard
           title="내 무역 현황"
           badge={<span className="da-my-badge">내 거래 데이터</span>}
           right={<span style={{ fontSize: 12, color: '#64748b' }}>저장된 거래 {myStats.total}건 기준</span>}
         >
-          <div className="da-my-tiles">
-            <div className="da-my-tile">
-              <span className="da-my-tile-lab">전체 거래</span>
-              <span className="da-my-tile-val">{myStats.total}건</span>
+          {/* 거래가 적을 땐 타일 대신 한 줄 요약 (숫자 나열 최소화) */}
+          {myStats.total >= 5 ? (
+            <div className="da-my-tiles">
+              <div className="da-my-tile"><span className="da-my-tile-lab">전체 거래</span><span className="da-my-tile-val">{myStats.total}건</span></div>
+              <div className="da-my-tile"><span className="da-my-tile-lab">제출 완료</span><span className="da-my-tile-val">{myStats.submitted}건</span></div>
+              <div className="da-my-tile"><span className="da-my-tile-lab">진행 중</span><span className="da-my-tile-val">{myStats.inProgress}건</span></div>
+              <div className="da-my-tile"><span className="da-my-tile-lab">누적 거래금액</span><span className="da-my-tile-val da-my-tile-amount">{myStats.amounts.map(([cur, sum]) => `${cur} ${Math.round(sum).toLocaleString()}`).join(' · ') || '—'}</span></div>
             </div>
-            <div className="da-my-tile">
-              <span className="da-my-tile-lab">제출 완료</span>
-              <span className="da-my-tile-val">{myStats.submitted}건</span>
-            </div>
-            <div className="da-my-tile">
-              <span className="da-my-tile-lab">진행 중</span>
-              <span className="da-my-tile-val">{myStats.inProgress}건</span>
-            </div>
-            <div className="da-my-tile">
-              <span className="da-my-tile-lab">누적 거래금액</span>
-              <span className="da-my-tile-val da-my-tile-amount">
-                {myStats.amounts.length > 0
-                  ? myStats.amounts.map(([cur, sum]) => `${cur} ${Math.round(sum).toLocaleString()}`).join(' · ')
-                  : '—'}
-              </span>
-            </div>
+          ) : (
+            <p className="da-my-line">
+              거래 <b>{myStats.total}건</b> · 제출 완료 <b>{myStats.submitted}건</b>
+              {myStats.amounts.length > 0 && <> · 누적 <b>{myStats.amounts.map(([cur, sum]) => `${cur} ${Math.round(sum).toLocaleString()}`).join(' · ')}</b></>}
+            </p>
+          )}
+
+          {/* 품목별 현황 — 클릭하면 아래 품목 트렌드가 그 품목으로 조회된다 */}
+          <span className="da-my-col-title">품목별 현황</span>
+          <div className="da-items">
+            {myStats.items.map((it) => {
+              const hasHs = isValidHsCode(it.hsCode);
+              const amountText = [...it.amounts.entries()].map(([cur, sum]) => `${cur} ${Math.round(sum).toLocaleString()}`).join(' · ');
+              return (
+                <div className="da-item" key={`${it.name}::${it.hsCode}`}>
+                  <div className="da-item-main">
+                    <span className="da-item-name">{it.name}</span>
+                    {hasHs && <span className="da-item-hs">HS {it.hsCode}</span>}
+                    <span className="da-item-meta">
+                      거래 {it.count}건{amountText && <> · {amountText}</>}{it.dests.size > 0 && <> · {[...it.dests].join(', ')}</>}
+                    </span>
+                  </div>
+                  {hasHs && (
+                    <button
+                      type="button"
+                      className="da-item-view"
+                      onClick={() => { setHsInput(it.hsCode); setHsQuery(it.hsCode); }}
+                    >
+                      시장 트렌드 보기 ↓
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          <div className="da-my-cols">
-            {myStats.topItems.length > 0 && (
-              <div className="da-my-col">
-                <span className="da-my-col-title">주요 품목</span>
-                {myStats.topItems.map(([name, count]) => (
-                  <div className="da-my-row" key={name}>
-                    <span className="da-my-row-name">{name}</span>
-                    <span className="da-my-row-bar">
-                      <span style={{ width: `${(count / myStats.topItems[0][1]) * 100}%` }} />
-                    </span>
-                    <span className="da-my-row-count">{count}건</span>
+          {/* 내 시장 리포트 — 도착 국가 × 한국 전체 수출 실적 조인 */}
+          {marketReport.length > 0 && (
+            <>
+              <span className="da-my-col-title" style={{ marginTop: 4 }}>내 시장 리포트</span>
+              <div className="da-markets">
+                {marketReport.map((m) => (
+                  <div className="da-market" key={m.code}>
+                    <div className="da-market-head">
+                      <span className="da-market-route">{m.ports.join(' · ')} → <b>{m.ko}</b></span>
+                      {m.rank && <span className="da-market-rank">한국 수출 대상국 {m.rank}위</span>}
+                    </div>
+                    <p className="da-market-line">
+                      한국 전체 수출 최근월 <b>{fmtUsd(m.lastExport)}</b>
+                      {m.trendPct !== null && (
+                        <span className={`da-market-trend ${m.trendPct >= 0 ? 'up' : 'down'}`}>
+                          {' '}· 6개월 {m.trendPct >= 0 ? '+' : ''}{m.trendPct}% {m.trendPct >= 0 ? '↗' : '↘'}
+                        </span>
+                      )}
+                    </p>
                   </div>
                 ))}
               </div>
-            )}
-            {myStats.topDests.length > 0 && (
-              <div className="da-my-col">
-                <span className="da-my-col-title">주요 도착지</span>
-                {myStats.topDests.map(([name, count]) => (
-                  <div className="da-my-row" key={name}>
-                    <span className="da-my-row-name">{name}</span>
-                    <span className="da-my-row-bar">
-                      <span style={{ width: `${(count / myStats.topDests[0][1]) * 100}%` }} />
-                    </span>
-                    <span className="da-my-row-count">{count}건</span>
-                  </div>
-                ))}
+            </>
+          )}
+
+          {/* 월별 거래 추이는 3개월 이상 쌓였을 때만 (2개짜리 막대는 무의미) */}
+          {myStats.months.length >= 3 && (
+            <div style={{ marginTop: 4 }}>
+              <span className="da-my-col-title">월별 거래</span>
+              <div className="da-my-months">
+                {myStats.months.map(([month, count]) => {
+                  const max = Math.max(...myStats.months.map(([, c]) => c));
+                  return (
+                    <div className="da-my-month" key={month} title={`${month} · ${count}건`}>
+                      <span className="da-my-month-bar" style={{ height: `${Math.max(12, (count / max) * 100)}%` }} />
+                      <span className="da-my-month-lab">{Number(month.slice(5))}월</span>
+                    </div>
+                  );
+                })}
               </div>
-            )}
-            {myStats.months.length > 1 && (
-              <div className="da-my-col">
-                <span className="da-my-col-title">월별 거래</span>
-                <div className="da-my-months">
-                  {myStats.months.map(([month, count]) => {
-                    const max = Math.max(...myStats.months.map(([, c]) => c));
-                    return (
-                      <div className="da-my-month" key={month} title={`${month} · ${count}건`}>
-                        <span className="da-my-month-bar" style={{ height: `${Math.max(12, (count / max) * 100)}%` }} />
-                        <span className="da-my-month-lab">{Number(month.slice(5))}월</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </ChartCard>
       )}
 
