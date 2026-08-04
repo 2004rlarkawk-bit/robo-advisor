@@ -56,7 +56,6 @@ export default function ItemTradeInsightCard({ hsCode, tradeType }: Props) {
     const prev = amounts.length > 1 ? amounts[amounts.length - 2] : 0;
     const delta = prev > 0 ? Math.round(((last - prev) / prev) * 100) : null;
     return { sorted, amounts, total, last, delta };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [records, isExport]);
 
   // HS 미입력·형식 불량·조회 실패·데이터 없음 → 카드 자체를 숨긴다
