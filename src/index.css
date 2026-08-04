@@ -3290,7 +3290,7 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
   display: flex; flex-direction: column; gap: 5px;
 }
 .fixlist-item {
-  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left;
   background: #fff; border: 1px solid var(--border-color); border-radius: 8px;
   padding: 8px 10px; cursor: pointer; font-family: inherit;
   transition: border-color 0.15s, background 0.15s;
@@ -3299,7 +3299,7 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .fixlist-item.error { border-left: 3px solid var(--error-color); }
 .fixlist-item.warning { border-left: 3px solid var(--warning-color); }
 .fixlist-dot {
-  width: 15px; height: 15px; flex-shrink: 0;
+  width: 15px; height: 15px; flex-shrink: 0; margin-top: 1.5px;
   border-radius: 50%; border: 1.5px solid var(--border-color);
   display: flex; align-items: center; justify-content: center;
   font-size: 9px; font-weight: 800; color: #fff; background: #fff;
@@ -3310,9 +3310,10 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .fixlist-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .fixlist-msg {
   min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text-dark);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.4; overflow-wrap: break-word;
 }
-.fixlist-hint { font-size: 10.5px; color: var(--text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fixlist-hint { font-size: 10.5px; color: var(--text-light); line-height: 1.45; overflow-wrap: break-word; }
 .fixlist-item.resolved .fixlist-msg { color: var(--text-light); text-decoration: line-through; }
-.fixlist-actions { display: flex; gap: 8px; margin-top: 2px; }
-.fixlist-actions .btn { flex: 1; }
+/* 패널이 좁아 가로 배치 시 버튼 문구가 줄바꿈되므로 세로로 쌓는다 */
+.fixlist-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+.fixlist-actions .btn { width: 100%; justify-content: center; white-space: nowrap; }
