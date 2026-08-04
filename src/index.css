@@ -3348,3 +3348,18 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .iti-chart-lab { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-light); }
 .iti-insight { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--text-dark); }
 .iti-note { margin: 4px 0 0; font-size: 11px; color: var(--text-light); }
+
+/* 데이터 분석 — 내 거래 품목 원클릭 조회 칩 */
+.da-mine { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.da-mine-lab { font-size: 12px; font-weight: 700; color: var(--text-light); padding-top: 6px; white-space: nowrap; }
+.da-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.da-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text-dark);
+  background: #fff; border: 1px solid var(--border-color); border-radius: 999px;
+  padding: 5px 11px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.da-chip:hover { border-color: var(--primary-color); background: #fbfdff; }
+.da-chip.active { border-color: var(--primary-color); background: var(--primary-light); color: var(--primary-color); }
+.da-chip-code { font-size: 10.5px; color: var(--text-light); font-weight: 700; }
+.da-chip.active .da-chip-code { color: var(--primary-color); }
