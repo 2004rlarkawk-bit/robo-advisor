@@ -3317,3 +3317,34 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 /* 패널이 좁아 가로 배치 시 버튼 문구가 줄바꿈되므로 세로로 쌓는다 */
 .fixlist-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
 .fixlist-actions .btn { width: 100%; justify-content: center; white-space: nowrap; }
+
+/* ============================================================
+   이 품목 수출입 동향 카드 — 데이터 분석을 결과 화면 흐름 안으로 이식
+   ============================================================ */
+.iti-card {
+  background: var(--card-bg); border: 1px solid var(--border-color);
+  border-radius: 16px; padding: 20px 24px;
+}
+.iti-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.iti-title { font-size: 14.5px; font-weight: 700; color: var(--text-dark); }
+.iti-hs {
+  font-size: 11px; font-weight: 800; color: var(--primary-color);
+  background: var(--primary-light); border-radius: 6px; padding: 2px 8px; margin-left: 6px;
+}
+.iti-src {
+  font-size: 11px; font-weight: 600; color: #15803d;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+}
+.iti-body { display: flex; gap: 20px; align-items: stretch; flex-wrap: wrap; }
+.iti-stats { display: flex; gap: 24px; flex-shrink: 0; }
+.iti-stat { display: flex; flex-direction: column; gap: 3px; }
+.iti-stat-lab { font-size: 11.5px; color: var(--text-light); font-weight: 600; }
+.iti-stat-val { font-size: 19px; font-weight: 800; color: var(--text-dark); display: inline-flex; align-items: center; gap: 7px; }
+.iti-delta { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; }
+.iti-delta.up { color: var(--success-color); }
+.iti-delta.down { color: var(--error-color); }
+.iti-chart { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 2px; }
+.iti-chart svg { width: 100%; height: 56px; display: block; }
+.iti-chart-lab { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-light); }
+.iti-insight { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--text-dark); }
+.iti-note { margin: 4px 0 0; font-size: 11px; color: var(--text-light); }
