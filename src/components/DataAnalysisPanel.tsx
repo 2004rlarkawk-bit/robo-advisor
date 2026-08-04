@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BarChart3, Loader2, Search } from 'lucide-react';
 import { fetchSavedTrades } from '../services/storageService';
+import { isSupabaseConfigured } from '../lib/supabase';
 import {
   getTotalTradeStats,
   getCountryTradeStats,
@@ -343,13 +344,16 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
         if (isValidHsCode(currentHs)) {
           picked.set(currentHs, currentItem?.itemName?.trim() || `HS ${currentHs}`);
         }
-        const trades = await fetchSavedTrades();
-        if (cancelled) return;
-        for (const t of trades) {
-          const code = cleanHsCode(t.profile?.hsCode ?? '');
-          if (!isValidHsCode(code) || picked.has(code)) continue;
-          picked.set(code, t.profile?.itemName?.trim() || `HS ${code}`);
-          if (picked.size >= 6) break;
+        // Supabase 미설정 환경(테스트·로컬)에서는 스텁 호출이 미처리 거부를 만들므로 조회를 건너뛴다
+        if (isSupabaseConfigured) {
+          const trades = await fetchSavedTrades();
+          if (cancelled) return;
+          for (const t of trades) {
+            const code = cleanHsCode(t.profile?.hsCode ?? '');
+            if (!isValidHsCode(code) || picked.has(code)) continue;
+            picked.set(code, t.profile?.itemName?.trim() || `HS ${code}`);
+            if (picked.size >= 6) break;
+          }
         }
         setMyItems([...picked.entries()].map(([hsCode, label]) => ({ hsCode, label })));
       } catch {
