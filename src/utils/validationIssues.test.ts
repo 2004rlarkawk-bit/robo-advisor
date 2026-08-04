@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import type { ValidationIssue } from '../types';
 import {
   issueKey,
