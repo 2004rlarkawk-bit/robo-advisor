@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BarChart3, Loader2, Search } from 'lucide-react';
+import { fetchSavedTrades } from '../services/storageService';
 import {
   getTotalTradeStats,
   getCountryTradeStats,
@@ -313,13 +314,50 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-export default function DataAnalysisPanel() {
+interface DataAnalysisPanelProps {
+  /** 통관 작업실에서 작성 중인 품목 — 있으면 품목 트렌드 초기값으로 사용 */
+  currentItem?: { hsCode: string; itemName: string };
+}
+
+const cleanHsCode = (v: string) => (v || '').replace(/[^0-9]/g, '');
+const isValidHsCode = (v: string) => /^\d{6,10}$/.test(v);
+
+export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProps = {}) {
   const range = useMemo(() => recentRange(6), []);
   const [totalState, setTotalState] = useState<LoadState<TotalTradeStat>>(idleState);
   const [countryState, setCountryState] = useState<LoadState<CountryTradeStat>>(idleState);
   const [itemState, setItemState] = useState<LoadState<ItemTradeStat>>(idleState);
-  const [hsInput, setHsInput] = useState('8517621010');
-  const [hsQuery, setHsQuery] = useState('8517621010');
+  // 작성 중인 거래에 유효한 HS코드가 있으면 그 품목부터 보여준다 (없으면 샘플 코드)
+  const currentHs = cleanHsCode(currentItem?.hsCode ?? '');
+  const initialHs = isValidHsCode(currentHs) ? currentHs : '8517621010';
+  const [hsInput, setHsInput] = useState(initialHs);
+  const [hsQuery, setHsQuery] = useState(initialHs);
+  // 내 거래 품목 칩 — 작성 중 품목 + 저장된 거래들의 품목을 모아 원클릭 조회
+  const [myItems, setMyItems] = useState<{ hsCode: string; label: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const picked = new Map<string, string>();
+        if (isValidHsCode(currentHs)) {
+          picked.set(currentHs, currentItem?.itemName?.trim() || `HS ${currentHs}`);
+        }
+        const trades = await fetchSavedTrades();
+        if (cancelled) return;
+        for (const t of trades) {
+          const code = cleanHsCode(t.profile?.hsCode ?? '');
+          if (!isValidHsCode(code) || picked.has(code)) continue;
+          picked.set(code, t.profile?.itemName?.trim() || `HS ${code}`);
+          if (picked.size >= 6) break;
+        }
+        setMyItems([...picked.entries()].map(([hsCode, label]) => ({ hsCode, label })));
+      } catch {
+        // 조회 실패(미로그인 등) 시 칩 섹션만 생략 — 페이지 나머지는 정상 동작
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const loadTotal = useCallback(async () => {
     setTotalState({ status: 'loading', records: [], source: null, latestPeriod: null, error: null });
@@ -488,6 +526,23 @@ export default function DataAnalysisPanel() {
         badge={itemState.source ? <SourceBadge source={itemState.source} /> : undefined}
         right={<><LatestPeriod period={itemState.latestPeriod} /><Legend /></>}
       >
+        {myItems.length > 0 && (
+          <div className="da-mine">
+            <span className="da-mine-lab">내 거래 품목</span>
+            <div className="da-chips">
+              {myItems.map((it) => (
+                <button
+                  key={it.hsCode}
+                  type="button"
+                  className={`da-chip${hsQuery === it.hsCode ? ' active' : ''}`}
+                  onClick={() => { setHsInput(it.hsCode); setHsQuery(it.hsCode); }}
+                >
+                  {it.label} <span className="da-chip-code">{it.hsCode}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <input
             className="form-input"
