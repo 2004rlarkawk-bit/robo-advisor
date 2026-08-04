@@ -5,7 +5,6 @@ import {
   FolderKanban, 
   Layers,
   FileCheck2,
-  BarChart3, 
   Settings, 
   PhoneCall, 
   Bell, 
@@ -48,7 +47,7 @@ import { buildExportDeclarationDocx, renderExportDeclarationDocxPreview } from '
 import SettingsPanel from './components/SettingsPanel';
 import GuidePanel from './components/GuidePanel';
 import AboutPanel from './components/AboutPanel';
-import DataAnalysisPanel from './components/DataAnalysisPanel';
+import ItemTradeInsightCard from './components/ItemTradeInsightCard';
 import DocumentManagerPanel from './components/DocumentManagerPanel';
 import TradeManagerPanel from './components/TradeManagerPanel';
 import CustomsHistoryPanel from './components/CustomsHistoryPanel';
@@ -1889,15 +1888,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
           </li>
           <li>
             <div
-              className={`menu-item ${activeMenu === 'analysis' ? 'active' : ''}`}
-              onClick={() => setActiveMenu('analysis')}
-            >
-              <BarChart3 size={18} />
-              데이터 분석
-            </div>
-          </li>
-          <li>
-            <div
               className={`menu-item ${activeMenu === 'profile' ? 'active' : ''}`}
               onClick={() => setActiveMenu('profile')}
             >
@@ -1989,7 +1979,6 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
             : activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
             : activeMenu === 'guide' ? <GuidePanel onNavigate={(menu) => setActiveMenu(menu as AppMenu)} />
             : activeMenu === 'settings' ? <SettingsPanel />
-            : activeMenu === 'analysis' ? <DataAnalysisPanel />
             : activeMenu === 'customs_history' ? <CustomsHistoryPanel onLoad={handleLoadSavedTrade} />
             : activeMenu === 'trades' ? <TradeManagerPanel onLoad={handleLoadSavedTrade} />   
             : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
@@ -3576,6 +3565,9 @@ const [profile, setProfile] = useState<TradeProfile>(emptyProfile);
                       </button>
                     </div>
                 </div>
+
+                {/* 이 품목 수출입 동향 — 데이터 분석 탭을 작업 흐름 안으로 이식 (HS 코드 기준 자동 조회) */}
+                <ItemTradeInsightCard hsCode={profile.hsCode} tradeType={profile.tradeType} />
               </div>
             )}
             </>}
