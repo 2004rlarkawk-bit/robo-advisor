@@ -3363,3 +3363,39 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .da-chip.active { border-color: var(--primary-color); background: var(--primary-light); color: var(--primary-color); }
 .da-chip-code { font-size: 10.5px; color: var(--text-light); font-weight: 700; }
 .da-chip.active .da-chip-code { color: var(--primary-color); }
+
+/* 데이터 분석 — 내 무역 현황 (내 거래 데이터 집계) */
+.da-my-badge {
+  font-size: 11px; font-weight: 700; color: var(--primary-color);
+  background: var(--primary-light); border: 1px solid #c9dcf8;
+  border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+}
+.da-my-tiles {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px; margin-bottom: 18px;
+}
+.da-my-tile {
+  background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
+}
+.da-my-tile-lab { font-size: 11.5px; font-weight: 600; color: var(--text-light); }
+.da-my-tile-val { font-size: 19px; font-weight: 800; color: var(--text-dark); }
+.da-my-tile-amount { font-size: 14.5px; line-height: 1.4; }
+.da-my-cols {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+.da-my-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.da-my-col-title { font-size: 12px; font-weight: 800; color: var(--text-light); }
+.da-my-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.da-my-row-name {
+  flex: 0 0 34%; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text-dark);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.da-my-row-bar { flex: 1; height: 8px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
+.da-my-row-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--primary-color); }
+.da-my-row-count { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: var(--text-light); }
+.da-my-months { display: flex; align-items: flex-end; gap: 10px; height: 72px; padding-top: 4px; }
+.da-my-month { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.da-my-month-bar { width: 18px; border-radius: 5px 5px 2px 2px; background: var(--primary-color); opacity: 0.85; }
+.da-my-month-lab { font-size: 10px; color: var(--text-light); }
