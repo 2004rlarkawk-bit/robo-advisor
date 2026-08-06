@@ -847,6 +847,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
           htmlTemplates: result.documents?.htmlTemplates || {},
           invoice: result.documents?.generatedDocs?.invoice,
           packingList: result.documents?.generatedDocs?.packingList,
+          customsDeclaration: result.documents?.generatedDocs?.customsDeclaration,
           overrides: ov,
           overrideRecords,
         },
