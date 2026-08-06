@@ -76,7 +76,14 @@ const completedShipperDocs = shipperDocs.filter(
 const externalDocs = [blDoc, coDoc, insuranceDoc].filter(
   (doc) => doc && doc.status !== 'not_needed'
 ).length;
-
+const documentStatusItems = [
+  { label: 'C/I', doc: invoiceDoc },
+  { label: 'P/L', doc: packingDoc },
+  { label: 'E/D', doc: customsDoc },
+  { label: 'B/L', doc: blDoc },
+  { label: 'C/O', doc: coDoc },
+  { label: 'INS', doc: insuranceDoc },
+].filter((item) => item.doc && item.doc.status !== 'not_needed');
 const customsStage =
   trade.profile.tradeType === 'export'
     ? '수출신고서 초안 생성'
@@ -105,16 +112,28 @@ const readiness =
                     {trade.profile.hsCode && (
                       <span className="document-hs-code">HS {trade.profile.hsCode}</span>
                     )}
-                    <span className={`trade-status-badge ${customsDoc?.status}`}>
-                      {customsDoc?.statusText || '상태 없음'}
-                    </span>
+                    <span className={`trade-status-badge ${customsDoc?.status || 'not_started'}`}>
+  {customsStage}
+</span>
                   </div>
 
                   <div className="document-trade-meta">
                     {trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'} · {dateLabel}
                   </div>
                 </div>
+<div className="document-trade-meta">
+  통관 준비도 {readiness}% · 화주 서류 {completedShipperDocs}/{shipperDocs.length} 완료 · 외부 발급 {externalDocs}건
+</div>
 
+{documentStatusItems.length > 0 && (
+  <div className="document-trade-meta" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+    {documentStatusItems.map((item) => (
+      <span key={item.label} className={`trade-status-badge ${item.doc?.status || 'not_started'}`}>
+        {item.label} {item.doc?.statusText || '상태 없음'}
+      </span>
+    ))}
+  </div>
+)}
                 <div className="document-trade-buttons">
                   <button className="btn-primary" onClick={() => onLoad(trade)}>
                     <Eye size={14} /> 조회
