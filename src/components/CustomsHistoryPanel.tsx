@@ -5,9 +5,10 @@ import { fetchSavedTrades } from '../services/storageService';
 
 interface Props {
   onLoad: (trade: SavedTrade) => void;
+  onOpenDocument?: (trade: SavedTrade, docId: string) => void;
 }
 
-export default function CustomsHistoryPanel({ onLoad }: Props) {
+export default function CustomsHistoryPanel({ onLoad, onOpenDocument }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
