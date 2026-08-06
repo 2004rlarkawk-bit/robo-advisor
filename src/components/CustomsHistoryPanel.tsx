@@ -32,10 +32,11 @@ export default function CustomsHistoryPanel({ onLoad }: Props) {
   }, [loadTrades]);
 
   const customsTrades = useMemo(() => {
-    return trades.filter((trade) =>
-      trade.documents.some((doc) => doc.id === 'customs_dec')
-    );
-  }, [trades]);
+  return trades.filter((trade) =>
+    trade.documents.some((doc) => doc.id === 'customs_dec') ||
+    !!trade.generatedDocs?.customsDeclaration
+  );
+}, [trades]);
 
   return (
     <div>
