@@ -62,6 +62,30 @@ export default function CustomsHistoryPanel({ onLoad, onOpenDocument }: Props) {
       ) : (
         customsTrades.map((trade) => {
           const customsDoc = trade.documents.find((doc) => doc.id === 'customs_dec');
+          const invoiceDoc = trade.documents.find((doc) => doc.id === 'invoice');
+const packingDoc = trade.documents.find((doc) => doc.id === 'packing_list');
+const blDoc = trade.documents.find((doc) => doc.id === 'bl');
+const coDoc = trade.documents.find((doc) => doc.id === 'co');
+const insuranceDoc = trade.documents.find((doc) => doc.id === 'insurance');
+
+const shipperDocs = [invoiceDoc, packingDoc, customsDoc].filter(Boolean);
+const completedShipperDocs = shipperDocs.filter(
+  (doc) => doc?.status === 'completed' || doc?.status === 'external_pending'
+).length;
+
+const externalDocs = [blDoc, coDoc, insuranceDoc].filter(
+  (doc) => doc && doc.status !== 'not_needed'
+).length;
+
+const customsStage =
+  trade.profile.tradeType === 'export'
+    ? '수출신고서 초안 생성'
+    : '수입신고 준비';
+
+const readiness =
+  shipperDocs.length > 0
+    ? Math.round((completedShipperDocs / shipperDocs.length) * 100)
+    : 0;
           const created = new Date(trade.generatedAt ?? trade.createdAt);
           const dateLabel = Number.isNaN(created.getTime())
             ? trade.createdAt
@@ -95,9 +119,12 @@ export default function CustomsHistoryPanel({ onLoad, onOpenDocument }: Props) {
                   <button className="btn-primary" onClick={() => onLoad(trade)}>
                     <Eye size={14} /> 조회
                   </button>
-                  <button className="btn-secondary" onClick={() => onLoad(trade)}>
-                    <Download size={14} /> 문서 확인
-                  </button>
+                  <button
+  className="btn-secondary"
+  onClick={() => onOpenDocument ? onOpenDocument(trade, 'customs_dec') : onLoad(trade)}
+>
+  <Download size={14} /> 문서 확인
+</button>
                 </div>
               </div>
             </div>
