@@ -1044,7 +1044,10 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setActiveMenu('dashboard');
   };
   loadSavedTradeRef.current = handleLoadSavedTrade;
-
+const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
+  handleLoadSavedTrade(trade);
+  setPreviewDocId(docId);
+};
   useEffect(() => {
     if (!user || !isWorkspaceRestored || !pendingResumeTradeId) return;
     const resumeId = pendingResumeTradeId;
