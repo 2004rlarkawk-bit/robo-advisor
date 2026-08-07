@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileCheck2, FolderOpen, Eye, Download } from 'lucide-react';
-import type { SavedTrade } from '../types';
+import { FileCheck2, FolderOpen, Eye, Download, Search } from 'lucide-react';
+import type { CustomsCargoProgressResult, SavedTrade } from '../types';
 import { fetchSavedTrades } from '../services/storageService';
-
+import { getCustomsCargoProgress } from '../services/customsApiService';
 interface Props {
   onLoad: (trade: SavedTrade) => void;
   onOpenDocument?: (trade: SavedTrade, docId: string) => void;
@@ -12,7 +12,8 @@ export default function CustomsHistoryPanel({ onLoad, onOpenDocument }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-
+const [cargoProgressByTradeId, setCargoProgressByTradeId] = useState<Record<string, CustomsCargoProgressResult>>({});
+const [checkingTradeId, setCheckingTradeId] = useState<string | null>(null);
   const loadTrades = useCallback(async () => {
     setIsLoading(true);
     setError('');
@@ -31,7 +32,48 @@ export default function CustomsHistoryPanel({ onLoad, onOpenDocument }: Props) {
   useEffect(() => {
     void loadTrades();
   }, [loadTrades]);
+const handleCheckCargoProgress = async (trade: SavedTrade) => {
+  const blNo = trade.profile.blNo?.trim();
 
+  if (!blNo) {
+    setCargoProgressByTradeId((current) => ({
+      ...current,
+      [trade.id]: {
+        blNo: '',
+        status: 'idle',
+        statusText: 'B/L 번호 없음',
+        events: [],
+        checkedAt: new Date().toISOString(),
+        message: '이 거래에는 B/L 번호가 없어 통관 진행정보를 조회할 수 없습니다.',
+      },
+    }));
+    return;
+  }
+
+  setCheckingTradeId(trade.id);
+
+  try {
+    const result = await getCustomsCargoProgress(blNo);
+    setCargoProgressByTradeId((current) => ({
+      ...current,
+      [trade.id]: result,
+    }));
+  } catch (caught) {
+    setCargoProgressByTradeId((current) => ({
+      ...current,
+      [trade.id]: {
+        blNo,
+        status: 'error',
+        statusText: '통관 진행정보 조회 실패',
+        events: [],
+        checkedAt: new Date().toISOString(),
+        message: caught instanceof Error ? caught.message : '알 수 없는 오류가 발생했습니다.',
+      },
+    }));
+  } finally {
+    setCheckingTradeId(null);
+  }
+};
   const customsTrades = useMemo(() => {
   return trades.filter((trade) =>
     trade.documents.some((doc) => doc.id === 'customs_dec') ||
@@ -97,7 +139,8 @@ const readiness =
           const dateLabel = Number.isNaN(created.getTime())
             ? trade.createdAt
             : `${created.getFullYear()}.${String(created.getMonth() + 1).padStart(2, '0')}.${String(created.getDate()).padStart(2, '0')}`;
-
+const cargoProgress = cargoProgressByTradeId[trade.id];
+const isCheckingCargo = checkingTradeId === trade.id;
           return (
             <div key={trade.id} className="form-card document-trade-card">
               <div className="document-trade-row">
@@ -134,6 +177,16 @@ const readiness =
     ))}
   </div>
 )}
+                {cargoProgress && (
+  <div className={`form-message ${cargoProgress.status === 'error' ? 'error' : 'info'}`} style={{ marginTop: '10px' }}>
+    <strong>{cargoProgress.statusText}</strong>
+    <div>B/L 번호: {cargoProgress.blNo || '-'}</div>
+    {cargoProgress.currentStep && <div>현재 단계: {cargoProgress.currentStep}</div>}
+    {cargoProgress.customsOffice && <div>처리 세관: {cargoProgress.customsOffice}</div>}
+    {cargoProgress.lastProcessedAt && <div>마지막 처리일시: {cargoProgress.lastProcessedAt}</div>}
+    {cargoProgress.message && <div>{cargoProgress.message}</div>}
+  </div>
+)}
                 <div className="document-trade-buttons">
                   <button className="btn-primary" onClick={() => onLoad(trade)}>
                     <Eye size={14} /> 조회
@@ -143,6 +196,13 @@ const readiness =
   onClick={() => onOpenDocument ? onOpenDocument(trade, 'customs_dec') : onLoad(trade)}
 >
   <Download size={14} /> 문서 확인
+</button>
+                  <button
+  className="btn-secondary"
+  onClick={() => void handleCheckCargoProgress(trade)}
+  disabled={isCheckingCargo}
+>
+  <Search size={14} /> {isCheckingCargo ? '조회 중...' : '통관 상태 조회'}
 </button>
                 </div>
               </div>
