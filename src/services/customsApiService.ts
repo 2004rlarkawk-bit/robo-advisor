@@ -12,7 +12,7 @@
  */
 
 import { supabase } from '../lib/supabase';
-
+import type { CustomsCargoProgressResult } from '../types';
 // ===== 공통 =====
 
 /** 데이터 소스 표시: 실 API 응답인지 시뮬레이션 폴백인지 UI에서 구분 */
@@ -654,4 +654,61 @@ export async function calcDutiableValue(
     effectiveDate: fx.effectiveDate,
     source: fx.source,
   };
+}
+
+
+// ===== 5. UNI-PASS 화물통관 진행정보 =====
+
+interface CustomsCargoProgressFunctionResponse {
+  success?: boolean;
+  result?: CustomsCargoProgressResult;
+  error?: string;
+}
+
+export async function getCustomsCargoProgress(
+  blNo: string
+): Promise<CustomsCargoProgressResult> {
+  const cleaned = blNo.trim();
+
+  if (!cleaned) {
+    return {
+      blNo: '',
+      status: 'idle',
+      statusText: 'B/L 번호가 입력되지 않았습니다.',
+      events: [],
+      checkedAt: new Date().toISOString(),
+      message: 'B/L 번호를 입력한 뒤 조회해 주세요.',
+    };
+  }
+
+  const { data, error } = await supabase.functions.invoke<CustomsCargoProgressFunctionResponse>(
+    'customs-cargo-progress',
+    {
+      body: { blNo: cleaned },
+    }
+  );
+
+  if (error) {
+    return {
+      blNo: cleaned,
+      status: 'error',
+      statusText: '통관 진행정보 조회 실패',
+      events: [],
+      checkedAt: new Date().toISOString(),
+      message: error.message,
+    };
+  }
+
+  if (!data || data.success !== true || !data.result) {
+    return {
+      blNo: cleaned,
+      status: 'error',
+      statusText: '통관 진행정보 조회 실패',
+      events: [],
+      checkedAt: new Date().toISOString(),
+      message: data?.error || '조회 결과를 불러오지 못했습니다.',
+    };
+  }
+
+  return data.result;
 }
