@@ -435,6 +435,25 @@ export interface CustomsDeclarationData {
   invoiceDate?: string;
 
   [key: string]: any;
+}export interface CustomsCargoProgressEvent {
+  step: string;
+  status: string;
+  processedAt?: string;
+  customsOffice?: string;
+  location?: string;
+  details?: string;
+}
+
+export interface CustomsCargoProgressResult {
+  blNo: string;
+  status: 'idle' | 'success' | 'not_found' | 'error';
+  statusText: string;
+  customsOffice?: string;
+  lastProcessedAt?: string;
+  currentStep?: string;
+  events: CustomsCargoProgressEvent[];
+  checkedAt: string;
+  message?: string;
 }
 export interface GeneratedDocuments {
   documents?: DocumentStatus[];
