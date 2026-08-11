@@ -187,24 +187,31 @@ const isCheckingCargo = checkingTradeId === trade.id;
     {cargoProgress.message && <div>{cargoProgress.message}</div>}
   </div>
 )}
-                <div className="document-trade-buttons">
-                 <div className="document-trade-buttons">
-  <button
-    className="btn-primary"
-    onClick={() => void handleCheckCargoProgress(trade)}
-    disabled={isCheckingCargo}
-  >
-    <Search size={14} /> {isCheckingCargo ? '조회 중...' : '통관 상태 조회'}
-  </button>
+                                <div className="document-trade-buttons">
+                  <button
+                    className="btn-primary"
+                    onClick={() => void handleCheckCargoProgress(trade)}
+                    disabled={isCheckingCargo}
+                  >
+                    <Search size={14} /> {isCheckingCargo ? '조회 중...' : '통관 상태 조회'}
+                  </button>
 
-  <button className="btn-secondary" onClick={() => onLoad(trade)}>
-    <Eye size={14} /> 상세 조회
-  </button>
+                  <button className="btn-secondary" onClick={() => onLoad(trade)}>
+                    <Eye size={14} /> 상세 조회
+                  </button>
 
-  <button
-    className="btn-secondary"
-    onClick={() => onOpenDocument ? onOpenDocument(trade, 'customs_dec') : onLoad(trade)}
-  >
-    <Download size={14} /> 문서 확인
-  </button>
-</div>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => onOpenDocument ? onOpenDocument(trade, 'customs_dec') : onLoad(trade)}
+                  >
+                    <Download size={14} /> 문서 확인
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
