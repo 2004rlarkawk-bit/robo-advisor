@@ -212,10 +212,10 @@ export default {
     }
 
     try {
-      const apiKey = Deno.env.get("UNI_PASS_CARGO_PROGRESS_KEY")?.trim();
+      const apiKey = Deno.env.get("UNIPASS_CARGO_CLEARANCE_KEY")?.trim();
 
       if (!apiKey) {
-        throw new Error("UNI_PASS_CARGO_PROGRESS_KEY가 Supabase Secrets에 설정되지 않았습니다.");
+        throw new Error("UNIPASS_CARGO_CLEARANCE_KEY가 Supabase Secrets에 설정되지 않았습니다.");
       }
 
       const body = await req.json().catch(() => ({} as CargoProgressRequest));
