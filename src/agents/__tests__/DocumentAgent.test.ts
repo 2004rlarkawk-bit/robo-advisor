@@ -333,8 +333,9 @@ describe('DocumentAgent — 수출 화주 신규 문서 필드', () => {
     expect((invoice as any).vessel).toBe('OCEAN STAR V.1001');
     expect((packingList as any).vessel).toBe('OCEAN STAR V.1001');
 
-    expect(invoice.signedBy).toBe('KIM JIMIN');
-    expect((packingList as any).signedBy).toBe('KIM JIMIN');
+    // 서명란은 자동 채움하지 않고 공란으로 둔다(실제 서명자가 직접 기재).
+    expect(invoice.signedBy).toBe('');
+    expect((packingList as any).signedBy).toBe('');
   });
 
   it('단일 itemName 값을 문서 품명으로 그대로 사용한다', async () => {

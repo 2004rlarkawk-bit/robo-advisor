@@ -118,7 +118,7 @@ export function getRelatedLawForIssue(issueId: string): RelatedLaw | null {
     'dutiable-value-info': { topic: '과세가격', lawName: '관세법', article: '제30조', summary: '과세가격 결정의 원칙 — 실제지급금액 기준 원화 환산' },
     'estimated-duty-info': { topic: '관세율', lawName: '관세법', article: '제49조·제50조', summary: '세율 적용 우선순위 — 기본세율과 협정세율' },
     'insurance-missing': { topic: '적하보험', lawName: '상법', article: '제693조', summary: '해상적하보험 — CIF 조건 매도인의 보험계약 체결 의무(Incoterms)' },
-    'co-required': { topic: '원산지증명', lawName: '대외무역법', article: '제33조', summary: '수출입 물품의 원산지 표시·증명' },
+    'co-required': { topic: '원산지증명', lawName: '대외무역법', article: '제33조', summary: '원산지표시대상 수출물품은 원산지를 정확하게 표시해야 합니다. 따라서 거래 조건상 원산지 증명이 필요한지 추가로 확인합니다.' },
   };
   return map[issueId] ?? null;
 }

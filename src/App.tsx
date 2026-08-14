@@ -94,6 +94,7 @@ import {
   EMPTY_SHIPPER_SUPPLEMENTAL_STATE,
   getGoodsDescriptionValidationMessage,
   primaryShipperItemToTradeProfile,
+  summarizeShipperItems,
   tradeProfileToPrimaryShipperItem,
 } from './utils/shipperForm';
 import {
@@ -922,9 +923,13 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const handleShipperItemsChange = (items: ShipperItem[]) => {
     if (items.length === 0) return;
     const [primaryItem] = items;
+    // 다품목이면 Invoice 총액은 primary 한 건이 아니라 모든 품목 금액의 합이어야 한다.
+    // (혼합 통화면 합산 불가 → summary.total === null, 이때는 primary 매핑값을 유지)
+    const summary = summarizeShipperItems(items);
     setProfile((current) => ({
       ...current,
       ...primaryShipperItemToTradeProfile(primaryItem),
+      ...(summary.total !== null ? { totalAmount: summary.total, invoiceAmount: summary.total } : {}),
       shipperItems: items,
     }));
   };
@@ -3208,13 +3213,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 {isGenerationBlocked ? (
                   <div className="rv-hero rv-hero-blocked">
                     <span className="rv-hero-blocked-ic"><AlertTriangle size={22} /></span>
-                    <div>
-                      <div className="rv-hero-blocked-title">
-                        제출 전 <b>{blockingIssuesCount}건</b>을 해결해야 최종 제출할 수 있어요
-                      </div>
-                      <p className="rv-hero-blocked-sub">
-                        상업송장·패킹리스트 <b>초안은 아래에서 미리보기·다운로드</b>할 수 있어요. 다만 아래 “해결하면 제출” 목록의 항목을 수정해야 최종 제출이 가능합니다.
-                      </p>
+                    <div className="rv-hero-blocked-title">
+                      제출 전 <b>{blockingIssuesCount}건</b>을 해결해야 최종 제출할 수 있어요
                     </div>
                   </div>
                 ) : (
@@ -3303,11 +3303,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     <>
                     <div className="rv-fixes-head">
                       <h3 className="rv-fixes-title">{blockingIssuesCount > 0 ? '해결하면 제출할 수 있어요' : '검토 참고 사항'}</h3>
-                      <p className="rv-fixes-sub">
-                        {blockingIssuesCount > 0
-                          ? '문제 문구를 확인하고 해당 입력을 수정하면 준비도가 100%에 가까워집니다.'
-                          : '제출을 막지는 않지만, 아래 내용을 확인하면 서류가 더 정확해져요.'}
-                      </p>
                     </div>
 
                       {/* 요약 칩 — 검토 완료·확인 필요 개수. 숫자는 아래 실제 렌더 항목 수와 일치한다. */}
@@ -3597,7 +3592,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                 미확인: 필요 여부 질문 / yes: 원산지 선택 + 신청자료 정리 + 발급기관 안내 / no: 이슈 자체가 안 뜸 */}
                             {issue.docType === 'co' && profile.coNeeded !== 'yes' && (
                               <div className="mobile-input-group">
-                                <label className="mobile-input-label">구매자가 FTA 적용 또는 원산지증명서를 요청했나요?</label>
                                 <div className="fix-choice">
                                   <button
                                     type="button"
@@ -3669,7 +3663,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                 C/O 질문과 같은 무채색 선택 버튼(fix-choice)으로 통일한다. */}
                             {issue.id === 'insurance-needed-check' && (
                               <div className="mobile-input-group">
-                                <label className="mobile-input-label">계약상 매도인(우리 측)이 적하보험을 부보하기로 했나요?</label>
                                 <div className="fix-choice">
                                   <button
                                     type="button"

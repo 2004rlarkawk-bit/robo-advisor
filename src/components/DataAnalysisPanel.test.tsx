@@ -15,6 +15,7 @@ vi.mock('../services/customsApiService', () => ({
   getTotalTradeStats: vi.fn(),
   getCountryTradeStats: vi.fn(),
   getItemTradeStats: vi.fn(),
+  getCustomsExchangeRate: vi.fn(),
 }));
 
 const totalMock = vi.mocked(getTotalTradeStats);
@@ -81,7 +82,8 @@ describe('DataAnalysisPanel', () => {
 
     expect(container.textContent).toContain('관세청 원데이터');
     expect(container.textContent).toContain('최신 기준: 2026년 6월');
-    expect(totalMock).toHaveBeenCalledTimes(1);
+    // 월별 총괄 카드는 제거됨 — 국가별 통계는 '내 시장 리포트' 조인용으로만 호출된다
+    expect(totalMock).not.toHaveBeenCalled();
     expect(countryMock).toHaveBeenCalledTimes(1);
     expect(itemMock).toHaveBeenCalledWith('8517621010', expect.any(String), expect.any(String));
   });
@@ -92,14 +94,13 @@ describe('DataAnalysisPanel', () => {
     itemMock.mockResolvedValue(empty);
     await act(async () => root.render(<DataAnalysisPanel />));
     await flush();
-    expect(container.textContent?.match(/선택한 기간에 조회된 관세청 데이터가 없습니다\./g)).toHaveLength(3);
+    expect(container.textContent?.match(/선택한 기간에 조회된 관세청 데이터가 없습니다\./g)).toHaveLength(1);
     expect(container.textContent).not.toContain('시뮬레이션');
   });
 
   it('API 오류를 표시하고 다시 시도한다', async () => {
-    totalMock.mockRejectedValueOnce(new Error('secret detail')).mockResolvedValueOnce(empty);
+    itemMock.mockRejectedValueOnce(new Error('secret detail')).mockResolvedValueOnce(empty);
     countryMock.mockResolvedValue(empty);
-    itemMock.mockResolvedValue(empty);
     await act(async () => root.render(<DataAnalysisPanel />));
     await flush();
 
@@ -108,7 +109,7 @@ describe('DataAnalysisPanel', () => {
     expect(retry).toBeTruthy();
     await act(async () => retry?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
     await flush();
-    expect(totalMock).toHaveBeenCalledTimes(2);
+    expect(itemMock).toHaveBeenCalledTimes(2);
     expect(container.textContent).not.toContain('secret detail');
   });
 });
