@@ -1044,10 +1044,10 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setActiveMenu('dashboard');
   };
   loadSavedTradeRef.current = handleLoadSavedTrade;
-// const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
-//   handleLoadSavedTrade(trade);
-//   setPreviewDocId(docId);
-// };
+const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
+  handleLoadSavedTrade(trade);
+  setPreviewDocId(docId);
+};
   useEffect(() => {
     if (!user || !isWorkspaceRestored || !pendingResumeTradeId) return;
     const resumeId = pendingResumeTradeId;
@@ -1767,7 +1767,10 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
             : activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
             : activeMenu === 'guide' ? <GuidePanel onNavigate={(menu) => setActiveMenu(menu as AppMenu)} />
             : activeMenu === 'settings' ? <SettingsPanel />
-            : activeMenu === 'customs_history' ? <CustomsHistoryPanel onLoad={handleLoadSavedTrade} />
+            : activeMenu === 'customs_history' ? <CustomsHistoryPanel
+  onLoad={handleLoadSavedTrade}
+  onOpenDocument={handleOpenSavedTradeDocument}
+/>
             : activeMenu === 'analysis' ? <DataAnalysisPanel currentItem={{ hsCode: profile.hsCode, itemName: profile.itemName }} />
             : activeMenu === 'docs' ? (
               <>
