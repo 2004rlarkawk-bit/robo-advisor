@@ -165,7 +165,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         otherReferences: profile.otherReferences || '',
         incotermsPlace: profile.shipperSupplemental?.incotermsPlace || '',
         // 서명란은 사용자가 지정한 서명자만 표기 — 상호를 서명으로 흉내내지 않는다(공란 허용).
-        signedBy: profile.signedBy || profile.signerName || '',
+        signedBy: '', // 서명란은 실제 서명자가 직접 기재 — 자동 채움 안 함
         // 무역협회 표준 서식 ①~⑱ 추가 필드
         sellerTaxNo: profile.tradeType === 'export' ? (profile.businessRegistrationNo || profile.taxNo || '') : '',
         buyer: profile.buyerName ? {
@@ -236,7 +236,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         notifyPartyName: profile.notifyPartyName || '',
         // 화인(shipping marks) 미입력이면 빈 값 — 템플릿이 'N/M'(No Marks) 표기를 담당한다.
         shippingMarks: profile.shippingMarks || '',
-        signedBy: profile.signedBy || profile.signerName || '',
+        signedBy: '', // 서명란은 실제 서명자가 직접 기재 — 자동 채움 안 함
         packageCount: sumPackages,
         packageType: items[0]?.packageUnit || profile.packageType || '',
         netWeight: sumNet,
@@ -289,7 +289,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         originCountry: profile.countryOfOrigin || 'Republic of Korea', // 템플릿 호환용 별칭
         destinationCountry: profile.partnerCountry || profile.dischargePort || '',
         items: generatedDocs.invoice?.items || [],
-        signedBy: profile.signedBy || profile.signerName || '',
+        signedBy: '', // 서명란은 실제 서명자가 직접 기재 — 자동 채움 안 함
         invoiceNo: generatedDocs.invoice?.invoiceNo || '',
         invoiceRef: generatedDocs.invoice?.invoiceNo || '', // 템플릿 호환용 별칭
         // RCEP 표준 서식(FORM RCEP, Box 1~14) 추가 필드
@@ -356,7 +356,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         customsValue: invoiceAmount,
         dutyRate: '',
         dutyAmount: 0,
-        signedBy: profile.signedBy || profile.signerName || '',
+        signedBy: '', // 서명란은 실제 서명자가 직접 기재 — 자동 채움 안 함
         // ── 수출신고서(초안) docx 전환용 확장 ──
         items,                                   // 갑지=items[0], 을지=items.slice(1)
         fobRate,

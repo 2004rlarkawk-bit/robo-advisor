@@ -1,5 +1,6 @@
 import { TradeProfile, ValidationIssue } from '../types';
 import { getIncotermsRule } from '../agents/incotermsRules';
+import { isGrossWeightBelowNet } from '../utils/shipperForm';
 import { calcDutiableValue, verifyBusinessRegistration } from '../services/customsApiService';
 import { estimateDuty } from '../services/unipassService';
 import { getRelatedLawForIssue } from '../services/lawService';
@@ -92,8 +93,18 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
     }
   }
 
+  // 다품목(shipperItems) 중 계산에 쓸 수 있는 유효 라인(수량·단가가 양수)만 추린다.
+  // 2건 이상이면 총액은 "품목 합계"라 단건 qty×price 검증이 성립하지 않으므로 아래에서 분기한다.
+  const validItems = (profile.shipperItems ?? []).filter((it) => {
+    const q = Number(it.quantity);
+    const p = Number(it.unitPrice);
+    return it.quantity !== '' && it.unitPrice !== '' &&
+      !Number.isNaN(q) && !Number.isNaN(p) && q > 0 && p > 0;
+  });
+
   // 3) 계산 검증 — 수량 × 단가 = 금액 (셋 다 유효한 양수로 입력된 경우에만)
   //    셋 중 하나라도 누락·비정상이면 위의 필수/숫자 검사가 이미 잡으므로 여기선 중복 발행하지 않는다.
+  //    다품목(2건 이상)이면 총액=품목 합계이므로 이 단건 검증 대신 아래 A(품목 합계) 검증을 쓴다.
   const qty = Number(profile.quantity);
   const price = Number(profile.unitPrice);
   const total = Number(profile.totalAmount);
@@ -102,7 +113,7 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
     profile.quantity !== undefined && profile.unitPrice !== undefined && profile.totalAmount !== undefined &&
     !Number.isNaN(qty) && !Number.isNaN(price) && !Number.isNaN(total) &&
     qty > 0 && price > 0 && total > 0;
-  if (allAmountsValid) {
+  if (allAmountsValid && validItems.length <= 1) {
     const expected = qty * price;
     // 단가·수량 반올림에서 오는 미세 오차(≤1%)는 허용하고, 자릿수 실수 등 실제 불일치만 잡는다.
     const tolerance = Math.max(0.01, expected * 0.01);
@@ -138,6 +149,94 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
       message: '송장 작성일이 출발일(선적일)보다 늦을 수 없습니다. 날짜를 확인해 주세요.',
       field: 'invoiceDate'
     });
+  }
+
+  // ===== 문서 내부 논리 검증 (결정론적, 외부 API 불필요) =====
+
+  // A) 다품목 금액 합계 = Invoice 총액 (유효 품목 2건 이상 & 단일 통화일 때만)
+  //    혼합 통화면 합산 자체가 성립하지 않으므로 건너뛴다(입력폼에서 총액도 미산출).
+  const itemCurrencies = new Set(validItems.map((it) => it.currency));
+  if (validItems.length >= 2 && itemCurrencies.size === 1 && !Number.isNaN(total) && total > 0) {
+    const itemsSum = validItems.reduce((s, it) => s + Number(it.quantity) * Number(it.unitPrice), 0);
+    const tolerance = Math.max(0.01, itemsSum * 0.01);
+    if (Math.abs(itemsSum - total) > tolerance) {
+      issues.push({
+        id: 'items-total-mismatch',
+        docType: 'invoice',
+        severity: 'error',
+        message: `품목 합계 불일치: 품목별 금액 합계는 ${itemsSum.toLocaleString()} 이지만, 입력된 Invoice 총액은 ${total.toLocaleString()} 입니다. 값을 확인해 주세요.`,
+        field: 'totalAmount',
+        amounts: { expected: itemsSum, actual: total, currency: profile.currency || 'USD' }
+      });
+    }
+  }
+
+  // B) 순중량(Net) ≤ 총중량(Gross) — 둘 다 양수로 입력된 경우에만
+  if (isGrossWeightBelowNet(profile.grossWeight, profile.netWeight)) {
+    issues.push({
+      id: 'weight-net-gross',
+      docType: 'packing_list',
+      severity: 'error',
+      message: `중량 오류: 순중량(Net ${Number(profile.netWeight).toLocaleString()}kg)은 총중량(Gross ${Number(profile.grossWeight).toLocaleString()}kg)보다 클 수 없습니다.`,
+      field: 'grossWeight'
+    });
+  }
+
+  // C) 포장 수량은 0보다 커야 함 (입력된 경우에만)
+  if (profile.packageCount !== '' && profile.packageCount !== undefined) {
+    const pkg = Number(profile.packageCount);
+    if (Number.isNaN(pkg) || pkg <= 0) {
+      issues.push({
+        id: 'package-count-nonpositive',
+        docType: 'packing_list',
+        severity: 'error',
+        message: '포장 수량(Packages)은 0보다 큰 값이어야 합니다.',
+        field: 'packageCount'
+      });
+    }
+  }
+
+  // D) 수량 단위 누락 — 수량이 유효 입력됐는데 단위(EA/CT/KG 등)가 비어 있음
+  const qtyEntered = profile.quantity !== '' && profile.quantity !== undefined && Number(profile.quantity) > 0;
+  if (qtyEntered && (!profile.unit || String(profile.unit).trim() === '')) {
+    issues.push({
+      id: 'unit-missing',
+      docType: 'packing_list',
+      severity: 'error',
+      message: '수량 단위(EA, CT, KG 등)가 입력되지 않았습니다.',
+      field: 'unit'
+    });
+  }
+
+  // E) 통화 누락 — 금액이 입력됐는데 통화(Currency)가 비어 있음
+  const anyAmountEntered = [profile.unitPrice, profile.totalAmount, profile.invoiceAmount]
+    .some((v) => v !== '' && v !== undefined && Number(v) > 0);
+  if (anyAmountEntered && (!profile.currency || String(profile.currency).trim() === '')) {
+    issues.push({
+      id: 'currency-missing',
+      docType: 'invoice',
+      severity: 'error',
+      message: '통화(Currency)가 선택되지 않았습니다. 금액의 통화 단위를 지정해 주세요.',
+      field: 'currency'
+    });
+  }
+
+  // F) 공급자·거래처 주소 누락 — 상업송장 필수 항목
+  const addressRequired: { field: 'companyAddress' | 'partnerAddress'; label: string }[] = [
+    { field: 'companyAddress', label: '공급자(Shipper) 주소' },
+    { field: 'partnerAddress', label: '거래처(Consignee) 주소' },
+  ];
+  for (const { field, label } of addressRequired) {
+    const value = profile[field];
+    if (value === undefined || value === null || String(value).trim() === '') {
+      issues.push({
+        id: `input-missing-${field}`,
+        docType: 'invoice',
+        severity: 'error',
+        message: `${label}이(가) 입력되지 않았습니다.`,
+        field
+      });
+    }
   }
 
   return issues;
@@ -271,7 +370,9 @@ export async function validateTradeDocumentsAsync(profile: TradeProfile): Promis
   if (currency !== 'KRW' && amount > 0) {
     try {
       const dv = await withTimeout(calcDutiableValue(amount, currency, profile.tradeType), 8000, '환율 환산');
-      const srcNote = dv.source === 'api' ? `관세청 주간환율 · 적용일 ${dv.effectiveDate}` : '시뮬레이션 환율 — 실환율은 API 키 설정 후 적용';
+      // 적용일 YYYYMMDD → YYYY.MM.DD
+      const fmtDate = (d: string) => /^\d{8}$/.test(d) ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d;
+      const srcNote = dv.source === 'api' ? `관세청 주간환율 · 적용일 ${fmtDate(dv.effectiveDate)}` : '시뮬레이션 환율 — 실환율은 API 키 설정 후 적용';
       const itemNote = profile.itemName ? `${profile.itemName} · ` : '';
       issues.push({
         id: 'dutiable-value-info',

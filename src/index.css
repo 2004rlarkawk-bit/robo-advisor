@@ -2932,8 +2932,10 @@ body {
 .rv-hero-ext b { color: var(--text-dark); font-weight: 700; }
 
 /* 차단 상태 히어로 — 100% 대신 해결 유도 (색·문구로 "아직 제출 불가" 명확히) */
+/* 한 줄 컴팩트 배너 — 아이콘 + 제목만, 세로 중앙 정렬. 좌우 여백은 유지, 상하만 축소. */
 .rv-hero-blocked {
-  display: flex; align-items: flex-start; gap: 14px;
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 28px;
   background: var(--warning-bg); border: 1px solid #fcd9a5;
 }
 .rv-hero-blocked-ic {
@@ -3495,3 +3497,64 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
   .draft-tray-item { flex-direction: column; align-items: stretch; gap: 10px; }
   .draft-tray-actions { margin-left: 0; justify-content: flex-end; }
 }
+
+/* ── 최종 제출된 거래 (문서 관리 탭, 임시보관함과 짝 맞춘 카드) ─────────── */
+.doc-panel {
+  margin-top: 20px; background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 16px; box-shadow: 0 1px 3px rgba(15, 23, 42, .05); overflow: hidden;
+}
+.doc-panel-head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 18px 24px; background: #fafbfc; border: none; cursor: pointer;
+  font-family: inherit; text-align: left;
+}
+.doc-panel-head:hover { background: #f1f5f9; }
+.doc-panel-head-main { display: flex; flex-direction: column; gap: 4px; }
+.doc-panel-title { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 800; color: #1e293b; }
+.doc-panel-count { font-size: 13px; font-weight: 700; color: #475569; background: #e2e8f0; border-radius: 999px; padding: 2px 11px; }
+.doc-panel-sub { font-size: 13.5px; color: #94a3b8; }
+.doc-panel-chevron { color: #94a3b8; transition: transform .18s ease; flex-shrink: 0; }
+.doc-panel-chevron.open { transform: rotate(180deg); }
+.doc-panel-body { padding: 8px 20px 18px; border-top: 1px solid #eef2f7; }
+
+.doc-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 44px 24px; text-align: center; color: #94a3b8; font-size: 14px; }
+
+/* 표 — grid 기반. 좁은 화면에선 가로 스크롤 */
+.doc-table { display: flex; flex-direction: column; overflow-x: auto; }
+.doc-table-head, .doc-table-row {
+  display: grid; align-items: center;
+  grid-template-columns: 1.5fr 1.7fr 0.7fr 1.2fr 0.9fr auto;
+  gap: 14px; min-width: 720px;
+}
+.doc-table-head {
+  padding: 12px 8px; font-size: 12.5px; font-weight: 700; color: #94a3b8;
+  border-bottom: 1px solid #eef2f7;
+}
+.doc-table-row {
+  padding: 16px 8px; border-bottom: 1px solid #f1f5f9;
+  border-left: 3px solid #22c55e; padding-left: 14px; border-radius: 2px;
+}
+.doc-table-row:last-child { border-bottom: none; }
+.doc-cell-name { font-size: 14.5px; font-weight: 700; color: #1e293b; }
+.doc-cell-route { font-size: 13.5px; color: #475569; }
+.doc-cell-incoterms { font-size: 13.5px; font-weight: 600; color: #334155; }
+.doc-cell-date { font-size: 13px; color: #64748b; font-variant-numeric: tabular-nums; }
+.doc-status-badge {
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  font-size: 12.5px; font-weight: 700; color: #15803d;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 4px 11px;
+}
+.doc-cell-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.doc-row-btn {
+  font-family: inherit; font-size: 13px; font-weight: 700; white-space: nowrap;
+  color: var(--primary-color); background: #fff; border: 1px solid #c7d7f0;
+  border-radius: 9px; padding: 8px 13px; cursor: pointer;
+}
+.doc-row-btn:hover { background: #f5f8ff; }
+.doc-row-btn.ghost { color: #475569; border-color: #e2e8f0; }
+.doc-row-btn.ghost:hover { background: #f8fafc; }
+.doc-row-del {
+  border: 1px solid #e2e8f0; background: #fff; color: #94a3b8; border-radius: 9px;
+  width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+}
+.doc-row-del:hover { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
