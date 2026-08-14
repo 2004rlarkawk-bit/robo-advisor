@@ -3558,3 +3558,57 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
   width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
 }
 .doc-row-del:hover { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
+
+/* ============================================================
+   데이터 분석 v3 — 내 무역 대시보드 중심 재구성
+   ============================================================ */
+.da-empty-my {
+  background: var(--card-bg); border: 1px dashed var(--border-color); border-radius: 14px;
+  padding: 26px 28px; margin-bottom: 20px; text-align: center;
+}
+.da-empty-my-title { font-size: 15.5px; font-weight: 800; color: var(--text-dark); margin-bottom: 6px; }
+.da-empty-my p { margin: 0; font-size: 13px; color: var(--text-light); }
+
+.da-my-tiles-big { margin-bottom: 22px; }
+.da-my-tiles-big .da-my-tile { padding: 16px 18px; }
+.da-my-tiles-big .da-my-tile-val { font-size: 26px; }
+.da-my-tiles-big .da-my-tile-amount { font-size: 17px; }
+
+.da-block { margin-bottom: 22px; display: flex; flex-direction: column; gap: 10px; }
+.da-block:last-child { margin-bottom: 4px; }
+
+.da-item-main { display: flex; flex-direction: column; gap: 7px; }
+.da-item-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.da-item-bar { display: block; height: 8px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
+.da-item-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--primary-color); }
+
+/* 이번 주 관세청 고시환율 */
+.da-rates { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.da-rate {
+  background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 3px;
+}
+.da-rate-cur { font-size: 12px; font-weight: 800; color: var(--primary-color); }
+.da-rate-val { font-size: 20px; font-weight: 800; color: var(--text-dark); }
+.da-rate-name { font-size: 11px; color: var(--text-light); }
+.da-rate-note { margin: 12px 0 0; font-size: 11.5px; color: var(--text-light); }
+.da-sim-badge {
+  font-size: 11px; font-weight: 600; color: var(--text-light);
+  background: #f1f5f9; border: 1px solid var(--border-color);
+  border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+}
+
+/* 울산항만공사 입출항 현황 */
+.upa-badge {
+  font-size: 11px; font-weight: 700; color: #0e7490;
+  background: #ecfeff; border: 1px solid #a5f3fc;
+  border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+}
+.upa-hint { font-size: 12px; font-weight: 600; color: var(--primary-color); }
+.upa-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.upa-table th {
+  text-align: left; padding: 8px 10px; font-size: 11.5px; color: var(--text-light);
+  border-bottom: 1px solid var(--border-color); white-space: nowrap;
+}
+.upa-table td { padding: 9px 10px; border-bottom: 1px solid #f1f5f9; color: var(--text-dark); white-space: nowrap; }
+.upa-vessel { font-weight: 700; }
