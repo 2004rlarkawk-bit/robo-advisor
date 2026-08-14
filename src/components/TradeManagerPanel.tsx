@@ -158,12 +158,12 @@ export default function TradeManagerPanel({ onLoad, embedded }: Props) {
         >
           <div className="draft-tray-head-main">
             <span className="draft-tray-title">
-              <Layers size={15} /> 임시보관함
+              <Layers size={19} /> 임시보관함
               <span className="draft-tray-count">{trades.length}건</span>
             </span>
             <span className="draft-tray-sub">작성 중인 거래를 이어서 작업할 수 있어요.</span>
           </div>
-          <ChevronDown size={18} className={`draft-tray-chevron ${trayOpen ? 'open' : ''}`} />
+          <ChevronDown size={21} className={`draft-tray-chevron ${trayOpen ? 'open' : ''}`} />
         </button>
 
         {trayOpen && (
@@ -188,10 +188,10 @@ export default function TradeManagerPanel({ onLoad, embedded }: Props) {
                   </div>
                   <div className="draft-tray-actions">
                     <button type="button" className="draft-tray-resume" onClick={() => onLoad(trade)}>
-                      <FolderOpen size={13} /> 이어서 작업
+                      <FolderOpen size={15} /> 이어서 작업
                     </button>
                     <button type="button" className="draft-tray-delete" aria-label="거래 삭제" onClick={() => void handleDelete(trade.id)}>
-                      <Trash2 size={14} />
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>

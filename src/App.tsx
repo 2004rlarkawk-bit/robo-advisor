@@ -1769,7 +1769,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             : activeMenu === 'settings' ? <SettingsPanel />
             : activeMenu === 'customs_history' ? <CustomsHistoryPanel onLoad={handleLoadSavedTrade} />
             : activeMenu === 'analysis' ? <DataAnalysisPanel currentItem={{ hsCode: profile.hsCode, itemName: profile.itemName }} />
-            : activeMenu === 'docs' ? <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
+            : activeMenu === 'docs' ? (
+              <>
+                {/* 임시보관함(작성 중 미제출 거래) — 문서 관리 탭 상단. 제출 완료 문서함과 한 곳에서 관리 */}
+                <TradeManagerPanel embedded onLoad={handleLoadSavedTrade} />
+                <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
+              </>
+            )
             : <>
             {/* Page Title & Subtitle */}
             <div className="page-heading">
@@ -3357,8 +3363,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               </div>
             )}
 
-            {/* 임시보관함 — 핵심 작업 영역(입력·생성·검토) 아래, 접힌 아코디언으로 배치 */}
-            <TradeManagerPanel embedded onLoad={handleLoadSavedTrade} />
+            {/* 임시보관함은 [문서 관리] 탭으로 이동함 */}
             </>}
             </Suspense>
           </div>
