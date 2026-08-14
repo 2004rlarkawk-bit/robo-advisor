@@ -141,16 +141,16 @@ const STEPS = [
       '품목·항구·거래조건만 입력하세요. 서류 탭이 필요한 항목만 보여주고, 나머지는 AI가 채웁니다.'
   },
   {
-    icon: <Sparkles size={28} />,
-    title: '② 서류 자동 생성',
+    icon: <ShieldCheck size={28} />,
+    title: '② AI 검증 & HS코드 추천',
     desc:
-      '상업송장·패킹리스트를 실무 표준 서식(DOCX)으로 만들고, HS코드는 관세청 사전 기반으로 추천합니다.'
+      '관세청 사전 기반으로 HS코드를 추천하고, 관세법 근거와 함께 오류·누락을 짚어냅니다.'
   },
   {
-    icon: <ShieldCheck size={28} />,
-    title: '③ AI 사전심사 · 즉시 보완',
+    icon: <Sparkles size={28} />,
+    title: '③ 문서 자동 생성',
     desc:
-      '제출 전에 관세법 조항을 근거로 오류·누락을 짚어내고, 그 자리에서 고쳐 "제출 준비 완료"까지 확인합니다.'
+      '통관·선적에 필요한 서류를 실무 표준 서식으로 한 번에 만들어 미리보기·다운로드합니다.'
   }
 ];
 
@@ -175,9 +175,9 @@ const DOCS = [
   },
   {
     icon: 'DEC',
-    name: '수출입신고서 초안',
+    name: '수출입신고서',
     desc:
-      '신고 데이터 초안 — 과세가격·세액 자동 계산'
+      '관세청 신고용 — 과세가격·관세 자동 계산'
   },
   {
     icon: 'C/O',
@@ -469,13 +469,13 @@ export default function AboutPanel({
             </svg>
             <span className="ah-wordmark">Port<b>AI</b></span>
           </div>
-          <h1 className="ah-rise ah-d2">관세사 없이도,<br />반송당하지 않는 <span className="ah-ai">서류</span>를.</h1>
-          <p className="ah-sub ah-rise ah-d3">AI 사전심사 기반 통관 문서 자동화</p>
-          <p className="ah-micro ah-rise ah-d4">AI 에이전트가 서류를 만들고, 제출 전에 관세법 근거로 먼저 심사합니다.</p>
+          <h1 className="ah-rise ah-d2">복잡한 통관 문서,<br /><span className="ah-ai">AI</span>로 빠르고 정확하게.</h1>
+          <p className="ah-sub ah-rise ah-d3">스마트 물류 · 통관 자동화 플랫폼</p>
+          <p className="ah-micro ah-rise ah-d4">AI가 문서를 이해하고, 리스크를 예측하며, 통관 업무를 자동화합니다.</p>
           <div className="ah-chips ah-rise ah-d5">
-            <span className="ah-chip"><i />관세법 근거 사전심사</span>
             <span className="ah-chip"><i />상업송장·패킹리스트 자동 생성</span>
-            <span className="ah-chip"><i />예상 세액·고시환율 계산</span>
+            <span className="ah-chip"><i />관세·환율 실시간 환산</span>
+            <span className="ah-chip"><i />규정 리스크 사전 점검</span>
           </div>
         </div>
       </div>
@@ -500,17 +500,17 @@ export default function AboutPanel({
           </div>
 
           <div className="about-counter-label">
-            지원 무역 서류
+            자동 생성 문서
           </div>
         </div>
 
         <div className="about-counter">
           <div className="about-counter-value">
-            제출 전
+            실시간
           </div>
 
           <div className="about-counter-label">
-            AI 사전심사
+            오류 검증
           </div>
         </div>
       </section>
@@ -542,7 +542,7 @@ export default function AboutPanel({
       {/* 4. 생성 문서 소개 */}
       <section className="about-section">
         <h2 className="about-section-title about-reveal">
-          6종 무역 서류를 한 흐름에서
+          6종 무역 서류를 자동으로
         </h2>
 
         <div className="about-docs">
@@ -565,11 +565,11 @@ export default function AboutPanel({
 
       {/* 5. CTA */}
       <section className="about-cta about-reveal">
-        <h2>제출하기 전에, 심사받으세요</h2>
+        <h2>지금 바로 시작하세요</h2>
 
         <p>
-          거래 정보만 입력하면 서류 생성부터
-          사전심사까지 5분이면 끝납니다.
+          거래 정보만 입력하면, 나머지는
+          PortAI가 합니다.
         </p>
 
         <button
