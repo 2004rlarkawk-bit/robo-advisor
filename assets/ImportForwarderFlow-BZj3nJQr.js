@@ -1,1 +1,0 @@
-import{j as o}from"./index-CljBY5AS.js";import{I as t}from"./ImportTradeFlow-N0lLXTVk.js";import"./icons-BFX_uoDn.js";import"./react-24G34jEJ.js";import"./importDocumentAnalysisService-DeqeEjoX.js";import"./index-B3kDFKVa.js";function f(r){return o.jsx(t,{role:"forwarder",...r})}export{f as default};
