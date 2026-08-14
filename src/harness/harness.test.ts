@@ -428,7 +428,11 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
   it('필수 항목이 모두 입력된 경우 입력값 검증 오류가 없다 (Python 시나리오 B)', () => {
     const fullProfile: TradeProfile = {
       ...baseAsyncProfile,
-      partnerName: 'ABC Corp'
+      partnerName: 'ABC Corp',
+      unit: 'EA',
+      currency: 'USD',
+      companyAddress: '인천 남동구 1로',
+      partnerAddress: '100 Test St, LA'
     };
     const issues = validateRequiredInputs(fullProfile);
     expect(issues).toHaveLength(0);
@@ -575,5 +579,63 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(issue).toBeDefined();
     expect(issue?.severity).toBe('error');
     expect(issue?.message).toContain('출발일');
+  });
+
+  // ===== 문서 내부 논리 검증 (Layer 1 추가 규칙) =====
+
+  const layer1Base: TradeProfile = {
+    ...baseAsyncProfile,
+    partnerName: 'ABC Corp',
+    unit: 'EA',
+    currency: 'USD',
+    companyAddress: '인천 남동구 1로',
+    partnerAddress: '100 Test St, LA'
+  };
+
+  it('순중량(Net)이 총중량(Gross)보다 크면 error가 발생한다', () => {
+    const issues = validateRequiredInputs({ ...layer1Base, netWeight: 500, grossWeight: 450 });
+    const issue = issues.find(i => i.id === 'weight-net-gross');
+    expect(issue?.severity).toBe('error');
+    expect(validateRequiredInputs({ ...layer1Base, netWeight: 450, grossWeight: 500 })
+      .find(i => i.id === 'weight-net-gross')).toBeUndefined();
+  });
+
+  it('포장 수량이 0 이하이면 error가 발생한다', () => {
+    expect(validateRequiredInputs({ ...layer1Base, packageCount: 0 })
+      .find(i => i.id === 'package-count-nonpositive')?.severity).toBe('error');
+    expect(validateRequiredInputs({ ...layer1Base, packageCount: 10 })
+      .find(i => i.id === 'package-count-nonpositive')).toBeUndefined();
+  });
+
+  it('수량이 있는데 단위가 누락되면 error가 발생한다', () => {
+    expect(validateRequiredInputs({ ...layer1Base, unit: '' })
+      .find(i => i.id === 'unit-missing')?.severity).toBe('error');
+  });
+
+  it('금액이 있는데 통화가 누락되면 error가 발생한다', () => {
+    expect(validateRequiredInputs({ ...layer1Base, currency: '' })
+      .find(i => i.id === 'currency-missing')?.severity).toBe('error');
+  });
+
+  it('공급자·거래처 주소가 누락되면 각각 error가 발생한다', () => {
+    const issues = validateRequiredInputs({ ...layer1Base, companyAddress: '', partnerAddress: '' });
+    expect(issues.find(i => i.id === 'input-missing-companyAddress')?.severity).toBe('error');
+    expect(issues.find(i => i.id === 'input-missing-partnerAddress')?.severity).toBe('error');
+  });
+
+  it('다품목 금액 합계 ≠ Invoice 총액이면 error, 일치하면 없음', () => {
+    const items = [
+      { id: '1', itemName: 'A', hsCode: '620211', quantity: 100 as const, unit: 'EA' as const, unitPrice: 250 as const, currency: 'USD' as const },
+      { id: '2', itemName: 'B', hsCode: '620211', quantity: 10 as const, unit: 'EA' as const, unitPrice: 100 as const, currency: 'USD' as const },
+    ];
+    // 합계 = 100×250 + 10×100 = 26,000. 총액을 25,000으로 넣으면 불일치.
+    const bad = validateRequiredInputs({ ...layer1Base, shipperItems: items, quantity: 100, unitPrice: 250, totalAmount: 25000 });
+    const badIssue = bad.find(i => i.id === 'items-total-mismatch');
+    expect(badIssue?.severity).toBe('error');
+    expect(badIssue?.message).toContain('26,000');
+    // 총액을 합계와 맞추면 불일치 없음. 단건 계산 오류(amount-calc-mismatch)도 다품목이라 미발행.
+    const ok = validateRequiredInputs({ ...layer1Base, shipperItems: items, quantity: 100, unitPrice: 250, totalAmount: 26000 });
+    expect(ok.find(i => i.id === 'items-total-mismatch')).toBeUndefined();
+    expect(ok.find(i => i.id === 'amount-calc-mismatch')).toBeUndefined();
   });
 });
