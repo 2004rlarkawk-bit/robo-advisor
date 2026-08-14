@@ -6,6 +6,14 @@ import type { ImportDocumentMeta } from '../../types/importTrade';
 
 vi.mock('../../services/importDocumentAnalysisService', () => ({
   classifyImportDocument: vi.fn().mockResolvedValue('commercial_invoice'),
+  IMPORT_DOCUMENT_TYPE_LABELS: {
+    commercial_invoice: '상업송장',
+    packing_list: '포장명세서',
+    bill_of_lading: '선하증권',
+    certificate_of_origin: '원산지증명서',
+    other: '기타서류',
+    unknown: '기타서류',
+  },
 }));
 
 import ImportDocumentUploader from './ImportDocumentUploader';
@@ -54,6 +62,7 @@ describe('수입 persisted 첨부 표시', () => {
       );
     });
     expect(container.textContent).toContain('invoice.pdf');
+    expect(container.textContent).toContain('상업송장');
     expect(container.textContent).toContain('업로드 완료');
   });
 

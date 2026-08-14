@@ -60,11 +60,12 @@ export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents
     }
 
     // 각 문서 카테고리별 검증 리포트 작성 및 로그 생성
-    const docTypes = ['invoice', 'packing_list', 'bl', 'customs_dec', 'co'] as const;
+    const docTypes = ['invoice', 'packing_list', 'transport_request', 'customs_dec', 'co'] as const;
     const docNames: Record<string, string> = {
       invoice: '상업송장(Invoice)',
       packing_list: '패킹리스트(Packing List)',
       bl: '선하증권(B/L)',
+      transport_request: '수출 운송의뢰서(Transport Request)',
       customs_dec: '통관신고서',
       co: '원산지증명서(C/O)'
     };

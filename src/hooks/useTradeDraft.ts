@@ -3,6 +3,7 @@ import type { TradeProfile, TradeRole, TradeType } from '../types';
 import type { TradeAttachment } from '../types/tradeFormData';
 import {
   deleteTradeDraft,
+  isSubmittedTradeDraft,
   loadDraftFromLocal,
   loadTradeDraft,
   removeDraftFromLocal,
@@ -146,7 +147,17 @@ export function useTradeDraft({
 
       if (restoreSequenceRef.current !== sequence) return;
       try {
-        const newest = selectNewestDraft(localDraft, databaseDraft);
+        let newest = selectNewestDraft(localDraft, databaseDraft);
+        if (newest?.tradeId && await isSubmittedTradeDraft(userId, newest.tradeId)) {
+          // 제출된 거래를 가리키는 local/DB 초안은 작성 중 복원 대상이 아니다.
+          removeDraftFromLocal(userId, tradeDirection, tradeRole);
+          try {
+            await deleteTradeDraft(userId, tradeDirection, tradeRole);
+          } catch (error) {
+            console.warn('[Trade Draft] 제출 완료 거래의 stale DB 초안 정리 실패:', error);
+          }
+          newest = null;
+        }
         const activeTradeId = tradeIdRef.current;
         if (!activeTradeId) {
           setProfile(newest ? { ...defaultProfile, ...newest.profile } : defaultProfile);

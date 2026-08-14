@@ -11,6 +11,10 @@ import {
   syncLegacyImportFields,
 } from '../../services/importDocumentAnalysisService';
 import { calculateEstimatedImportDuty } from '../../services/importDutyService';
+import {
+  recommendImportHSKForItems,
+  validateOfficialImportHSK,
+} from '../../services/importHSCodeSuggestionService';
 import { assessImportRisks } from '../../services/importRiskService';
 import {
   downloadImportDeclarationRequest,
@@ -49,8 +53,9 @@ import type {
 import type { PersistedTradeStatus, SavedTrade, TradeProfile } from '../../types';
 import type { TradeFormDataV3 } from '../../types/tradeFormData';
 import type { TradeDraftRow } from '../../services/draftCacheService';
-import { saveTradeFormDraft } from '../../services/draftCacheService';
+import { deleteTradeDraft, isSubmittedTradeDraft, saveTradeFormDraft } from '../../services/draftCacheService';
 import { useFormDataDraft } from '../../hooks/useFormDataDraft';
+import DocumentManagerReadOnlyAction from '../DocumentManagerReadOnlyAction';
 
 interface Props {
   role: UserTradeRole;
@@ -60,6 +65,8 @@ interface Props {
   onComplete: (snapshot: ImportTradeSnapshot) => Promise<SavedTrade>;
   onSaved?: (trade: SavedTrade) => void;
   onWorkspaceStateChange?: (state: { currentStep: number; tradeId: string | null }) => void;
+  readOnly?: boolean;
+  onClose?: () => void;
 }
 
 export interface ImportFileResolutionFailure {
@@ -258,44 +265,55 @@ export async function resolveImportAnalysisFiles(
   expectedUserId?: string,
 ): Promise<ImportFileResolutionResult> {
   const resolved = { ...sourceFiles };
-  const failures: ImportFileResolutionFailure[] = [];
-
-  for (const document of documents) {
-    if (resolved[document.id]) continue;
+  const outcomes = await Promise.all(documents.map(async (document) => {
+    if (resolved[document.id]) return null;
     if (!hasValidStoragePath(document)) {
-      failures.push({
-        documentId: document.id,
-        fileName: document.name,
-        message: '업로드 전 원본 파일을 찾을 수 없습니다.',
-        code: 'PENDING_FILE_MISSING',
-        bucket: document.storageBucket || 'trade-documents',
-        maskedStoragePath: '',
-        status: '',
-      });
-      continue;
+      return {
+        kind: 'failure' as const,
+        failure: {
+          documentId: document.id,
+          fileName: document.name,
+          message: '업로드 전 원본 파일을 찾을 수 없습니다.',
+          code: 'PENDING_FILE_MISSING',
+          bucket: document.storageBucket || 'trade-documents',
+          maskedStoragePath: '',
+          status: '',
+        },
+      };
     }
     try {
-      resolved[document.id] = await loader({
+      const file = await loader({
         storageBucket: document.storageBucket || 'trade-documents',
         storagePath: document.storagePath!,
         fileName: document.name,
         mimeType: document.mimeType,
         documentType: document.type === 'unknown' ? 'other' : document.type,
       }, expectedUserId);
+      return { kind: 'success' as const, documentId: document.id, file };
     } catch (error) {
       const downloadError = error instanceof TradeAttachmentDownloadError ? error : null;
-      failures.push({
-        documentId: document.id,
-        fileName: document.name,
-        message: downloadError?.message
-          || (error instanceof Error ? error.message : 'Storage download 실패'),
-        code: downloadError?.code || 'STORAGE_DOWNLOAD_FAILED',
-        bucket: downloadError?.bucket || document.storageBucket || 'trade-documents',
-        maskedStoragePath: downloadError?.maskedStoragePath || '<user>/…',
-        status: downloadError?.status || '',
-      });
+      return {
+        kind: 'failure' as const,
+        failure: {
+          documentId: document.id,
+          fileName: document.name,
+          message: downloadError?.message
+            || (error instanceof Error ? error.message : 'Storage download 실패'),
+          code: downloadError?.code || 'STORAGE_DOWNLOAD_FAILED',
+          bucket: downloadError?.bucket || document.storageBucket || 'trade-documents',
+          maskedStoragePath: downloadError?.maskedStoragePath || '<user>/…',
+          status: downloadError?.status || '',
+        },
+      };
     }
-  }
+  }));
+
+  const failures: ImportFileResolutionFailure[] = [];
+  outcomes.forEach((outcome) => {
+    if (!outcome) return;
+    if (outcome.kind === 'success') resolved[outcome.documentId] = outcome.file;
+    else failures.push(outcome.failure);
+  });
 
   return { files: resolved, failures };
 }
@@ -308,6 +326,8 @@ export default function ImportTradeFlow({
   onComplete,
   onSaved,
   onWorkspaceStateChange,
+  readOnly = false,
+  onClose,
 }: Props) {
   const cacheKey = `portai_import_draft:${userId}:${role}`;
   const [state, setState] = useState<CachedState>(() => loadCached(cacheKey));
@@ -316,8 +336,18 @@ export default function ImportTradeFlow({
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState(false);
   const [showInProgressConfirmation, setShowInProgressConfirmation] = useState(false);
+  const [manualHsInputs, setManualHsInputs] = useState<Record<string, string>>({});
+  const [manualHsErrors, setManualHsErrors] = useState<Record<string, string>>({});
+  const [validatingHsItemId, setValidatingHsItemId] = useState<string | null>(null);
   const skipNextLocalCacheWriteRef = useRef(false);
+  const onWorkspaceStateChangeRef = useRef(onWorkspaceStateChange);
+  onWorkspaceStateChangeRef.current = onWorkspaceStateChange;
   const [downloadFormat, setDownloadFormat] = useState<ImportDeclarationDownloadFormat>('pdf');
+  const canBrowseReadOnlyResultSteps = readOnly;
+  const moveToReadOnlyResultStep = (step: number) => {
+    if (!canBrowseReadOnlyResultSteps || (step !== 2 && step !== 3)) return;
+    setState((current) => ({ ...current, step }));
+  };
   const selectedHS = useMemo(() => {
     const firstCode = state.analysis?.extracted.items.find((item) => item.confirmedHSCode)?.confirmedHSCode;
     return state.suggestions.find((item) => item.code === firstCode || item.code === state.selectedCode);
@@ -332,7 +362,7 @@ export default function ImportTradeFlow({
     completeDraft,
   } = useFormDataDraft({
     userId,
-    enabled: Boolean(userId),
+    enabled: Boolean(userId) && !readOnly,
     direction: 'import',
     role,
     formData: draftFormData,
@@ -341,12 +371,37 @@ export default function ImportTradeFlow({
     onRestore: handleDraftRestore,
   });
 
+  // 브라우저가 거래 row 저장 직후 종료되는 등 local cache가 남아도 submitted 거래는 복원하지 않는다.
   useEffect(() => {
+    if (readOnly || !state.tradeId) return;
+    let cancelled = false;
+    void isSubmittedTradeDraft(userId, state.tradeId)
+      .then(async (submitted) => {
+        if (!submitted || cancelled) return;
+        try {
+          await deleteTradeDraft(userId, 'import', role);
+        } catch (error) {
+          console.warn('[Import Draft] 제출 완료 거래의 stale DB 초안 정리 실패:', error);
+        }
+        if (cancelled) return;
+        skipNextLocalCacheWriteRef.current = true;
+        localStorage.removeItem(cacheKey);
+        setState(EMPTY);
+        setSourceFiles({});
+        setMessage('');
+        onWorkspaceStateChangeRef.current?.({ currentStep: 1, tradeId: null });
+      })
+      .catch((error) => console.warn('[Import Draft] 제출 상태 확인 실패:', error));
+    return () => { cancelled = true; };
+  }, [cacheKey, readOnly, role, state.tradeId, userId]);
+
+  useEffect(() => {
+    if (readOnly) return;
     onWorkspaceStateChange?.({
       currentStep: state.step,
       tradeId: state.tradeId ?? null,
     });
-  }, [onWorkspaceStateChange, state.step, state.tradeId]);
+  }, [onWorkspaceStateChange, readOnly, state.step, state.tradeId]);
 
   const persistImportDocuments = async (): Promise<ImportDocumentMeta[]> => {
     const missingFiles = state.documents.filter((document) =>
@@ -380,6 +435,7 @@ export default function ImportTradeFlow({
   };
 
   useEffect(() => {
+    if (readOnly) return;
     if (skipNextLocalCacheWriteRef.current) {
       skipNextLocalCacheWriteRef.current = false;
       return;
@@ -389,7 +445,7 @@ export default function ImportTradeFlow({
     } catch (error) {
       console.warn('[Import Draft] localStorage 임시 저장 실패:', error);
     }
-  }, [cacheKey, state]);
+  }, [cacheKey, readOnly, state]);
 
   const analyze = async () => {
     setMessage('');
@@ -432,8 +488,7 @@ export default function ImportTradeFlow({
       setSourceFiles(resolvedFiles);
       const result = await analyzeImportDocuments(analyzableDocuments, resolvedFiles);
       const failedIds = new Set(failures.map((failure) => failure.documentId));
-      setState((current) => {
-        const documents = current.documents.map((document) => {
+      const documents = state.documents.map((document) => {
           if (failedIds.has(document.id)) {
             return {
               ...document,
@@ -453,14 +508,19 @@ export default function ImportTradeFlow({
             sourceId: classification?.sourceId || document.sourceId || document.id,
           };
         });
-        const suggestions = role === 'shipper' ? result.suggestions : [];
-        const analysis: ImportAnalysisResult = {
-          ...result.analysis,
-          extracted: {
-            ...result.analysis.extracted,
-            certificateOfOriginAvailable: documents.some((document) => document.type === 'certificate_of_origin'),
-          },
-        };
+      const analysis: ImportAnalysisResult = {
+        ...result.analysis,
+        extracted: {
+          ...result.analysis.extracted,
+          certificateOfOriginAvailable: documents.some((document) => document.type === 'certificate_of_origin'),
+        },
+      };
+      const suggestions = role === 'shipper'
+        ? await recommendImportHSKForItems(analysis.extracted.items)
+        : [];
+      setManualHsInputs({});
+      setManualHsErrors({});
+      setState((current) => {
         return {
           ...current,
           step: 2,
@@ -538,6 +598,15 @@ export default function ImportTradeFlow({
     if (!fields.items.length || missingDescriptions) {
       setBusy(false);
       return setMessage('품목정보의 품명은 분석 결과 확정에 필요합니다.');
+    }
+    if (role === 'shipper') {
+      const validations = await Promise.all(
+        fields.items.map((item) => validateOfficialImportHSK(item.confirmedHSCode)),
+      );
+      if (validations.some(({ valid }) => !valid)) {
+        setBusy(false);
+        return setMessage('모든 품목의 대한민국 HSK 10자리 코드를 공식 후보에서 선택하거나 직접 입력해 확정해 주세요.');
+      }
     }
     try {
       duty = role === 'shipper'
@@ -647,6 +716,25 @@ export default function ImportTradeFlow({
     };
   });
 
+  const selectRecommendedHS = (itemId: string, code: string) => {
+    setManualHsInputs((current) => ({ ...current, [itemId]: code }));
+    setManualHsErrors((current) => ({ ...current, [itemId]: '' }));
+    updateConfirmedHS(itemId, code);
+  };
+
+  const confirmManualHS = async (itemId: string, currentCode: string) => {
+    setValidatingHsItemId(itemId);
+    const result = await validateOfficialImportHSK(currentCode);
+    setValidatingHsItemId(null);
+    if (!result.valid) {
+      setManualHsErrors((current) => ({ ...current, [itemId]: result.error }));
+      return;
+    }
+    setManualHsInputs((current) => ({ ...current, [itemId]: result.normalizedCode }));
+    setManualHsErrors((current) => ({ ...current, [itemId]: '' }));
+    updateConfirmedHS(itemId, result.normalizedCode);
+  };
+
   const lookupCargo = async () => {
     if (!state.analysis?.extracted.blNo) return setMessage('B/L 번호를 입력해 주세요.');
     setBusy(true);
@@ -662,6 +750,7 @@ export default function ImportTradeFlow({
   };
 
   const complete = async () => {
+    if (readOnly) return;
     if (!state.analysis || busy) return;
     if (!state.generatedAt) return setMessage('수입신고 의뢰서를 먼저 생성해 주세요.');
     const unresolvedHigh = state.risks.filter((risk) => risk.level === 'high' && risk.status !== 'resolved');
@@ -676,10 +765,10 @@ export default function ImportTradeFlow({
   };
 
   const persistCompletedTrade = async () => {
+    if (readOnly) return;
     if (!state.analysis || busy || !state.generatedAt) return;
     setShowInProgressConfirmation(false);
     setBusy(true);
-    let tradeSaved = false;
     try {
       const completedTrade = await onComplete({
         tradeId: state.tradeId,
@@ -695,8 +784,13 @@ export default function ImportTradeFlow({
         generatedAt: state.generatedAt,
         flowCompletedAt: new Date().toISOString(),
       });
-      tradeSaved = true;
-      await completeDraft();
+      // 거래 row 저장 성공 이후에만 작성 상태를 정리한다. DB draft 삭제 실패는 제출 거래 복원을
+      // 허용하는 이유가 될 수 없으므로 기록만 남기고 local/React/workspace 초기화는 계속한다.
+      try {
+        await completeDraft();
+      } catch (error) {
+        console.warn('[Import Draft] 제출 후 DB 초안 정리 실패:', error);
+      }
       skipNextLocalCacheWriteRef.current = true;
       localStorage.removeItem(cacheKey);
       setState(EMPTY);
@@ -706,9 +800,7 @@ export default function ImportTradeFlow({
       onSaved?.(completedTrade);
     } catch (error) {
       console.error(error);
-      setMessage(tradeSaved
-        ? '거래는 저장했지만 작업실 초안을 정리하지 못했습니다. 입력 상태를 유지합니다.'
-        : '거래 저장에 실패했습니다. 입력과 첨부는 유지됩니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
+      setMessage('거래 저장에 실패했습니다. 입력과 첨부는 유지됩니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
     } finally {
       setBusy(false);
     }
@@ -736,17 +828,20 @@ export default function ImportTradeFlow({
           <h2>수입 {role === 'shipper' ? '화주' : '포워더'} 업무</h2>
           <p>{role === 'shipper' ? '해외 수출자가 보낸 해상 서류를 AI로 분석한 뒤 확인·수정합니다.' : '화주 또는 수출지 포워더에게 받은 서류를 저장하고 통관 진행을 추적합니다.'}</p>
         </div>
-        <button type="button" className="btn btn-secondary" onClick={reset}><RefreshCw size={15} /> 단계 초기화</button>
+        {!readOnly && <button type="button" className="btn btn-secondary" onClick={reset}><RefreshCw size={15} /> 단계 초기화</button>}
       </div>
       <ImportStepIndicator
         current={state.step}
         labels={role === 'shipper' ? ['서류 업로드·AI 분석', '분석 결과·HS 확정', '세액·의뢰서·리스크'] : ['서류 업로드', '서류 확인', '통관 처리']}
-        onMove={(step) => setState((current) => ({ ...current, step }))}
+        onMove={canBrowseReadOnlyResultSteps
+          ? moveToReadOnlyResultStep
+          : readOnly ? undefined : (step) => setState((current) => ({ ...current, step }))}
+        canMoveTo={canBrowseReadOnlyResultSteps ? (step) => step === 2 || step === 3 : undefined}
       />
       {message && <div className={`form-message ${state.dutyError && state.step === 3 ? 'warning' : 'error'}`} role="alert">{message}</div>}
       {!isDraftHydrated && <div className="draft-save-status saving" role="status">초안 복원 중...</div>}
       {draftSaveStatus === 'error' && <div className="form-message error" role="alert">초안 자동 저장에 실패했습니다.</div>}
-      {showInProgressConfirmation && (
+      {!readOnly && showInProgressConfirmation && (
         <div className="confirmation-backdrop" role="presentation">
           <section className="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="in-progress-title">
             <h3 id="in-progress-title">진행 중 상태로 저장할까요?</h3>
@@ -787,7 +882,9 @@ export default function ImportTradeFlow({
               ? '해외 수출업자에게 받은 C/I, P/L, B/L, C/O 및 기타서류를 한 번에 업로드해 주세요.'
               : 'B/L, C/I, P/L 사본을 업로드해 주세요.'}
           />
-          <div className="import-actions"><button className="btn btn-primary" disabled={busy} onClick={() => void analyze()}>{busy ? 'AI 분석 중…' : 'AI 분석 실행'}</button></div>
+          {readOnly && onClose
+            ? <DocumentManagerReadOnlyAction onClose={onClose} className="import-actions" />
+            : <div className="import-actions"><button className="btn btn-primary" disabled={busy} onClick={() => void analyze()}>{busy ? 'AI 분석 중…' : 'AI 분석 실행'}</button></div>}
         </>
       )}
 
@@ -797,6 +894,7 @@ export default function ImportTradeFlow({
             analysis={state.analysis}
             importerCompanyName={role === 'shipper' ? importerCompanyName : undefined}
             hasCertificateOfOriginDocument={state.documents.some((document) => document.type === 'certificate_of_origin')}
+            readOnly={readOnly}
             onChange={(extracted) => setState((current) => ({
               ...current,
               analysis: current.analysis ? { ...current.analysis, extracted } : null,
@@ -805,44 +903,93 @@ export default function ImportTradeFlow({
             }))}
           />
           {role === 'forwarder' ? <ImportDocumentComparison rows={state.analysis.comparison} /> : (
+            <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
             <section className="form-card import-card">
               <div className="import-card-heading">
-                <div><span className="ai-badge">수입국 기준 추천</span><h2>G. 품목별 HS Code 추천 및 확정</h2></div>
-                <p>문서 추출값과 AI 추천값은 구분됩니다. 사용자가 선택하거나 직접 입력한 값만 최종값입니다.</p>
+                <div><span className="ai-badge">대한민국 공식 HSK</span><h2>G. 품목별 HSK 자동추천 및 확정</h2></div>
+                <p>해외 문서 코드는 참고용이며, 관세청 공식 HSK 후보를 선택하거나 검증된 10자리 코드를 직접 입력해야 합니다.</p>
               </div>
               {state.analysis.extracted.items.map((item, index) => {
                 const candidates = state.suggestions.filter((suggestion) => !suggestion.itemId || suggestion.itemId === item.id);
+                const additionalInformation = Array.from(new Set(
+                  candidates.flatMap((suggestion) => suggestion.missingInformation ?? []),
+                ));
+                const manualValue = manualHsInputs[item.id] ?? item.confirmedHSCode;
                 return (
                   <div className="import-hs-item" key={item.id}>
                     <h3>품목 {index + 1}: {item.description || '품명 미확인'}</h3>
-                    <div className="import-field-grid">
-                      <label className="form-group"><span className="form-label">문서에서 추출한 HS Code</span><input className="form-input" readOnly value={item.documentHSCode} placeholder="첨부문서에서 확인되지 않음" /></label>
-                      <label className="form-group"><span className="form-label">사용자가 확정한 HS Code</span><input className="form-input user-editable" value={item.confirmedHSCode} onChange={(event) => updateConfirmedHS(item.id, event.target.value)} placeholder="후보 선택 또는 직접 입력" /></label>
+                    <div className="import-hs-reference">
+                      <span className="form-label">해외 문서 HS Code</span>
+                      <strong>{item.documentHSCode || '첨부문서에서 확인되지 않음'}</strong>
+                      <small>해외 수출자가 작성한 HS Code로 참고용입니다.</small>
                     </div>
-                    {item.documentHSCode && <button type="button" className="btn btn-secondary" onClick={() => updateConfirmedHS(item.id, item.documentHSCode)}>문서값을 최종 확정</button>}
+                    <h4 className="import-hs-subheading">대한민국 HSK 자동추천</h4>
                     <div className="hs-suggestion-list">
                       {candidates.length === 0 ? <p className="import-empty">추천 근거가 부족하거나 후보가 없습니다. 직접 확인해 주세요.</p> : candidates.map((suggestion) => (
                         <label key={`${item.id}-${suggestion.code}`} className={`hs-suggestion ${item.confirmedHSCode === suggestion.code ? 'selected' : ''}`}>
-                          <input type="radio" name={`import-hs-${item.id}`} checked={item.confirmedHSCode === suggestion.code} onChange={() => updateConfirmedHS(item.id, suggestion.code)} />
+                          <input type="radio" name={`import-hs-${item.id}`} checked={item.confirmedHSCode === suggestion.code} disabled={readOnly} onChange={() => selectRecommendedHS(item.id, suggestion.code)} />
                           <span>
                             <strong>{suggestion.code} · {suggestion.description}</strong>
-                            <small>{suggestion.reasoning} · 신뢰도 {Math.round(suggestion.confidence * 100)}%</small>
-                            {!!suggestion.missingInformation?.length && <small>추가 확인: {suggestion.missingInformation.join(', ')}</small>}
+                            <small>추천 신뢰도 {Math.round(suggestion.confidence * 100)}%</small>
+                            <small>{suggestion.reasoning}</small>
                           </span>
                         </label>
                       ))}
                     </div>
+                    {additionalInformation.length > 0 && (
+                      <div className="import-hs-additional">
+                        <strong>추가 확인 정보</strong>
+                        <ul>{additionalInformation.map((value) => <li key={value}>{value}</li>)}</ul>
+                      </div>
+                    )}
+                    <div className="import-hs-manual">
+                      <label className="form-group">
+                        <span className="form-label">대한민국 HSK 직접 입력</span>
+                        <input
+                          className={`form-input user-editable${manualHsErrors[item.id] ? ' input-error' : ''}`}
+                          value={manualValue}
+                          disabled={readOnly}
+                          onChange={(event) => {
+                            setManualHsInputs((current) => ({ ...current, [item.id]: event.target.value }));
+                            setManualHsErrors((current) => ({ ...current, [item.id]: '' }));
+                          }}
+                          placeholder="숫자 10자리"
+                          inputMode="numeric"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={readOnly || validatingHsItemId === item.id}
+                        onClick={() => void confirmManualHS(item.id, manualValue)}
+                      >
+                        {validatingHsItemId === item.id ? '확인 중...' : '직접 입력 확정'}
+                      </button>
+                    </div>
+                    {manualHsErrors[item.id] && <p className="import-hs-error" role="alert">{manualHsErrors[item.id]}</p>}
                   </div>
                 );
               })}
             </section>
+            </fieldset>
           )}
-          <div className="import-actions">
-            <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 1 }))}>이전</button>
-            <button className="btn btn-primary" disabled={busy} onClick={() => void confirmAndCalculate()}>
-              {role === 'shipper' ? '분석 결과 확인 및 예상세액 계산' : '확인 및 다음 단계'}
-            </button>
-          </div>
+          {readOnly && onClose ? (
+            <DocumentManagerReadOnlyAction
+              onClose={onClose}
+              className="import-actions"
+              navigationAction={{
+                label: role === 'forwarder' ? '3단계 통관처리 보기' : '3단계 세액·의뢰서·리스크 보기',
+                onClick: () => moveToReadOnlyResultStep(3),
+              }}
+            />
+          ) : (
+            <div className="import-actions">
+              <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 1 }))}>이전</button>
+              <button className="btn btn-primary" disabled={busy} onClick={() => void confirmAndCalculate()}>
+                {role === 'shipper' ? '분석 결과 확인 및 예상세액 계산' : '확인 및 다음 단계'}
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -872,15 +1019,24 @@ export default function ImportTradeFlow({
           </section>
           <RiskSummary
             risks={state.risks}
-            onToggle={(id) => setState((current) => ({
+            onToggle={readOnly ? undefined : (id) => setState((current) => ({
               ...current,
               risks: current.risks.map((risk) => risk.id === id ? { ...risk, status: risk.status === 'resolved' ? 'unresolved' : 'resolved' } : risk),
             }))}
           />
-          <div className="import-actions">
-            <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button>
-            <button className="btn btn-primary" disabled={busy} onClick={() => void complete()}>{busy ? '완료 처리 중…' : '완료'}</button>
-          </div>
+          {readOnly && onClose ? <DocumentManagerReadOnlyAction
+            onClose={onClose}
+            className="import-actions"
+            navigationAction={{
+              label: '2단계 이전 단계 보기',
+              onClick: () => moveToReadOnlyResultStep(2),
+            }}
+          /> : (
+            <div className="import-actions">
+              <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button>
+              <button className="btn btn-primary" disabled={busy} onClick={() => void complete()}>{busy ? '완료 처리 중…' : '완료'}</button>
+            </div>
+          )}
         </>
       )}
 
@@ -899,9 +1055,19 @@ export default function ImportTradeFlow({
             onChange={(arrivalNotice) => setState((current) => ({ ...current, arrivalNotice }))}
             userId={userId}
             tradeId={state.tradeId}
+            readOnly={readOnly}
           />
           <RiskSummary risks={state.risks} />
-          <div className="import-actions"><button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button><button className="btn btn-primary" disabled={busy || state.existingStatus === 'submitted'} onClick={() => void complete()}>{state.existingStatus === 'submitted' ? '제출 완료' : hasValidStoragePath(state.arrivalNotice) ? '완료 및 제출' : '진행 중으로 저장'}</button></div>
+          {readOnly && onClose
+            ? <DocumentManagerReadOnlyAction
+              onClose={onClose}
+              className="import-actions"
+              navigationAction={{
+                label: '2단계 이전 단계 보기',
+                onClick: () => moveToReadOnlyResultStep(2),
+              }}
+            />
+            : <div className="import-actions"><button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button><button className="btn btn-primary" disabled={busy || state.existingStatus === 'submitted'} onClick={() => void complete()}>{state.existingStatus === 'submitted' ? '제출 완료' : hasValidStoragePath(state.arrivalNotice) ? '완료 및 제출' : '진행 중으로 저장'}</button></div>}
         </>
       )}
     </div>

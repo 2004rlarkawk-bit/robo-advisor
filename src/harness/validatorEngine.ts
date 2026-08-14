@@ -24,7 +24,7 @@ function withTimeout<T>(promise: Promise<T>, ms = 8000, label = '외부 API'): P
  * 2) 숫자 항목(수량·중량·단가·금액)은 0보다 커야 함
  * 3) 계산 검증 — 수량 × 단가 = 금액이 맞는지
  * 4) 도착예정일이 출발일보다 빠르면 오류
- * 5) 송장 작성일이 출발일(선적일)보다 늦으면 오류
+ * 수출 화주 화면에서 더 이상 입력받지 않는 ETA·송장 작성일은 여기서 검증하지 않는다.
  *
  * 중량 누락·항구 누락·HS코드는 기존 룰(validateTradeDocuments/HSCodeAgent)이
  * 전담하므로 여기서 중복 발행하지 않는다.
@@ -38,13 +38,11 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
     { field: 'incoterms', label: '거래조건(Incoterms)', docType: 'invoice' },
     { field: 'quantity', label: '화물 수량', docType: 'packing_list' },
     // 선적일(departureDate)은 R2에서 warning으로 처리(인보이스는 선적 전 발행이 흔함) — 여기서 error로 잡지 않음
-    { field: 'arrivalDate', label: '도착예정일', docType: 'bl' },
     { field: 'companyName', label: '업체명', docType: 'invoice' },
     { field: 'partnerName', label: '거래처명(Consignee)', docType: 'invoice' },
     { field: 'contact', label: '담당자 연락처', docType: 'invoice' },
     { field: 'unitPrice', label: '단가', docType: 'invoice' },
     { field: 'totalAmount', label: '금액(Total Amount)', docType: 'invoice' },
-    { field: 'invoiceDate', label: '송장 작성일', docType: 'invoice' },
   ];
 
   for (const { field, label, docType } of required) {
@@ -118,28 +116,6 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
     }
   }
 
-  // 4) 날짜 순서 확인 (도착예정일이 출발일보다 빠르면 오류)
-  if (profile.departureDate && profile.arrivalDate && profile.departureDate > profile.arrivalDate) {
-    issues.push({
-      id: 'input-date-order',
-      docType: 'bl',
-      severity: 'error',
-      message: '도착예정일이 출발일보다 빠를 수 없습니다.',
-      field: 'arrivalDate'
-    });
-  }
-
-  // 5) 송장 작성일은 출발일(선적일)보다 늦을 수 없음 (둘 다 입력된 경우에만)
-  if (profile.invoiceDate && profile.departureDate && profile.invoiceDate > profile.departureDate) {
-    issues.push({
-      id: 'invoice-date-after-shipment',
-      docType: 'invoice',
-      severity: 'error',
-      message: '송장 작성일이 출발일(선적일)보다 늦을 수 없습니다. 날짜를 확인해 주세요.',
-      field: 'invoiceDate'
-    });
-  }
-
   return issues;
 }
 
@@ -178,14 +154,14 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
     });
   }
 
-  // 4. 선하증권 (B/L) - 항구 검증 (EXW 조건이 아닐 때만 항구 누락을 에러로 잡음)
+  // 4. 수출 운송의뢰서 - 항구 검증 (EXW 조건이 아닐 때만 항구 누락을 에러로 잡음)
   const isEXW = profile.incoterms === 'EXW';
   if (!isEXW && (!profile.loadPort || !profile.dischargePort)) {
     issues.push({
       id: 'ports-missing',
-      docType: 'bl',
+      docType: 'transport_request',
       severity: 'error',
-      message: '선하증권(B/L): 선적항 및 도착항 정보 누락 (해상 운송 경로 설정이 완료되지 않았습니다.)',
+      message: '수출 운송의뢰서: 선적항 및 도착항 정보 누락 (해상 운송 경로 설정이 완료되지 않았습니다.)',
       field: 'loadPort'
     });
   }
@@ -246,7 +222,7 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
       if (looksLikeAirport(profile.loadPort || '') || looksLikeAirport(profile.dischargePort || '')) {
         issues.push({
           id: 'transport-context-mismatch',
-          docType: 'bl',
+          docType: 'transport_request',
           severity: 'info', // 자문 경고 (info/advisory)
           message: '운송 맥락 불일치 경고: FOB/CIF 조건은 해상 운송 전용인데 공항이 입력되어 있습니다. 항구를 입력하세요.',
           field: 'loadPort'

@@ -359,6 +359,32 @@ describe('수입 초안 attachment hydration', () => {
     expect(Object.keys(result.files)).toEqual(['local-0', 'local-1', 'local-2']);
   });
 
+  it('여러 persisted 문서의 Storage download를 동시에 시작한다', async () => {
+    const documents = ['ci', 'pl', 'bl'].map((id) => ({
+      id,
+      name: `${id}.pdf`,
+      size: 3,
+      mimeType: 'application/pdf',
+      type: 'other' as const,
+      status: 'ready' as const,
+      storageBucket: 'trade-documents',
+      storagePath: `user/draft/${id}.pdf`,
+    }));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const loader = vi.fn(async (input: { fileName: string }) => {
+      await gate;
+      return new File(['pdf'], input.fileName, { type: 'application/pdf' });
+    });
+
+    const pending = resolveImportAnalysisFiles(documents, {}, loader);
+    await vi.waitFor(() => expect(loader).toHaveBeenCalledTimes(3));
+    release();
+    const result = await pending;
+
+    expect(Object.keys(result.files)).toEqual(['ci', 'pl', 'bl']);
+  });
+
   it('3개 중 1개 download 실패 시 성공한 2개 File과 실패 metadata를 함께 반환한다', async () => {
     const documents = ['ci', 'pl', 'bl'].map((id, index) => ({
       id,

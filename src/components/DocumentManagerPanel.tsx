@@ -8,9 +8,10 @@ import { getTestSubmissionMeta } from '../services/devTestDataService';
 interface Props {
   onLoad: (trade: SavedTrade) => void;
   onCopy: (trade: SavedTrade) => void;
+  onListReady?: () => void;
 }
 
-export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
+export default function DocumentManagerPanel({ onLoad, onCopy, onListReady }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,8 +26,9 @@ export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
       setError('제출된 문서를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
     } finally {
       setIsLoading(false);
+      onListReady?.();
     }
-  }, []);
+  }, [onListReady]);
 
   useEffect(() => { void loadTrades(); }, [loadTrades]);
 
@@ -96,7 +98,13 @@ export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
                       <span className="document-trade-name">{trade.profile.itemName || '(품목명 없음)'}</span>
                       {trade.profile.hsCode && <span className="document-hs-code">HS {trade.profile.hsCode}</span>}
                     </div>
-                    <div className="document-trade-meta">{trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'} · B/L {trade.profile.blNo || '-'} · {dateLabel}</div>
+                    <div className="document-trade-meta">
+                      {trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'} · {
+                        (trade.tradeDirection ?? trade.profile.tradeType) === 'export' && trade.tradeRole !== 'forwarder' && trade.generatedDocs?.transportRequest
+                          ? `T/R ${trade.generatedDocs.transportRequest.requestNo || '-'}`
+                          : `B/L ${trade.profile.blNo || '-'}`
+                      } · {dateLabel}
+                    </div>
                   </div>
 
                   <div className="document-trade-counts">

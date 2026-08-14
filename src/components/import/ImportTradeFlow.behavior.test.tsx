@@ -6,8 +6,16 @@ import { normalizeImportAnalysisResult } from '../../services/importDocumentAnal
 import type { SavedTrade } from '../../types';
 import ImportTradeFlow from './ImportTradeFlow';
 
-const { completeDraftMock } = vi.hoisted(() => ({
+const { completeDraftMock, isSubmittedTradeDraftMock, deleteTradeDraftMock } = vi.hoisted(() => ({
   completeDraftMock: vi.fn(),
+  isSubmittedTradeDraftMock: vi.fn().mockResolvedValue(false),
+  deleteTradeDraftMock: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../services/draftCacheService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/draftCacheService')>()),
+  isSubmittedTradeDraft: isSubmittedTradeDraftMock,
+  deleteTradeDraft: deleteTradeDraftMock,
 }));
 
 vi.mock('../../hooks/useFormDataDraft', () => ({
@@ -92,7 +100,10 @@ function savedTrade(status: 'in_progress' | 'submitted' = 'in_progress'): SavedT
   };
 }
 
-function renderFlow(onComplete = vi.fn().mockResolvedValue(savedTrade())) {
+function renderFlow(
+  onComplete = vi.fn().mockResolvedValue(savedTrade()),
+  viewOptions: { role?: 'shipper' | 'forwarder'; readOnly?: boolean; onClose?: () => void } = {},
+) {
   const onSaved = vi.fn();
   const onWorkspaceStateChange = vi.fn();
   container = document.createElement('div');
@@ -107,6 +118,7 @@ function renderFlow(onComplete = vi.fn().mockResolvedValue(savedTrade())) {
         onComplete={onComplete}
         onSaved={onSaved}
         onWorkspaceStateChange={onWorkspaceStateChange}
+        {...viewOptions}
       />,
     );
   });
@@ -133,6 +145,8 @@ beforeEach(() => {
   localStorage.setItem(cacheKey, JSON.stringify(cachedForwarderState()));
   localStorage.setItem(otherDraftKey, '{"protected":true}');
   completeDraftMock.mockResolvedValue(undefined);
+  isSubmittedTradeDraftMock.mockResolvedValue(false);
+  deleteTradeDraftMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -205,5 +219,116 @@ describe('수입 포워더 진행 중 저장 UX', () => {
       .not.toHaveBeenCalledWith({ currentStep: 1, tradeId: null });
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+
+  it('거래 저장 성공 후 DB draft 삭제가 실패해도 local/React 상태를 비우고 제출 이력으로 이동한다', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    completeDraftMock.mockRejectedValue(new Error('draft delete failed'));
+    const handlers = renderFlow();
+    act(() => button('진행 중으로 저장').click());
+
+    await act(async () => {
+      confirmInProgressButton().click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(handlers.onComplete).toHaveBeenCalledOnce();
+    expect(localStorage.getItem(cacheKey)).toBeNull();
+    expect(handlers.onWorkspaceStateChange)
+      .toHaveBeenLastCalledWith({ currentStep: 1, tradeId: null });
+    expect(handlers.onSaved).toHaveBeenCalledOnce();
+    expect(consoleWarn).toHaveBeenCalled();
+    consoleWarn.mockRestore();
+  });
+});
+
+describe('수입 문서관리 조회 모드', () => {
+  it.each([
+    ['shipper', otherDraftKey],
+    ['forwarder', cacheKey],
+  ] as const)('수입 %s 결과 화면은 완료·수정 액션 대신 닫기만 표시한다', (role, roleCacheKey) => {
+    localStorage.setItem(roleCacheKey, JSON.stringify(cachedForwarderState()));
+    const onClose = vi.fn();
+    const onComplete = vi.fn().mockResolvedValue(savedTrade());
+    renderFlow(onComplete, { role, readOnly: true, onClose });
+
+    expect(container?.textContent).not.toContain('단계 초기화');
+    expect(container?.textContent).not.toContain('완료 및 제출');
+    expect(Array.from(container?.querySelectorAll('button') ?? [])
+      .some((candidate) => candidate.textContent?.trim() === '진행 중으로 저장')).toBe(false);
+    act(() => button('닫기').click());
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('수입 포워더는 조회 상태를 유지하면서 3단계와 2단계를 왕복한 뒤 닫는다', () => {
+    const initialCache = JSON.stringify(cachedForwarderState());
+    localStorage.setItem(cacheKey, initialCache);
+    const onClose = vi.fn();
+    const handlers = renderFlow(vi.fn().mockResolvedValue(savedTrade()), {
+      role: 'forwarder',
+      readOnly: true,
+      onClose,
+    });
+
+    expect(container?.textContent).toContain('통관 진행 현황');
+    act(() => button('2단계 이전 단계 보기').click());
+    expect(container?.textContent).toContain('분석 결과 확인 및 수정');
+    expect(container?.querySelector<HTMLFieldSetElement>('.workspace-readonly-fieldset')?.disabled).toBe(true);
+
+    act(() => button('3단계 통관처리 보기').click());
+    expect(container?.textContent).toContain('통관 진행 현황');
+    act(() => button('닫기').click());
+
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(handlers.onComplete).not.toHaveBeenCalled();
+    expect(handlers.onWorkspaceStateChange).not.toHaveBeenCalled();
+    expect(localStorage.getItem(cacheKey)).toBe(initialCache);
+  });
+
+  it('수입 화주는 조회 상태를 유지하면서 3단계와 2단계를 왕복한 뒤 닫는다', () => {
+    const initialCache = JSON.stringify(cachedForwarderState());
+    localStorage.setItem(otherDraftKey, initialCache);
+    const onClose = vi.fn();
+    const handlers = renderFlow(vi.fn().mockResolvedValue(savedTrade()), {
+      role: 'shipper',
+      readOnly: true,
+      onClose,
+    });
+
+    expect(container?.textContent).toContain('수입신고 의뢰서');
+    expect(container?.textContent).not.toContain('완료 및 제출');
+    act(() => button('2단계 이전 단계 보기').click());
+    expect(container?.textContent).toContain('G. 품목별 HSK 자동추천 및 확정');
+    const manualHsInput = container?.querySelector<HTMLInputElement>('.import-hs-manual input');
+    expect(manualHsInput?.matches(':disabled')).toBe(true);
+    expect(button('직접 입력 확정').matches(':disabled')).toBe(true);
+
+    act(() => button('3단계 세액·의뢰서·리스크 보기').click());
+    expect(container?.textContent).toContain('수입신고 의뢰서');
+    act(() => button('닫기').click());
+
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(handlers.onComplete).not.toHaveBeenCalled();
+    expect(handlers.onWorkspaceStateChange).not.toHaveBeenCalled();
+    expect(localStorage.getItem(otherDraftKey)).toBe(initialCache);
+  });
+
+  it('수입 화주 resume/normal 모드는 2단계 입력과 최종 완료 액션을 편집 가능하게 유지한다', () => {
+    localStorage.setItem(otherDraftKey, JSON.stringify(cachedForwarderState()));
+    renderFlow(vi.fn().mockResolvedValue(savedTrade()), {
+      role: 'shipper',
+      readOnly: false,
+    });
+
+    expect(container?.textContent).toContain('단계 초기화');
+    expect(container?.textContent).toContain('완료');
+    expect(container?.textContent).not.toContain('닫기');
+    act(() => button('이전').click());
+    const manualHsInput = container?.querySelector<HTMLInputElement>('.import-hs-manual input');
+    expect(manualHsInput?.matches(':disabled')).toBe(false);
+    expect(button('직접 입력 확정').matches(':disabled')).toBe(false);
   });
 });

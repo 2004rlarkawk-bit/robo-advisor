@@ -11,6 +11,8 @@ const DOC_LABEL: Record<ImportDocumentType, string> = {
   packing_list: 'Packing List',
   bill_of_lading: 'Bill of Lading',
   certificate_of_origin: 'Certificate of Origin',
+  transport_request: 'Export Transport Request',
+  export_declaration: 'Export Declaration',
   other: '기타서류',
   unknown: '기타서류',
 };

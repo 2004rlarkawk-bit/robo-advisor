@@ -1,6 +1,12 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { FileSignature, FileText, Plus, RotateCcw, Trash2 } from 'lucide-react';
-import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS } from '../constants/ports';
+import {
+  EXPORT_POD_OPTIONS,
+  EXPORT_POL_OPTIONS,
+  OTHER_DOMESTIC_PORT_VALUE,
+  OTHER_FOREIGN_PORT_VALUE,
+  normalizeExportPortValue,
+} from '../constants/ports';
 import type { Incoterms, NumericInput, ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
 import CountrySelect from './CountrySelect';
 import { useShipperHSCodeSuggestions } from '../hooks/useShipperHSCodeSuggestions';
@@ -12,8 +18,10 @@ import {
   isGrossWeightBelowNet,
   NON_ENGLISH_GOODS_DESCRIPTION_MESSAGE,
   SHIPPER_CURRENCIES,
-  SHIPPER_ITEM_UNITS,
+  SHIPPER_ITEM_UNIT_OPTIONS,
+  SHIPPER_PACKAGE_TYPE_OPTIONS,
   summarizeShipperItems,
+  getShipperPackageTypeOptionValue,
 } from '../utils/shipperForm';
 
 interface Props {
@@ -24,6 +32,7 @@ interface Props {
   toolbar?: ReactNode;
   statusContent?: ReactNode;
   profileSignerDefault?: string;
+  tradeId?: string | null;
   onProfilePatch: (patch: Partial<TradeProfile>) => void;
   onItemsChange: (items: ShipperItem[]) => void;
   onSupplementalChange: (state: ShipperSupplementalState) => void;
@@ -31,9 +40,16 @@ interface Props {
   onGenerate: () => void;
 }
 
-const INCOTERMS_OPTIONS: Exclude<Incoterms, ''>[] = ['EXW', 'FOB', 'CFR', 'CIF', 'DDP'];
-const PAYMENT_TERM_OPTIONS = ['T/T', 'L/C', 'D/P', 'D/A', 'Open Account'] as const;
-const PACKAGE_TYPE_OPTIONS = ['CTNS', 'PALLETS', 'CASES', 'BOXES', 'BAGS', 'DRUMS'] as const;
+const INCOTERMS_OPTIONS: Exclude<Incoterms, ''>[] = ['FOB', 'CFR', 'CIF', 'FAS', 'FCA'];
+const PAYMENT_TERM_OPTIONS = [
+  { value: 'T/T', label: 'T/T (전신송금)' },
+  { value: 'L/C', label: 'L/C (신용장)' },
+  { value: 'D/P', label: 'D/P (지급인도)' },
+  { value: 'D/A', label: 'D/A (인수인도)' },
+  { value: 'Open Account', label: 'Open Account (외상거래)' },
+] as const;
+const OTHER_ITEM_UNIT_VALUE = '__OTHER_ITEM_UNIT__';
+const OTHER_PACKAGE_TYPE_VALUE = '__OTHER_PACKAGE_TYPE__';
 
 function numericValue(eventValue: string): NumericInput {
   return eventValue === '' ? '' : Number(eventValue);
@@ -47,6 +63,7 @@ export default function ShipperWorkspaceForm({
   toolbar,
   statusContent,
   profileSignerDefault = '',
+  tradeId,
   onProfilePatch,
   onItemsChange,
   onSupplementalChange,
@@ -57,6 +74,62 @@ export default function ShipperWorkspaceForm({
   const hasInvalidWeight = isGrossWeightBelowNet(profile.grossWeight, profile.netWeight);
   const hsCodeSuggestions = useShipperHSCodeSuggestions(items);
   const [showItemValidation, setShowItemValidation] = useState(false);
+  const [incotermsPlaceSource, setIncotermsPlaceSource] = useState<'loadPort' | 'dischargePort' | null>(null);
+  const [forceCustomLoadPort, setForceCustomLoadPort] = useState(false);
+  const [forceCustomDischargePort, setForceCustomDischargePort] = useState(false);
+  const [forceCustomPackageType, setForceCustomPackageType] = useState(false);
+
+  const normalizedLoadPort = normalizeExportPortValue(profile.loadPort);
+  const normalizedDischargePort = normalizeExportPortValue(profile.dischargePort);
+  const isKnownLoadPort = EXPORT_POL_OPTIONS.some((port) => port.value === normalizedLoadPort);
+  const isKnownDischargePort = EXPORT_POD_OPTIONS.some((port) => port.value === normalizedDischargePort);
+  const loadPortSelection = forceCustomLoadPort || (profile.loadPort && !isKnownLoadPort)
+    ? OTHER_DOMESTIC_PORT_VALUE
+    : normalizedLoadPort;
+  const dischargePortSelection = forceCustomDischargePort || (profile.dischargePort && !isKnownDischargePort)
+    ? OTHER_FOREIGN_PORT_VALUE
+    : normalizedDischargePort;
+  const knownPackageType = getShipperPackageTypeOptionValue(profile.packageType);
+  const packageTypeSelection = forceCustomPackageType || (profile.packageType && !knownPackageType)
+    ? OTHER_PACKAGE_TYPE_VALUE
+    : knownPackageType ?? '';
+
+  useEffect(() => {
+    setIncotermsPlaceSource(null);
+    setForceCustomPackageType(false);
+  }, [tradeId]);
+
+  useEffect(() => {
+    if (isKnownLoadPort) setForceCustomLoadPort(false);
+    else if (profile.loadPort) setForceCustomLoadPort(true);
+  }, [isKnownLoadPort, profile.loadPort]);
+
+  useEffect(() => {
+    if (isKnownDischargePort) setForceCustomDischargePort(false);
+    else if (profile.dischargePort) setForceCustomDischargePort(true);
+  }, [isKnownDischargePort, profile.dischargePort]);
+
+  useEffect(() => {
+    const patch: Partial<TradeProfile> = {};
+    if (profile.loadPort && normalizedLoadPort !== profile.loadPort) patch.loadPort = normalizedLoadPort;
+    if (profile.dischargePort && normalizedDischargePort !== profile.dischargePort) {
+      patch.dischargePort = normalizedDischargePort;
+    }
+    if (Object.keys(patch).length > 0) onProfilePatch(patch);
+  }, [normalizedDischargePort, normalizedLoadPort, onProfilePatch, profile.dischargePort, profile.loadPort]);
+
+  useEffect(() => {
+    if (knownPackageType) setForceCustomPackageType(false);
+    else if (profile.packageType) setForceCustomPackageType(true);
+  }, [knownPackageType, profile.packageType]);
+
+  useEffect(() => {
+    if (!incotermsPlaceSource) return;
+    const nextPlace = incotermsPlaceSource === 'loadPort' ? normalizedLoadPort : normalizedDischargePort;
+    if (supplemental.incotermsPlace !== nextPlace) {
+      onSupplementalChange({ ...supplemental, incotermsPlace: nextPlace });
+    }
+  }, [incotermsPlaceSource, normalizedDischargePort, normalizedLoadPort, onSupplementalChange, supplemental]);
 
   const updateItem = <K extends keyof ShipperItem>(id: string, field: K, value: ShipperItem[K]) => {
     onItemsChange(items.map((item) => item.id === id ? { ...item, [field]: value } : item));
@@ -75,6 +148,25 @@ export default function ShipperWorkspaceForm({
     setShowItemValidation(true);
     if (getGoodsDescriptionValidationMessage(items)) return;
     onGenerate();
+  };
+
+  const handleResetClick = () => {
+    setIncotermsPlaceSource(null);
+    setForceCustomLoadPort(false);
+    setForceCustomDischargePort(false);
+    setForceCustomPackageType(false);
+    onReset();
+  };
+
+  const toggleIncotermsPlaceSource = (source: 'loadPort' | 'dischargePort', checked: boolean) => {
+    const nextSource = checked ? source : null;
+    setIncotermsPlaceSource(nextSource);
+    if (nextSource) {
+      onSupplementalChange({
+        ...supplemental,
+        incotermsPlace: nextSource === 'loadPort' ? normalizedLoadPort : normalizedDischargePort,
+      });
+    }
   };
 
   const patchParty = (field: keyof TradeProfile, value: string) => {
@@ -329,7 +421,7 @@ export default function ShipperWorkspaceForm({
                   );
                 })()}
                 <div className="form-group" data-field="quantity"><label className="form-label">수량</label><input type="number" min="0" className="form-input" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', numericValue(e.target.value))} /></div>
-                <div className="form-group"><label className="form-label">단위</label><select className="form-input" value={item.unit} onChange={(e) => updateItem(item.id, 'unit', e.target.value as ShipperItem['unit'])}>{SHIPPER_ITEM_UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></div>
+                <div className="form-group"><label className="form-label">단위</label><select className="form-input" value={SHIPPER_ITEM_UNIT_OPTIONS.some((option) => option.value === item.unit) ? item.unit : OTHER_ITEM_UNIT_VALUE} onChange={(e) => updateItem(item.id, 'unit', e.target.value === OTHER_ITEM_UNIT_VALUE ? '' : e.target.value)}>{SHIPPER_ITEM_UNIT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}<option value={OTHER_ITEM_UNIT_VALUE}>기타</option></select>{!SHIPPER_ITEM_UNIT_OPTIONS.some((option) => option.value === item.unit) && <input className="form-input shipper-custom-unit-input" aria-label="기타 단위 직접 입력" value={item.unit} maxLength={12} onChange={(e) => updateItem(item.id, 'unit', e.target.value.toUpperCase().replace(/[^A-Z0-9./-]/g, ''))} placeholder="영문 단위 직접 입력 (예: DOZ)" />}</div>
                 <div className="form-group" data-field="unitPrice"><label className="form-label">단가</label><input type="number" min="0" step="any" className="form-input" value={item.unitPrice} onChange={(e) => updateItem(item.id, 'unitPrice', numericValue(e.target.value))} /></div>
                 <div className="form-group"><label className="form-label">통화</label><select className="form-input" value={item.currency} onChange={(e) => updateItem(item.id, 'currency', e.target.value as ShipperItem['currency'])}>{SHIPPER_CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></div>
                 <div className="form-group" data-field="totalAmount"><span className="form-label">금액</span><div className="form-input shipper-readonly-value">{item.currency} {calculateShipperItemAmount(item).toLocaleString()}</div></div>
@@ -349,8 +441,8 @@ export default function ShipperWorkspaceForm({
         <summary className="form-section-summary">4. 거래 조건</summary>
         <div className="form-grid">
           <div className="form-group" data-field="incoterms"><label className="form-label">Incoterms</label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Incoterms 지정 장소 또는 항만</label><input className="form-input" value={supplemental.incotermsPlace} onChange={(e) => onSupplementalChange({ ...supplemental, incotermsPlace: e.target.value })} placeholder="Busan Port" /></div>
+          <div className="form-group"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+          <div className="form-group shipper-incoterms-place"><label className="form-label">Incoterms 지정 장소 또는 항만</label><input className="form-input" value={supplemental.incotermsPlace} readOnly={incotermsPlaceSource !== null} onChange={(e) => onSupplementalChange({ ...supplemental, incotermsPlace: e.target.value })} placeholder="Busan Port" /><div className="shipper-inline-options"><label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'loadPort'} onChange={(e) => toggleIncotermsPlaceSource('loadPort', e.target.checked)} /> 선적항과 동일</label><label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'dischargePort'} onChange={(e) => toggleIncotermsPlaceSource('dischargePort', e.target.checked)} /> 도착항과 동일</label></div></div>
           {profile.paymentTerms === 'L/C' && <>
             <div className="form-group"><label className="form-label">L/C No.</label><input className="form-input" value={profile.lcNo ?? ''} onChange={(e) => onProfilePatch({ lcNo: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">L/C Date</label><input type="date" className="form-input" value={profile.lcDate ?? ''} onChange={(e) => onProfilePatch({ lcDate: e.target.value })} /></div>
@@ -363,7 +455,7 @@ export default function ShipperWorkspaceForm({
         <summary className="form-section-summary">5. 포장 정보</summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">포장 수량</label><input type="number" min="0" className="form-input" value={profile.packageCount ?? ''} onChange={(e) => onProfilePatch({ packageCount: numericValue(e.target.value) })} /></div>
-          <div className="form-group"><label className="form-label">포장 종류</label><select className="form-input" value={profile.packageType ?? ''} onChange={(e) => onProfilePatch({ packageType: e.target.value })}><option value="">선택하세요</option>{PACKAGE_TYPE_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+          <div className="form-group"><label className="form-label">포장 종류</label><select className="form-input" value={packageTypeSelection} onChange={(e) => { if (e.target.value === OTHER_PACKAGE_TYPE_VALUE) setForceCustomPackageType(true); else { setForceCustomPackageType(false); onProfilePatch({ packageType: e.target.value }); } }}><option value="">선택하세요</option>{SHIPPER_PACKAGE_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}<option value={OTHER_PACKAGE_TYPE_VALUE}>기타</option></select>{packageTypeSelection === OTHER_PACKAGE_TYPE_VALUE && <input className="form-input shipper-custom-package-input" aria-label="기타 포장종류 직접 입력" value={profile.packageType ?? ''} maxLength={24} onChange={(e) => onProfilePatch({ packageType: e.target.value.toUpperCase().replace(/[^A-Z0-9 ./-]/g, '') })} placeholder="영문 포장종류 직접 입력 (예: SACK)" />}</div>
           <div className="form-group" data-field="weight"><label className="form-label">총중량 G.W. (kg)</label><input type="number" min="0" step="any" className="form-input" value={profile.grossWeight ?? ''} onChange={(e) => onProfilePatch({ grossWeight: numericValue(e.target.value), weight: numericValue(e.target.value) })} /></div>
           <div className="form-group"><label className="form-label">순중량 N.W. (kg)</label><input type="number" min="0" step="any" className="form-input" value={profile.netWeight ?? ''} onChange={(e) => onProfilePatch({ netWeight: numericValue(e.target.value) })} /></div>
           <div className="form-group"><label className="form-label">CBM</label><input className="form-input" value={profile.measurement ?? ''} onChange={(e) => onProfilePatch({ measurement: e.target.value })} /></div>
@@ -387,12 +479,10 @@ export default function ShipperWorkspaceForm({
       <details className="form-section">
         <summary className="form-section-summary">6. 항만 및 일정</summary>
         <div className="form-grid">
-          <div className="form-group" data-field="loadPort"><label className="form-label">선적항 POL</label><select className="form-input" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })}><option value="">선적항을 선택하세요</option>{LOAD_PORT_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}</select></div>
-          <div className="form-group" data-field="dischargePort"><label className="form-label">도착항 POD</label><select className="form-input" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })}><option value="">도착항을 선택하세요</option>{DISCHARGE_PORT_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}</select></div>
+          <div className="form-group" data-field="loadPort"><label className="form-label">선적항 POL</label><select className="form-input" value={loadPortSelection} onChange={(e) => { if (e.target.value === OTHER_DOMESTIC_PORT_VALUE) setForceCustomLoadPort(true); else { setForceCustomLoadPort(false); onProfilePatch({ loadPort: e.target.value }); } }}><option value="">선적항을 선택하세요</option>{EXPORT_POL_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_DOMESTIC_PORT_VALUE}>기타 국내항</option></select>{loadPortSelection === OTHER_DOMESTIC_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 국내항 직접 입력" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })} placeholder="기타 국내항 직접 입력" />}</div>
+          <div className="form-group" data-field="dischargePort"><label className="form-label">도착항 POD</label><select className="form-input" value={dischargePortSelection} onChange={(e) => { if (e.target.value === OTHER_FOREIGN_PORT_VALUE) setForceCustomDischargePort(true); else { setForceCustomDischargePort(false); onProfilePatch({ dischargePort: e.target.value }); } }}><option value="">도착항을 선택하세요</option>{EXPORT_POD_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_FOREIGN_PORT_VALUE}>기타 해외항</option></select>{dischargePortSelection === OTHER_FOREIGN_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 해외항 직접 입력" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })} placeholder="기타 해외항 직접 입력" />}</div>
           <div className="form-group" data-field="departureDate"><label className="form-label">희망 출항일</label><input type="date" className="form-input" value={profile.departureDate} onChange={(e) => onProfilePatch({ departureDate: e.target.value })} /></div>
-          <div className="form-group" data-field="arrivalDate"><label className="form-label">도착 예정일 ETA</label><input type="date" className="form-input" value={profile.arrivalDate ?? ''} onChange={(e) => onProfilePatch({ arrivalDate: e.target.value })} /></div>
-          <div className="form-group" data-field="invoiceDate"><label className="form-label">송장 작성일</label><input type="date" className="form-input" value={profile.invoiceDate ?? ''} onChange={(e) => onProfilePatch({ invoiceDate: e.target.value })} /></div>
-          <div className="form-group"><label className="form-label">선박명 Vessel <span className="optional-label">(선택)</span></label><input className="form-input" value={profile.vesselOrFlight ?? ''} onChange={(e) => onProfilePatch({ vesselOrFlight: e.target.value })} placeholder="OCEAN STAR V.1001" /></div>
+          <div className="form-group"><label className="form-label">운송방식</label><select className="form-input" value={profile.loadingMode ?? ''} onChange={(e) => onProfilePatch({ loadingMode: e.target.value === '' ? undefined : e.target.value as TradeProfile['loadingMode'] })}><option value="">미정</option><option value="FCL">FCL</option><option value="LCL">LCL</option></select></div>
         </div>
       </details>
 
@@ -407,7 +497,7 @@ export default function ShipperWorkspaceForm({
       </details>
 
       <div className="form-actions">
-        <button type="button" className="btn btn-secondary" onClick={onReset}><RotateCcw size={16} /> 초기화</button>
+        <button type="button" className="btn btn-secondary" onClick={handleResetClick}><RotateCcw size={16} /> 초기화</button>
         <button type="button" className="btn btn-primary" onClick={handleGenerateClick} disabled={isProcessing}><FileText size={16} />{isProcessing ? '생성 중...' : '필요 서류 자동 생성'}</button>
       </div>
     </div>

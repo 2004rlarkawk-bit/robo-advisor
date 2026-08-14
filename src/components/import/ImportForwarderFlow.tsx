@@ -8,6 +8,8 @@ export default function ImportForwarderFlow(props: {
   onComplete: (snapshot: ImportTradeSnapshot) => Promise<SavedTrade>;
   onSaved?: (trade: SavedTrade) => void;
   onWorkspaceStateChange?: (state: { currentStep: number; tradeId: string | null }) => void;
+  readOnly?: boolean;
+  onClose?: () => void;
 }) {
   return <ImportTradeFlow role="forwarder" {...props} />;
 }

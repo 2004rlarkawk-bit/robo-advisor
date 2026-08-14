@@ -7,6 +7,8 @@ export type ImportDocumentType =
   | 'packing_list'
   | 'bill_of_lading'
   | 'certificate_of_origin'
+  | 'transport_request'
+  | 'export_declaration'
   | 'other'
   | 'unknown';
 export type ImportAnalysisStatus =
@@ -57,6 +59,8 @@ export interface ImportParty {
 
 export interface ImportItem {
   id: string;
+  itemNo?: string;
+  sku?: string;
   description: string;
   koreanDescription: string;
   documentHSCode: string;
@@ -65,6 +69,10 @@ export interface ImportItem {
   specification: string;
   material: string;
   composition: string;
+  fabricConstruction: string;
+  productForm: string;
+  processingState: string;
+  gender: string;
   intendedUse: string;
   originCountry: string;
   quantity: string;
@@ -72,7 +80,19 @@ export interface ImportItem {
   unitPrice: string;
   currency: string;
   amount: string;
+  packageCount?: string;
+  packageUnit?: string;
+  netWeight?: string;
+  grossWeight?: string;
+  measurement?: string;
+  shippingMarks?: string;
   sourceDocumentIds: string[];
+}
+
+export interface ImportCargoTotals {
+  numberOfPackages: string;
+  grossWeight: string;
+  measurement: string;
 }
 
 export interface ImportExtractedFields {
@@ -97,6 +117,10 @@ export interface ImportExtractedFields {
   sealNo: string;
   vesselName: string;
   voyageNo: string;
+  exportDeclarationNo: string;
+  loadingMode: string;
+  measurement: string;
+  shippingMarks: string;
 
   exporterDetails: ImportParty;
   importerDetails: ImportParty;
@@ -110,6 +134,7 @@ export interface ImportExtractedFields {
   containerNumbers: string[];
   sealNumbers: string[];
   items: ImportItem[];
+  cargoTotals: ImportCargoTotals;
   certificateOfOriginAvailable: boolean;
   totalPackageCount: string;
   packageUnit: string;
@@ -160,15 +185,24 @@ export interface ImportHSCodeSuggestion {
   reasoning: string;
   confidence: number;
   missingInformation?: string[];
-  source?: 'ai_recommendation';
+  source?: 'official_hsk_ai_ranked' | 'official_hsk_fallback';
 }
 
 export interface ImportDocumentAnalysisResponse {
   analysis: ImportAnalysisResult;
   classifications: ImportDocumentClassification[];
-  suggestions: ImportHSCodeSuggestion[];
   source: 'openai';
   model: string;
+  timing?: {
+    requestParseMs: number;
+    openAiMs: number;
+    responseParseMs: number;
+    totalMs: number;
+    inputBytes: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    reasoningTokens?: number;
+  };
 }
 
 export interface ImportDutyItemEstimate {

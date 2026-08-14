@@ -3,8 +3,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TradeAttachment } from '../types/tradeFormData';
-import type { ForwarderDocumentConflict } from '../services/forwarderDocumentAnalysisService';
-import type { ForwarderFormState } from '../utils/forwarderForm';
+import type { ForwarderAutoFillApplicationResult } from '../services/forwarderDocumentAnalysisService';
+import { createEmptyForwarderFormState, type ForwarderFormState } from '../utils/forwarderForm';
 
 const { uploadMock, removeMock, classifyMock, analyzeMock } = vi.hoisted(() => ({
   uploadMock: vi.fn(),
@@ -49,7 +49,11 @@ function renderUploader(
   onApplyAnalysis: (
     values: Partial<ForwarderFormState>,
     sourceFiles: Record<string, string>,
-  ) => ForwarderDocumentConflict[] = vi.fn(() => []),
+  ) => ForwarderAutoFillApplicationResult = vi.fn(() => ({
+    state: createEmptyForwarderFormState(),
+    conflicts: [],
+    profileReplacements: [],
+  })),
 ) {
   const onChange = vi.fn();
   container = document.createElement('div');
@@ -84,6 +88,7 @@ afterEach(() => {
 describe('수출 포워더 첨부 uploader', () => {
   it('persisted metadata를 파일 input 없이도 업로드 완료로 표시한다', () => {
     renderUploader([persisted]);
+    expect(container?.textContent).toContain('상업송장');
     expect(container?.textContent).toContain('invoice.pdf');
     expect(container?.textContent).toContain('업로드 완료');
     expect(analyzeMock).not.toHaveBeenCalled();
@@ -231,7 +236,11 @@ describe('수출 포워더 첨부 uploader', () => {
       documentConflicts: [],
       failures: [],
     });
-    const onApplyAnalysis = vi.fn(() => []);
+    const onApplyAnalysis = vi.fn(() => ({
+      state: createEmptyForwarderFormState(),
+      conflicts: [],
+      profileReplacements: [],
+    }));
     renderUploader([persisted], onApplyAnalysis);
     const analyzeButton = Array.from(container!.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('AI 분석'))!;
@@ -247,7 +256,8 @@ describe('수출 포워더 첨부 uploader', () => {
       { companyName: 'AI Exporter', itemName: 'Cotton shirts' },
       { companyName: 'invoice.pdf', itemName: 'invoice.pdf' },
     );
-    expect(container?.textContent).toContain('자동 입력');
+    expect(container?.textContent).not.toContain('서류 기준으로');
+    expect(container?.querySelector('.form-message.info')).toBeNull();
   });
 
   it('사용자 입력과 AI 값이 충돌하면 기존값을 유지했다는 상세를 표시한다', async () => {
@@ -258,12 +268,16 @@ describe('수출 포워더 첨부 uploader', () => {
       documentConflicts: [],
       failures: [],
     });
-    const onApplyAnalysis = vi.fn(() => [{
-      field: 'companyName' as const,
-      currentValue: 'User Exporter',
-      analyzedValue: 'AI Exporter',
-      sourceFileName: 'invoice.pdf',
-    }]);
+    const onApplyAnalysis = vi.fn(() => ({
+      state: createEmptyForwarderFormState(),
+      conflicts: [{
+        field: 'companyName' as const,
+        currentValue: 'User Exporter',
+        analyzedValue: 'AI Exporter',
+        sourceFileName: 'invoice.pdf',
+      }],
+      profileReplacements: [],
+    }));
     renderUploader([persisted], onApplyAnalysis);
     const analyzeButton = Array.from(container!.querySelectorAll('button'))
       .find((candidate) => candidate.textContent?.includes('AI 분석'))!;
@@ -274,9 +288,42 @@ describe('수출 포워더 첨부 uploader', () => {
       await Promise.resolve();
     });
 
-    expect(container?.textContent).toContain('기존 입력을 유지');
+    expect(container?.textContent).toContain('직접 입력한 값 또는 문서 간 충돌값은 기존 입력을 유지');
     expect(container?.textContent).toContain('User Exporter');
     expect(container?.textContent).toContain('AI Exporter');
     expect(container?.textContent).toContain('invoice.pdf');
+  });
+
+  it('기본 프로필 교체가 있어도 분석 완료 파란 안내창을 표시하지 않는다', async () => {
+    analyzeMock.mockResolvedValue({
+      values: { companyName: 'Document Exporter' },
+      classifications: {},
+      sourceFiles: { companyName: 'invoice.pdf' },
+      documentConflicts: [],
+      failures: [],
+    });
+    const onApplyAnalysis = vi.fn(() => ({
+      state: { ...createEmptyForwarderFormState(), companyName: 'Document Exporter' },
+      conflicts: [],
+      profileReplacements: [{
+        field: 'companyName' as const,
+        currentValue: 'Profile Exporter',
+        analyzedValue: 'Document Exporter',
+        sourceFileName: 'invoice.pdf',
+      }],
+    }));
+    renderUploader([persisted], onApplyAnalysis);
+    const analyzeButton = Array.from(container!.querySelectorAll('button'))
+      .find((candidate) => candidate.textContent?.includes('AI 분석'))!;
+
+    await act(async () => {
+      analyzeButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container?.textContent).not.toContain('서류 내용을 우선 반영했습니다');
+    expect(container?.textContent).not.toContain('기존 Profile Exporter → 서류 Document Exporter');
+    expect(container?.querySelector('.form-message.info')).toBeNull();
   });
 });

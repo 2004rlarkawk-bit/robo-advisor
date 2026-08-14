@@ -3,6 +3,7 @@ import { FileText, FileUp, Sparkles, Trash2 } from 'lucide-react';
 import { classifyImportDocument } from '../services/importDocumentAnalysisService';
 import {
   analyzeForwarderAttachments,
+  type ForwarderAutoFillApplicationResult,
   type ForwarderDocumentConflict,
 } from '../services/forwarderDocumentAnalysisService';
 import type {
@@ -17,10 +18,11 @@ import type { ForwarderFormState } from '../utils/forwarderForm';
 
 const ACCEPTED_MIME_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg']);
 const DOCUMENT_OPTIONS: Array<{ value: TradeAttachmentDocumentType; label: string }> = [
-  { value: 'commercial_invoice', label: 'C/I' },
-  { value: 'packing_list', label: 'P/L' },
-  { value: 'bill_of_lading', label: 'B/L' },
-  { value: 'certificate_of_origin', label: 'C/O' },
+  { value: 'commercial_invoice', label: '상업송장' },
+  { value: 'packing_list', label: '포장명세서' },
+  { value: 'transport_request', label: '수출 운송의뢰서' },
+  { value: 'export_declaration', label: '수출신고필증' },
+  { value: 'certificate_of_origin', label: '원산지증명서' },
   { value: 'other', label: '기타서류' },
 ];
 const FIELD_LABELS: Partial<Record<keyof ForwarderFormState, string>> = {
@@ -28,6 +30,11 @@ const FIELD_LABELS: Partial<Record<keyof ForwarderFormState, string>> = {
   companyAddress: 'Shipper 주소',
   partnerName: 'Consignee 회사명',
   partnerAddress: 'Consignee 주소',
+  invoiceNo: 'Invoice No.',
+  exportDeclarationNo: '수출신고번호',
+  incoterms: 'Incoterms',
+  requestedDepartureDate: '희망 출항일',
+  loadingMode: '운송방식',
   vesselOrFlight: 'Vessel',
   voyageNo: 'Voyage No.',
   loadPort: 'POL',
@@ -41,6 +48,9 @@ const FIELD_LABELS: Partial<Record<keyof ForwarderFormState, string>> = {
   packageCount: 'Number of Packages',
   packageType: 'Kind of Packages',
   grossWeight: 'Gross Weight',
+  measurement: 'Measurement CBM',
+  shippingMarks: 'Marks & Numbers',
+  cargoItems: '화물명세',
 };
 
 interface Props {
@@ -51,7 +61,7 @@ interface Props {
   onApplyAnalysis?: (
     values: Partial<ForwarderFormState>,
     sourceFiles: Record<string, string>,
-  ) => ForwarderDocumentConflict[];
+  ) => ForwarderAutoFillApplicationResult;
 }
 
 function acceptedFile(file: File): boolean {
@@ -122,8 +132,7 @@ export default function TradeAttachmentUploader({
       setMessageKind('error');
       setMessage(`일부 파일을 업로드하지 못했습니다: ${failed.join(', ')}`);
     } else {
-      setMessageKind('info');
-      setMessage(`${uploaded.length}개 파일을 업로드했습니다. AI 분석으로 빈 입력값을 자동 채울 수 있습니다.`);
+      setMessage('');
     }
     setBusy(false);
   };
@@ -131,8 +140,7 @@ export default function TradeAttachmentUploader({
   const analyze = async () => {
     if (!attachments.length || busy) return;
     setBusy(true);
-    setMessageKind('info');
-    setMessage('첨부 문서를 AI로 분석하고 있습니다.');
+    setMessage('');
     setConflicts([]);
     try {
       const result = await analyzeForwarderAttachments(attachments, pendingFiles, userId);
@@ -144,18 +152,17 @@ export default function TradeAttachmentUploader({
         attachment.documentType !== attachments[index].documentType)) {
         onChange(reclassified);
       }
-      const userConflicts = onApplyAnalysis?.(result.values, result.sourceFiles) ?? [];
+      const application = onApplyAnalysis?.(result.values, result.sourceFiles);
+      const userConflicts = application?.conflicts ?? [];
       const nextConflicts = [...userConflicts, ...result.documentConflicts];
       setConflicts(nextConflicts);
-      const conflictCount = nextConflicts.length;
-      const appliedCount = Object.keys(result.values).length - userConflicts.length;
-      const parts = [`빈 필드 ${Math.max(0, appliedCount)}개를 자동 입력했습니다.`];
-      if (conflictCount > 0) parts.push(`기존 값 또는 문서 간 충돌 ${conflictCount}개는 덮어쓰지 않았습니다.`);
       if (result.failures.length > 0) {
-        parts.push(`분석 실패 ${result.failures.length}개: ${result.failures.map(({ fileName }) => fileName).join(', ')}`);
+        setMessageKind('error');
+        setMessage(`분석 실패 ${result.failures.length}개: ${result.failures.map(({ fileName }) => fileName).join(', ')}`);
+      } else {
+        // 성공 결과는 폼 반영 자체로 충분하므로 큰 자동반영 안내 박스를 남기지 않는다.
+        setMessage('');
       }
-      setMessageKind(result.failures.length === attachments.length ? 'error' : 'info');
-      setMessage(parts.join(' '));
     } catch (error) {
       setMessageKind('error');
       setMessage(error instanceof Error
@@ -206,7 +213,7 @@ export default function TradeAttachmentUploader({
       >
         <FileUp size={32} />
         <h3>수출 서류를 한 번에 첨부해 주세요</h3>
-        <p>C/I, P/L, B/L, C/O 및 기타서류 · PDF, PNG, JPEG</p>
+        <p>C/I, P/L, 수출 운송의뢰서, 수출신고필증 및 기타서류 · PDF, PNG, JPEG</p>
         <button
           type="button"
           className="btn btn-secondary"
@@ -240,7 +247,7 @@ export default function TradeAttachmentUploader({
       {message && <div className={`form-message ${messageKind}`} role="status">{message}</div>}
       {conflicts.length > 0 && (
         <div className="form-message warning" role="status">
-          <strong>자동입력 충돌값은 기존 입력을 유지했습니다.</strong>
+          <strong>직접 입력한 값 또는 문서 간 충돌값은 기존 입력을 유지했습니다.</strong>
           <ul>
             {conflicts.map((conflict, index) => (
               <li key={`${String(conflict.field)}-${conflict.sourceFileName}-${index}`}>
@@ -257,31 +264,37 @@ export default function TradeAttachmentUploader({
           <p className="import-empty">첨부된 파일이 없습니다.</p>
         ) : attachments.map((attachment) => (
           <div className="import-document-row" key={attachment.id}>
-            <FileText size={18} />
-            <div className="import-document-name">
-              <strong>{attachment.fileName}</strong>
-              <span>{(attachment.sizeBytes / 1024).toFixed(1)} KB · 업로드 완료</span>
+            <FileText className="import-document-icon" size={18} aria-hidden="true" />
+            <div className="import-document-content">
+              <strong className="import-document-type">
+                {DOCUMENT_OPTIONS.find(({ value }) => value === attachment.documentType)?.label || '기타서류'}
+              </strong>
+              <span className="import-document-file-name" title={attachment.fileName}>{attachment.fileName}</span>
+              <span className="import-document-meta">{(attachment.sizeBytes / 1024).toFixed(1)} KB · 업로드 완료</span>
             </div>
-            <select
-              aria-label={`${attachment.fileName} 문서 종류`}
-              value={attachment.documentType === 'arrival_notice' ? 'other' : attachment.documentType}
-              onChange={(event) => onChange(attachments.map((item) => item.id === attachment.id
-                ? { ...item, documentType: event.target.value as TradeAttachmentDocumentType }
-                : item))}
-            >
-              {DOCUMENT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className="icon-btn import-delete"
-              disabled={busy}
-              aria-label={`${attachment.fileName} 삭제`}
-              onClick={() => void remove(attachment)}
-            >
-              <Trash2 size={16} />
-            </button>
+            <div className="import-document-actions">
+              <select
+                aria-label={`${attachment.fileName} 문서 종류`}
+                value={attachment.documentType === 'arrival_notice' ? 'other' : attachment.documentType}
+                onChange={(event) => onChange(attachments.map((item) => item.id === attachment.id
+                  ? { ...item, documentType: event.target.value as TradeAttachmentDocumentType }
+                  : item))}
+              >
+                {DOCUMENT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="icon-btn import-delete"
+                disabled={busy}
+                title="파일 삭제"
+                aria-label={`${attachment.fileName} 삭제`}
+                onClick={() => void remove(attachment)}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
           </div>
         ))}
       </div>

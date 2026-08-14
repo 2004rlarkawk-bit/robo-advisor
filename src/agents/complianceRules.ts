@@ -162,7 +162,7 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     const v = profile.vesselOrFlight || '';
     const looksAir = /항공|air|flight|\b[A-Z]{2}\d{2,4}\b/i.test(v);
     if (looksAir) {
-      issues.push(mk('r4-transport-mode', 'bl', 'vesselOrFlight',
+      issues.push(mk('r4-transport-mode', 'transport_request', 'vesselOrFlight',
         `${inc}는 해상 운송 전용 조건인데 운송수단이 항공편으로 보입니다("${v}"). 조건 또는 운송수단을 확인하세요.`));
     }
   }
@@ -175,7 +175,7 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     const un = [!lc ? `선적항 "${load}"` : '', !dc ? `도착항 "${disch}"` : ''].filter(Boolean).join(', ');
     skipLog(`R5 동일국가 검사 건너뜀 — 항구 국가 추정 불가(${un}). 오탐 방지.`);
   } else if (lc && dc && lc === dc) {
-    issues.push(mk('r5-same-country-ports', 'bl', 'loadPort',
+    issues.push(mk('r5-same-country-ports', 'transport_request', 'loadPort',
       `선적항과 도착항이 같은 국가(${lc})로 보입니다(국내운송 의심). 보세운송·반송·FTZ 등 정상 사유이면 사유 입력 후 진행하세요.`));
   }
 
@@ -204,8 +204,8 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     }
   }
   const engFields: { field: keyof TradeProfile; label: string; docType: DocumentType }[] = [
-    { field: 'loadPort', label: '선적항(From)', docType: 'bl' },
-    { field: 'dischargePort', label: '도착항(To)', docType: 'bl' },
+    { field: 'loadPort', label: '선적항(From)', docType: 'transport_request' },
+    { field: 'dischargePort', label: '도착항(To)', docType: 'transport_request' },
     { field: 'companyAddress', label: '자사 주소', docType: 'invoice' },
     { field: 'partnerAddress', label: '거래처 주소', docType: 'invoice' },
     { field: 'buyerAddress', label: 'Buyer 주소', docType: 'invoice' },

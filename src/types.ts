@@ -6,6 +6,7 @@ export type Incoterms =
   | 'FOB'
   | 'CFR'
   | 'CIF'
+  | 'FAS'
   | 'EXW'
   | 'DDP'
   | 'DAP'
@@ -13,8 +14,29 @@ export type Incoterms =
 
 export type NumericInput = number | '';
 
+/** 수출 포워더가 원천서류에서 확인하는 품목별 화물명세. */
+export interface ForwarderCargoItem {
+  id: string;
+  itemNo: string;
+  sku: string;
+  descriptionOfGoods: string;
+  numberOfPackages: NumericInput;
+  kindOfPackages: string;
+  grossWeightKg: NumericInput;
+  measurementCbm: string;
+  marksAndNumbers: string;
+  sourceDocumentIds: string[];
+}
+
+/** 문서 전체 TOTAL. 품목별 값으로 분배하거나 첫 품목에 복사하지 않는다. */
+export interface ForwarderCargoTotals {
+  numberOfPackages: NumericInput;
+  grossWeightKg: NumericInput;
+  measurementCbm: string;
+}
+
 // 2026-07-23 편의성 업그레이드: 화주용 통관 입력 폼 확장
-export type ShipperItemUnit = 'EA' | 'PCS' | 'SET' | 'CTN' | 'BOX' | 'KG' | 'TON' | 'M' | 'M2' | 'M3' | 'L';
+export type ShipperItemUnit = 'PCS' | 'EA' | 'SET' | 'PAIR' | 'BOX' | 'CTN' | 'KG' | 'G' | 'TON' | 'M' | 'M2' | 'M3' | 'L' | 'ROLL';
 export type ShipperCurrency = 'USD' | 'EUR' | 'JPY' | 'CNY' | 'KRW' | 'GBP';
 
 export interface ShipperItem {
@@ -22,7 +44,8 @@ export interface ShipperItem {
   itemName: string;
   hsCode: string;
   quantity: NumericInput;
-  unit: ShipperItemUnit;
+  /** 표준 영문 단위 코드 또는 사용자가 직접 입력한 영문 단위. */
+  unit: string;
   unitPrice: NumericInput;
   currency: ShipperCurrency;
 }
@@ -54,6 +77,8 @@ export interface TradeProfile {
   weight: NumericInput;
   departureDate: string;
   arrivalDate: string;
+  /** 수출 화주가 요청한 출항 희망일. 포워더가 확정하는 ETD(departureDate)와 구분한다. */
+  requestedDepartureDate?: string;
   companyName: string;
   contact: string;
   contactName?: string;
@@ -156,6 +181,9 @@ export interface TradeProfile {
   /** 수출 화주 폼 전용 JSON 상태. 기존 profile JSON 저장/복원 흐름을 그대로 사용한다. */
   shipperItems?: ShipperItem[];
   shipperSupplemental?: ShipperSupplementalState;
+  /** 수출 포워더 화물명세. form_data.items 배열과 왕복한다. */
+  forwarderCargoItems?: ForwarderCargoItem[];
+  forwarderCargoTotals?: ForwarderCargoTotals;
 }
 
 // 주의: '| string'을 붙이면 유니언이 사실상 string으로 붕괴되어 오타를 컴파일이 못 잡는다
@@ -165,6 +193,7 @@ export type DocumentType =
   | 'co'
   | 'customs_dec'
   | 'bl'
+  | 'transport_request'
   | 'insurance';
 
 export type DocumentStatusType =
@@ -386,6 +415,69 @@ export interface InsuranceData {
 
   [key: string]: any;
 }
+
+export interface TransportRequestItem {
+  description: string;
+  hsCode: string;
+  quantity: number;
+  unit: string;
+  packageCount: number;
+  packageType: string;
+  netWeight: number;
+  grossWeight: number;
+  measurement: string;
+}
+
+/** 수출 화주가 포워더에게 전달하는 업무용 운송 의뢰 초안. Booking/B/L 확정 정보는 포함하지 않는다. */
+export interface TransportRequestData {
+  requestNo: string;
+  requestDate: string;
+  exporter: PartyInfo;
+  requesterName: string;
+  businessRegistrationNo: string;
+  consignee: PartyInfo;
+  notifyParty?: PartyInfo;
+  items: TransportRequestItem[];
+  incoterms: string;
+  incotermsPlace: string;
+  paymentTerms: string;
+  invoiceNo: string;
+  loadPort: string;
+  dischargePort: string;
+  requestedDepartureDate: string;
+  loadingMode: 'FCL' | 'LCL' | '';
+}
+
+export interface BillOfLadingCargoItem {
+  descriptionOfGoods: string;
+  numberOfPackages: NumericInput;
+  kindOfPackages: string;
+  grossWeightKg: NumericInput;
+  measurementCbm: string;
+  marksAndNumbers: string;
+}
+
+/** 수출 포워더가 1단계 입력값으로 생성하는 B/L 초안. */
+export interface BillOfLadingData {
+  draftNo: string;
+  generatedAt: string;
+  shipper: PartyInfo;
+  consignee: PartyInfo;
+  notifyParty?: PartyInfo;
+  carrier: string;
+  bookingNo: string;
+  vessel: string;
+  voyageNo: string;
+  loadPort: string;
+  dischargePort: string;
+  etd: string;
+  eta: string;
+  loadingMode: ForwarderLoadingMode | '';
+  containerNo: string;
+  sealNo: string;
+  items: BillOfLadingCargoItem[];
+  cargoTotals: ForwarderCargoTotals;
+}
 export interface CustomsDeclarationData {
   declarationNo: string;
   declarationDate: string;
@@ -462,6 +554,8 @@ export interface GeneratedDocuments {
   certificateOfOrigin?: CertificateOfOriginData;
   insurance?: InsuranceData;
   customsDeclaration?: CustomsDeclarationData;
+  transportRequest?: TransportRequestData;
+  billOfLading?: BillOfLadingData;
   htmlTemplates?: Record<string, string>;
 
   [key: string]: any;

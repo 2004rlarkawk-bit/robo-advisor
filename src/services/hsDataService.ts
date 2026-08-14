@@ -153,3 +153,20 @@ export async function lookupHSByCode(code: string): Promise<HSDataEntry | null> 
   // 6자리 등 부분 코드: 접두 일치 첫 항목
   return data.find((e) => e.code.startsWith(c)) ?? null;
 }
+
+/** 공식 관세청 데이터에서 숫자 접두와 일치하는 실제 HSK 10자리만 반환합니다. */
+export async function findTenDigitHSKByPrefix(prefix: string, limit = 30): Promise<HSDataEntry[]> {
+  const normalized = prefix.replace(/[^0-9]/g, '').slice(0, 10);
+  if (!/^\d{4,10}$/.test(normalized)) return [];
+  const data = await loadHSData();
+  return data
+    .filter((entry) => /^\d{10}$/.test(entry.code) && entry.code.startsWith(normalized))
+    .slice(0, limit);
+}
+
+/** 숫자 10자리 형식과 공식 관세청 HSK 사전의 정확 일치를 함께 검증합니다. */
+export async function isOfficialTenDigitHSK(code: string): Promise<boolean> {
+  if (!/^\d{10}$/.test(code)) return false;
+  const entry = await lookupHSByCode(code);
+  return entry?.code === code;
+}

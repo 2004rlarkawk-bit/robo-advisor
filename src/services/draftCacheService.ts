@@ -235,6 +235,20 @@ export async function loadTradeDraft(userId: string, direction: TradeType = 'exp
   return row;
 }
 
+/** stale draft가 이미 최종 제출된 거래를 가리키는지 확인한다. AI/폼 데이터가 아니라 거래 상태만 조회한다. */
+export async function isSubmittedTradeDraft(userId: string, tradeId: string | null | undefined): Promise<boolean> {
+  if (!tradeId?.trim()) return false;
+  const { data, error } = await supabase
+    .from('trades')
+    .select('status')
+    .eq('id', tradeId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.status === 'submitted';
+}
+
 export interface SaveTradeDraftResult {
   saved: boolean;
   updatedAt: string;

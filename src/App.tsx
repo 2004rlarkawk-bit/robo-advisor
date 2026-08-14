@@ -36,6 +36,8 @@ import {
   type ShipperSupplementalState,
   type FeedbackReport,
   type CustomsDeclarationData,
+  type TransportRequestData,
+  type BillOfLadingData,
 } from './types';
 import './styles/feedbackReport.css';
 import AuthPage from './components/AuthPage';
@@ -46,12 +48,13 @@ import TradeDirectionSelector from './components/trade/TradeDirectionSelector';
 import TradeRoleSelector from './components/trade/TradeRoleSelector';
 import AppHeader from './components/layout/AppHeader';
 import AppSidebar from './components/layout/AppSidebar';
+import DocumentManagerReadOnlyAction from './components/DocumentManagerReadOnlyAction';
 import type { ImportTradeSnapshot, TradeDirection } from './types/importTrade';
 import type { TradeAttachment } from './types/tradeFormData';
 import { deleteCurrentAccount, getCurrentAuthUser, markOnboardingCompleted, onAuthStateChange, signOutUser, type AuthSessionUser } from './services/authService';
 import { useUserProfile } from './hooks/useUserProfile';
 import { useTradeDraft } from './hooks/useTradeDraft';
-import { removeDraftFromLocal, saveTradeDraft } from './services/draftCacheService';
+import { loadTradeDraft, removeDraftFromLocal, saveTradeDraft } from './services/draftCacheService';
 import { userProfileToTradeDefaults } from './services/profileService';
 import {
   createPerfectTestProfile,
@@ -96,11 +99,15 @@ import {
 import {
   createEmptyForwarderFormState,
   forwarderFormToTradeProfile,
-  isBookingNumberRequired,
   isEtaBeforeEtd,
   tradeProfileToForwarderFormState,
   type ForwarderFormState,
 } from './utils/forwarderForm';
+import {
+  createForwarderBillOfLadingDraft,
+  validateForwarderBillOfLading,
+} from './services/forwarderBillOfLadingService';
+import { renderBillOfLadingHTML } from './agents/templates/billOfLading';
 import {
   issueKey,
   issueToFieldKey,
@@ -121,6 +128,7 @@ const SettingsPanel = lazy(() => import('./components/SettingsPanel'));
 const TradeManagerPanel = lazy(() => import('./components/TradeManagerPanel'));
 
 const IS_DEV_TEST_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
+type TradeOpenMode = 'normal' | 'view' | 'resume';
 
 export default function App() {
   const [activeMenu, setActiveMenu] = useState<AppMenu>('about');
@@ -131,6 +139,8 @@ export default function App() {
   const [workspaceCurrentStep, setWorkspaceCurrentStep] = useState(1);
   const [importWorkspaceVersion, setImportWorkspaceVersion] = useState(0);
   const [pendingResumeTradeId, setPendingResumeTradeId] = useState<string | null>(null);
+  const [tradeOpenMode, setTradeOpenMode] = useState<TradeOpenMode>('normal');
+  const isDocumentManagerReadOnlyView = tradeOpenMode === 'view';
   const [isWorkspaceRestored, setIsWorkspaceRestored] = useState(false);
   const restoredWorkspaceUserRef = useRef<string | null>(null);
   const loadSavedTradeRef = useRef<(trade: SavedTrade) => void>(() => undefined);
@@ -178,7 +188,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   }, [needsOnboarding, user, userProfile]);
 
   useEffect(() => {
-    if (!user || !isWorkspaceRestored || restoredWorkspaceUserRef.current !== user.id) return;
+    if (!user || !isWorkspaceRestored || restoredWorkspaceUserRef.current !== user.id || isDocumentManagerReadOnlyView) return;
     saveWorkspaceSession({
       userId: user.id,
       activeMenu,
@@ -191,6 +201,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     activeMenu,
     currentTradeId,
     isWorkspaceRestored,
+    isDocumentManagerReadOnlyView,
     tradeDirection,
     user,
     workspaceCurrentStep,
@@ -202,12 +213,18 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       void flushTradeDraft().catch(() => undefined);
     }
     setTradeDirection(direction);
+    setTradeOpenMode('normal');
     setProfile((current) => ({ ...current, tradeType: direction }));
     setCurrentTradeId(null);
     setCurrentTradeStatus(null);
     hasSubmittedTradeRef.current = false;
     setHasGenerated(false);
     setWorkspaceCurrentStep(1);
+    setDocuments([]);
+    setIssues([]);
+    setHtmlTemplates({});
+    setBillOfLadingData(null);
+    setForwarderGenerationError('');
   };
 
   const handleImportComplete = async (snapshot: ImportTradeSnapshot): Promise<SavedTrade> => {
@@ -215,6 +232,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   };
 
   const handleImportSaved = (completedTrade: SavedTrade) => {
+    setTradeOpenMode('normal');
     setCurrentTradeId(null);
     setCurrentTradeStatus(null);
     setWorkspaceCurrentStep(1);
@@ -392,7 +410,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     pauseDraftSaving,
   } = useTradeDraft({
     userId: user?.id ?? null,
-    enabled: tradeDirection === 'export' && Boolean(user && userProfile && !needsOnboarding && !user.onboardingPending),
+    enabled: tradeDirection === 'export' && !isDocumentManagerReadOnlyView && Boolean(user && userProfile && !needsOnboarding && !user.onboardingPending),
     tradeDirection,
     tradeRole: workspaceRole,
     profile: workspaceDraftProfile,
@@ -428,6 +446,39 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const blockedGenRef = useRef<{ result: any; generationProfile: TradeProfile; writeMode: ReturnType<typeof decideGeneratedTradeWrite> } | null>(null);
   const [feedbackReport, setFeedbackReport] = useState<FeedbackReport | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+  const documentManagerPreviewOriginRef = useRef<{
+    contentScrollTop: number;
+    windowScrollY: number;
+    workspace: {
+      tradeDirection: TradeDirection;
+      integratedWorkspaceRole: WorkspaceRole;
+      currentTradeId: string | null;
+      currentTradeStatus: PersistedTradeStatus | null;
+      tradeOpenMode: TradeOpenMode;
+      workspaceCurrentStep: number;
+      pendingResumeTradeId: string | null;
+      profile: TradeProfile;
+      forwarderForm: ForwarderFormState;
+      forwarderAttachments: TradeAttachment[];
+      hasGenerated: boolean;
+      documents: DocumentStatus[];
+      issues: ValidationIssue[];
+      htmlTemplates: Record<string, string>;
+      invoiceData: InvoiceData | null;
+      packingListData: PackingListData | null;
+      customsDeclarationData: CustomsDeclarationData | null;
+      transportRequestData: TransportRequestData | null;
+      billOfLadingData: BillOfLadingData | null;
+      forwarderGenerationError: string;
+      overrides: Record<string, string>;
+      hasSubmittedTrade: boolean;
+    };
+    importCache: { key: string; value: string | null } | null;
+  } | null>(null);
+  const pendingDocumentManagerScrollRef = useRef<{
+    contentScrollTop: number;
+    windowScrollY: number;
+  } | null>(null);
   const [htmlTemplates, setHtmlTemplates] = useState<Record<string, string>>({});
   // 상업송장은 고정 docx 템플릿에서 생성한다. 구조 데이터를 보관하고, 생성된 Blob을 캐시해
   // 미리보기와 다운로드가 "동일 바이너리"를 쓰게 한다.
@@ -444,6 +495,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [customsDeclarationData, setCustomsDeclarationData] = useState<CustomsDeclarationData | null>(null);
   const customsDocxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
   const customsDocxPreviewRef = useRef<HTMLDivElement | null>(null);
+  const [transportRequestData, setTransportRequestData] = useState<TransportRequestData | null>(null);
+  const [billOfLadingData, setBillOfLadingData] = useState<BillOfLadingData | null>(null);
+  const [forwarderGenerationError, setForwarderGenerationError] = useState('');
 
   // 같은 InvoiceData면 같은 Blob 반환(캐시) → 화면 미리보기와 다운로드 파일이 동일 바이너리.
   const getInvoiceBlob = async (): Promise<Blob | null> => {
@@ -483,6 +537,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     id === 'invoice' ? !!invoiceData
       : id === 'packing_list' ? !!packingListData
       : id === 'customs_dec' ? !!customsDeclarationData
+      : id === 'transport_request' ? !!transportRequestData && !!htmlTemplates[id]
       : !!htmlTemplates[id];
 
   // 미리보기 모달에서 상업송장은 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
@@ -600,33 +655,84 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [currentTradeStatus, setCurrentTradeStatus] = useState<PersistedTradeStatus | null>(null);
   const isSubmittingTradeRef = useRef(false);
   const hasSubmittedTradeRef = useRef(false);
+  const exportDraftCompletedRef = useRef(false);
+
+  // 서버에서 submitted 저장이 확인된 뒤에만 수출 작업실의 작성용 상태를 비운다.
+  // 제출 거래 row/generatedDocs는 건드리지 않고 React 상태·workspace resume 연결만 초기화한다.
+  const clearExportAuthoringStateAfterSubmission = () => {
+    pauseDraftSaving();
+    setProfile({ ...tradeDraftDefaultProfile, tradeType: 'export' });
+    setForwarderForm(createEmptyForwarderFormState());
+    setForwarderAttachments([]);
+    setCurrentTradeId(null);
+    setCurrentTradeStatus(null);
+    setWorkspaceCurrentStep(1);
+    setPendingResumeTradeId(null);
+    setTradeOpenMode('normal');
+    setHasGenerated(false);
+    setWorkspaceCurrentStep(1);
+    setDocuments([]);
+    setIssues([]);
+    setHtmlTemplates({});
+    setInvoiceData(null);
+    setPackingListData(null);
+    setCustomsDeclarationData(null);
+    setTransportRequestData(null);
+    setBillOfLadingData(null);
+    setForwarderGenerationError('');
+    invoiceDocxCacheRef.current = null;
+    packingXlsxCacheRef.current = null;
+    customsDocxCacheRef.current = null;
+    setOverrides({});
+    blockedGenRef.current = null;
+    setFeedbackReport(null);
+    setHsCandidates([]);
+    setHsDisambiguation(null);
+    setPreviewDocId(null);
+    setDevTestMode(null);
+    setDevTestMessage('');
+    hasSubmittedTradeRef.current = false;
+    exportDraftCompletedRef.current = true;
+    clearWorkspaceSession();
+  };
 
   const handleSaveForwarderTrade = async () => {
     if (isForwarderSaving) return;
-    if (!forwarderForm.companyName.trim() || !forwarderForm.itemName.trim()) {
-      alert('Shipper 회사명과 Description of Goods를 입력해 주세요.');
+    const validation = validateForwarderBillOfLading(forwarderForm);
+    if (!validation.valid) {
+      alert(`B/L 생성에 필요한 정보를 입력해 주세요: ${validation.missingLabels.join(', ')}`);
       return;
     }
-    if (isBookingNumberRequired(forwarderForm) || isEtaBeforeEtd(forwarderForm.departureDate, forwarderForm.arrivalDate)) return;
+    if (isEtaBeforeEtd(forwarderForm.departureDate, forwarderForm.arrivalDate)) return;
     if (currentTradeStatus === 'submitted') {
       alert('이미 전송이 완료된 거래입니다.');
       return;
     }
 
     setIsForwarderSaving(true);
+    setForwarderGenerationError('');
     try {
+      const savedProfile = forwarderFormToTradeProfile(forwarderForm);
+      const existingGeneratedDocs = billOfLadingData || htmlTemplates.bl
+        ? {
+            billOfLading: billOfLadingData ?? undefined,
+            htmlTemplates,
+          }
+        : undefined;
       const data = {
-        profile: forwarderFormToTradeProfile(forwarderForm),
+        profile: savedProfile,
         tradeDirection: 'export' as const,
         tradeRole: 'forwarder' as const,
         attachments: forwarderAttachments,
-        documents: [],
-        issues: [],
+        documents,
+        issues,
+        generatedDocs: existingGeneratedDocs,
       };
       const tradeId = currentTradeId;
       const saved = tradeId && currentTradeStatus === 'generated'
         ? await updateGeneratedTrade(tradeId, data)
         : await createGeneratedTrade(data);
+      let savedAttachments = forwarderAttachments;
       if (!tradeId && forwarderAttachments.length > 0 && user) {
         const scopedAttachments = await moveTradeAttachmentsToScope({
           userId: user.id,
@@ -635,42 +741,91 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
         });
         await updateGeneratedTrade(saved.id, { ...data, attachments: scopedAttachments });
         setForwarderAttachments(scopedAttachments);
-        await saveTradeDraft(user.id, data.profile, 'forwarder', {
-          attachments: scopedAttachments,
-          currentStep: 2,
-          tradeId: saved.id,
-        });
+        savedAttachments = scopedAttachments;
       }
       setCurrentTradeId(saved.id);
       setCurrentTradeStatus('generated');
       setWorkspaceCurrentStep(2);
       hasSubmittedTradeRef.current = false;
-      alert('선적·부킹 정보가 저장되었습니다.');
+      if (user) {
+        try {
+          await saveTradeDraft(user.id, savedProfile, 'forwarder', {
+            attachments: savedAttachments,
+            currentStep: 2,
+            tradeId: saved.id,
+          });
+        } catch (draftError) {
+          console.warn('[Trade Draft] 포워더 저장 후 초안 캐시 갱신 실패:', draftError);
+        }
+      }
+
+      try {
+        const generatedBill = createForwarderBillOfLadingDraft(forwarderForm, saved.id);
+        const generatedHtml = renderBillOfLadingHTML(generatedBill);
+        const generatedDocuments = [
+          ...documents.filter((document) => document.id !== 'bl'),
+          { id: 'bl' as const, name: '선하증권(B/L)', status: 'completed' as const, statusText: '초안' },
+        ];
+        const generatedTemplates = { ...htmlTemplates, bl: generatedHtml };
+        await updateGeneratedTrade(saved.id, {
+          profile: savedProfile,
+          tradeDirection: 'export',
+          tradeRole: 'forwarder',
+          attachments: savedAttachments,
+          documents: generatedDocuments,
+          issues,
+          generatedDocs: {
+            billOfLading: generatedBill,
+            htmlTemplates: generatedTemplates,
+          },
+        });
+        setBillOfLadingData(generatedBill);
+        setHtmlTemplates(generatedTemplates);
+        setDocuments(generatedDocuments);
+        setForwarderGenerationError('');
+        alert('입력 정보가 저장되고 B/L 초안이 생성되었습니다.');
+      } catch (generationError) {
+        console.error('[Forwarder Export] B/L 생성 실패:', generationError);
+        setForwarderGenerationError('B/L 생성에 실패했습니다. 저장된 입력값은 유지됩니다. 다시 시도해주세요.');
+        alert('입력 정보는 저장되었지만 B/L 생성에 실패했습니다. 다시 시도해주세요.');
+      }
     } catch (error) {
       console.error('[Forwarder Export] generated 저장 실패:', error);
-      alert('선적·부킹 정보를 저장하지 못했습니다.');
+      alert('입력 정보를 저장하지 못했습니다. 현재 입력값을 유지한 채 다시 시도해주세요.');
     } finally {
       setIsForwarderSaving(false);
     }
   };
 
   const handleSubmitForwarderTrade = async () => {
+    if (isDocumentManagerReadOnlyView) return;
     const tradeId = currentTradeId;
     if (!tradeId || currentTradeStatus !== 'generated' || isForwarderSaving) return;
+    if (!billOfLadingData || !htmlTemplates.bl || forwarderGenerationError) {
+      alert('B/L을 먼저 생성해주세요.');
+      return;
+    }
     setIsForwarderSaving(true);
     try {
       await markTradeAsSubmitted(tradeId, {
         profile: forwarderFormToTradeProfile(forwarderForm),
         tradeRole: 'forwarder',
         attachments: forwarderAttachments,
-        documents: [],
-        issues: [],
+        documents,
+        issues,
+        generatedDocs: {
+          billOfLading: billOfLadingData,
+          htmlTemplates,
+        },
       });
       setCurrentTradeStatus('submitted');
       hasSubmittedTradeRef.current = true;
-      await completeDraft().catch((error) => {
-        console.warn('[Trade Draft] 포워더 제출 후 초안 정리 실패:', error);
-      });
+      try {
+        await completeDraft();
+      } catch (error) {
+        console.warn('[Trade Draft] 포워더 제출 후 DB 초안 정리 실패:', error);
+      }
+      clearExportAuthoringStateAfterSubmission();
       setActiveMenu('docs');
       alert('포워더 거래가 전송 완료 상태로 저장되었습니다.');
     } catch (error) {
@@ -682,10 +837,17 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   };
 
   const handleResetForwarderTrade = () => {
+    setTradeOpenMode('normal');
     setForwarderForm(createEmptyForwarderFormState());
     setForwarderAttachments([]);
     setCurrentTradeId(null);
     setCurrentTradeStatus(null);
+    setWorkspaceCurrentStep(1);
+    setDocuments([]);
+    setIssues([]);
+    setHtmlTemplates({});
+    setBillOfLadingData(null);
+    setForwarderGenerationError('');
     hasSubmittedTradeRef.current = false;
   };
 
@@ -694,11 +856,17 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       void flushTradeDraft().catch(() => undefined);
     }
     setIntegratedWorkspaceRole(role);
+    setTradeOpenMode('normal');
     setCurrentTradeId(null);
     setCurrentTradeStatus(null);
     hasSubmittedTradeRef.current = false;
     setHasGenerated(false);
     setWorkspaceCurrentStep(1);
+    setDocuments([]);
+    setIssues([]);
+    setHtmlTemplates({});
+    setBillOfLadingData(null);
+    setForwarderGenerationError('');
   };
 
   // 재검증(rerunAgents) 동시 실행 제어 — 마지막 요청의 결과만 반영한다
@@ -799,6 +967,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   invoiceDocxCacheRef.current = null;
   setPackingListData(null);
   setCustomsDeclarationData(null);
+  setTransportRequestData(null);
   packingXlsxCacheRef.current = null;
   setHsCandidates([]);
   setHsDisambiguation(null);
@@ -827,6 +996,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     invoiceDocxCacheRef.current = null;
     setPackingListData(result.documents?.generatedDocs?.packingList || null);
     setCustomsDeclarationData(result.documents?.generatedDocs?.customsDeclaration || null);
+    setTransportRequestData(result.documents?.generatedDocs?.transportRequest || null);
     packingXlsxCacheRef.current = null;
     setHasGenerated(true);
     blockedGenRef.current = null;
@@ -848,6 +1018,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
           invoice: result.documents?.generatedDocs?.invoice,
           packingList: result.documents?.generatedDocs?.packingList,
           customsDeclaration: result.documents?.generatedDocs?.customsDeclaration,
+          transportRequest: result.documents?.generatedDocs?.transportRequest,
           overrides: ov,
           overrideRecords,
         },
@@ -956,6 +1127,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
         invoiceDocxCacheRef.current = null;
         setPackingListData(result.documents?.generatedDocs?.packingList || null);
         setCustomsDeclarationData(result.documents?.generatedDocs?.customsDeclaration || null);
+        setTransportRequestData(result.documents?.generatedDocs?.transportRequest || null);
         packingXlsxCacheRef.current = null;
         setHasGenerated(true);
         blockedGenRef.current = { result, generationProfile, writeMode };
@@ -979,7 +1151,11 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   };
 
   // [문서 관리]에서 저장 이력 복원
-  const handleLoadSavedTrade = (t: SavedTrade) => {
+  const handleLoadSavedTrade = (t: SavedTrade, openMode: TradeOpenMode = 'normal') => {
+    // 조회(view)와 실제 작업 재개(resume/normal)를 명시적으로 분리한다.
+    setTradeOpenMode(openMode);
+    documentManagerPreviewOriginRef.current = null;
+    pendingDocumentManagerScrollRef.current = null;
     const importSnapshot = t.generatedDocs?.importTrade as ImportTradeSnapshot | undefined;
     if ((t.tradeDirection ?? t.profile.tradeType) === 'import' && importSnapshot && user) {
       setTradeDirection('import');
@@ -1013,6 +1189,11 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       setCurrentTradeId(t.id);
       setCurrentTradeStatus(t.status ?? 'generated');
       setWorkspaceCurrentStep(2);
+      setDocuments(t.documents);
+      setIssues(t.issues);
+      setHtmlTemplates((t.generatedDocs?.htmlTemplates as Record<string, string>) || {});
+      setBillOfLadingData((t.generatedDocs?.billOfLading as BillOfLadingData) || null);
+      setForwarderGenerationError('');
       hasSubmittedTradeRef.current = t.status === 'submitted';
       setActiveMenu('dashboard');
       return;
@@ -1034,6 +1215,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     invoiceDocxCacheRef.current = null;
     setPackingListData((t.generatedDocs?.packingList as PackingListData) || null);
     setCustomsDeclarationData((t.generatedDocs?.customsDeclaration as CustomsDeclarationData) || null);
+    setTransportRequestData((t.generatedDocs?.transportRequest as TransportRequestData) || null);
     packingXlsxCacheRef.current = null;
     setOverrides((t.generatedDocs?.overrides as Record<string, string>) || {});
     blockedGenRef.current = null;
@@ -1042,6 +1224,154 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setHsDisambiguation(null);
     setHasGenerated(true);
     setActiveMenu('dashboard');
+  };
+  const handleLoadSavedTradeFromDocumentManager = (trade: SavedTrade) => {
+    const importSnapshot = trade.generatedDocs?.importTrade as ImportTradeSnapshot | undefined;
+    const importCacheKey = user && (trade.tradeDirection ?? trade.profile.tradeType) === 'import' && importSnapshot
+      ? `portai_import_draft:${user.id}:${importSnapshot.role}`
+      : null;
+    const origin = {
+      contentScrollTop: document.querySelector<HTMLElement>('.content-body')?.scrollTop ?? 0,
+      windowScrollY: window.scrollY,
+      workspace: {
+        tradeDirection,
+        integratedWorkspaceRole,
+        currentTradeId,
+        currentTradeStatus,
+        tradeOpenMode,
+        workspaceCurrentStep,
+        pendingResumeTradeId,
+        profile,
+        forwarderForm,
+        forwarderAttachments,
+        hasGenerated,
+        documents,
+        issues,
+        htmlTemplates,
+        invoiceData,
+        packingListData,
+        customsDeclarationData,
+        transportRequestData,
+        billOfLadingData,
+        forwarderGenerationError,
+        overrides,
+        hasSubmittedTrade: hasSubmittedTradeRef.current,
+      },
+      importCache: importCacheKey
+        ? { key: importCacheKey, value: localStorage.getItem(importCacheKey) }
+        : null,
+    };
+    // 조회 데이터가 정상 작업실 초안으로 자동 저장되지 않도록 즉시 저장 타이머를 중단한다.
+    pauseDraftSaving();
+    handleLoadSavedTrade(trade, 'view');
+    documentManagerPreviewOriginRef.current = origin;
+  };
+
+  const handleResumeSavedTradeFromDocumentManager = async (trade: SavedTrade) => {
+    // 조회 출처 snapshot/readOnly 상태가 이어서 작업에 전파되지 않도록 먼저 제거한다.
+    setPreviewDocId(null);
+    documentManagerPreviewOriginRef.current = null;
+    pendingDocumentManagerScrollRef.current = null;
+    setTradeOpenMode('resume');
+    handleLoadSavedTrade(trade, 'resume');
+    startNewDraft();
+
+    if (!user) return;
+    const direction = trade.tradeDirection ?? trade.profile.tradeType;
+    const role = trade.tradeRole ?? 'shipper';
+    try {
+      const draft = await loadTradeDraft(user.id, direction, role);
+      if (!draft || draft.trade_id !== trade.id) return;
+
+      const restoredStep = draft.current_step ?? (direction === 'import' ? 3 : 2);
+      setCurrentTradeId(trade.id);
+      setCurrentTradeStatus(trade.status ?? 'generated');
+      setWorkspaceCurrentStep(restoredStep);
+      if (direction === 'export' && role === 'forwarder') {
+        setForwarderForm(tradeProfileToForwarderFormState(draft.profile));
+        setForwarderAttachments(draft.form_data?.attachments ?? trade.attachments ?? []);
+      } else if (direction === 'export') {
+        setProfile(draft.profile);
+        setHasGenerated(restoredStep > 1);
+      }
+    } catch (error) {
+      // trades row 복원은 이미 완료됐으므로 draft 부가정보 조회 실패가 이어서 작업을 막지는 않는다.
+      console.warn('[Trade Resume] 마지막 draft 단계 복원 실패:', error);
+    }
+  };
+  const restoreWorkspaceAfterDocumentManagerView = (
+    origin: NonNullable<typeof documentManagerPreviewOriginRef.current>,
+  ) => {
+    const snapshot = origin.workspace;
+    if (origin.importCache) {
+      if (origin.importCache.value === null) localStorage.removeItem(origin.importCache.key);
+      else localStorage.setItem(origin.importCache.key, origin.importCache.value);
+    }
+    setTradeDirection(snapshot.tradeDirection);
+    setIntegratedWorkspaceRole(snapshot.integratedWorkspaceRole);
+    setCurrentTradeId(snapshot.currentTradeId);
+    setCurrentTradeStatus(snapshot.currentTradeStatus);
+    setTradeOpenMode(snapshot.tradeOpenMode);
+    setWorkspaceCurrentStep(snapshot.workspaceCurrentStep);
+    setPendingResumeTradeId(snapshot.pendingResumeTradeId);
+    setProfile(snapshot.profile);
+    setForwarderForm(snapshot.forwarderForm);
+    setForwarderAttachments(snapshot.forwarderAttachments);
+    setHasGenerated(snapshot.hasGenerated);
+    setDocuments(snapshot.documents);
+    setIssues(snapshot.issues);
+    setHtmlTemplates(snapshot.htmlTemplates);
+    setInvoiceData(snapshot.invoiceData);
+    setPackingListData(snapshot.packingListData);
+    setCustomsDeclarationData(snapshot.customsDeclarationData);
+    setTransportRequestData(snapshot.transportRequestData);
+    setBillOfLadingData(snapshot.billOfLadingData);
+    setForwarderGenerationError(snapshot.forwarderGenerationError);
+    setOverrides(snapshot.overrides);
+    hasSubmittedTradeRef.current = snapshot.hasSubmittedTrade;
+    setPreviewDocId(null);
+    blockedGenRef.current = null;
+    invoiceDocxCacheRef.current = null;
+    packingXlsxCacheRef.current = null;
+    setImportWorkspaceVersion((version) => version + 1);
+  };
+  const handleDocumentManagerListReady = useCallback(() => {
+    const scroll = pendingDocumentManagerScrollRef.current;
+    if (!scroll) return;
+    pendingDocumentManagerScrollRef.current = null;
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('.content-body')?.scrollTo({
+        top: scroll.contentScrollTop,
+        left: 0,
+        behavior: 'auto',
+      });
+      window.scrollTo({ top: scroll.windowScrollY, left: 0, behavior: 'auto' });
+    });
+  }, []);
+  const handleCloseDocumentPreview = () => {
+    setPreviewDocId(null);
+    const origin = documentManagerPreviewOriginRef.current;
+    if (!origin) return;
+    restoreWorkspaceAfterDocumentManagerView(origin);
+    documentManagerPreviewOriginRef.current = null;
+    pendingDocumentManagerScrollRef.current = origin;
+    setActiveMenu('docs');
+  };
+  const handleAppNavigate = (menu: AppMenu) => {
+    if (isDocumentManagerReadOnlyView) {
+      const origin = documentManagerPreviewOriginRef.current;
+      if (origin) restoreWorkspaceAfterDocumentManagerView(origin);
+      else setTradeOpenMode('normal');
+      documentManagerPreviewOriginRef.current = null;
+      pendingDocumentManagerScrollRef.current = null;
+    }
+    if (menu === 'dashboard' && exportDraftCompletedRef.current) {
+      // 문서관리 화면에서는 초안 저장을 멈춘 채 두고, 작업실에 다시 들어오는 순간
+      // 비어 있는 신규 거래를 자동저장할 수 있도록 draft lifecycle만 재활성화한다.
+      exportDraftCompletedRef.current = false;
+      startNewDraft();
+    }
+    setActiveMenu(menu);
   };
   loadSavedTradeRef.current = handleLoadSavedTrade;
 const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
@@ -1054,8 +1384,16 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     setPendingResumeTradeId(null);
     void fetchSavedTradeById(resumeId)
       .then((trade) => {
+        if (trade?.status === 'submitted') {
+          setCurrentTradeId(null);
+          setCurrentTradeStatus(null);
+          setWorkspaceCurrentStep(1);
+          clearWorkspaceSession();
+          return;
+        }
         if (!trade || (trade.status !== 'generated' && trade.status !== 'in_progress')) {
           setCurrentTradeId(null);
+          setWorkspaceCurrentStep(1);
           return;
         }
         loadSavedTradeRef.current(trade);
@@ -1114,6 +1452,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     invoiceDocxCacheRef.current = null;
     setPackingListData(null);
     setCustomsDeclarationData(null);
+    setTransportRequestData(null);
     packingXlsxCacheRef.current = null;
     setFeedbackReport(null);
     setHsCandidates([]);
@@ -1152,6 +1491,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       invoiceDocxCacheRef.current = null;
       setPackingListData(result.documents?.generatedDocs?.packingList || null);
       setCustomsDeclarationData(result.documents?.generatedDocs?.customsDeclaration || null);
+      setTransportRequestData(result.documents?.generatedDocs?.transportRequest || null);
       packingXlsxCacheRef.current = null;
       setIssues(result.issues?.issues || []);
       setFeedbackReport(result.feedback?.report || null);
@@ -1232,12 +1572,16 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       packing_list: 'PackingList',
       co: 'CO',
       bl: 'BL',
+      transport_request: 'TransportRequest',
       customs_dec: 'CustomsDeclaration',
       insurance: 'InsurancePolicy',
     };
     const docTypeLabel = labels[docId] ?? docId;
-    const company = profile.companyName || 'ExportCo';
-    const dateStr = (profile.departureDate || new Date().toISOString().split('T')[0]).replace(/[-]/g, '');
+    const sourceProfile = tradeDirection === 'export' && workspaceRole === 'forwarder'
+      ? forwarderFormToTradeProfile(forwarderForm)
+      : profile;
+    const company = sourceProfile.companyName || 'ExportCo';
+    const dateStr = (sourceProfile.departureDate || new Date().toISOString().split('T')[0]).replace(/[-]/g, '');
     return `${docTypeLabel}_${company}_${dateStr}.pdf`;
   };
 
@@ -1421,6 +1765,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   };
 
   const handleSubmitAll = async () => {
+    if (isDocumentManagerReadOnlyView) return;
     if (isSubmittingTradeRef.current) return;
 
     if (hasSubmittedTradeRef.current) {
@@ -1444,8 +1789,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     try {
       const validationErrorCount = issues.filter((issue) => issue.severity === 'error').length;
       const generatedDocs = devTestMode && canBypassValidation
-        ? { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, customsDeclaration: customsDeclarationData ?? undefined, overrides, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
-        : { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, customsDeclaration: customsDeclarationData ?? undefined, overrides };
+        ? { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, customsDeclaration: customsDeclarationData ?? undefined, transportRequest: transportRequestData ?? undefined, overrides, _testMeta: createTestSubmissionMeta(devTestMode, validationErrorCount) }
+        : { htmlTemplates, invoice: invoiceData ?? undefined, packingList: packingListData ?? undefined, customsDeclaration: customsDeclarationData ?? undefined, transportRequest: transportRequestData ?? undefined, overrides };
       await markTradeAsSubmitted(tradeId, {
         profile,
         tradeRole: workspaceRole,
@@ -1455,6 +1800,12 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       });
       setCurrentTradeStatus('submitted');
       hasSubmittedTradeRef.current = true;
+      try {
+        await completeDraft();
+      } catch (error) {
+        console.warn('[Trade Draft] 화주 제출 후 DB 초안 정리 실패:', error);
+      }
+      clearExportAuthoringStateAfterSubmission();
       setActiveMenu('docs');
       if (devTestMode === 'needs_revision' && hasBlockingErrors) {
         alert('검증 오류를 포함한 테스트 문서가 제출되었습니다.');
@@ -1746,7 +2097,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       <AppSidebar
         activeMenu={activeMenu}
         collapsed={sidebarCollapsed}
-        onNavigate={setActiveMenu}
+        onNavigate={handleAppNavigate}
       />
 
       {/* 2. Main Portal Contents */}
@@ -1756,7 +2107,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
           user={user}
           profile={userProfile}
           onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
-          onNavigate={setActiveMenu}
+          onNavigate={handleAppNavigate}
           onLogout={() => void handleLogout()}
         />
 
@@ -1775,8 +2126,12 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             : activeMenu === 'docs' ? (
               <>
                 {/* 임시보관함(작성 중 미제출 거래) — 문서 관리 탭 상단. 제출 완료 문서함과 한 곳에서 관리 */}
-                <TradeManagerPanel embedded onLoad={handleLoadSavedTrade} />
-                <DocumentManagerPanel onLoad={handleLoadSavedTrade} onCopy={handleCopySavedTrade} />
+                <TradeManagerPanel embedded onLoad={(trade) => void handleResumeSavedTradeFromDocumentManager(trade)} />
+                <DocumentManagerPanel
+                  onLoad={handleLoadSavedTradeFromDocumentManager}
+                  onCopy={handleCopySavedTrade}
+                  onListReady={handleDocumentManagerListReady}
+                />
               </>
             )
             : <>
@@ -1786,14 +2141,14 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               <p className="page-subtitle">AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.</p>
             </div>
 
-            <div className="trade-selector-panel">
+            {!isDocumentManagerReadOnlyView && <div className="trade-selector-panel">
               <TradeDirectionSelector value={tradeDirection} onChange={handleTradeDirectionChange} />
               <TradeRoleSelector
                 value={workspaceRole}
                 allowedRoles={userProfile.service_role === 'integrated' ? ['shipper', 'forwarder'] : [workspaceRole]}
                 onChange={handleWorkspaceRoleChange}
               />
-            </div>
+            </div>}
 
             {tradeDirection === 'import' ? (
               workspaceRole === 'forwarder'
@@ -1803,6 +2158,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   onGenerate={handleImportGenerate}
                   onComplete={handleImportComplete}
                   onSaved={handleImportSaved}
+                  readOnly={isDocumentManagerReadOnlyView}
+                  onClose={handleCloseDocumentPreview}
                   onWorkspaceStateChange={({ currentStep, tradeId }) => {
                     setWorkspaceCurrentStep(currentStep);
                     setCurrentTradeId(tradeId);
@@ -1815,6 +2172,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   onGenerate={handleImportGenerate}
                   onComplete={handleImportComplete}
                   onSaved={handleImportSaved}
+                  readOnly={isDocumentManagerReadOnlyView}
+                  onClose={handleCloseDocumentPreview}
                   onWorkspaceStateChange={({ currentStep, tradeId }) => {
                     setWorkspaceCurrentStep(currentStep);
                     setCurrentTradeId(tradeId);
@@ -1833,6 +2192,19 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 attachmentScopeId={currentTradeId ?? `draft-export-forwarder`}
                 attachments={forwarderAttachments}
                 onAttachmentsChange={setForwarderAttachments}
+                profileDefaults={tradeProfileToForwarderFormState(tradeDraftDefaultProfile)}
+                readOnly={isDocumentManagerReadOnlyView}
+                onClose={handleCloseDocumentPreview}
+                currentStep={workspaceCurrentStep}
+                billOfLadingHtml={htmlTemplates.bl ?? ''}
+                generationError={forwarderGenerationError}
+                onPreviousStep={() => {
+                  setForwarderGenerationError('');
+                  setWorkspaceCurrentStep(1);
+                }}
+                onViewBillOfLading={() => setPreviewDocId('bl')}
+                onDownloadBillOfLading={() => void handleDownloadDoc('bl')}
+                onRegenerateBillOfLading={handleSaveForwarderTrade}
               />
             ) : !hasGenerated ? (
               /* --- 거래 정보 입력 모드 --- */
@@ -1843,6 +2215,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   supplemental={shipperSupplemental}
                   isProcessing={isProcessing}
                   profileSignerDefault={userProfile.contact_name?.trim() || ''}
+                  tradeId={currentTradeId}
                   onProfilePatch={(patch) => setProfile((current) => ({ ...current, ...patch }))}
                   onItemsChange={handleShipperItemsChange}
                   onSupplementalChange={(state) => setProfile((current) => ({ ...current, shipperSupplemental: state }))}
@@ -2857,7 +3230,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </div>
                     {externalPendingCount > 0 && (
                       <p className="rv-hero-ext">
-                        선하증권·통관신고·원산지증명서 등 <b>{externalPendingCount}건</b>은 선사·관세사·상공회의소가 발행해요.
+                        통관·원산지·보험 관련 서류 등 <b>{externalPendingCount}건</b>은 관세사·상공회의소·보험사가 발행해요.
                       </p>
                     )}
                   </div>
@@ -2871,12 +3244,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     // 수입 거래는 신고를 I/D로 노출한다.
                     const abbr = doc.id === 'invoice' ? 'C/I'
                       : doc.id === 'packing_list' ? 'P/L'
+                      : doc.id === 'transport_request' ? 'T/R'
                       : doc.id === 'bl' ? 'B/L'
                       : doc.id === 'customs_dec' ? (profile.tradeType === 'import' ? 'I/D' : 'E/D')
                       : doc.id === 'co' ? 'C/O'
                       : doc.id === 'insurance' ? 'I/P' : '서류';
                     const fileReady = hasDoc(doc.id);
-                    const isOwnDoc = doc.id === 'invoice' || doc.id === 'packing_list';
+                    const isOwnDoc = doc.id === 'invoice' || doc.id === 'packing_list' || doc.id === 'transport_request';
                     // 표시 상태 규칙:
                     //  - 화주 서류 + 파일 있음 + 차단 중  → '초안' (볼 수 있지만 제출 전 검토 필요)
                     //  - 화주 서류 + completed + 파일 없음 → '생성 대기' (아직 미생성)
@@ -2988,7 +3362,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                             warning: { label: '보완 권장', hint: '해소 권장', cls: 'sev-warning', icon: <AlertTriangle size={17} strokeWidth={2.4} /> },
                           };
                           const docLabelOf = (dt: string): string => (({
-                            invoice: '상업송장', packing_list: '패킹리스트', bl: '선하증권 B/L',
+                            invoice: '상업송장', packing_list: '패킹리스트', bl: '선하증권 B/L', transport_request: '수출 운송의뢰서',
                             customs_dec: '통관신고서', co: '원산지증명서', insurance: '적하보험증권',
                           } as Record<string, string>)[dt] || '기타 서류');
                           // 확인 항목 카드용 손질 카피 — 원 검증 메시지 대신 짧은 제목 + 명령형 설명.
@@ -3089,6 +3463,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   );
                                 })()}
                               </div>
+                              {!isDocumentManagerReadOnlyView && <>
                               {/* 입력수정 버튼 = 입력 폼 필드로 해소 가능한 이슈에 노출(도착예정일·항구 등 B/L 귀속 포함).
                                   전용 해소 UI가 있는 것만 제외: C/O·보험(필요 여부 질문/준비 확인)·중량·HS코드(인라인 입력). */}
                               {issue.docType !== 'co' &&
@@ -3100,8 +3475,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   {actionLabel} <ArrowRight size={14} />
                                 </button>
                               )}
+                              </>}
                             </div>
 
+                            {!isDocumentManagerReadOnlyView && <>
                             {/* 이슈 유형별 즉시 보완 입력 */}
                             {issue.field === 'weight' && (
                               <div className="fix-inline-row">
@@ -3337,6 +3714,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                 </button>
                               )
                             )}
+                            </>}
 
                           </div>
                               </Fragment>
@@ -3348,19 +3726,25 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </>
                   )}
 
-                    <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
-                      <button
-                        className="btn btn-primary"
-                        onClick={handleSubmitAll}
-                        disabled={blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null)}
-                        style={{ flex: 1, opacity: blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null) ? 0.6 : 1, cursor: blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null) ? 'not-allowed' : 'pointer' }}
-                      >
-                        전체 문서 전송
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setHasGenerated(false)} style={{ flex: 1 }}>
-                        뒤로 가기 (입력 수정)
-                      </button>
-                    </div>
+                    {isDocumentManagerReadOnlyView ? (
+                      <DocumentManagerReadOnlyAction onClose={handleCloseDocumentPreview} />
+                    ) : (
+                      <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+                        <>
+                          <button
+                            className="btn btn-primary"
+                            onClick={handleSubmitAll}
+                            disabled={blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null)}
+                            style={{ flex: 1, opacity: blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null) ? 0.6 : 1, cursor: blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null) ? 'not-allowed' : 'pointer' }}
+                          >
+                            전체 문서 전송
+                          </button>
+                          <button className="btn btn-secondary" onClick={() => { setHasGenerated(false); setWorkspaceCurrentStep(1); }} style={{ flex: 1 }}>
+                            뒤로 가기 (입력 수정)
+                          </button>
+                        </>
+                      </div>
+                    )}
                 </div>
 
               </div>
@@ -3479,12 +3863,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   packing_list: '패킹리스트(Packing List)',
                   co: '원산지증명서(Certificate of Origin)',
                   bl: '선하증권(B/L)',
+                  transport_request: '수출 운송의뢰서(Transport Request)',
                   customs_dec: '수출신고서(초안)',
                   insurance: '적하보험증권(Insurance Policy)',
                 } as Record<string, string>)[previewDocId ?? ''] ?? '문서')} 미리보기
               </h3>
               <button 
-                onClick={() => setPreviewDocId(null)}
+                onClick={handleCloseDocumentPreview}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -3545,7 +3930,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             }}>
               <button 
                 className="btn btn-secondary" 
-                onClick={() => setPreviewDocId(null)}
+                onClick={handleCloseDocumentPreview}
               >
                 닫기
               </button>
@@ -3554,7 +3939,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : (previewDocId === 'packing_list' || previewDocId === 'customs_dec') ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
+                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : (previewDocId === 'packing_list' || previewDocId === 'customs_dec') ? 'DOCX 다운로드' : previewDocId === 'bl' ? 'PDF 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
             </div>
           </div>

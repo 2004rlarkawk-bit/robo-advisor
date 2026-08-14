@@ -91,17 +91,16 @@ export function determineRequiredDocuments(
     lastReviewed: hasCustomsInfo ? timestamp : undefined,
   });
 
-  // 4. 선하증권(B/L)
-  // B/L은 포워더 또는 선사가 발행하므로 화주가 직접 생성하지 않는다.
-  // EXW에서는 매수인 측이 운송을 주도하므로 해당 없음으로 처리한다.
-  const isEXW = profile.incoterms === 'EXW';
-
-  if (isEXW) {
+  // 4. 수출 운송의뢰서(T/R)
+  // 수출 화주는 B/L 발행 주체가 아니므로 포워더에게 전달할 운송의뢰 초안을 생성한다.
+  // 수입 레거시 파이프라인의 B/L 상태는 기존 저장 데이터 호환을 위해 그대로 둔다.
+  if (profile.tradeType === 'export') {
     docs.push({
-      id: 'bl',
-      name: '선하증권(B/L)',
-      status: 'not_needed',
-      statusText: 'EXW 조건 - 매수인 측 처리',
+      id: 'transport_request',
+      name: '수출 운송의뢰서(Transport Request)',
+      status: 'completed',
+      statusText: '초안',
+      lastReviewed: timestamp,
     });
   } else {
     docs.push({
@@ -199,6 +198,8 @@ const NEXT_STEP_HINTS: Record<string, string> = {
     '품목명·업체명·거래조건을 입력하면 상업송장이 완료돼요',
   packing_list:
     '수량과 중량을 입력하면 패킹리스트가 완료돼요',
+  transport_request:
+    '입력한 화물·항만 정보로 수출 운송의뢰서 초안을 생성해요',
   bl:
     '포워더 또는 선사의 선하증권 발행을 기다려 주세요',
   customs_dec:

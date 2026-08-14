@@ -7,11 +7,18 @@ export interface HSCodeCandidateContext {
 
 export interface HSCodeItemDetails {
   material?: string;
+  composition?: string;
   fabricConstruction?: string;
   intendedUse?: string;
   productForm?: string;
   processingState?: string;
   ageGroup?: string;
+  gender?: string;
+  koreanDescription?: string;
+  modelName?: string;
+  specification?: string;
+  originCountry?: string;
+  documentHSCode?: string;
 }
 
 export interface VerifiedHSCodeSuggestion {

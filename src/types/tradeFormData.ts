@@ -22,6 +22,8 @@ export type TradeAttachmentDocumentType =
   | 'packing_list'
   | 'bill_of_lading'
   | 'certificate_of_origin'
+  | 'transport_request'
+  | 'export_declaration'
   | 'arrival_notice'
   | 'other';
 
@@ -60,6 +62,8 @@ export interface TradeFormParties {
 
 export interface TradeFormItem {
   id: string;
+  itemNo?: string;
+  sku?: string;
   description: string;
   koreanDescription: string;
   hsCode: string;
@@ -111,6 +115,7 @@ export interface TradeFormShipment {
   finalDestination: string;
   departureDate: string;
   arrivalDate: string;
+  requestedDepartureDate: string;
   vesselOrFlight: string;
   carrier: string;
   exportDeclarationNo: string;

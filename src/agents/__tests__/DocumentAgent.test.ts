@@ -12,6 +12,7 @@ import { escapeHtml } from '../templates/escapeHtml';
 import { HSCodeResult, AgentLog } from '../types';
 import { TradeProfile, TradeItem } from '../../types';
 import { mapPackingListToSchema, renderPackingListPreviewHtml } from '../../services/packingListXlsxService';
+import { mapPackingListToDocxSchema } from '../../services/packingListDocxService';
 import { mapInvoiceToSchema } from '../../services/invoiceDocxService';
 
 const hsResult: HSCodeResult = {
@@ -62,6 +63,16 @@ async function runMulti(items: TradeItem[], overrides: Partial<TradeProfile> = {
 }
 
 describe('DocumentAgent — 다품목(C2) 파이프라인', () => {
+  it('품목 단위는 한국어 라벨 없이 영문 저장값 그대로 문서에 전달한다', async () => {
+    const result = await runMulti([
+      mkItem({ unit: 'PAIR' }),
+      mkItem({ unit: 'DOZ' }),
+    ]);
+
+    expect(result.generatedDocs.invoice?.items.map((item) => item.unit)).toEqual(['PAIR', 'DOZ']);
+    expect(result.generatedDocs.packingList?.items.map((item) => item.unit)).toEqual(['PAIR', 'DOZ']);
+  });
+
   it('여러 품목이 인보이스·패킹리스트에 모두 반영된다(폼 입력 유실 없음)', async () => {
     const r = await runMulti([
       mkItem({ description: 'A', quantity: 10, unitPrice: 5 }),
@@ -94,6 +105,26 @@ describe('DocumentAgent — 다품목(C2) 파이프라인', () => {
 });
 
 describe('DocumentAgent — 인보이스·패킹리스트 중량 일관성', () => {
+  it('포장종류는 한국어 라벨 없이 영문 저장값 그대로 Packing List에 전달한다', async () => {
+    const result = await runAgent({ packageCount: 4, packageType: 'SACK' });
+
+    expect(result.generatedDocs.invoice?.packageType).toBe('SACK');
+    expect(result.generatedDocs.packingList?.packageType).toBe('SACK');
+    expect(mapPackingListToDocxSchema(result.generatedDocs.packingList!).items[0].packages).toBe('4 SACK');
+  });
+
+  it('수출 Invoice Date는 레거시 입력값이 아니라 실제 생성일을 사용한다', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 14, 9, 30, 0));
+
+    const result = await runAgent({ invoiceDate: '2020-01-01' });
+
+    expect(result.generatedDocs.invoice?.invoiceDate).toBe('2026-08-14');
+    expect(result.generatedDocs.packingList?.invoiceDate).toBe('2026-08-14');
+    expect(result.generatedDocs.customsDeclaration?.invoiceDate).toBe('2026-08-14');
+    vi.useRealTimers();
+  });
+
   it('grossWeight가 빈 문자열이면 weight로 폴백해 두 문서의 총중량이 일치한다', async () => {
     // 앱 초기 상태(App.tsx)에서 grossWeight 기본값은 '' — 과거에는 ??로 인해 PL 총중량이 0이 됐다
     const result = await runAgent({ grossWeight: '', netWeight: '' });
@@ -237,6 +268,34 @@ describe('DocumentAgent — Buyer 영문 국가 연결', () => {
 });
 
 describe('DocumentAgent — 수출 화주 신규 문서 필드', () => {
+  it('수출 운송의뢰서를 화주 입력값으로 만들고 포워더 확정 정보는 포함하지 않는다', async () => {
+    const result = await runMulti([
+      mkItem({ description: 'Cotton Shirts', hsCode: '6105100000', quantity: 20, unit: 'PCS', packageCount: 2, packageUnit: 'CARTON', netWeight: 18, grossWeight: 20, measurement: '0.25' }),
+    ], {
+      companyName: 'KOREA EXPORT CO.', companyAddress: 'Seoul, Korea', contactName: 'KIM', contact: 'export@example.com',
+      partnerName: 'GLOBAL BUYER', partnerAddress: 'Tokyo, Japan', notifyPartyName: 'NOTIFY LTD.',
+      businessRegistrationNo: '123-45-67890', paymentTerms: 'T/T', invoiceNo: 'INV-REF-1',
+      loadPort: 'BUSAN', dischargePort: 'TOKYO', departureDate: '2026-08-20', loadingMode: 'LCL',
+      bookingNo: 'SHOULD-NOT-APPEAR', vesselOrFlight: 'SHOULD-NOT-APPEAR', blNo: 'SHOULD-NOT-APPEAR',
+      containerNo: 'SHOULD-NOT-APPEAR', sealNo: 'SHOULD-NOT-APPEAR',
+      shipperSupplemental: { incotermsPlace: 'BUSAN' } as any,
+    });
+
+    const tr = result.generatedDocs.transportRequest!;
+    expect(tr.requestNo).toMatch(/^TR-/);
+    expect(tr.exporter.name).toBe('KOREA EXPORT CO.');
+    expect(tr.consignee.name).toBe('GLOBAL BUYER');
+    expect(tr.items[0]).toMatchObject({ description: 'Cotton Shirts', unit: 'PCS', packageType: 'CARTON' });
+    expect(tr.loadingMode).toBe('LCL');
+    expect(tr.incotermsPlace).toBe('BUSAN');
+    expect(tr).not.toHaveProperty('bookingNo');
+    expect(tr).not.toHaveProperty('vesselName');
+    expect(tr).not.toHaveProperty('blNo');
+    expect(tr).not.toHaveProperty('containerNo');
+    expect(result.htmlTemplates?.transport_request).toContain('EXPORT TRANSPORT REQUEST');
+    expect(result.htmlTemplates?.transport_request).not.toContain('SHOULD-NOT-APPEAR');
+  });
+
   it('영문 품명·기타 참조번호·Vessel·서명자를 C/I와 P/L에 함께 전달한다', async () => {
     const result = await runAgent({
       signedBy: 'KIM JIMIN',

@@ -110,27 +110,27 @@ describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테
     expect(resValid6.formattedCode).toBe('8517.62');
   });
 
-  it('필수 항목이 채워지면 송장·패킹리스트는 생성 완료, B/L은 포워더 발행 대기 상태다', () => {
+  it('필수 항목이 채워지면 송장·패킹리스트와 수출 운송의뢰서 초안이 생성된다', () => {
     const docs = determineRequiredDocuments(mockValidProfile);
 
     const invoice = docs.find(d => d.id === 'invoice');
     const packing = docs.find(d => d.id === 'packing_list');
-    const bl = docs.find(d => d.id === 'bl');
+    const transportRequest = docs.find(d => d.id === 'transport_request');
 
-    // 화주가 생성하는 건 C/I·P/L뿐 — B/L은 포워더/선사 발행이라 대기 상태.
     expect(invoice?.status).toBe('completed');
     expect(packing?.status).toBe('completed');
-    expect(bl?.status).toBe('external_pending');
-    expect(bl?.statusText).toBe('포워더 발행 대기');
+    expect(transportRequest?.status).toBe('completed');
+    expect(transportRequest?.statusText).toBe('초안');
+    expect(docs.find(d => d.id === 'bl')).toBeUndefined();
   });
 
   it('자동 생성 대상(C/I·P/L·E/D)만 채워지면 준비도 100% — 타 주체 발급 서류는 준비도 분모에서 제외된다', () => {
     const docs = determineRequiredDocuments(mockValidProfile);
     const readiness = calculateReadiness(docs);
 
-    // C/I·P/L·수출신고서(초안) 셋 다 완료 → 100%. B/L·C/O(external_pending)는 분모에 없음.
+    // C/I·P/L·수출신고서·운송의뢰서 초안이 모두 완료 → 100%. C/O는 분모에 없음.
     expect(readiness.percent).toBe(100);
-    expect(readiness.applicableCount).toBe(3);
+    expect(readiness.applicableCount).toBe(4);
     expect(readiness.nextStepDocId).toBeUndefined();
   });
 
@@ -300,7 +300,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(no.documents?.documents.find(d => d.id === 'co')?.status).toBe('not_needed');
   });
 
-  it('EXW 조건의 경우 B/L이 비필수(not_needed) 처리되고 정보성 안내가 발생한다', async () => {
+  it('레거시 EXW 거래도 B/L 대신 운송의뢰서 초안을 만들고 책임 안내를 유지한다', async () => {
     const exwProfile: TradeProfile = {
       tradeType: 'export',
       itemName: '기계부품',
@@ -319,9 +319,9 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     const orchestrator = new OrchestratorAgent();
     const result = await orchestrator.run({ profile: exwProfile, useLLM: false });
 
-    // B/L 비필수 검증
-    const blDoc = result.documents?.documents.find(d => d.id === 'bl');
-    expect(blDoc?.status).toBe('not_needed');
+    const transportRequest = result.documents?.documents.find(d => d.id === 'transport_request');
+    expect(transportRequest?.status).toBe('completed');
+    expect(result.documents?.documents.find(d => d.id === 'bl')).toBeUndefined();
 
     // 정보성 알림 검증
     const exwIssue = result.issues?.issues.find(i => i.id === 'exw-responsibility-info');
@@ -506,7 +506,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(issues.find(i => i.id === 'estimated-duty-info')).toBeUndefined();
   });
 
-  it('도착예정일이 출발일보다 빠르면 error 이슈가 발생한다', () => {
+  it('수출 화주 입력에서 제거된 도착예정일은 생성 차단 검증에 사용하지 않는다', () => {
     const badDateProfile: TradeProfile = {
       ...baseAsyncProfile,
       partnerName: 'ABC Corp',
@@ -514,13 +514,10 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
       arrivalDate: '2026-07-10'
     };
     const issues = validateRequiredInputs(badDateProfile);
-    const dateIssue = issues.find(i => i.id === 'input-date-order');
-    expect(dateIssue).toBeDefined();
-    expect(dateIssue?.severity).toBe('error');
-    expect(dateIssue?.message).toContain('도착예정일이 출발일보다 빠를 수 없습니다');
+    expect(issues.find(i => i.id === 'input-date-order')).toBeUndefined();
   });
 
-  it('단가·금액·송장 작성일 누락 시 각각 필수 항목 error가 발생한다', () => {
+  it('단가·금액은 필수지만 자동 생성되는 송장 작성일은 입력 누락 오류가 아니다', () => {
     const missingAmountProfile: TradeProfile = {
       ...baseAsyncProfile,
       partnerName: 'ABC Corp',
@@ -531,7 +528,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     const issues = validateRequiredInputs(missingAmountProfile);
     expect(issues.find(i => i.id === 'input-missing-unitPrice')?.severity).toBe('error');
     expect(issues.find(i => i.id === 'input-missing-totalAmount')?.severity).toBe('error');
-    expect(issues.find(i => i.id === 'input-missing-invoiceDate')?.severity).toBe('error');
+    expect(issues.find(i => i.id === 'input-missing-invoiceDate')).toBeUndefined();
   });
 
   it('수량 × 단가 ≠ 금액이면 계산 불일치 error가 발생한다', () => {
@@ -562,7 +559,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(issues.find(i => i.id === 'amount-calc-mismatch')).toBeUndefined();
   });
 
-  it('송장 작성일이 출발일(선적일)보다 늦으면 error가 발생한다', () => {
+  it('레거시 송장 작성일은 새 문서 생성 검증을 차단하지 않는다', () => {
     const lateInvoiceProfile: TradeProfile = {
       ...baseAsyncProfile,
       partnerName: 'ABC Corp',
@@ -571,9 +568,6 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
       arrivalDate: '2026-07-20'
     };
     const issues = validateRequiredInputs(lateInvoiceProfile);
-    const issue = issues.find(i => i.id === 'invoice-date-after-shipment');
-    expect(issue).toBeDefined();
-    expect(issue?.severity).toBe('error');
-    expect(issue?.message).toContain('출발일');
+    expect(issues.find(i => i.id === 'invoice-date-after-shipment')).toBeUndefined();
   });
 });

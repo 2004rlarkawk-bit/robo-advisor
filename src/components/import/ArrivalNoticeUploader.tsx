@@ -11,9 +11,10 @@ interface Props {
   onChange: (value: ArrivalNoticeMeta | null) => void;
   userId: string;
   tradeId?: string;
+  readOnly?: boolean;
 }
 
-export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId }: Props) {
+export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId, readOnly = false }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -88,8 +89,10 @@ export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId
         <div className="arrival-notice-file">
           <FileText size={20} />
           <div><strong>{displayValue.fileName}</strong><span>{(displayValue.sizeBytes / 1024).toFixed(1)} KB · {displayValue.mimeType}</span></div>
-          <button type="button" disabled={busy} className="icon-btn import-delete" title="도착통지서 삭제" aria-label="도착통지서 삭제" onClick={() => void removeFile()}><Trash2 size={16} /></button>
+          {!readOnly && <button type="button" disabled={busy} className="icon-btn import-delete" title="도착통지서 삭제" aria-label="도착통지서 삭제" onClick={() => void removeFile()}><Trash2 size={16} /></button>}
         </div>
+      ) : readOnly ? (
+        <p className="import-empty">첨부된 도착통지서가 없습니다.</p>
       ) : (
         <label className="arrival-notice-picker">
           <Paperclip size={20} />

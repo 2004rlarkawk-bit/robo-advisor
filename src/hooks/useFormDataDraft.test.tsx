@@ -6,14 +6,17 @@ import { tradeProfileToFormData } from '../services/tradeDataMapper';
 import type { TradeDraftRow } from '../services/draftCacheService';
 import type { TradeProfile } from '../types';
 
-const { loadMock, saveMock } = vi.hoisted(() => ({
+const { loadMock, saveMock, isSubmittedMock, deleteMock } = vi.hoisted(() => ({
   loadMock: vi.fn(),
   saveMock: vi.fn(),
+  isSubmittedMock: vi.fn().mockResolvedValue(false),
+  deleteMock: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../services/draftCacheService', () => ({
-  deleteTradeDraft: vi.fn(),
+  deleteTradeDraft: deleteMock,
   loadTradeDraft: loadMock,
+  isSubmittedTradeDraft: isSubmittedMock,
   saveTradeFormDraft: saveMock,
 }));
 
@@ -71,9 +74,33 @@ afterEach(() => {
   container = null;
   vi.useRealTimers();
   vi.clearAllMocks();
+  isSubmittedMock.mockResolvedValue(false);
 });
 
 describe('공통 form_data draft hydration', () => {
+  it('DB draft가 submitted 거래를 가리키면 formData와 step을 복원하지 않는다', async () => {
+    isSubmittedMock.mockResolvedValue(true);
+    saveMock.mockResolvedValue({ saved: true, updatedAt: '2026-08-15T00:01:00.000Z' });
+    loadMock.mockResolvedValue({
+      user_id: 'user', direction: 'import', role: 'forwarder', trade_id: 'submitted-trade',
+      current_step: 3, form_data: restoredFormData, profile: emptyProfile,
+      updated_at: '2026-08-15T00:00:00.000Z',
+    });
+
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(<Harness enabled />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toBe('|1');
+    expect(deleteMock).toHaveBeenCalledWith('user', 'import', 'forwarder');
+  });
+
   it('DB hydration 전 빈 form_data를 저장하지 않고 복원된 step/form_data만 저장한다', async () => {
     vi.useFakeTimers();
     let resolveDraft!: (draft: TradeDraftRow) => void;

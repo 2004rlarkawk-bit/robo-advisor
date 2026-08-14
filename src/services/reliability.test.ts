@@ -75,6 +75,10 @@ describe('getSavedTrades — 손상된 이력 방어', () => {
 });
 
 describe('getIncotermsRule — DAP/FCA 규칙', () => {
+  it('수출 화주 선택지인 CFR/FAS 규칙이 정의되어 있다', () => {
+    expect(getIncotermsRule('CFR')?.transportMode).toBe('sea');
+    expect(getIncotermsRule('FAS')?.transportMode).toBe('sea');
+  });
   it('DAP 규칙이 정의되어 있다 (보험은 매수인, 전 운송수단)', () => {
     const rule = getIncotermsRule('DAP');
     expect(rule).not.toBeNull();

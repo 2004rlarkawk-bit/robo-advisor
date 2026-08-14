@@ -9,6 +9,8 @@ export default function ImportShipperFlow(props: {
   onComplete: (snapshot: ImportTradeSnapshot) => Promise<SavedTrade>;
   onSaved?: (trade: SavedTrade) => void;
   onWorkspaceStateChange?: (state: { currentStep: number; tradeId: string | null }) => void;
+  readOnly?: boolean;
+  onClose?: () => void;
 }) {
   return <ImportTradeFlow role="shipper" {...props} />;
 }

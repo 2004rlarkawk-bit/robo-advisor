@@ -359,11 +359,18 @@ function normalizeItemDetails(
 
   const allowedFields = [
     "material",
+    "composition",
     "fabricConstruction",
     "intendedUse",
     "productForm",
     "processingState",
     "ageGroup",
+    "gender",
+    "koreanDescription",
+    "modelName",
+    "specification",
+    "originCountry",
+    "documentHSCode",
   ];
   const details: Record<string, string> = {};
 

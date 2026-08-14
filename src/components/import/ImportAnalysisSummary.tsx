@@ -12,6 +12,7 @@ interface Props {
   onChange: (fields: ImportExtractedFields) => void;
   importerCompanyName?: string;
   hasCertificateOfOriginDocument?: boolean;
+  readOnly?: boolean;
 }
 
 const PARTY_FIELDS: Array<[keyof ImportParty, string]> = [
@@ -29,6 +30,10 @@ const EMPTY_ITEM = (): ImportItem => ({
   specification: '',
   material: '',
   composition: '',
+  fabricConstruction: '',
+  productForm: '',
+  processingState: '',
+  gender: '',
   intendedUse: '',
   originCountry: '',
   quantity: '',
@@ -65,6 +70,7 @@ export default function ImportAnalysisSummary({
   onChange,
   importerCompanyName,
   hasCertificateOfOriginDocument = false,
+  readOnly = false,
 }: Props) {
   const fields = analysis.extracted;
   const commit = (next: ImportExtractedFields) => onChange(syncLegacyImportFields(next));
@@ -91,6 +97,8 @@ export default function ImportAnalysisSummary({
         <div><span className="ai-badge">AI 추출값</span><h2>분석 결과 확인 및 수정</h2></div>
         <p>첨부문서에서 확인된 값만 자동 입력했습니다. 잘못되거나 누락된 값만 수정해 주세요.</p>
       </div>
+
+      <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
 
       <h3>A. 거래 당사자</h3>
       {([
@@ -245,6 +253,7 @@ export default function ImportAnalysisSummary({
             </div>
           ))}
       </div>
+      </fieldset>
     </section>
   );
 }

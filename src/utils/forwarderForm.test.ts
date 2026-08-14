@@ -2,19 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   createEmptyForwarderFormState,
   forwarderFormToTradeProfile,
-  isBookingNumberRequired,
   isEtaBeforeEtd,
   tradeProfileToForwarderFormState,
 } from './forwarderForm';
 
-describe('포워더 입력 검증', () => {
-  it('부킹 확정 상태에서 Booking No.가 없으면 필수 오류다', () => {
-    expect(isBookingNumberRequired({ ...createEmptyForwarderFormState(), bookingStatus: 'confirmed' })).toBe(true);
-    expect(isBookingNumberRequired({ ...createEmptyForwarderFormState(), bookingStatus: 'confirmed', bookingNo: 'BK-100' })).toBe(false);
-  });
-
-  it('부킹 요청 상태에서는 Booking No.가 없어도 된다', () => {
-    expect(isBookingNumberRequired(createEmptyForwarderFormState())).toBe(false);
+describe('포워더 입력 검증과 저장 매핑', () => {
+  it('Booking No. 유무로 부킹 상태를 자동 산출한다', () => {
+    expect(forwarderFormToTradeProfile({
+      ...createEmptyForwarderFormState(), bookingNo: '', bookingStatus: 'confirmed',
+    }).bookingStatus).toBe('requested');
+    expect(forwarderFormToTradeProfile({
+      ...createEmptyForwarderFormState(), bookingNo: 'BK-100', bookingStatus: 'requested',
+    }).bookingStatus).toBe('confirmed');
   });
 
   it('ETA가 ETD보다 빠르면 오류다', () => {
@@ -22,18 +21,46 @@ describe('포워더 입력 검증', () => {
     expect(isEtaBeforeEtd('2026-08-10', '2026-08-11')).toBe(false);
   });
 
-  it('부킹·적재 필드를 TradeProfile 경계에서 왕복 보존한다', () => {
+  it('운송의뢰·예약·컨테이너·화물 필드를 TradeProfile 경계에서 왕복 보존한다', () => {
     const state = {
       ...createEmptyForwarderFormState(),
       companyName: 'Forwarder Customer',
       itemName: 'Machine Parts',
       exportDeclarationNo: 'EXP-1',
+      invoiceNo: 'INV-1',
+      incoterms: 'FOB' as const,
+      requestedDepartureDate: '2026-08-20',
+      shippingMarks: 'ABC / BUSAN',
       bookingNo: 'BK-1',
       bookingStatus: 'confirmed' as const,
       loadingMode: 'LCL' as const,
       containerSize: '40HC' as const,
       containerQuantity: 2,
     };
-    expect(tradeProfileToForwarderFormState(forwarderFormToTradeProfile(state))).toMatchObject(state);
+    const restored = tradeProfileToForwarderFormState(forwarderFormToTradeProfile(state));
+    expect(restored).toMatchObject({
+      ...state,
+      cargoItems: [expect.objectContaining({
+        descriptionOfGoods: 'Machine Parts',
+        marksAndNumbers: 'ABC / BUSAN',
+      })],
+    });
+  });
+
+  it('구버전 프로필에 신규 필드가 없어도 안전한 기본값으로 복원한다', () => {
+    const profile = forwarderFormToTradeProfile(createEmptyForwarderFormState());
+    delete profile.requestedDepartureDate;
+    delete profile.loadingMode;
+    delete profile.shippingMarks;
+    expect(tradeProfileToForwarderFormState(profile)).toMatchObject({
+      requestedDepartureDate: '', loadingMode: '', shippingMarks: '',
+    });
+  });
+
+  it('구버전 컨테이너 데이터에 운송방식이 없으면 FCL로 복원한다', () => {
+    const profile = forwarderFormToTradeProfile(createEmptyForwarderFormState());
+    delete profile.loadingMode;
+    profile.containerNo = 'CONT-1';
+    expect(tradeProfileToForwarderFormState(profile).loadingMode).toBe('FCL');
   });
 });
