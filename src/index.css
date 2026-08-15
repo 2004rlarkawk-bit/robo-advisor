@@ -2519,7 +2519,10 @@ body {
 .ai-badge, .source-badge { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: #ede9fe; color: #6d28d9; font-size: 10px; font-weight: 700; }
 .source-badge { background: #e0f2fe; color: #0369a1; }
 .import-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.import-card > h3 { margin: 24px 0 12px; font-size: 15px; }
+/* 섹션 제목(A/B/C)이 fieldset 안에 들어가므로 자식 선택자만으로는 안 잡힌다 */
+.import-card > h3,
+.import-card .workspace-readonly-fieldset > h3 { margin: 30px 0 14px; font-size: 15px; }
+.import-card .workspace-readonly-fieldset > h3:first-child { margin-top: 4px; }
 .import-party-fieldset, .import-item-fieldset { position: relative; min-width: 0; margin: 0 0 14px; padding: 16px; border: 1px solid var(--border-color); border-radius: 10px; }
 .import-party-fieldset legend, .import-item-fieldset legend { padding: 0 7px; color: var(--text-dark); font-weight: 700; }
 .import-party-actions { display: flex; justify-content: flex-end; margin: -5px 0 12px; }
