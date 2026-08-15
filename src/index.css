@@ -3618,10 +3618,11 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .customs-panel .doc-panel-body { gap: 8px; }
 .customs-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .customs-meta .meta-dot { color: #cbd5e1; }
-/* 통관 내역: 섹션을 페이지 상단에 더 가깝게 */
+/* 통관 내역: 섹션을 상단 바로 아래에 배치 */
 .customs-panel { margin-top: 0; }
-/* 통관 내역: 수출/수입 필터 + 정렬 툴바 — 헤더와 목록 사이 숨 쉴 여백 */
-.customs-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 2px 12px; }
+.content-body:has(.customs-panel) { padding-top: 10px; }
+/* 통관 내역: 수출/수입 필터 + 정렬 툴바 — 헤더에서 확실히 띄운다 */
+.customs-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 20px 2px 14px; }
 .customs-filter-chips { display: flex; gap: 10px; flex-wrap: wrap; }
 .customs-filter-chip {
   border: 1px solid #cbd5e1; background: #fff; color: #64748b;
