@@ -3613,6 +3613,11 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .draft-tray-item.customs .draft-tray-line1 { gap: 16px; }
 .draft-tray-item.customs .customs-badges { gap: 8px 12px; }
 .draft-tray-item.customs .trade-status-badge { padding-top: 3px; padding-bottom: 3px; }
+/* 아직 생성 전(대기·필요 여부 확인) 서류 칩은 연한 회색으로 — 생성 완료와 구분 */
+.draft-tray-item.customs .trade-status-badge.not_started,
+.draft-tray-item.customs .trade-status-badge.external_pending {
+  background: #f4f6f9; color: #9aa6b5;
+}
 .draft-tray-item.customs .draft-tray-actions.vertical { padding-left: 24px; gap: 7px; }
 .draft-tray-item.customs .draft-tray-actions.vertical .draft-tray-resume { padding-top: 7px; padding-bottom: 7px; }
 .customs-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
