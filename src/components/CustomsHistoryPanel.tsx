@@ -84,7 +84,7 @@ const handleCheckCargoProgress = async (trade: SavedTrade) => {
 }, [trades]);
 
   return (
-    <section className="doc-panel">
+    <section className="doc-panel customs-panel">
       <button
         type="button"
         className="doc-panel-head"

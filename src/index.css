@@ -3607,12 +3607,15 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .draft-tray-resume.primary { background: #0b57d0; border-color: #0b57d0; color: #fff; }
 .draft-tray-resume.primary:hover { background: #0a4cb8; border-color: #0a4cb8; color: #fff; }
 .draft-tray-resume:disabled { opacity: .6; cursor: default; }
-/* 통관 내역 카드: 정보 그룹이 독립적으로 읽히도록 여백을 넓게 */
-.draft-tray-item.customs { padding: 26px 32px; }
-.draft-tray-item.customs .draft-tray-info { gap: 15px; }
+/* 통관 내역 카드: 가로 여백은 넓게, 세로는 기업형 리스트 밀도로 */
+.draft-tray-item.customs { padding: 20px 32px; }
+.draft-tray-item.customs .draft-tray-info { gap: 11px; }
 .draft-tray-item.customs .draft-tray-line1 { gap: 16px; }
-.draft-tray-item.customs .customs-badges { gap: 10px 12px; }
-.draft-tray-item.customs .draft-tray-actions.vertical { padding-left: 24px; }
+.draft-tray-item.customs .customs-badges { gap: 8px 12px; }
+.draft-tray-item.customs .trade-status-badge { padding-top: 3px; padding-bottom: 3px; }
+.draft-tray-item.customs .draft-tray-actions.vertical { padding-left: 24px; gap: 7px; }
+.draft-tray-item.customs .draft-tray-actions.vertical .draft-tray-resume { padding-top: 7px; padding-bottom: 7px; }
+.customs-panel .doc-panel-body { gap: 8px; }
 .customs-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .customs-meta .meta-dot { color: #cbd5e1; }
 .draft-tray-more {
