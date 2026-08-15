@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { determineRequiredDocuments, calculateReadiness } from './rulesEngine';
 import { validateTradeDocuments, validateTradeDocumentsAsync, validateRequiredInputs } from './validatorEngine';
+import { runComplianceRules } from '../agents/complianceRules';
 import { OrchestratorAgent } from '../agents/OrchestratorAgent';
 import { HSCodeAgent } from '../agents/HSCodeAgent';
 import { TradeProfile } from '../types';
@@ -535,7 +536,9 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(issues.find(i => i.id === 'input-missing-invoiceDate')).toBeUndefined();
   });
 
-  it('수량 × 단가 ≠ 금액이면 계산 불일치 error가 발생한다', () => {
+  // 2026-08 통합: 단건 금액산술은 complianceRules.ts R8(r8-amount-arithmetic)로 이관됐다.
+  // validateRequiredInputs는 더 이상 이 이슈를 내지 않는다(아래 "이중 error 표시 제거" 참고).
+  it('수량 × 단가 ≠ 금액이 1% 허용오차를 넘으면 R8 계산 불일치 error가 발생한다', () => {
     const wrongTotalProfile: TradeProfile = {
       ...baseAsyncProfile,
       partnerName: 'ABC Corp',
@@ -543,15 +546,17 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
       unitPrice: 10,
       totalAmount: 12000 // 올바른 값은 15000
     };
-    const issues = validateRequiredInputs(wrongTotalProfile);
-    const calcIssue = issues.find(i => i.id === 'amount-calc-mismatch');
+    expect(validateRequiredInputs(wrongTotalProfile).find(i => i.id === 'amount-calc-mismatch'))
+      .toBeUndefined(); // validatorEngine은 더 이상 발행하지 않음
+    const calcIssue = runComplianceRules(wrongTotalProfile).find(i => i.id === 'r8-amount-arithmetic');
     expect(calcIssue).toBeDefined();
     expect(calcIssue?.severity).toBe('error');
     expect(calcIssue?.message).toContain('15,000');
     expect(calcIssue?.message).toContain('12,000');
+    expect(calcIssue?.amounts).toEqual({ expected: 15000, actual: 12000, currency: 'USD' });
   });
 
-  it('수량 × 단가 = 금액이 맞으면 계산 불일치 error가 없다', () => {
+  it('수량 × 단가 = 금액이 맞으면 R8 계산 불일치 error가 없다', () => {
     const okTotalProfile: TradeProfile = {
       ...baseAsyncProfile,
       partnerName: 'ABC Corp',
@@ -559,8 +564,37 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
       unitPrice: 12.5,
       totalAmount: 2500 // 200 × 12.5 = 2500
     };
-    const issues = validateRequiredInputs(okTotalProfile);
-    expect(issues.find(i => i.id === 'amount-calc-mismatch')).toBeUndefined();
+    expect(runComplianceRules(okTotalProfile).find(i => i.id === 'r8-amount-arithmetic')).toBeUndefined();
+  });
+
+  it('1% 이내 오차(반올림 등)는 R8이 통과시킨다(허용오차 정책)', () => {
+    // 기대값 15000의 0.5% = 75 → 14930은 허용오차 안
+    const roundingProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp',
+      quantity: 1500,
+      unitPrice: 10,
+      totalAmount: 14930,
+    };
+    expect(runComplianceRules(roundingProfile).find(i => i.id === 'r8-amount-arithmetic')).toBeUndefined();
+  });
+
+  it('큰 불일치(허용오차 초과)는 R8·validatorEngine 합쳐도 금액 이슈가 정확히 1개다(이중 error 표시 제거 확인)', () => {
+    const wrongTotalProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp',
+      quantity: 1500,
+      unitPrice: 10,
+      totalAmount: 12000, // 15000 대비 20% 어긋남
+    };
+    // ComplianceAgent가 실제로 하는 것과 같이 두 엔진 결과를 합쳐서 센다.
+    const combined = [
+      ...validateTradeDocuments(wrongTotalProfile),
+      ...runComplianceRules(wrongTotalProfile),
+    ];
+    const amountIssues = combined.filter(i => i.field === 'totalAmount' && i.amounts);
+    expect(amountIssues).toHaveLength(1);
+    expect(amountIssues[0].id).toBe('r8-amount-arithmetic');
   });
 
   it('레거시 송장 작성일은 새 문서 생성 검증을 차단하지 않는다', () => {
@@ -630,6 +664,48 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     // 총액을 합계와 맞추면 불일치 없음. 단건 계산 오류(amount-calc-mismatch)도 다품목이라 미발행.
     const ok = validateRequiredInputs({ ...layer1Base, shipperItems: items, quantity: 100, unitPrice: 250, totalAmount: 26000 });
     expect(ok.find(i => i.id === 'items-total-mismatch')).toBeUndefined();
-    expect(ok.find(i => i.id === 'amount-calc-mismatch')).toBeUndefined();
+    // R8(단건 계산)도 다품목(2건 이상)이면 가드로 스킵 — profile.quantity×unitPrice(25000)가
+    // totalAmount(26000)와 달라도 다품목 총액 비교(items-total-mismatch)로 대체되므로 미발행.
+    expect(runComplianceRules({ ...layer1Base, shipperItems: items, quantity: 100, unitPrice: 250, totalAmount: 26000 })
+      .find(i => i.id === 'r8-amount-arithmetic')).toBeUndefined();
+  });
+});
+
+describe('항구 누락 검증 — R3(Incoterms별 정밀판정) 전담, ports-missing은 Incoterms 공란일 때만 폴백', () => {
+  const portBase: TradeProfile = {
+    tradeType: 'export',
+    itemName: 'FROZEN HAIRTAIL, WHOLE ROUND',
+    hsCode: '0303892000',
+    incoterms: 'FOB',
+    quantity: 500,
+    weight: 5400,
+    loadPort: '',
+    dischargePort: '',
+    departureDate: '',
+    arrivalDate: '',
+    companyName: 'DAEHAN',
+    contact: '02-1',
+    countryOfOrigin: 'REPUBLIC OF KOREA',
+  };
+  // ComplianceAgent가 실제로 하는 것과 같이 두 엔진의 이슈를 합쳐 loadPort 관련 항목만 본다.
+  const portIssues = (profile: TradeProfile) =>
+    [...validateTradeDocuments(profile), ...runComplianceRules(profile)]
+      .filter(i => i.id === 'ports-missing' || i.id.startsWith('r3-incoterm-port'));
+
+  it('FOB + 선적항 누락 → 이슈 1개(r3-incoterm-port만, ports-missing 중복 없음)', () => {
+    const issues = portIssues({ ...portBase, loadPort: '', dischargePort: 'OSAKA, JAPAN' });
+    expect(issues).toHaveLength(1);
+    expect(issues[0].id).toBe('r3-incoterm-port');
+  });
+
+  it('FOB + 도착항만 누락 → 이슈 0개(FOB는 도착항 불필요, ports-missing 오탐 제거 확인)', () => {
+    const issues = portIssues({ ...portBase, loadPort: 'BUSAN, KOREA', dischargePort: '' });
+    expect(issues).toHaveLength(0);
+  });
+
+  it('Incoterms 공란 + 항구 둘 다 누락 → ports-missing 발동(R3가 판단 못 하는 유일한 폴백)', () => {
+    const issues = portIssues({ ...portBase, incoterms: '', loadPort: '', dischargePort: '' });
+    expect(issues).toHaveLength(1);
+    expect(issues[0].id).toBe('ports-missing');
   });
 });

@@ -134,54 +134,13 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
     );
   });
 
-  // 3) 계산 검증 — 수량 × 단가 = 금액
+  // 3) 계산 검증 — 수량 × 단가 = 금액 (단건)
   //
-  // 셋 다 유효한 양수로 입력된 경우에만 검사한다.
-  // 셋 중 하나라도 누락·비정상이면 위의 필수/숫자 검사가 이미 잡으므로
-  // 여기서는 중복 이슈를 발행하지 않는다.
-  //
-  // 다품목(2건 이상)이면 총액 = 품목 합계이므로
-  // 이 단건 검증 대신 아래 A) 품목 합계 검증을 사용한다.
-  const qty = Number(profile.quantity);
-  const price = Number(profile.unitPrice);
+  // 2026-08 통합: 이 단건 비교는 complianceRules.ts R8(r8-amount-arithmetic)로 이관했다.
+  // 예전엔 여기(1% 허용오차)와 R8(구 정확일치)이 서로 다른 기준으로 같은 값을 각자 검사해
+  // "이중 error 표시"·"기준 불일치" 버그를 냈다. R8이 이제 이 1% 허용오차 정책과 다품목 가드를
+  // 그대로 흡수했으므로 여기서는 발행하지 않는다 — total은 아래 A) 품목 합계 검증이 계속 쓴다.
   const total = Number(profile.totalAmount);
-
-  const allAmountsValid =
-    profile.quantity !== '' &&
-    profile.unitPrice !== '' &&
-    profile.totalAmount !== '' &&
-    profile.quantity !== undefined &&
-    profile.unitPrice !== undefined &&
-    profile.totalAmount !== undefined &&
-    !Number.isNaN(qty) &&
-    !Number.isNaN(price) &&
-    !Number.isNaN(total) &&
-    qty > 0 &&
-    price > 0 &&
-    total > 0;
-
-  if (allAmountsValid && validItems.length <= 1) {
-    const expected = qty * price;
-
-    // 단가·수량 반올림에서 오는 미세 오차(≤1%)는 허용하고,
-    // 자릿수 실수 등 실제 불일치만 잡는다.
-    const tolerance = Math.max(0.01, expected * 0.01);
-
-    if (Math.abs(expected - total) > tolerance) {
-      issues.push({
-        id: 'amount-calc-mismatch',
-        docType: 'invoice',
-        severity: 'error',
-        message: `금액 계산 불일치: 수량(${qty.toLocaleString()}) × 단가(${price.toLocaleString()}) = ${expected.toLocaleString()} 이지만, 입력된 금액은 ${total.toLocaleString()} 입니다. 값을 확인해 주세요.`,
-        field: 'totalAmount',
-        amounts: {
-          expected,
-          actual: total,
-          currency: profile.currency || 'USD',
-        },
-      });
-    }
-  }
 
   // ===== 문서 내부 논리 검증 (결정론적, 외부 API 불필요) =====
 
@@ -373,10 +332,13 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
   }
 
   // 4. 수출 운송의뢰서 - 항구 검증
-  // EXW 조건이 아닐 때만 항구 누락을 에러로 잡음
-  const isEXW = profile.incoterms === 'EXW';
-
-  if (!isEXW && (!profile.loadPort || !profile.dischargePort)) {
+  //
+  // 2026-08 통합: Incoterms가 있으면 complianceRules.ts R3(r3-incoterm-port 등)가
+  // 조건별로 어느 항구가 필수인지 정밀 판정하므로 여기서는 관여하지 않는다 — 예전엔
+  // "EXW 아니면 둘 다 필수"로 뭉뚱그려 FOB(선적항만 필요)에서 도착항이 비어도 오탐을 냈고,
+  // FOB에서 선적항이 비면 R3와 여기 둘 다 error를 띄워 카드가 2장 뜨는 문제도 있었다.
+  // 이 체크는 이제 Incoterms 자체가 비어 R3가 전혀 판단할 수 없는 경우의 폴백으로만 남는다.
+  if (!profile.incoterms && (!profile.loadPort || !profile.dischargePort)) {
     issues.push({
       id: 'ports-missing',
       docType: 'transport_request',

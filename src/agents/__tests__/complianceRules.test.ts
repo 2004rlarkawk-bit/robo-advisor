@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { runComplianceRules, checkPackingInvoiceConsistency, RULE_POLICY } from '../complianceRules';
 import { TradeProfile } from '../../types';
 
@@ -224,5 +224,59 @@ describe('R11 — 결제조건 ↔ L/C 필드 정합성', () => {
     const list = ids({ paymentTerms: 'T/T', lcNo: '', lcBank: '', lcDate: '' });
     expect(list).not.toContain('r11-payment-lc-conflict');
     expect(list).not.toContain('r11-lc-missing');
+  });
+});
+
+describe('R2 출항희망일 비현실적 범위(연도 오타 방지)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 15)); // 2026-08-15로 고정
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('오늘 기준 1년 전 ~ 2년 후 범위 안이면 통과', () => {
+    expect(ids({ departureDate: '2026-09-01' })).not.toContain('r2-departure-out-of-range');
+    expect(ids({ departureDate: '2025-09-01' })).not.toContain('r2-departure-out-of-range');
+    expect(ids({ departureDate: '2028-06-01' })).not.toContain('r2-departure-out-of-range');
+  });
+
+  it('연도를 잘못 찍어 범위를 벗어나면(예: 2016) warning', () => {
+    const issue = find({ departureDate: '2016-07-20' }, 'r2-departure-out-of-range')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('warning');
+  });
+
+  it('너무 먼 미래(예: 2062)도 warning', () => {
+    expect(ids({ departureDate: '2062-01-01' })).toContain('r2-departure-out-of-range');
+  });
+
+  it('공란이면 발생하지 않음(R2 필수 체크와 중복 발행 안 함)', () => {
+    expect(ids({ departureDate: '' })).not.toContain('r2-departure-out-of-range');
+  });
+});
+
+describe('R12 Buyer 정보 일관성', () => {
+  it('Buyer 회사명만 있고 주소 없으면 warning', () => {
+    const issue = find({ buyerName: 'Global Import LLC', buyerAddress: '' }, 'r12-buyer-address-missing')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('warning');
+  });
+
+  it('Buyer 주소만 있고 회사명 없으면 warning', () => {
+    const issue = find({ buyerName: '', buyerAddress: '250 Market Street, LA' }, 'r12-buyer-name-missing')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('warning');
+  });
+
+  it('둘 다 있으면 통과', () => {
+    const list = ids({ buyerName: 'Global Import LLC', buyerAddress: '250 Market Street, LA' });
+    expect(list).not.toContain('r12-buyer-address-missing');
+    expect(list).not.toContain('r12-buyer-name-missing');
+  });
+
+  it('둘 다 비어 있으면 미발행(Buyer는 선택 항목)', () => {
+    const list = ids({ buyerName: '', buyerAddress: '' });
+    expect(list).not.toContain('r12-buyer-address-missing');
+    expect(list).not.toContain('r12-buyer-name-missing');
   });
 });

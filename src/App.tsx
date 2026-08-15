@@ -1853,7 +1853,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1)),
     [issues]
   );
-  const LIVE_CHECK_ID = /^(input-missing-|input-nan-|input-nonpositive-)|^(amount-calc-mismatch|input-date-order|invoice-date-after-shipment)$/;
+  // amount-calc-mismatch는 2026-08 통합으로 complianceRules.ts R8에 흡수되어 더 이상 발행되지
+  // 않는다(validatorEngine.ts 참고) — validateRequiredInputs가 안 내는 id를 실시간 재평가 대상으로
+  // 남겨두면 liveInputIssueIds가 절대 못 채워서 "항상 해결됨"으로 오판하므로 패턴에서 제외했다.
+  const LIVE_CHECK_ID = /^(input-missing-|input-nan-|input-nonpositive-)|^(input-date-order|invoice-date-after-shipment)$/;
   const liveInputIssueIds = useMemo(
     () => new Set(validateRequiredInputs(profile).map(i => i.id)),
     [profile]
@@ -3377,14 +3380,14 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                             const num = issue.severity === 'warning' ? ++warnSeq : 0;
                             const fieldStr = String(issue.field || '');
                             const errIcon =
-                              (issue.id === 'amount-calc-mismatch' || fieldStr === 'totalAmount' || fieldStr === 'unitPrice' || fieldStr === 'invoiceAmount')
+                              (issue.amounts || fieldStr === 'totalAmount' || fieldStr === 'unitPrice' || fieldStr === 'invoiceAmount')
                                 ? <Calculator size={17} />
                                 : (/date/i.test(fieldStr) || issue.id === 'input-date-order')
                                   ? <Calendar size={17} />
                                   : <FileText size={17} />;
                             const actionLabel =
                               issue.severity === 'warning' ? '입력 수정'
-                                : issue.id === 'amount-calc-mismatch' ? '금액 수정'
+                                : issue.amounts ? '금액 수정'
                                 : fieldStr === 'arrivalDate' ? '도착일 입력'
                                 : '입력 수정';
                             const docLbl = docLabelOf(issue.docType);

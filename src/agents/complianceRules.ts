@@ -19,6 +19,7 @@ export const RULE_POLICY = {
   'r1-origin-missing':        { severity: 'error',   overridable: true },
   'r1-itemname-insufficient': { severity: 'error',   overridable: true },
   'r2-departure-missing':     { severity: 'warning', overridable: false },
+  'r2-departure-out-of-range':{ severity: 'warning', overridable: false },
   'r3-incoterm-port':         { severity: 'error',   overridable: true },
   'r3-incoterm-port-flex':    { severity: 'warning', overridable: false },
   'r4-transport-mode':        { severity: 'warning', overridable: false },
@@ -32,12 +33,17 @@ export const RULE_POLICY = {
   'r11-payment-lc-conflict':  { severity: 'error',   overridable: true },
   'r11-lc-missing':           { severity: 'warning', overridable: false },
   'r11-lc-date-missing':      { severity: 'warning', overridable: false },
+  'r12-buyer-address-missing':{ severity: 'warning', overridable: false },
+  'r12-buyer-name-missing':   { severity: 'warning', overridable: false },
 } as const satisfies Record<string, RulePolicy>;
 
 export type ComplianceRuleId = keyof typeof RULE_POLICY;
 
-/** 정책 레지스트리에서 severity/overridable을 읽어 이슈를 만든다(수기 지정 방지). */
-function mk(id: ComplianceRuleId, docType: DocumentType, field: string, message: string): ValidationIssue {
+/**
+ * 정책 레지스트리에서 severity/overridable을 읽어 이슈를 만든다(수기 지정 방지).
+ * extra: card/amounts처럼 UI가 구조화 값으로 소비하는 필드만 얹는 용도(severity/overridable은 여전히 정책이 결정).
+ */
+function mk(id: ComplianceRuleId, docType: DocumentType, field: string, message: string, extra?: Partial<ValidationIssue>): ValidationIssue {
   const p = RULE_POLICY[id];
   return {
     id,
@@ -46,6 +52,7 @@ function mk(id: ComplianceRuleId, docType: DocumentType, field: string, message:
     message,
     severity: p.severity,
     overridable: p.severity === 'error' ? p.overridable : undefined,
+    ...extra,
   };
 }
 
@@ -84,9 +91,6 @@ const HS4_UNIT: Record<string, string> = {
 };
 const isWeightUnit = (u?: string) => /^(kg|g|ton|mt|톤|킬로|중량)/i.test((u || '').trim());
 
-// 통화별 소수 자릿수
-const decimalsFor = (ccy?: string) => (['KRW', 'JPY'].includes(up(ccy)) ? 0 : 2);
-const roundTo = (n: number, d: number) => Math.round(n * 10 ** d) / 10 ** d;
 const num = (v: unknown): number | null => {
   if (v === '' || v === null || v === undefined) return null;
   const n = Number(v);
@@ -131,6 +135,21 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
   if (ON_BOARD_TERMS.has(inc) && !(profile.departureDate || '').trim()) {
     issues.push(mk('r2-departure-missing', 'invoice', 'departureDate',
       '선적일(출발일)이 비어 있습니다. 선적 전 발행이면 무방하나, 확정 시 입력을 권장합니다.'));
+  }
+  // 출항희망일 비현실적 범위(연도 오타 방지) — 오늘 기준 1년 전 ~ 2년 후를 벗어나면 경고.
+  // 입력은 <input type="date"> 네이티브 검증이라 "존재하지 않는 날짜"는 이미 막히므로,
+  // 여기서는 "존재는 하지만 연도를 잘못 찍은" 값(2016/2062 등)만 잡는다.
+  if ((profile.departureDate || '').trim()) {
+    const dep = new Date(profile.departureDate as string);
+    if (!Number.isNaN(dep.getTime())) {
+      const today = new Date();
+      const minDate = new Date(today); minDate.setFullYear(today.getFullYear() - 1);
+      const maxDate = new Date(today); maxDate.setFullYear(today.getFullYear() + 2);
+      if (dep < minDate || dep > maxDate) {
+        issues.push(mk('r2-departure-out-of-range', 'invoice', 'departureDate',
+          `출항희망일(${profile.departureDate})이 현재로부터 비현실적으로 먼 날짜입니다. 연도를 다시 확인하세요.`));
+      }
+    }
   }
 
   // ── R3. Incoterms ↔ 항구 정합성 (error) ─────────────
@@ -241,15 +260,42 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
       '결제조건이 L/C인데 L/C Date가 비어 있습니다.'));
   }
 
+  // ── R12. Buyer 정보 일관성 (warning) ────────────────
+  // Buyer는 Consignee(거래처)와 별개로 입력 가능한 선택 항목이라 필수값으로 잡지 않는다.
+  // 다만 한쪽만 입력된 반쪽짜리 상태는 서류 대사에서 문제가 되므로 안내한다.
+  const buyerName = (profile.buyerName || '').trim();
+  const buyerAddress = (profile.buyerAddress || '').trim();
+  if (buyerName && !buyerAddress) {
+    issues.push(mk('r12-buyer-address-missing', 'invoice', 'buyerAddress',
+      `Buyer 회사명("${buyerName}")은 입력되었는데 Buyer 주소가 비어 있습니다. 상업송장 Buyer란은 명기 시 함께 채워야 합니다.`));
+  } else if (!buyerName && buyerAddress) {
+    issues.push(mk('r12-buyer-name-missing', 'invoice', 'buyerName',
+      'Buyer 주소는 입력되었는데 Buyer 회사명이 비어 있습니다. 회사명을 입력하세요.'));
+  }
+
   // ── R8. 금액 산술 (error) ───────────────────────────
-  // quantity × unit_price = amount (통화별 소수 자릿수로 반올림 후 비교).
+  // quantity × unit_price = amount.
+  //
+  // 허용오차 정책(2026-08 통합 — validatorEngine의 amount-calc-mismatch를 여기로 흡수):
+  // 정확 일치가 아니라 1%(최소 0.01) 오차를 허용한다. 이유: 단가·환율 반올림 등 정상적인
+  // 소수점 오차까지 error로 차단하면 과검출이 되고, 두 엔진이 서로 다른 기준(정확일치 vs 1%)을
+  // 쓰던 과거 상태는 "0.5% 어긋난 금액이 한쪽만 통과", "1% 넘게 어긋나면 error 카드가 2장 뜸"
+  // 두 가지 버그를 냈다. 이제 이 R8이 금액산술의 유일한 판정처다.
+  //
+  // 다품목(shipperItems 2건 이상)이면 총액 = 품목 합계이므로 이 단건 qty×price 비교는 성립하지
+  // 않는다 — validatorEngine도 같은 이유로 스킵했던 가드를 그대로 이식한다.
+  const validItems = (profile.shipperItems ?? []).filter((it) => {
+    const q = Number(it.quantity), p = Number(it.unitPrice);
+    return it.quantity !== '' && it.unitPrice !== '' && !Number.isNaN(q) && !Number.isNaN(p) && q > 0 && p > 0;
+  });
   const qty = num(profile.quantity), price = num(profile.unitPrice), total = num(profile.totalAmount);
-  const dp = decimalsFor(profile.currency);
-  if (qty !== null && price !== null && total !== null && qty > 0 && price > 0) {
-    const expected = roundTo(qty * price, dp);
-    if (roundTo(total, dp) !== expected) {
+  if (validItems.length <= 1 && qty !== null && price !== null && total !== null && qty > 0 && price > 0) {
+    const expected = qty * price;
+    const tolerance = Math.max(0.01, expected * 0.01);
+    if (Math.abs(expected - total) > tolerance) {
       issues.push(mk('r8-amount-arithmetic', 'invoice', 'totalAmount',
-        `금액이 맞지 않습니다: 수량 ${qty} × 단가 ${price} = ${expected} 이어야 하는데 총액이 ${roundTo(total, dp)}입니다(통화 ${up(profile.currency) || 'USD'}, 소수 ${dp}자리).`));
+        `금액 계산 불일치: 수량(${qty.toLocaleString()}) × 단가(${price.toLocaleString()}) = ${expected.toLocaleString()} 이지만, 입력된 금액은 ${total.toLocaleString()} 입니다. 값을 확인해 주세요.`,
+        { amounts: { expected, actual: total, currency: up(profile.currency) || 'USD' } }));
     }
   }
 
