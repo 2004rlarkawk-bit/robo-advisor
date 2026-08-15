@@ -83,6 +83,24 @@ const handleCheckCargoProgress = async (trade: SavedTrade) => {
   );
 }, [trades]);
 
+  // 수출/수입 필터 + 날짜 정렬
+  const [typeFilter, setTypeFilter] = useState<'all' | 'export' | 'import'>('all');
+  const [sortKey, setSortKey] = useState<'latest' | 'oldest'>('latest');
+
+  const exportCount = useMemo(() => customsTrades.filter((t) => t.profile.tradeType === 'export').length, [customsTrades]);
+  const importCount = customsTrades.length - exportCount;
+
+  const visibleTrades = useMemo(() => {
+    const list = typeFilter === 'all'
+      ? customsTrades
+      : customsTrades.filter((t) => t.profile.tradeType === typeFilter);
+    return [...list].sort((a, b) => {
+      const ta = new Date(a.generatedAt ?? a.createdAt).getTime();
+      const tb = new Date(b.generatedAt ?? b.createdAt).getTime();
+      return sortKey === 'oldest' ? ta - tb : tb - ta;
+    });
+  }, [customsTrades, typeFilter, sortKey]);
+
   return (
     <section className="doc-panel customs-panel">
       <button
@@ -116,7 +134,42 @@ const handleCheckCargoProgress = async (trade: SavedTrade) => {
           <span>아직 통관신고 관련 서류가 생성된 거래가 없습니다.</span>
         </div>
       ) : (
-        customsTrades.map((trade) => {
+      <>
+      <div className="customs-toolbar">
+        <div className="customs-filter-chips">
+          <button
+            type="button"
+            className={`customs-filter-chip ${typeFilter === 'all' ? 'active' : ''}`}
+            onClick={() => setTypeFilter('all')}
+          >전체 {customsTrades.length}</button>
+          <button
+            type="button"
+            className={`customs-filter-chip ${typeFilter === 'export' ? 'active' : ''}`}
+            onClick={() => setTypeFilter('export')}
+          >수출 {exportCount}</button>
+          <button
+            type="button"
+            className={`customs-filter-chip ${typeFilter === 'import' ? 'active' : ''}`}
+            onClick={() => setTypeFilter('import')}
+          >수입 {importCount}</button>
+        </div>
+        <select
+          className="customs-sort-select"
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as 'latest' | 'oldest')}
+          aria-label="정렬 순서"
+        >
+          <option value="latest">최신순</option>
+          <option value="oldest">오래된순</option>
+        </select>
+      </div>
+
+      {visibleTrades.length === 0 ? (
+        <div className="doc-empty">
+          {typeFilter === 'export' ? '수출' : '수입'} 거래의 통관 내역이 없습니다.
+        </div>
+      ) : (
+        visibleTrades.map((trade) => {
           const customsDoc = trade.documents.find((doc) => doc.id === 'customs_dec');
           const invoiceDoc = trade.documents.find((doc) => doc.id === 'invoice');
 const packingDoc = trade.documents.find((doc) => doc.id === 'packing_list');
@@ -222,6 +275,8 @@ const isCheckingCargo = checkingTradeId === trade.id;
             </div>
           );
         })
+      )}
+      </>
       )}
       </div>
       )}

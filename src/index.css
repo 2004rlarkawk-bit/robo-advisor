@@ -3618,6 +3618,20 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .customs-panel .doc-panel-body { gap: 8px; }
 .customs-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .customs-meta .meta-dot { color: #cbd5e1; }
+/* 통관 내역: 수출/수입 필터 + 정렬 툴바 */
+.customs-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 2px 2px 4px; }
+.customs-filter-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.customs-filter-chip {
+  border: 1px solid #cbd5e1; background: #fff; color: #64748b;
+  font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 999px;
+  cursor: pointer; font-family: inherit; transition: border-color .15s ease;
+}
+.customs-filter-chip:hover { border-color: #94a3b8; }
+.customs-filter-chip.active { border-color: #0b57d0; background: #0b57d0; color: #fff; }
+.customs-sort-select {
+  border: 1px solid #cbd5e1; border-radius: 9px; padding: 8px 12px;
+  font-family: inherit; font-size: 13px; color: #475569; background: #fff; cursor: pointer;
+}
 .draft-tray-more {
   align-self: center; font-size: 13.5px; font-weight: 600; color: #475569;
   background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 18px;
