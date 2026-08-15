@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown } from 'lucide-react';
+import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown, Copy } from 'lucide-react';
 import type { SavedTrade } from '../types';
 import { deleteSavedTrade, fetchSubmittedTrades } from '../services/storageService';
 import { filterDocumentManagerTrades } from '../services/tradeListPolicy';
@@ -140,116 +140,44 @@ export default function DocumentManagerPanel({
               </span>
             </div>
           ) : (
-            <div
-              className="doc-table"
-              role="table"
-            >
-              <div
-                className="doc-table-head"
-                role="row"
-              >
-                <span role="columnheader">
-                  상품명
-                </span>
-
-                <span role="columnheader">
-                  목적지
-                </span>
-
-                <span role="columnheader">
-                  인코텀즈
-                </span>
-
-                <span role="columnheader">
-                  제출 일시
-                </span>
-
-                <span role="columnheader">
-                  문서 상태
-                </span>
-
-                <span role="columnheader">
-                  작업
-                </span>
-              </div>
-
-              {trades.map((trade) => (
-                <div
-                  key={trade.id}
-                  className="doc-table-row"
-                  role="row"
-                >
-                  <span
-                    className="doc-cell-name"
-                    role="cell"
-                  >
-                    {trade.profile.itemName ||
-                      '(품목명 없음)'}
-                  </span>
-
-                  <span
-                    className="doc-cell-route"
-                    role="cell"
-                  >
-                    {trade.profile.loadPort || '-'} →{' '}
-                    {trade.profile.dischargePort || '-'}
-                  </span>
-
-                  <span
-                    className="doc-cell-incoterms"
-                    role="cell"
-                  >
-                    {trade.profile.incoterms || '-'}
-                  </span>
-
-                  <span
-                    className="doc-cell-date"
-                    role="cell"
-                  >
-                    {formatDate(trade)}
-                  </span>
-
-                  <span role="cell">
-                    <span className="doc-status-badge">
-                      <CheckCircle2 size={13} />
-                      제출 완료
-                    </span>
-                  </span>
-
-                  <span
-                    className="doc-cell-actions"
-                    role="cell"
-                  >
-                    <button
-                      type="button"
-                      className="doc-row-btn"
-                      onClick={() => onLoad(trade)}
-                    >
-                      조회
+            /* 임시보관함과 같은 행 카드 형식 — 목록 스타일을 한 벌로 통일 */
+            trades.map((trade) => {
+              const p = trade.profile;
+              const country = p.partnerCountry || p.buyerCountry || '';
+              const ports = [p.loadPort, p.dischargePort].filter(Boolean).join(' → ');
+              const route = [country, ports, p.incoterms].filter(Boolean).join(' · ');
+              return (
+                <div key={trade.id} className="draft-tray-item">
+                  <div className="draft-tray-info">
+                    <div className="draft-tray-line1">
+                      <span className={`trade-type-badge ${p.tradeType}`}>{p.tradeType === 'export' ? '수출' : '수입'}</span>
+                      <span className="draft-tray-name">{p.itemName || '(품목명 없음)'}</span>
+                      <span className="draft-tray-status" style={{ color: '#15803d', background: '#f0fdf4' }}>
+                        <CheckCircle2 size={12} style={{ verticalAlign: -1.5, marginRight: 4 }} />제출 완료
+                      </span>
+                    </div>
+                    {route && <span className="draft-tray-route">{route}</span>}
+                    <span className="draft-tray-time">{formatDate(trade)}</span>
+                  </div>
+                  <div className="draft-tray-actions">
+                    <button type="button" className="draft-tray-resume" onClick={() => onLoad(trade)}>
+                      <FolderOpen size={15} /> 조회
                     </button>
-
-                    <button
-                      type="button"
-                      className="doc-row-btn ghost"
-                      onClick={() => onCopy(trade)}
-                    >
-                      새 거래로 복사
+                    <button type="button" className="draft-tray-resume" onClick={() => onCopy(trade)}>
+                      <Copy size={15} /> 새 거래로 복사
                     </button>
-
                     <button
                       type="button"
-                      className="doc-row-del"
+                      className="draft-tray-delete"
                       aria-label="문서 삭제"
-                      onClick={() =>
-                        void handleDelete(trade.id)
-                      }
+                      onClick={() => void handleDelete(trade.id)}
                     >
-                      <Trash2 size={15} />
+                      <Trash2 size={16} />
                     </button>
-                  </span>
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })
           )}
         </div>
       )}

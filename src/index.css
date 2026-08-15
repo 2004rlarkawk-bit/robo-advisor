@@ -3548,8 +3548,8 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 
 /* ── 임시보관함 (AI 통관 작업실 하단 아코디언) ─────────────────── */
 .draft-tray {
-  margin-top: 32px; background: #fff; border: 1px solid #e2e8f0;
-  border-radius: 16px; box-shadow: 0 1px 3px rgba(15, 23, 42, .05); overflow: hidden;
+  margin-top: 32px; background: #fff; border: 1px solid #cbd5e1;
+  border-radius: 16px; box-shadow: 0 1px 4px rgba(15, 23, 42, .06); overflow: hidden;
 }
 .draft-tray-header {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px;
@@ -3566,9 +3566,11 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .draft-tray-body { padding: 16px 20px 18px; border-top: 1px solid #eef2f7; display: flex; flex-direction: column; gap: 10px; }
 .draft-tray-item {
   display: flex; align-items: center; gap: 14px;
-  border: 1px solid #e8edf3; border-radius: 12px; padding: 16px 18px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
+  border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px 18px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  transition: border-color .15s ease;
 }
+.draft-tray-item:hover { border-color: #94a3b8; }
 .draft-tray-info { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .draft-tray-line1 { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .draft-tray-name { font-size: 15.5px; font-weight: 700; color: #1e293b; }
@@ -3600,8 +3602,8 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 
 /* ── 최종 제출된 거래 (문서 관리 탭, 임시보관함과 짝 맞춘 카드) ─────────── */
 .doc-panel {
-  margin-top: 20px; background: #fff; border: 1px solid #e2e8f0;
-  border-radius: 16px; box-shadow: 0 1px 3px rgba(15, 23, 42, .05); overflow: hidden;
+  margin-top: 20px; background: #fff; border: 1px solid #cbd5e1;
+  border-radius: 16px; box-shadow: 0 1px 4px rgba(15, 23, 42, .06); overflow: hidden;
 }
 .doc-panel-head {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px;
@@ -3615,7 +3617,7 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .doc-panel-sub { font-size: 13.5px; color: #94a3b8; }
 .doc-panel-chevron { color: #94a3b8; transition: transform .18s ease; flex-shrink: 0; }
 .doc-panel-chevron.open { transform: rotate(180deg); }
-.doc-panel-body { padding: 8px 20px 18px; border-top: 1px solid #eef2f7; }
+.doc-panel-body { padding: 16px 20px 18px; border-top: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 10px; }
 
 .doc-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 44px 24px; text-align: center; color: #94a3b8; font-size: 14px; }
 

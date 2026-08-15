@@ -71,8 +71,8 @@ export default function TradeManagerPanel({ onLoad, embedded }: Props) {
   const [detail, setDetail] = useState<SavedTrade | null>(null);
   const [memos, setMemos] = useState<Record<string, string>>(loadMemos);
   const [editingMemo, setEditingMemo] = useState<string | null>(null);
-  // 임시보관함(임베드) 전용: 접힘 상태 · 전체 보기 — 문서 관리 탭 진입 시 바로 보이도록 기본 펼침
-  const [trayOpen, setTrayOpen] = useState(true);
+  // 임시보관함(임베드) 전용: 접힘 상태 · 전체 보기 — 제출 문서함과 나란히 접힌 상태로 시작
+  const [trayOpen, setTrayOpen] = useState(false);
   const [trayShowAll, setTrayShowAll] = useState(false);
 
   const loadTrades = useCallback(async () => {
