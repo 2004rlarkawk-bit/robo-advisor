@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileCheck2, FolderOpen, Eye, Download, Search, ChevronDown } from 'lucide-react';
+import { FileCheck2, FolderOpen, Eye, Download, Search } from 'lucide-react';
 import type { CustomsCargoProgressResult, SavedTrade } from '../types';
 import { fetchSavedTrades } from '../services/storageService';
 import { getCustomsCargoProgress } from '../services/customsApiService';
@@ -14,8 +14,6 @@ export default function CustomsHistoryPanel({ onLoad, onOpenDocument }: Props) {
   const [error, setError] = useState('');
 const [cargoProgressByTradeId, setCargoProgressByTradeId] = useState<Record<string, CustomsCargoProgressResult>>({});
 const [checkingTradeId, setCheckingTradeId] = useState<string | null>(null);
-  // 문서 관리 탭과 같은 아코디언 형식 — 단독 페이지라 기본 펼침
-  const [open, setOpen] = useState(true);
   const loadTrades = useCallback(async () => {
     setIsLoading(true);
     setError('');
@@ -102,28 +100,16 @@ const handleCheckCargoProgress = async (trade: SavedTrade) => {
   }, [customsTrades, typeFilter, sortKey]);
 
   return (
-    <section className="doc-panel customs-panel">
-      <button
-        type="button"
-        className="doc-panel-head"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
+    <section className="customs-page">
+      <div className="customs-page-head">
         <span className="doc-panel-icon"><FileCheck2 size={22} /></span>
-        <div className="doc-panel-head-main">
-          <span className="doc-panel-title">
-            통관 내역
-            <span className="doc-panel-count">{customsTrades.length}건</span>
-          </span>
-          <span className="doc-panel-sub">
-            통관신고 관련 서류 생성 상태와 거래별 통관 진행 정보를 확인할 수 있어요.
-          </span>
-        </div>
-        <ChevronDown size={21} className={`doc-panel-chevron ${open ? 'open' : ''}`} />
-      </button>
+        <span className="doc-panel-title">
+          통관 내역
+          <span className="doc-panel-count">{customsTrades.length}건</span>
+        </span>
+      </div>
 
-      {open && (
-      <div className="doc-panel-body">
+      <div className="customs-body">
       {error && <div className="form-message error" role="alert">{error}</div>}
 
       {isLoading ? (
@@ -282,7 +268,6 @@ const isCheckingCargo = checkingTradeId === trade.id;
       </>
       )}
       </div>
-      )}
     </section>
   );
 }
