@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileCheck2, FolderOpen, Eye, Download, Search } from 'lucide-react';
+import { FileCheck2, FolderOpen, Eye, Download, Search, ChevronDown } from 'lucide-react';
 import type { CustomsCargoProgressResult, SavedTrade } from '../types';
 import { fetchSavedTrades } from '../services/storageService';
 import { getCustomsCargoProgress } from '../services/customsApiService';
@@ -14,6 +14,8 @@ export default function CustomsHistoryPanel({ onLoad, onOpenDocument }: Props) {
   const [error, setError] = useState('');
 const [cargoProgressByTradeId, setCargoProgressByTradeId] = useState<Record<string, CustomsCargoProgressResult>>({});
 const [checkingTradeId, setCheckingTradeId] = useState<string | null>(null);
+  // 문서 관리 탭과 같은 아코디언 형식 — 단독 페이지라 기본 펼침
+  const [open, setOpen] = useState(true);
   const loadTrades = useCallback(async () => {
     setIsLoading(true);
     setError('');
@@ -82,24 +84,36 @@ const handleCheckCargoProgress = async (trade: SavedTrade) => {
 }, [trades]);
 
   return (
-    <div>
-      <div className="page-heading">
-        <h1 className="page-title document-manager-title">
-          <FileCheck2 size={26} /> 통관 내역
-        </h1>
-        <p className="page-subtitle">
-          통관신고 관련 서류 생성 상태와 거래별 통관 진행 정보를 확인합니다.
-        </p>
-      </div>
+    <section className="doc-panel">
+      <button
+        type="button"
+        className="doc-panel-head"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <div className="doc-panel-head-main">
+          <span className="doc-panel-title">
+            <FileCheck2 size={19} />
+            통관 내역
+            <span className="doc-panel-count">{customsTrades.length}건</span>
+          </span>
+          <span className="doc-panel-sub">
+            통관신고 관련 서류 생성 상태와 거래별 통관 진행 정보를 확인할 수 있어요.
+          </span>
+        </div>
+        <ChevronDown size={21} className={`doc-panel-chevron ${open ? 'open' : ''}`} />
+      </button>
 
+      {open && (
+      <div className="doc-panel-body">
       {error && <div className="form-message error" role="alert">{error}</div>}
 
       {isLoading ? (
-        <div className="form-card document-empty">통관 내역을 불러오는 중입니다.</div>
+        <div className="doc-empty">통관 내역을 불러오는 중입니다.</div>
       ) : customsTrades.length === 0 ? (
-        <div className="form-card document-empty">
-          <FolderOpen size={36} />
-          아직 통관신고 관련 서류가 생성된 거래가 없습니다.
+        <div className="doc-empty">
+          <FolderOpen size={34} />
+          <span>아직 통관신고 관련 서류가 생성된 거래가 없습니다.</span>
         </div>
       ) : (
         customsTrades.map((trade) => {
@@ -142,76 +156,77 @@ const readiness =
 const cargoProgress = cargoProgressByTradeId[trade.id];
 const isCheckingCargo = checkingTradeId === trade.id;
           return (
-            <div key={trade.id} className="form-card document-trade-card">
-              <div className="document-trade-row">
-                <div className="document-trade-summary">
-                  <div className="document-trade-heading">
-                    <span className={`trade-type-badge ${trade.profile.tradeType}`}>
-                      {trade.profile.tradeType === 'export' ? '수출' : '수입'}
-                    </span>
-                    <span className="document-trade-name">
-                      {trade.profile.itemName || '(품목명 없음)'}
-                    </span>
-                    {trade.profile.hsCode && (
-                      <span className="document-hs-code">HS {trade.profile.hsCode}</span>
-                    )}
-                    <span className={`trade-status-badge ${customsDoc?.status || 'not_started'}`}>
-  {customsStage}
-</span>
-                  </div>
-
-                  <div className="document-trade-meta">
-                    {trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'} · {dateLabel}
-                  </div>
+            <div key={trade.id} className="draft-tray-item">
+              <div className="draft-tray-info">
+                <div className="draft-tray-line1">
+                  <span className={`trade-type-badge ${trade.profile.tradeType}`}>
+                    {trade.profile.tradeType === 'export' ? '수출' : '수입'}
+                  </span>
+                  <span className="draft-tray-name">
+                    {trade.profile.itemName || '(품목명 없음)'}
+                  </span>
+                  {trade.profile.hsCode && (
+                    <span className="document-hs-code">HS {trade.profile.hsCode}</span>
+                  )}
+                  <span className={`trade-status-badge ${customsDoc?.status || 'not_started'}`}>
+                    {customsStage}
+                  </span>
                 </div>
-<div className="document-trade-meta">
-  통관 준비도 {readiness}% · 화주 서류 {completedShipperDocs}/{shipperDocs.length} 완료 · 외부 발급 {externalDocs}건
-</div>
 
-{documentStatusItems.length > 0 && (
-  <div className="document-trade-meta" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
-    {documentStatusItems.map((item) => (
-      <span key={item.label} className={`trade-status-badge ${item.doc?.status || 'not_started'}`}>
-        {item.label} {item.doc?.statusText || '상태 없음'}
-      </span>
-    ))}
-  </div>
-)}
+                <span className="draft-tray-route">
+                  {trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'} · 통관 준비도 {readiness}% · 화주 서류 {completedShipperDocs}/{shipperDocs.length} 완료 · 외부 발급 {externalDocs}건
+                </span>
+
+                {documentStatusItems.length > 0 && (
+                  <div className="draft-tray-line1" style={{ gap: 6 }}>
+                    {documentStatusItems.map((item) => (
+                      <span key={item.label} className={`trade-status-badge ${item.doc?.status || 'not_started'}`}>
+                        {item.label} {item.doc?.statusText || '상태 없음'}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {cargoProgress && (
-  <div className={`form-message ${cargoProgress.status === 'error' ? 'error' : 'info'}`} style={{ marginTop: '10px' }}>
-    <strong>{cargoProgress.statusText}</strong>
-    <div>B/L 번호: {cargoProgress.blNo || '-'}</div>
-    {cargoProgress.currentStep && <div>현재 단계: {cargoProgress.currentStep}</div>}
-    {cargoProgress.customsOffice && <div>처리 세관: {cargoProgress.customsOffice}</div>}
-    {cargoProgress.lastProcessedAt && <div>마지막 처리일시: {cargoProgress.lastProcessedAt}</div>}
-    {cargoProgress.message && <div>{cargoProgress.message}</div>}
-  </div>
-)}
-                                <div className="document-trade-buttons">
-                  <button
-                    className="btn-primary"
-                    onClick={() => void handleCheckCargoProgress(trade)}
-                    disabled={isCheckingCargo}
-                  >
-                    <Search size={14} /> {isCheckingCargo ? '조회 중...' : '통관 상태 조회'}
-                  </button>
+                  <div className={`form-message ${cargoProgress.status === 'error' ? 'error' : 'info'}`} style={{ marginTop: 4 }}>
+                    <strong>{cargoProgress.statusText}</strong>
+                    <div>B/L 번호: {cargoProgress.blNo || '-'}</div>
+                    {cargoProgress.currentStep && <div>현재 단계: {cargoProgress.currentStep}</div>}
+                    {cargoProgress.customsOffice && <div>처리 세관: {cargoProgress.customsOffice}</div>}
+                    {cargoProgress.lastProcessedAt && <div>마지막 처리일시: {cargoProgress.lastProcessedAt}</div>}
+                    {cargoProgress.message && <div>{cargoProgress.message}</div>}
+                  </div>
+                )}
 
-                  <button className="btn-secondary" onClick={() => onLoad(trade)}>
-                    <Eye size={14} /> 상세 조회
-                  </button>
+                <span className="draft-tray-time">{dateLabel}</span>
+              </div>
 
-                  <button
-                    className="btn-secondary"
-                    onClick={() => onOpenDocument ? onOpenDocument(trade, 'customs_dec') : onLoad(trade)}
-                  >
-                    <Download size={14} /> 문서 확인
-                  </button>
-                </div>
+              <div className="draft-tray-actions">
+                <button
+                  type="button"
+                  className="draft-tray-resume"
+                  onClick={() => void handleCheckCargoProgress(trade)}
+                  disabled={isCheckingCargo}
+                >
+                  <Search size={15} /> {isCheckingCargo ? '조회 중...' : '통관 상태 조회'}
+                </button>
+                <button type="button" className="draft-tray-resume" onClick={() => onLoad(trade)}>
+                  <Eye size={15} /> 상세 조회
+                </button>
+                <button
+                  type="button"
+                  className="draft-tray-resume"
+                  onClick={() => onOpenDocument ? onOpenDocument(trade, 'customs_dec') : onLoad(trade)}
+                >
+                  <Download size={15} /> 문서 확인
+                </button>
               </div>
             </div>
           );
         })
       )}
-    </div>
+      </div>
+      )}
+    </section>
   );
 }
