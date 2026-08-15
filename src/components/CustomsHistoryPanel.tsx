@@ -210,6 +210,9 @@ const isCheckingCargo = checkingTradeId === trade.id;
                   <span className={`trade-type-badge ${trade.profile.tradeType}`}>
                     {trade.profile.tradeType === 'export' ? '수출' : '수입'}
                   </span>
+                </div>
+
+                <div className="draft-tray-line1">
                   <span className="draft-tray-name">
                     {trade.profile.itemName || '(품목명 없음)'}
                   </span>
