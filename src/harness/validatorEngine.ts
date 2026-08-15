@@ -30,6 +30,16 @@ function withTimeout<T>(promise: Promise<T>, ms = 8000, label = '외부 API'): P
  * 중량 누락·항구 누락·HS코드는 기존 룰(validateTradeDocuments/HSCodeAgent)이
  * 전담하므로 여기서 중복 발행하지 않는다.
  */
+// 한글 받침 유무로 주격/보조사 선택 — "도착예정일이", "단가가"처럼 자연스럽게(이(가) 병기 제거).
+function hasBatchim(word: string): boolean {
+  const base = word.replace(/\([^)]*\)\s*$/, '').trim(); // 뒤 영문 병기 괄호는 판정에서 제외
+  const c = base.charCodeAt(base.length - 1);
+  if (Number.isNaN(c) || c < 0xac00 || c > 0xd7a3) return true; // 비한글은 받침 있는 것으로 간주(이/은)
+  return (c - 0xac00) % 28 !== 0;
+}
+const josaIGa = (w: string) => (hasBatchim(w) ? '이' : '가');
+const josaEunNeun = (w: string) => (hasBatchim(w) ? '은' : '는');
+
 export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
@@ -60,8 +70,8 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
         id: `input-missing-${field}`,
         docType,
         severity: 'error',
-        message: `${label}이(가) 입력되지 않았습니다.`,
-        field,
+        message: `${label}${josaIGa(label)} 입력되지 않았습니다.`,
+        field
       });
     }
   }
@@ -90,16 +100,16 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
           id: `input-nan-${field}`,
           docType,
           severity: 'error',
-          message: `${label}은(는) 숫자로 입력해야 합니다.`,
-          field,
+          message: `${label}${josaEunNeun(label)} 숫자로 입력해야 합니다.`,
+          field
         });
       } else if (num <= 0) {
         issues.push({
           id: `input-nonpositive-${field}`,
           docType,
           severity: 'error',
-          message: `${label}은(는) 0보다 커야 합니다.`,
-          field,
+          message: `${label}${josaEunNeun(label)} 0보다 커야 합니다.`,
+          field
         });
       }
     }
@@ -311,8 +321,8 @@ export function validateRequiredInputs(profile: TradeProfile): ValidationIssue[]
         id: `input-missing-${field}`,
         docType: 'invoice',
         severity: 'error',
-        message: `${label}이(가) 입력되지 않았습니다.`,
-        field,
+        message: `${label}${josaIGa(label)} 입력되지 않았습니다.`,
+        field
       });
     }
   }

@@ -3055,7 +3055,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 </div>
                 )}
 
-                {/* Right Guide Card — 입력 대기 / 진행 / 완료 3-상태 */}
+                {/* Right Guide Card — 진행/고칠 항목/최근 결과 상태에서만 표시 (입력 대기 안내 카드는 제거) */}
+                {(isProcessing || fixListIssues.length > 0 || documents.some(d => d.status !== 'not_started')) && (
                 <div className="info-card">
                   {isProcessing ? (
                     (() => {
@@ -3181,13 +3182,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                         결과 화면 다시 보기
                       </button>
                     </div>
-                  ) : (
-                    <div className="info-idle">
-                      <span className="visual-ship visual-ship-sm">🚢</span>
-                      <p className="info-desc">왼쪽에 거래 정보를 입력하고 [필요 서류 자동 생성]을 누르면 여기에 검증 결과와 생성된 문서가 표시됩니다.</p>
-                    </div>
-                  )}
+                  ) : null}
                 </div>
+                )}
               </div>
             ) : (
               /* --- 결과 리포트 대시보드 모드 --- */
