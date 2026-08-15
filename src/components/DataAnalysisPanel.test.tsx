@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DataAnalysisPanel, { recentRange } from './DataAnalysisPanel';
 import {
   getCountryTradeStats,
+  getCustomsExchangeRate,
   getItemTradeStats,
   getTotalTradeStats,
 } from '../services/customsApiService';
@@ -15,7 +16,9 @@ vi.mock('../services/customsApiService', () => ({
   getTotalTradeStats: vi.fn(),
   getCountryTradeStats: vi.fn(),
   getItemTradeStats: vi.fn(),
-  getCustomsExchangeRate: vi.fn(),
+  // 기본값을 reject로 두면 컴포넌트의 "환율 조회 실패 시 카드만 생략" 폴백을 타서
+  // 환율 카드와 무관한 테스트가 undefined 요소로 죽지 않는다.
+  getCustomsExchangeRate: vi.fn(() => Promise.reject(new Error('not mocked'))),
 }));
 
 const totalMock = vi.mocked(getTotalTradeStats);
@@ -38,6 +41,8 @@ describe('DataAnalysisPanel', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+    // afterEach의 vi.resetAllMocks()가 팩토리 기본 구현을 지우므로 매 테스트 전에 다시 건다.
+    vi.mocked(getCustomsExchangeRate).mockRejectedValue(new Error('not mocked'));
   });
 
   afterEach(() => {

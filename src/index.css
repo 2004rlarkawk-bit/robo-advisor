@@ -1147,6 +1147,10 @@ body {
   gap: 24px;
   align-items: stretch;
 }
+/* 오른쪽 안내 카드가 없을 때(입력 대기 상태)는 폼이 전체 폭 사용 */
+.dashboard-grid:has(> :only-child) {
+  grid-template-columns: 1fr;
+}
 
 /* Three-column Dashboard (Result View) */
 .result-header-summary {
