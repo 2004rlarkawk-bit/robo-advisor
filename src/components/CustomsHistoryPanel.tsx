@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileCheck2, FolderOpen, Eye, Download, Search } from 'lucide-react';
+import { FileCheck2, FolderOpen, Download, Search } from 'lucide-react';
 import type { CustomsCargoProgressResult, SavedTrade } from '../types';
 import { fetchSavedTrades } from '../services/storageService';
 import { getCustomsCargoProgress } from '../services/customsApiService';
@@ -249,9 +249,6 @@ const isCheckingCargo = checkingTradeId === trade.id;
                   disabled={isCheckingCargo}
                 >
                   <Search size={15} /> {isCheckingCargo ? '조회 중...' : '통관 상태 조회'}
-                </button>
-                <button type="button" className="draft-tray-resume" onClick={() => onLoad(trade)}>
-                  <Eye size={15} /> 상세 조회
                 </button>
                 <button
                   type="button"
