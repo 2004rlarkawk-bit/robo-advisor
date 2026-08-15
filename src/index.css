@@ -3148,10 +3148,8 @@ body {
 .rv-done-title { font-size: 16px; font-weight: 800; color: #166534; }
 .rv-done-sub { margin: 4px 0 0; font-size: 13px; color: #3f6b4e; line-height: 1.5; }
 
-/* 확인 항목 카드 — 심각도별 좌측 컬러 바 + 리딩 마커(번호/아이콘) + 서류 칩 */
-.mobile-fix-card.sev-error   { border-left: 4px solid var(--error-color); }
-.mobile-fix-card.sev-warning { border-left: 4px solid var(--warning-color); }
-.mobile-fix-card.sev-info    { border-left: 4px solid var(--border-color); background: #fbfdff; }
+/* 확인 항목 카드 — 좌측 컬러 바 없이 흰 카드 + 리딩 마커(번호/아이콘) + 서류 칩 */
+.mobile-fix-card.sev-info { background: #fbfdff; }
 
 .fix-card__head { display: flex; align-items: flex-start; gap: 12px; }
 
@@ -3162,7 +3160,7 @@ body {
 }
 .fix-card__marker--num  { border-radius: 50%; }
 .fix-card__marker--icon { border-radius: 9px; }
-.sev-warning .fix-card__marker { background: #fdeccf; color: var(--warning-color); border: 1.5px solid #f6d29a; }
+.sev-warning .fix-card__marker { background: #fff; color: var(--warning-color); border: 1.5px solid #f0b95e; }
 .sev-error   .fix-card__marker { background: var(--error-bg);   color: var(--error-color); }
 .sev-info    .fix-card__marker { background: #eef2f7; color: #64748b; }
 

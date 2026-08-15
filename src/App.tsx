@@ -3353,8 +3353,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                             (a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9)
                           );
                           const sevMeta: Record<string, { label: string; hint: string; cls: string; icon: JSX.Element }> = {
-                            error: { label: '반드시 수정', hint: '제출 차단 · 먼저 해결', cls: 'sev-error', icon: <OctagonAlert size={17} strokeWidth={2.4} /> },
-                            warning: { label: '보완 권장', hint: '해소 권장', cls: 'sev-warning', icon: <AlertTriangle size={17} strokeWidth={2.4} /> },
+                            error: { label: '반드시 수정', hint: '', cls: 'sev-error', icon: <OctagonAlert size={17} strokeWidth={2.4} /> },
+                            warning: { label: '보완 권장', hint: '', cls: 'sev-warning', icon: <AlertTriangle size={17} strokeWidth={2.4} /> },
                           };
                           const docLabelOf = (dt: string): string => (({
                             invoice: '상업송장', packing_list: '패킹리스트', bl: '선하증권 B/L', transport_request: '수출 운송의뢰서',
