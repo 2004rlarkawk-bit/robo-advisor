@@ -151,7 +151,7 @@ const readiness =
 const cargoProgress = cargoProgressByTradeId[trade.id];
 const isCheckingCargo = checkingTradeId === trade.id;
           return (
-            <div key={trade.id} className="draft-tray-item">
+            <div key={trade.id} className="draft-tray-item customs">
               <div className="draft-tray-info">
                 <div className="draft-tray-line1">
                   <span className={`trade-type-badge ${trade.profile.tradeType}`}>
@@ -160,17 +160,24 @@ const isCheckingCargo = checkingTradeId === trade.id;
                   <span className="draft-tray-name">
                     {trade.profile.itemName || '(품목명 없음)'}
                   </span>
-                  <span className="draft-tray-inline-meta">
-                    {[trade.profile.hsCode ? `HS ${trade.profile.hsCode}` : '', dateLabel].filter(Boolean).join(' · ')}
-                  </span>
+                  {trade.profile.hsCode && (
+                    <span className="draft-tray-inline-meta">HS {trade.profile.hsCode}</span>
+                  )}
+                  <span className="draft-tray-inline-meta">{dateLabel}</span>
                 </div>
 
-                <span className="draft-tray-route">
-                  {trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'} · 통관 준비도 {readiness}% · 화주 서류 {completedShipperDocs}/{shipperDocs.length} 완료 · 외부 발급 {externalDocs}건
+                <span className="draft-tray-route customs-meta">
+                  <span>{trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'}</span>
+                  <span className="meta-dot">·</span>
+                  <span>통관 준비도 {readiness}%</span>
+                  <span className="meta-dot">·</span>
+                  <span>화주 서류 {completedShipperDocs}/{shipperDocs.length} 완료</span>
+                  <span className="meta-dot">·</span>
+                  <span>외부 발급 {externalDocs}건</span>
                 </span>
 
                 {documentStatusItems.length > 0 && (
-                  <div className="draft-tray-line1" style={{ gap: 6 }}>
+                  <div className="draft-tray-line1 customs-badges">
                     {documentStatusItems.map((item) => (
                       <span key={item.label} className={`trade-status-badge ${item.doc?.status || 'not_started'}`}>
                         {item.label} {item.doc?.statusText || '상태 없음'}

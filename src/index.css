@@ -3607,6 +3607,14 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .draft-tray-resume.primary { background: #0b57d0; border-color: #0b57d0; color: #fff; }
 .draft-tray-resume.primary:hover { background: #0a4cb8; border-color: #0a4cb8; color: #fff; }
 .draft-tray-resume:disabled { opacity: .6; cursor: default; }
+/* 통관 내역 카드: 정보 그룹이 독립적으로 읽히도록 여백을 넓게 */
+.draft-tray-item.customs { padding: 26px 32px; }
+.draft-tray-item.customs .draft-tray-info { gap: 15px; }
+.draft-tray-item.customs .draft-tray-line1 { gap: 16px; }
+.draft-tray-item.customs .customs-badges { gap: 10px 12px; }
+.draft-tray-item.customs .draft-tray-actions.vertical { padding-left: 24px; }
+.customs-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.customs-meta .meta-dot { color: #cbd5e1; }
 .draft-tray-more {
   align-self: center; font-size: 13.5px; font-weight: 600; color: #475569;
   background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 18px;
