@@ -3566,7 +3566,8 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: 'ì ‘ê
 .draft-tray-body { padding: 16px 20px 18px; border-top: 1px solid #eef2f7; display: flex; flex-direction: column; gap: 10px; }
 .draft-tray-item {
   display: flex; align-items: center; gap: 14px;
-  border: 1px solid #e8edf3; border-left: 4px solid #cbd5e1; border-radius: 12px; padding: 14px 18px;
+  border: 1px solid #e8edf3; border-radius: 12px; padding: 16px 18px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
 }
 .draft-tray-info { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .draft-tray-line1 { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
@@ -3582,8 +3583,8 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: 'ì ‘ê
 }
 .draft-tray-resume:hover { border-color: #0b57d0; color: #0b57d0; background: #f8faff; }
 .draft-tray-delete {
-  border: none; background: transparent; color: #cbd5e1; border-radius: 9px;
-  width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  border: 1px solid #cbd5e1; background: #fff; color: #64748b; border-radius: 9px;
+  width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
 }
 .draft-tray-delete:hover { color: #dc2626; background: #fef2f2; }
 .draft-tray-more {

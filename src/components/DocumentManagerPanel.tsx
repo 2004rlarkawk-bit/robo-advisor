@@ -18,7 +18,8 @@ export default function DocumentManagerPanel({
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [open, setOpen] = useState(true);
+  // 문서 관리 탭 진입 시 임시보관함이 먼저 보이도록 기본 접힘
+  const [open, setOpen] = useState(false);
 
   const loadTrades = useCallback(async () => {
     setIsLoading(true);

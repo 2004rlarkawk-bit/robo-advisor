@@ -48,7 +48,7 @@ function trayStatusOf(t: SavedTrade): { text: string; color: string; bg: string;
   const dl = deadlineInfo(t);
   if (errors > 0) return { text: `필수 오류 ${errors}건`, color: '#b91c1c', bg: '#fef2f2', accent: '#ef4444' };
   if (dl?.urgent) return { text: dl.label, color: '#b91c1c', bg: '#fef2f2', accent: '#ef4444' };
-  if (warns > 0) return { text: `보완 필요 ${warns}건`, color: '#b45309', bg: '#fffbeb', accent: '#f59e0b' };
+  if (warns > 0) return { text: `보완 권장 ${warns}건`, color: '#b45309', bg: '#fffbeb', accent: '#f59e0b' };
   if (t.status === 'in_progress') return { text: '입력 중', color: '#64748b', bg: '#f1f5f9', accent: '#cbd5e1' };
   return { text: '생성 준비 완료', color: '#15803d', bg: '#f0fdf4', accent: '#22c55e' };
 }
@@ -71,8 +71,8 @@ export default function TradeManagerPanel({ onLoad, embedded }: Props) {
   const [detail, setDetail] = useState<SavedTrade | null>(null);
   const [memos, setMemos] = useState<Record<string, string>>(loadMemos);
   const [editingMemo, setEditingMemo] = useState<string | null>(null);
-  // 임시보관함(임베드) 전용: 접힘 상태 · 전체 보기
-  const [trayOpen, setTrayOpen] = useState(false);
+  // 임시보관함(임베드) 전용: 접힘 상태 · 전체 보기 — 문서 관리 탭 진입 시 바로 보이도록 기본 펼침
+  const [trayOpen, setTrayOpen] = useState(true);
   const [trayShowAll, setTrayShowAll] = useState(false);
 
   const loadTrades = useCallback(async () => {
@@ -176,7 +176,7 @@ export default function TradeManagerPanel({ onLoad, embedded }: Props) {
               const ports = [p.loadPort, p.dischargePort].filter(Boolean).join(' → ');
               const route = [country, ports, p.incoterms].filter(Boolean).join(' · ');
               return (
-                <div key={trade.id} className="draft-tray-item" style={{ borderLeftColor: st.accent }}>
+                <div key={trade.id} className="draft-tray-item">
                   <div className="draft-tray-info">
                     <div className="draft-tray-line1">
                       <span className={`trade-type-badge ${p.tradeType}`}>{p.tradeType === 'export' ? '수출' : '수입'}</span>
