@@ -3589,6 +3589,24 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
   width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
 }
 .draft-tray-delete:hover { color: #dc2626; background: #fef2f2; }
+/* 섹션 헤더 아이콘 박스 (문서 관리·통관 내역 공통) */
+.doc-panel-icon {
+  width: 46px; height: 46px; border: 1px solid #dbe3ec; border-radius: 12px;
+  background: #fff; color: #0b57d0; display: inline-flex; align-items: center;
+  justify-content: center; flex-shrink: 0;
+}
+.draft-tray-head-main, .doc-panel-head-main { flex: 1; }
+/* 행 1줄에 붙는 회색 보조 정보 (HS · 날짜) */
+.draft-tray-inline-meta { font-size: 13.5px; color: #64748b; font-weight: 500; }
+/* 통관 내역: 우측 세로 버튼 스택 + 본문과 구분선 */
+.draft-tray-actions.vertical {
+  flex-direction: column; align-items: stretch; align-self: stretch; justify-content: center;
+  border-left: 1px solid #e2e8f0; padding-left: 16px; min-width: 178px; gap: 9px;
+}
+.draft-tray-actions.vertical .draft-tray-resume { justify-content: center; }
+.draft-tray-resume.primary { background: #0b57d0; border-color: #0b57d0; color: #fff; }
+.draft-tray-resume.primary:hover { background: #0a4cb8; border-color: #0a4cb8; color: #fff; }
+.draft-tray-resume:disabled { opacity: .6; cursor: default; }
 .draft-tray-more {
   align-self: center; font-size: 13.5px; font-weight: 600; color: #475569;
   background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 18px;
@@ -3598,6 +3616,7 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 @media (max-width: 640px) {
   .draft-tray-item { flex-direction: column; align-items: stretch; gap: 10px; }
   .draft-tray-actions { margin-left: 0; justify-content: flex-end; }
+  .draft-tray-actions.vertical { border-left: none; padding-left: 0; }
 }
 
 /* ── 최종 제출된 거래 (문서 관리 탭, 임시보관함과 짝 맞춘 카드) ─────────── */

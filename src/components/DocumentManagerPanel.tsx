@@ -97,9 +97,9 @@ export default function DocumentManagerPanel({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
+        <span className="doc-panel-icon"><FileText size={22} /></span>
         <div className="doc-panel-head-main">
           <span className="doc-panel-title">
-            <FileText size={19} />
             최종 제출된 거래
             <span className="doc-panel-count">
               {trades.length}건

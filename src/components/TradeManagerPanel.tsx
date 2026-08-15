@@ -156,9 +156,10 @@ export default function TradeManagerPanel({ onLoad, embedded }: Props) {
           aria-expanded={trayOpen}
           onClick={() => setTrayOpen((v) => !v)}
         >
+          <span className="doc-panel-icon"><Layers size={22} /></span>
           <div className="draft-tray-head-main">
             <span className="draft-tray-title">
-              <Layers size={19} /> 임시보관함
+              임시보관함
               <span className="draft-tray-count">{trades.length}건</span>
             </span>
             <span className="draft-tray-sub">작성 중인 거래를 이어서 작업할 수 있어요.</span>

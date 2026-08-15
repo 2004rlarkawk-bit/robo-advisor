@@ -91,9 +91,9 @@ const handleCheckCargoProgress = async (trade: SavedTrade) => {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
+        <span className="doc-panel-icon"><FileCheck2 size={22} /></span>
         <div className="doc-panel-head-main">
           <span className="doc-panel-title">
-            <FileCheck2 size={19} />
             통관 내역
             <span className="doc-panel-count">{customsTrades.length}건</span>
           </span>
@@ -140,11 +140,6 @@ const documentStatusItems = [
   { label: 'C/O', doc: coDoc },
   { label: 'INS', doc: insuranceDoc },
 ].filter((item) => item.doc && item.doc.status !== 'not_needed');
-const customsStage =
-  trade.profile.tradeType === 'export'
-    ? '수출신고서 초안 생성'
-    : '수입신고 준비';
-
 const readiness =
   shipperDocs.length > 0
     ? Math.round((completedShipperDocs / shipperDocs.length) * 100)
@@ -165,11 +160,8 @@ const isCheckingCargo = checkingTradeId === trade.id;
                   <span className="draft-tray-name">
                     {trade.profile.itemName || '(품목명 없음)'}
                   </span>
-                  {trade.profile.hsCode && (
-                    <span className="document-hs-code">HS {trade.profile.hsCode}</span>
-                  )}
-                  <span className={`trade-status-badge ${customsDoc?.status || 'not_started'}`}>
-                    {customsStage}
+                  <span className="draft-tray-inline-meta">
+                    {[trade.profile.hsCode ? `HS ${trade.profile.hsCode}` : '', dateLabel].filter(Boolean).join(' · ')}
                   </span>
                 </div>
 
@@ -198,13 +190,12 @@ const isCheckingCargo = checkingTradeId === trade.id;
                   </div>
                 )}
 
-                <span className="draft-tray-time">{dateLabel}</span>
               </div>
 
-              <div className="draft-tray-actions">
+              <div className="draft-tray-actions vertical">
                 <button
                   type="button"
-                  className="draft-tray-resume"
+                  className="draft-tray-resume primary"
                   onClick={() => void handleCheckCargoProgress(trade)}
                   disabled={isCheckingCargo}
                 >
