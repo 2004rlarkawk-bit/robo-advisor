@@ -37,6 +37,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
               : 0,
             measurement: index === 0 ? profile.measurement || '' : '',
             packageCount: index === 0 ? Number(profile.packageCount) || 0 : 0,
+            eaPerBox: index === 0 ? Number(profile.eaPerBox) || 0 : 0,
             packageUnit: index === 0 ? profile.packageType || '' : '',
             shippingMarks: index === 0 ? profile.shippingMarks || undefined : undefined,
           }))
@@ -54,6 +55,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
             grossWeight: Number(profile.grossWeight || profile.weight) || 0,
             measurement: profile.measurement || '',
             packageCount: Number(profile.packageCount) || 0,
+            eaPerBox: Number(profile.eaPerBox) || 0,
             packageUnit: profile.packageType || '',
             shippingMarks: profile.shippingMarks || undefined,
           }];
@@ -216,6 +218,8 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         grossWeight: it.grossWeight,
         dimensions: it.measurement || '',
         packageCount: it.packageCount,
+        // 0은 "미입력"과 같은 취급(R10이 boxes>0 && ea>0만 대조 대상으로 삼음) → 공란(undefined)으로 유지.
+        eaPerBox: it.eaPerBox ? it.eaPerBox : undefined,
         packageType: it.packageUnit || '',
         marks: it.shippingMarks,
       }));

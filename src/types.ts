@@ -106,6 +106,9 @@ export interface TradeProfile {
 
   packageCount?: NumericInput;
   packageType?: string;
+  // 박스당 수량(EA/Box) — packageCount(박스 수)와 곱하면 패킹리스트 총 EA.
+  // R10(complianceRules.ts packingTotalEA)이 인보이스 수량과 대조하는 데 쓰인다.
+  eaPerBox?: NumericInput;
   netWeight?: NumericInput;
   grossWeight?: NumericInput;
   measurement?: string;
@@ -316,7 +319,8 @@ export interface TradeItem {
   netWeight: number;      // 순중량 → C/I net_weight, P/L quantity_or_net_weight
   grossWeight: number;    // → P/L gross_weight
   measurement: string;    // 용적(CBM) → P/L measurement
-  packageCount: number;   // → P/L packages(수)
+  packageCount: number;   // → P/L packages(수, boxes로 취급)
+  eaPerBox?: number;      // 박스당 수량 → P/L R10(패킹↔인보이스 수량 대조)의 boxes×eaPerBox 산출에 사용
   packageUnit: string;    // → P/L packages(단위: CTNS 등)
   shippingMarks?: string; // 품목별 화인 override — 비면 문서레벨 상속. C/I로 승격하지 않음.
 }
@@ -345,6 +349,8 @@ export interface InvoiceItem {
   grossWeight: number;
   dimensions: string;
   packageCount?: number;
+  // 박스당 수량(EA/Box) — packageCount(박스 수)를 boxes로 취급해 R10 대조에 쓴다.
+  eaPerBox?: number;
   packageType?: string;
 
   [key: string]: any;

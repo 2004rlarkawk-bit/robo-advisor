@@ -8,6 +8,7 @@ vi.mock('../../services/customsApiService', async (importOriginal) => ({
   }),
 }));
 import { DocumentAgent } from '../DocumentAgent';
+import { checkPackingInvoiceConsistency } from '../complianceRules';
 import { escapeHtml } from '../templates/escapeHtml';
 import { HSCodeResult, AgentLog } from '../types';
 import { TradeProfile, TradeItem } from '../../types';
@@ -111,6 +112,31 @@ describe('DocumentAgent — 인보이스·패킹리스트 중량 일관성', () 
     expect(result.generatedDocs.invoice?.packageType).toBe('SACK');
     expect(result.generatedDocs.packingList?.packageType).toBe('SACK');
     expect(mapPackingListToDocxSchema(result.generatedDocs.packingList!).items[0].packages).toBe('4 SACK');
+  });
+
+  it('박스당 수량(eaPerBox) 입력 시 boxes×eaPerBox가 인보이스 수량과 대조되어 R10이 실제로 발동한다', async () => {
+    // 포장 수량(packageCount=박스 수) 4 × 박스당 수량(eaPerBox) 20 = 80 ≠ 인보이스 수량 100
+    const result = await runAgent({ quantity: 100, packageCount: 4, eaPerBox: 20 });
+
+    // 화주 폼 입력이 패킹리스트 품목까지 흘러간다(죽은 필드였던 경로 활성화)
+    expect(result.generatedDocs.packingList?.items[0].packageCount).toBe(4);
+    expect(result.generatedDocs.packingList?.items[0].eaPerBox).toBe(20);
+
+    // 패킹리스트 XLSX G열(eaPerBox)·H열(boxes)도 실값으로 채워진다
+    const schema = mapPackingListToSchema(result.generatedDocs.packingList!);
+    expect(schema.items[0].eaPerBox).toBe(20);
+    expect(schema.items[0].boxes).toBe(4);
+
+    // R10: 80 ≠ 100 → 경고 발동
+    const issues = checkPackingInvoiceConsistency(result.generatedDocs.invoice!, result.generatedDocs.packingList!);
+    expect(issues.map((i) => i.id)).toContain('r10-packing-qty-mismatch');
+  });
+
+  it('eaPerBox 미입력이면 R10 대조는 여전히 건너뛴다(오탐 방지 유지)', async () => {
+    const result = await runAgent({ quantity: 100, packageCount: 4 }); // eaPerBox 없음
+
+    const issues = checkPackingInvoiceConsistency(result.generatedDocs.invoice!, result.generatedDocs.packingList!);
+    expect(issues.map((i) => i.id)).not.toContain('r10-packing-qty-mismatch');
   });
 
   it('수출 Invoice Date는 레거시 입력값이 아니라 실제 생성일을 사용한다', async () => {
