@@ -2518,13 +2518,13 @@ body {
 .import-card-heading h2 { margin: 3px 0 0; font-size: 17px; }
 .ai-badge, .source-badge { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: #ede9fe; color: #6d28d9; font-size: 10px; font-weight: 700; }
 .source-badge { background: #e0f2fe; color: #0369a1; }
-.import-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.import-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 24px; }
 /* 섹션 제목(A/B/C)이 fieldset 안에 들어가므로 자식 선택자만으로는 안 잡힌다 */
 .import-card > h3,
 .import-card .workspace-readonly-fieldset > h3 { margin: 30px 0 14px; font-size: 15px; }
 .import-card .workspace-readonly-fieldset > h3:first-child { margin-top: 4px; }
-.import-party-fieldset, .import-item-fieldset { position: relative; min-width: 0; margin: 0 0 14px; padding: 16px; border: 1px solid var(--border-color); border-radius: 10px; }
-.import-party-fieldset legend, .import-item-fieldset legend { padding: 0 7px; color: var(--text-dark); font-weight: 700; }
+.import-party-fieldset, .import-item-fieldset { position: relative; min-width: 0; margin: 0 0 20px; padding: 20px 24px 24px; border: 1px solid var(--border-color); border-radius: 12px; }
+.import-party-fieldset legend, .import-item-fieldset legend { padding: 0 8px; color: var(--text-dark); font-weight: 800; font-size: 15px; }
 .import-party-actions { display: flex; justify-content: flex-end; margin: -5px 0 12px; }
 .import-party-actions .btn { padding: 7px 11px; font-size: 12px; }
 .import-item-fieldset > .import-delete { position: absolute; top: 9px; right: 10px; }
@@ -2550,7 +2550,8 @@ body {
 .import-choice-button.selected { border-color: #94a3b8; background: #e2e8f0; color: var(--text-dark); font-weight: 600; }
 .import-choice-button:disabled { cursor: not-allowed; opacity: .45; }
 .import-co-status small { display: block; margin-top: 8px; color: var(--text-light); }
-.user-editable { border-left: 3px solid #8b5cf6 !important; }
+/* AI 추출값 입력칸 — 보라 액센트 제거, 기본 테두리의 깔끔한 흰 입력칸으로 통일 */
+.user-editable { background: #fff; }
 .import-validation-list { margin-top: 16px; }
 .import-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .hs-suggestion-list { display: grid; gap: 9px; }
@@ -2592,7 +2593,7 @@ body {
 .cargo-timeline li span { position: absolute; z-index: 1; top: 3px; left: 50%; width: 15px; height: 15px; transform: translateX(-50%); border-radius: 50%; background: #cbd5e1; }
 .cargo-timeline li.done::before, .cargo-timeline li.done span, .cargo-timeline li.current::before, .cargo-timeline li.current span { background: var(--primary-color); }
 .cargo-timeline li.current { color: var(--primary-color); font-weight: 700; }
-.arrival-notice-card { border: 1px solid #c4b5fd; }
+.arrival-notice-card { border: 1px solid #cbd5e1; }
 .arrival-notice-file, .arrival-notice-picker { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--border-color); border-radius: 10px; background: #fafafa; }
 .arrival-notice-file > div, .arrival-notice-picker > span { flex: 1; min-width: 0; }
 .arrival-notice-file strong, .arrival-notice-file span, .arrival-notice-picker strong, .arrival-notice-picker small { display: block; }
