@@ -11,6 +11,10 @@ import type { Incoterms, NumericInput, ShipperItem, ShipperSupplementalState, Tr
 import CountrySelect from './CountrySelect';
 import { useShipperHSCodeSuggestions } from '../hooks/useShipperHSCodeSuggestions';
 import {
+  fetchFrequentTradePartners,
+  type FrequentTradePartner,
+} from '../services/frequentTradePartnerService';
+import {
   calculateShipperItemAmount,
   createEmptyShipperItem,
   EMPTY_GOODS_DESCRIPTION_MESSAGE,
@@ -33,6 +37,7 @@ interface Props {
   statusContent?: ReactNode;
   profileSignerDefault?: string;
   tradeId?: string | null;
+  userId?: string;
   onProfilePatch: (patch: Partial<TradeProfile>) => void;
   onItemsChange: (items: ShipperItem[]) => void;
   onSupplementalChange: (state: ShipperSupplementalState) => void;
@@ -55,6 +60,21 @@ function numericValue(eventValue: string): NumericInput {
   return eventValue === '' ? '' : Number(eventValue);
 }
 
+function normalizePartyValue(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}
+
+function formatPartnerDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date).replace(/\. /g, '.').replace(/\.$/, '');
+}
+
 export default function ShipperWorkspaceForm({
   profile,
   items,
@@ -64,6 +84,7 @@ export default function ShipperWorkspaceForm({
   statusContent,
   profileSignerDefault = '',
   tradeId,
+  userId,
   onProfilePatch,
   onItemsChange,
   onSupplementalChange,
@@ -78,6 +99,8 @@ export default function ShipperWorkspaceForm({
   const [forceCustomLoadPort, setForceCustomLoadPort] = useState(false);
   const [forceCustomDischargePort, setForceCustomDischargePort] = useState(false);
   const [forceCustomPackageType, setForceCustomPackageType] = useState(false);
+  const [frequentPartners, setFrequentPartners] = useState<FrequentTradePartner[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(Boolean(userId));
 
   const normalizedLoadPort = normalizeExportPortValue(profile.loadPort);
   const normalizedDischargePort = normalizeExportPortValue(profile.dischargePort);
@@ -93,6 +116,30 @@ export default function ShipperWorkspaceForm({
   const packageTypeSelection = forceCustomPackageType || (profile.packageType && !knownPackageType)
     ? OTHER_PACKAGE_TYPE_VALUE
     : knownPackageType ?? '';
+
+  useEffect(() => {
+    let active = true;
+    if (!userId) {
+      setFrequentPartners([]);
+      setPartnersLoading(false);
+      return () => { active = false; };
+    }
+
+    setPartnersLoading(true);
+    void fetchFrequentTradePartners(userId)
+      .then((partners) => {
+        if (active) setFrequentPartners(partners);
+      })
+      .catch((error: unknown) => {
+        console.warn('자주 거래한 거래처 조회 실패 — 직접 입력을 유지합니다:', error);
+        if (active) setFrequentPartners([]);
+      })
+      .finally(() => {
+        if (active) setPartnersLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [userId]);
 
   useEffect(() => {
     setIncotermsPlaceSource(null);
@@ -218,6 +265,32 @@ export default function ShipperWorkspaceForm({
     }
   };
 
+  const loadFrequentPartner = (partner: FrequentTradePartner) => {
+    const buyerMatchesConsignee =
+      normalizePartyValue(partner.buyer.name) === normalizePartyValue(partner.consignee.name) &&
+      normalizePartyValue(partner.buyer.address) === normalizePartyValue(partner.consignee.address) &&
+      normalizePartyValue(partner.buyer.country) === normalizePartyValue(partner.consignee.country);
+    const consigneeMatchesNotifyParty =
+      normalizePartyValue(partner.consignee.name) === normalizePartyValue(partner.notifyParty.name) &&
+      normalizePartyValue(partner.consignee.address) === normalizePartyValue(partner.notifyParty.address);
+
+    onProfilePatch({
+      buyerName: partner.buyer.name,
+      buyerAddress: partner.buyer.address,
+      buyerCountry: partner.buyer.country,
+      partnerName: partner.consignee.name,
+      partnerAddress: partner.consignee.address,
+      partnerCountry: partner.consignee.country,
+      notifyPartyName: partner.notifyParty.name,
+      notifyPartyAddress: partner.notifyParty.address,
+    });
+    onSupplementalChange({
+      ...supplemental,
+      buyerMatchesConsignee,
+      consigneeMatchesNotifyParty,
+    });
+  };
+
   return (
     <div className="form-card shipper-workspace-form">
       <div className="trade-section-header">
@@ -274,7 +347,26 @@ export default function ShipperWorkspaceForm({
 
       <details className="form-section">
         <summary className="form-section-summary">2. 거래처 정보</summary>
-        <div className="form-message info">저장된 거래처 없음 · 아래에서 직접 입력해 주세요.</div>
+        {partnersLoading ? (
+          <div className="form-message info" role="status">자주 거래한 거래처를 불러오는 중입니다.</div>
+        ) : frequentPartners.length > 0 ? (
+          <div className="frequent-partners" aria-label="자주 거래한 거래처">
+            <strong className="frequent-partners-title">자주 거래한 거래처</strong>
+            <div className="frequent-partner-list">
+              {frequentPartners.map((partner, index) => (
+                <div className="frequent-partner-card" key={partner.key}>
+                  <div className="frequent-partner-copy">
+                    <strong>{index + 1}. {partner.buyer.name}</strong>
+                    <span>{partner.transactionCount}회 거래 · 최근 거래 {formatPartnerDate(partner.lastTransactionDate)}</span>
+                  </div>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => loadFrequentPartner(partner)}>불러오기</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="form-message info">저장된 거래처가 없습니다.<br />아래에서 직접 입력해 주세요.</div>
+        )}
         <div className="shipper-checkbox-row">
           <label><input type="checkbox" checked={supplemental.buyerMatchesConsignee} onChange={(event) => setBuyerMatchesConsignee(event.target.checked)} /> Buyer와 Consignee 동일</label>
           <label><input type="checkbox" checked={supplemental.consigneeMatchesNotifyParty} onChange={(event) => setConsigneeMatchesNotify(event.target.checked)} /> Consignee와 Notify Party 동일</label>

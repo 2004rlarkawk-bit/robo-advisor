@@ -5,13 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
 import { EMPTY_SHIPPER_SUPPLEMENTAL_STATE } from '../utils/shipperForm';
 
-const { recommendMock } = vi.hoisted(() => ({
+const { recommendMock, frequentPartnersMock } = vi.hoisted(() => ({
   recommendMock: vi.fn(),
+  frequentPartnersMock: vi.fn(),
 }));
 
 vi.mock('../services/shipperHSCodeSuggestionService', () => ({
   recommendShipperHSCode: recommendMock,
   normalizeHSKCode: (code: string) => code.replace(/[\s.-]/g, ''),
+}));
+
+vi.mock('../services/frequentTradePartnerService', () => ({
+  fetchFrequentTradePartners: frequentPartnersMock,
 }));
 
 import ShipperWorkspaceForm from './ShipperWorkspaceForm';
@@ -36,6 +41,8 @@ let container: HTMLDivElement | null = null;
 
 beforeEach(() => {
   recommendMock.mockReset();
+  frequentPartnersMock.mockReset();
+  frequentPartnersMock.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -52,6 +59,7 @@ function renderForm(
   profileOverride: Partial<TradeProfile> = {},
   supplementalOverride: Partial<ShipperSupplementalState> = {},
   profileSignerDefault = '',
+  userId?: string,
 ) {
   const onItemsChange = vi.fn();
   const onProfilePatch = vi.fn();
@@ -75,6 +83,7 @@ function renderForm(
         }}
         isProcessing={false}
         profileSignerDefault={profileSignerDefault}
+        userId={userId}
         onProfilePatch={onProfilePatch}
         onItemsChange={onItemsChange}
         onSupplementalChange={onSupplementalChange}
@@ -103,6 +112,53 @@ function renderForm(
 }
 
 describe('화주용 통관 입력 폼', () => {
+  it('자주 거래한 거래처의 최신 Buyer·Consignee·Notify Party 전체와 동일 체크 상태를 불러온다', async () => {
+    const shared = { name: 'Global Import LLC', address: '250 Market Street', country: 'US', contactName: '', contact: '', businessNumber: '', taxNumber: '' };
+    frequentPartnersMock.mockResolvedValueOnce([{
+      key: 'global', transactionCount: 8, lastTransactionDate: '2026-08-12T00:00:00Z',
+      buyer: shared,
+      consignee: { ...shared },
+      notifyParty: { ...shared },
+    }]);
+    const rendered = renderForm([firstItem], false, {}, {}, '', 'user-a');
+
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(frequentPartnersMock).toHaveBeenCalledTimes(1);
+    expect(frequentPartnersMock).toHaveBeenCalledWith('user-a');
+    expect(rendered.container.textContent).toContain('8회 거래 · 최근 거래 2026.08.12');
+    rendered.rerenderProfile({ buyerName: '직접 수정한 Buyer' });
+    expect(frequentPartnersMock).toHaveBeenCalledTimes(1);
+
+    const loadButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent === '불러오기');
+    act(() => loadButton?.click());
+
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({
+      buyerName: shared.name,
+      buyerAddress: shared.address,
+      buyerCountry: shared.country,
+      partnerName: shared.name,
+      partnerAddress: shared.address,
+      partnerCountry: shared.country,
+      notifyPartyName: shared.name,
+      notifyPartyAddress: shared.address,
+    });
+    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({
+      buyerMatchesConsignee: true,
+      consigneeMatchesNotifyParty: true,
+    }));
+  });
+
+  it('추천 조회가 실패해도 빈 상태와 직접 입력 필드를 유지한다', async () => {
+    frequentPartnersMock.mockRejectedValueOnce(new Error('network'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const rendered = renderForm([firstItem], false, {}, {}, '', 'user-a');
+
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(rendered.container.textContent).toContain('저장된 거래처가 없습니다.');
+    expect(Array.from(rendered.container.querySelectorAll('label')).some((label) => label.textContent === 'Buyer 회사명')).toBe(true);
+    warn.mockRestore();
+  });
   it('영문 품명 입력란 하나만 표시하고 itemName을 직접 수정한다', () => {
     const item = { ...firstItem, itemName: "Women's Coats" };
     const rendered = renderForm([item]);

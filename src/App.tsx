@@ -2218,6 +2218,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               /* --- 거래 정보 입력 모드 --- */
               <div className="dashboard-grid">
                 <ShipperWorkspaceForm
+                  userId={user.id}
                   profile={profile}
                   items={shipperItems}
                   supplemental={shipperSupplemental}

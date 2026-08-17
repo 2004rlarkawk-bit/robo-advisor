@@ -536,6 +536,14 @@ body {
 .shipper-checkbox-row { display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 0 18px 16px; color: var(--text-dark); font-size: 13px; }
 .shipper-checkbox-row label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
 .shipper-checkbox-row input { accent-color: var(--primary-color); }
+.frequent-partners { margin: 0 18px 16px; padding: 12px; border: 1px solid #bfdbfe; border-radius: 10px; background: #f8fbff; }
+.frequent-partners-title { display: block; margin-bottom: 9px; color: #1e3a8a; font-size: 13px; }
+.frequent-partner-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.frequent-partner-card { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 10px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px; background: #fff; }
+.frequent-partner-copy { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.frequent-partner-copy strong { overflow: hidden; color: var(--text-dark); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.frequent-partner-copy span { color: var(--text-light); font-size: 11px; white-space: nowrap; }
+.frequent-partner-card .btn { flex: 0 0 auto; }
 .shipper-item-list { display: flex; flex-direction: column; gap: 12px; padding: 4px 18px 14px; }
 .shipper-item-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; background: var(--card-bg); }
 .shipper-item-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; color: var(--text-dark); font-size: 14px; }
@@ -2642,6 +2650,8 @@ body {
   .profile-grid-wide { grid-column: auto; }
   .profile-submit { max-width: none; }
   .shipper-checkbox-row, .shipper-item-actions { align-items: stretch; flex-direction: column; }
+  .frequent-partner-list { grid-template-columns: 1fr; }
+  .frequent-partner-card { align-items: flex-start; }
   .profile-delete-button { flex-basis: 104px; }
   .auth-email-row { gap: 6px; }
   .email-check-button { flex-basis: 84px; padding-inline: 6px; font-size: 12px; }
