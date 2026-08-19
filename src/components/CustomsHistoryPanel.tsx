@@ -46,19 +46,22 @@ const buildSimulatedCargoProgress = (trade: SavedTrade): CustomsCargoProgressRes
     d.setHours(hour, minute, 0, 0);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
   };
-  const loadPort = p.loadPort || 'Busan Port';
   const dischargePort = p.dischargePort || '(도착항)';
+  // 시뮬레이션 시나리오는 울산으로 고정 통일 — 신고 세관(울산세관)과
+  // 보세구역·선적·출항 장소(Ulsan Port)가 한 지역으로 일치하도록 한다.
+  const loadPort = 'Ulsan Port';
+  const customsOffice = '울산세관';
   return {
     blNo,
     status: 'success',
     statusText: '수출통관 진행 정보',
-    customsOffice: '울산세관',
+    customsOffice,
     lastProcessedAt: day(0, 14, 20),
     currentStep: '출항 완료 — 목적항 도착 대기',
     checkedAt: new Date().toISOString(),
     events: [
-      { step: '수출신고 접수', status: '완료', processedAt: day(-3, 9, 12), customsOffice: '울산세관', details: '신고인 전자신고 접수' },
-      { step: '수출신고 수리', status: '완료', processedAt: day(-3, 11, 47), customsOffice: '울산세관', details: '심사 완료 · 수리' },
+      { step: '수출신고 접수', status: '완료', processedAt: day(-3, 9, 12), customsOffice, details: '신고인 전자신고 접수' },
+      { step: '수출신고 수리', status: '완료', processedAt: day(-3, 11, 47), customsOffice, details: '심사 완료 · 수리' },
       { step: '보세구역 반입', status: '완료', processedAt: day(-2, 15, 30), location: `${loadPort} 보세구역`, details: '반입신고 완료' },
       { step: '선적(적재)', status: '완료', processedAt: day(-1, 8, 5), location: loadPort, details: '적재 이행 보고' },
       { step: '출항', status: '완료', processedAt: day(0, 14, 20), location: `${loadPort} → ${dischargePort}`, details: '선박 출항' },
