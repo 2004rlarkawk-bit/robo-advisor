@@ -314,7 +314,7 @@ body {
   gap: 24px;
   width: 100%;
   /* 콘텐츠가 화면을 꽉 채우지 않도록 폭을 제한하고 가운데 정렬 — 양옆 여백 확보 */
-  max-width: 1120px;
+  max-width: 1000px;
   margin: 0 auto;
 }
 
@@ -325,9 +325,11 @@ body {
 }
 
 .page-title {
-  font-family: var(--font-logo);
-  font-size: 28px;
-  font-weight: 800;
+  /* 로고용 Outfit은 한글 미지원이라 폴백이 섞여 어색함 — 본문 폰트로 통일 */
+  font-family: var(--font-main);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: #0f172a;
 }
 
