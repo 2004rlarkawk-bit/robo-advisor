@@ -52,13 +52,13 @@ const buildSimulatedCargoProgress = (trade: SavedTrade): CustomsCargoProgressRes
     blNo,
     status: 'success',
     statusText: '수출통관 진행 정보',
-    customsOffice: '부산세관',
+    customsOffice: '울산세관',
     lastProcessedAt: day(0, 14, 20),
     currentStep: '출항 완료 — 목적항 도착 대기',
     checkedAt: new Date().toISOString(),
     events: [
-      { step: '수출신고 접수', status: '완료', processedAt: day(-3, 9, 12), customsOffice: '부산세관', details: '신고인 전자신고 접수' },
-      { step: '수출신고 수리', status: '완료', processedAt: day(-3, 11, 47), customsOffice: '부산세관', details: '심사 완료 · 수리' },
+      { step: '수출신고 접수', status: '완료', processedAt: day(-3, 9, 12), customsOffice: '울산세관', details: '신고인 전자신고 접수' },
+      { step: '수출신고 수리', status: '완료', processedAt: day(-3, 11, 47), customsOffice: '울산세관', details: '심사 완료 · 수리' },
       { step: '보세구역 반입', status: '완료', processedAt: day(-2, 15, 30), location: `${loadPort} 보세구역`, details: '반입신고 완료' },
       { step: '선적(적재)', status: '완료', processedAt: day(-1, 8, 5), location: loadPort, details: '적재 이행 보고' },
       { step: '출항', status: '완료', processedAt: day(0, 14, 20), location: `${loadPort} → ${dischargePort}`, details: '선박 출항' },
@@ -195,14 +195,6 @@ const completedShipperDocs = shipperDocs.filter(
 const externalDocs = [blDoc, coDoc, insuranceDoc].filter(
   (doc) => doc && doc.status !== 'not_needed'
 ).length;
-const documentStatusItems = [
-  { label: 'C/I', doc: invoiceDoc },
-  { label: 'P/L', doc: packingDoc },
-  { label: 'E/D', doc: customsDoc },
-  { label: 'B/L', doc: blDoc },
-  { label: 'C/O', doc: coDoc },
-  { label: 'INS', doc: insuranceDoc },
-].filter((item) => item.doc && item.doc.status !== 'not_needed');
 const readiness =
   shipperDocs.length > 0
     ? Math.round((completedShipperDocs / shipperDocs.length) * 100)
@@ -241,16 +233,6 @@ const isCheckingCargo = checkingTradeId === trade.id;
                   <span className="meta-dot">·</span>
                   <span className="customs-meta-item"><ExternalLink size={15} />외부 발급 <b>{externalDocs}건</b></span>
                 </span>
-
-                {documentStatusItems.length > 0 && (
-                  <div className="draft-tray-line1 customs-badges">
-                    {documentStatusItems.map((item) => (
-                      <span key={item.label} className={`trade-status-badge ${item.doc?.status || 'not_started'}`}>
-                        {item.label} {item.doc?.statusText || '상태 없음'}
-                      </span>
-                    ))}
-                  </div>
-                )}
 
                 {cargoProgress && (
                   cargoProgress.status === 'success' && cargoProgress.events.length > 0 ? (
