@@ -18,6 +18,48 @@ const DOC_LABEL: Record<ImportDocumentType, string> = {
 };
 const numberValue = (value: string): number => Number(value.replace(/,/g, '')) || 0;
 
+/**
+ * LLM 검증이 넘겨주는 영문 필드 키 → 사용자용 한글 제목.
+ * 목록에 없는 키는 camelCase를 띄어쓰기로 풀어 표기한다 (raw 키 노출 방지).
+ */
+const FIELD_TITLE: Record<string, string> = {
+  weightclassification: '중량 표기 방식 불일치',
+  billofladingstatus: 'B/L 문구 확인 필요',
+  importer: 'Importer 정보 불일치',
+  consignee: 'Consignee 정보 불일치',
+  shipper: 'Shipper 정보 불일치',
+  invoicenumber: 'Invoice 번호 불일치',
+  invoicedate: 'Invoice 날짜 불일치',
+  totalamount: 'Invoice 총금액 불일치',
+  invoicetotal: 'Invoice 총금액 불일치',
+  currency: '통화 표기 불일치',
+  hscode: 'HS Code 불일치',
+  incoterms: 'Incoterms 불일치',
+  portofloading: '선적항 불일치',
+  portofdischarge: '도착항 불일치',
+  netweight: '순중량 불일치',
+  grossweight: '총중량 불일치',
+  packagecount: '포장 수량 불일치',
+  packageunit: '포장 단위 불일치',
+  sealnumber: 'Seal 번호 불일치',
+  containernumber: '컨테이너 번호 불일치',
+  origincountry: '원산지 표기 불일치',
+  description: '품명 표기 불일치',
+  vesselname: '선박명 불일치',
+  quantity: '수량 표기 불일치',
+};
+
+function titleForField(field: string): string {
+  const known = FIELD_TITLE[field.replace(/[^a-zA-Z]/g, '').toLowerCase()];
+  if (known) return known;
+  if (/[가-힣]/.test(field)) return field; // 이미 한글 제목이면 그대로
+  // camelCase → "Weight Classification" 식으로 풀어서라도 raw 키 노출은 막는다
+  const spaced = field.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function recommendationFor(field: string): string {
   const normalized = field.toLowerCase();
   if (normalized.includes('package') || normalized.includes('포장')) return 'C/I와 P/L의 포장 단위·수량을 대조하고 실제 선적 수량으로 확정하세요.';
@@ -38,14 +80,21 @@ export function assessImportRisks(
   dutyError = '',
   importerCompanyName = '',
 ): ImportRisk[] {
+  // documentId(UUID)가 사용자 화면에 그대로 노출되지 않도록 서류 이름으로 치환
+  const docNameOf = (documentId: string): string => {
+    const doc = documents.find((entry) => entry.id === documentId);
+    if (doc) return DOC_LABEL[doc.type] ?? doc.name;
+    return UUID_PATTERN.test(documentId) ? '첨부 문서' : documentId;
+  };
+
   const risks: ImportRisk[] = analysis.validations.map((validation) => ({
     id: validation.id,
     level: validation.severity === 'error' ? 'high' : 'medium',
-    item: validation.field,
+    item: titleForField(validation.field),
     cause: validation.message,
     recommendation: recommendationFor(validation.field),
     relatedDocuments: validation.documents.map((document) => DOC_LABEL[document] ?? document),
-    differentValues: validation.values?.map((entry) => `${entry.documentId}: ${entry.value}`),
+    differentValues: validation.values?.map((entry) => `${docNameOf(entry.documentId)}: ${entry.value}`),
     status: 'unresolved',
   }));
   const add = (risk: ImportRisk) => {

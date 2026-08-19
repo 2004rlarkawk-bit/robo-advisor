@@ -2589,6 +2589,35 @@ body {
 .risk-item > span { height: fit-content; padding: 3px 7px; border-radius: 999px; background: #fff; font-size: 10px; font-weight: 700; }
 .risk-item p { margin: 4px 0; font-size: 12px; }
 .risk-item small { display: block; margin-top: 3px; color: var(--text-light); }
+
+/* 수입 종합 리스크 — 수출 확인 항목(fix-card)과 같은 문법의 부속 요소 */
+.risk-resolved { opacity: 0.55; }
+.risk-check-btn {
+  align-self: center; flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
+  padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border-color);
+  background: #fff; font-size: 12.5px; font-weight: 600; color: var(--text-dark);
+  cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.risk-check-btn:hover { border-color: #94a3b8; }
+.risk-check-btn.on { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+.risk-detail { margin-top: 8px; }
+.risk-detail summary {
+  display: inline-block; padding: 2px 10px; border-radius: 999px; cursor: pointer; list-style: none;
+  background: #eef2ff; color: #4338ca; font-size: 11px; font-weight: 600;
+}
+.risk-detail summary::-webkit-details-marker { display: none; }
+.risk-detail-body {
+  margin-top: 6px; padding: 8px 12px; border-radius: 8px; background: #f8fafc;
+  border: 1px solid #e2e8f0; font-size: 12px; color: #334155; line-height: 1.55;
+}
+.risk-detail-body ul { margin: 0 0 6px; padding-left: 16px; }
+.risk-detail-body p { margin: 0; }
+.risk-pass {
+  display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px;
+  border-radius: 9px; background: #ecfdf5; color: #065f46;
+}
+.risk-pass strong { font-size: 14.5px; }
+.risk-pass p { margin: 3px 0 0; font-size: 12.5px; color: #047857; }
 .cargo-query { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; }
 .cargo-status-text { padding: 13px; border-radius: 8px; background: #f8fafc; }
 .cargo-timeline { display: grid; grid-template-columns: repeat(7, 1fr); margin: 24px 0 5px; padding: 0; list-style: none; }

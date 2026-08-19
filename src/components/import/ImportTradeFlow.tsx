@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Eye, RefreshCw, Search } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Eye, FileText, OctagonAlert, RefreshCw, Search } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
 import ImportAnalysisSummary from './ImportAnalysisSummary';
@@ -1108,25 +1108,92 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
 }
 
 function RiskSummary({ risks, onToggle }: { risks: ImportRisk[]; onToggle?: (id: string) => void }) {
+  // 수출 결과 페이지의 확인 항목과 같은 문법: 반드시 수정(high) / 보완 권장(그 외) 두 그룹.
+  const blockers = risks.filter((risk) => risk.level === 'high');
+  const advisories = risks.filter((risk) => risk.level === 'medium' || risk.level === 'low');
+  const nothingFound = blockers.length === 0 && advisories.length === 0;
+
+  let advisorySeq = 0;
+  const renderCard = (risk: ImportRisk) => {
+    const isBlocker = risk.level === 'high';
+    const resolved = risk.status === 'resolved';
+    const num = isBlocker ? 0 : ++advisorySeq;
+    const hasDetail = !!risk.differentValues?.length || !!risk.recommendation;
+    return (
+      <div key={risk.id} className={`mobile-fix-card fix-card ${isBlocker ? 'sev-error' : 'sev-warning'}${resolved ? ' risk-resolved' : ''}`}>
+        <div className="fix-card__head">
+          <span className={`fix-card__marker fix-card__marker--${isBlocker ? 'icon' : 'num'}`}>
+            {isBlocker ? <FileText size={17} /> : num}
+          </span>
+          <div className="fix-card__text">
+            <div className="fix-card__titlerow">
+              <span className="fix-card__title">{risk.item}</span>
+              {risk.relatedDocuments.slice(0, 3).map((doc) => (
+                <span key={doc} className="fix-card__doc">{doc}</span>
+              ))}
+            </div>
+            <p className="fix-card__desc">{risk.cause}</p>
+            {hasDetail && (
+              <details className="risk-detail">
+                <summary>값 비교·해결 방법</summary>
+                <div className="risk-detail-body">
+                  {!!risk.differentValues?.length && (
+                    <ul>
+                      {risk.differentValues.map((value, index) => <li key={index}>{value}</li>)}
+                    </ul>
+                  )}
+                  {risk.recommendation && <p>{risk.recommendation}</p>}
+                </div>
+              </details>
+            )}
+          </div>
+          {onToggle ? (
+            <button
+              type="button"
+              className={`risk-check-btn${resolved ? ' on' : ''}`}
+              onClick={() => onToggle(risk.id)}
+            >
+              {resolved ? <><CheckCircle2 size={14} /> 확인됨</> : '확인 완료'}
+            </button>
+          ) : resolved ? (
+            <span className="risk-check-btn on" aria-hidden><CheckCircle2 size={14} /> 확인됨</span>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <section className="form-card import-card">
       <div className="import-card-heading"><div><h2>종합 리스크</h2></div></div>
-      <div className="risk-list">
-        {risks.map((risk) => (
-          <article key={risk.id} className={`risk-item ${risk.level}`}>
-            <span>{risk.level.toUpperCase()}</span>
-            <div>
-              <strong>{risk.item}</strong>
-              <p>{risk.cause}</p>
-              {!!risk.relatedDocuments.length && <small>출처: {risk.relatedDocuments.join(', ')}</small>}
-              {!!risk.differentValues?.length && <small>서로 다른 값: {risk.differentValues.join(' / ')}</small>}
-              <small>해결 방법: {risk.recommendation}</small>
-              <small>해결 여부: {risk.status === 'resolved' ? '확인 완료' : '미확인'}</small>
+      {nothingFound ? (
+        <div className="risk-pass">
+          <CheckCircle2 size={20} />
+          <div>
+            <strong>자동 탐지된 주요 위험이 없습니다</strong>
+            <p>최종 의뢰 전 원본 문서와 한 번 더 대조하세요.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="mobile-fix-list">
+          {blockers.length > 0 && (
+            <div className="sev-section-header sev-error">
+              <span className="sev-section-icon"><OctagonAlert size={17} strokeWidth={2.4} /></span>
+              <span className="sev-section-label">반드시 수정</span>
+              <span className="sev-section-count">{blockers.length}</span>
             </div>
-            {onToggle && <button type="button" className="btn btn-secondary" onClick={() => onToggle(risk.id)}>{risk.status === 'resolved' ? '미확인으로 변경' : '확인 완료'}</button>}
-          </article>
-        ))}
-      </div>
+          )}
+          {blockers.map(renderCard)}
+          {advisories.length > 0 && (
+            <div className="sev-section-header sev-warning">
+              <span className="sev-section-icon"><AlertTriangle size={17} strokeWidth={2.4} /></span>
+              <span className="sev-section-label">보완 권장</span>
+              <span className="sev-section-count">{advisories.length}</span>
+            </div>
+          )}
+          {advisories.map(renderCard)}
+        </div>
+      )}
       <p className="import-notice">자동 분석 결과는 참고정보이며 최종 법률·통관 판단이 아닙니다.</p>
     </section>
   );
