@@ -3413,28 +3413,27 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                               <div className="fix-card__text">
                                 {(() => {
                                   // 메시지에서 근거 접미사와 마지막 (부연설명)을 분리해 렌더한다.
+                                  // 부연설명(detailLine)은 노이즈라 표시하지 않고 제목만 쓴다.
                                   const rawMsg = issue.message || '';
                                   const basisMatch = rawMsg.match(/\s*\[근거:\s*([^\]]+)\]\s*$/);
                                   const withoutBasis = basisMatch ? rawMsg.slice(0, basisMatch.index).trimEnd() : rawMsg;
                                   const parenMatch = withoutBasis.match(/\s*\(([^()]+)\)\s*$/);
                                   let mainLine = parenMatch ? withoutBasis.slice(0, parenMatch.index).trimEnd() : withoutBasis;
-                                  let detailLine = parenMatch ? parenMatch[1].trim() : '';
                                   const basisLaw = issue.basis?.law || (basisMatch ? basisMatch[1].trim() : '');
                                   const basisSummary = issue.basis?.summary || '';
                                   // 서류 칩이 이미 서류명을 보여주므로 제목 앞 "서류명:" 접두는 제거해 중복 방지.
                                   mainLine = mainLine.replace(new RegExp('^' + docLbl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[:：]\\s*'), '');
-                                  // 알려진 이슈는 손질된 짧은 제목·명령형 설명으로 교체(도안 카피).
+                                  // 알려진 이슈는 손질된 짧은 제목으로 교체(도안 카피).
                                   const pres = present(issue);
-                                  if (pres) { mainLine = pres.title; detailLine = pres.desc; }
-                                  // 금액 불일치는 칩으로 숫자를 보여주므로 제목을 짧게, 부연은 생략.
-                                  if (issue.amounts) { mainLine = '금액 계산이 일치하지 않습니다'; detailLine = ''; }
+                                  if (pres) { mainLine = pres.title; }
+                                  // 금액 불일치는 칩으로 숫자를 보여주므로 제목을 짧게.
+                                  if (issue.amounts) { mainLine = '금액 계산이 일치하지 않습니다'; }
                                   return (
                                     <>
                                       <div className="fix-card__titlerow">
                                         <span className="fix-card__title">{mainLine}</span>
                                         {!isErr && <span className="fix-card__doc">{docLbl}</span>}
                                       </div>
-                                      {detailLine && <p className="fix-card__desc">{detailLine}</p>}
                                       {isErr && (
                                         <div className="fix-card__meta">
                                           {issue.amounts && (
