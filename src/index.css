@@ -313,7 +313,8 @@ body {
   flex-direction: column;
   gap: 24px;
   width: 100%;
-  max-width: 1560px;
+  /* 콘텐츠가 화면을 꽉 채우지 않도록 폭을 제한하고 가운데 정렬 — 양옆 여백 확보 */
+  max-width: 1200px;
   margin: 0 auto;
 }
 

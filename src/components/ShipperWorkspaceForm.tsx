@@ -387,7 +387,7 @@ export default function ShipperWorkspaceForm({
       </details>
 
       <details className="form-section">
-        <summary className="form-section-summary">3. 품목 정보 · {items.length}개</summary>
+        <summary className="form-section-summary">3. 품목 정보</summary>
         <div className="shipper-item-list">
           {items.map((item, index) => (
             <div className="shipper-item-card" key={item.id}>
