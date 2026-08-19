@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileCheck2, FolderOpen, Download, Search } from 'lucide-react';
+import { FileCheck2, FolderOpen, Download, Search, Building2, CheckCircle2, CircleDot, ClipboardList, ExternalLink, FileText } from 'lucide-react';
 import type { CustomsCargoProgressResult, SavedTrade } from '../types';
 
 import { fetchSavedTrades } from '../services/storageService';
@@ -56,7 +56,6 @@ const buildSimulatedCargoProgress = (trade: SavedTrade): CustomsCargoProgressRes
     lastProcessedAt: day(0, 14, 20),
     currentStep: '출항 완료 — 목적항 도착 대기',
     checkedAt: new Date().toISOString(),
-    message: '※ 시연용 시뮬레이션 데이터 — UNI-PASS 연동 시 실시간 정보로 대체됩니다.',
     events: [
       { step: '수출신고 접수', status: '완료', processedAt: day(-3, 9, 12), customsOffice: '부산세관', details: '신고인 전자신고 접수' },
       { step: '수출신고 수리', status: '완료', processedAt: day(-3, 11, 47), customsOffice: '부산세관', details: '심사 완료 · 수리' },
@@ -234,13 +233,13 @@ const isCheckingCargo = checkingTradeId === trade.id;
                 </div>
 
                 <span className="draft-tray-route customs-meta">
-                  <span>{trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'}</span>
+                  <span className="customs-meta-item"><Building2 size={15} />{trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'}</span>
                   <span className="meta-dot">·</span>
-                  <span>통관 준비도 {readiness}%</span>
+                  <span className="customs-meta-item"><CheckCircle2 size={15} className="meta-ic-ok" />통관 준비도 <b>{readiness}%</b></span>
                   <span className="meta-dot">·</span>
-                  <span>화주 서류 {completedShipperDocs}/{shipperDocs.length} 완료</span>
+                  <span className="customs-meta-item"><FileText size={15} />화주 서류 <b>{completedShipperDocs}/{shipperDocs.length} 완료</b></span>
                   <span className="meta-dot">·</span>
-                  <span>외부 발급 {externalDocs}건</span>
+                  <span className="customs-meta-item"><ExternalLink size={15} />외부 발급 <b>{externalDocs}건</b></span>
                 </span>
 
                 {documentStatusItems.length > 0 && (
@@ -254,33 +253,51 @@ const isCheckingCargo = checkingTradeId === trade.id;
                 )}
 
                 {cargoProgress && (
-                  <div className={`form-message ${cargoProgress.status === 'error' ? 'error' : 'info'}`} style={{ marginTop: 4 }}>
-                    <strong>{cargoProgress.statusText}</strong>
-                    <div>B/L 번호: {cargoProgress.blNo || '-'}</div>
-                    {cargoProgress.currentStep && <div>현재 단계: {cargoProgress.currentStep}</div>}
-                    {cargoProgress.customsOffice && <div>처리 세관: {cargoProgress.customsOffice}</div>}
-                    {cargoProgress.lastProcessedAt && <div>마지막 처리일시: {cargoProgress.lastProcessedAt}</div>}
-                    {cargoProgress.events.length > 0 && (
-                      <div className="cargo-timeline">
-                        {cargoProgress.events.map((ev, idx) => (
-                          <div className="cargo-timeline-row" key={`${ev.step}-${idx}`}>
-                            <span className={`cargo-timeline-dot ${idx === cargoProgress.events.length - 1 ? 'current' : ''}`} aria-hidden="true" />
-                            <div className="cargo-timeline-body">
-                              <div className="cargo-timeline-head">
-                                <span className="cargo-timeline-step">{ev.step}</span>
-                                <span className="cargo-timeline-status">{ev.status}</span>
-                                {ev.processedAt && <span className="cargo-timeline-time">{ev.processedAt}</span>}
-                              </div>
-                              <div className="cargo-timeline-meta">
-                                {[ev.customsOffice, ev.location, ev.details].filter(Boolean).join(' · ')}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                  cargoProgress.status === 'success' && cargoProgress.events.length > 0 ? (
+                    <div className="cargo-card">
+                      <div className="cargo-card-head"><ClipboardList size={18} /> {cargoProgress.statusText}</div>
+                      <div className="cargo-summary">
+                        <div className="cargo-summary-item">
+                          <span className="cargo-summary-k">B/L 번호</span>
+                          <span className="cargo-summary-v accent">{cargoProgress.blNo || '-'}</span>
+                        </div>
+                        <div className="cargo-summary-item">
+                          <span className="cargo-summary-k">현재 단계</span>
+                          <span className="cargo-summary-v accent">{cargoProgress.currentStep || '-'}</span>
+                        </div>
+                        <div className="cargo-summary-item">
+                          <span className="cargo-summary-k">처리 세관</span>
+                          <span className="cargo-summary-v">{cargoProgress.customsOffice || '-'}</span>
+                        </div>
+                        <div className="cargo-summary-item">
+                          <span className="cargo-summary-k">마지막 처리일시</span>
+                          <span className="cargo-summary-v">{cargoProgress.lastProcessedAt || '-'}</span>
+                        </div>
                       </div>
-                    )}
-                    {cargoProgress.message && <div style={{ marginTop: 6 }}>{cargoProgress.message}</div>}
-                  </div>
+                      <div className="cargo-steps">
+                        {cargoProgress.events.map((ev, idx) => {
+                          const isCurrent = idx === cargoProgress.events.length - 1;
+                          return (
+                            <div className="cargo-step-row" key={`${ev.step}-${idx}`}>
+                              <span className={`cargo-step-ic ${isCurrent ? 'current' : ''}`}>
+                                {isCurrent ? <CircleDot size={19} /> : <CheckCircle2 size={19} />}
+                              </span>
+                              <span className="cargo-step-name">{ev.step}</span>
+                              <span className="cargo-step-chip">{ev.status}</span>
+                              <span className="cargo-step-time">{ev.processedAt || ''}</span>
+                              <span className="cargo-step-meta">{[ev.customsOffice, ev.location, ev.details].filter(Boolean).join(' · ')}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`form-message ${cargoProgress.status === 'error' ? 'error' : 'info'}`} style={{ marginTop: 4 }}>
+                      <strong>{cargoProgress.statusText}</strong>
+                      <div>B/L 번호: {cargoProgress.blNo || '-'}</div>
+                      {cargoProgress.message && <div style={{ marginTop: 6 }}>{cargoProgress.message}</div>}
+                    </div>
+                  )
                 )}
 
               </div>
