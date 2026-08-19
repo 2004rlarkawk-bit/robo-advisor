@@ -3546,7 +3546,7 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
   gap: 20px;
 }
 .da-my-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.da-my-col-title { font-size: 12px; font-weight: 800; color: var(--text-light); }
+.da-my-col-title { font-size: 16px; font-weight: 800; color: var(--text-dark); }
 .da-my-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .da-my-row-name {
   flex: 0 0 34%; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text-dark);
@@ -3581,21 +3581,27 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
   border-radius: 8px; padding: 6px 11px; cursor: pointer; white-space: nowrap;
 }
 .da-item-view:hover { background: var(--primary-light); }
-.da-markets { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 16px; }
+.da-markets { display: flex; flex-direction: column; gap: 14px; margin: 12px 0 16px; }
 .da-market {
-  border: 1px solid #d5e3f5; background: #f8fbff; border-radius: 10px; padding: 11px 14px;
+  border: 1px solid #e5eaf1; background: #ffffff; border-radius: 14px; padding: 20px 24px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 .da-market-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.da-market-route { font-size: 13px; font-weight: 600; color: var(--text-dark); }
+.da-market-route { font-size: 19px; font-weight: 700; color: var(--text-dark); }
 .da-market-route b { font-weight: 800; }
 .da-market-rank {
-  font-size: 11px; font-weight: 800; color: var(--primary-color);
-  background: var(--primary-light); border-radius: 999px; padding: 3px 10px; white-space: nowrap;
+  font-size: 13px; font-weight: 700; color: var(--primary-color);
+  background: var(--primary-light); border-radius: 999px; padding: 6px 16px; white-space: nowrap;
 }
-.da-market-line { margin: 5px 0 0; font-size: 12.5px; color: var(--text-light); }
-.da-market-line b { color: var(--text-dark); font-weight: 700; }
-.da-market-trend.up { color: var(--success-color); font-weight: 700; }
-.da-market-trend.down { color: var(--error-color); font-weight: 700; }
+/* 2컬럼 스탯 — 최근월 수출액 | 최근 6개월 증감률 */
+.da-market-stats { display: flex; align-items: stretch; gap: 0; margin-top: 14px; }
+.da-market-stat { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+.da-market-stat + .da-market-stat { border-left: 1px solid var(--border-color-subtle); padding-left: 28px; margin-left: 28px; }
+.da-market-stat-lab { font-size: 13px; color: var(--text-light); }
+.da-market-stat-val { font-size: 26px; font-weight: 800; color: var(--text-dark); line-height: 1.1; }
+.da-market-stat-val small { font-size: 15px; font-weight: 600; color: var(--text-light); margin-left: 2px; }
+.da-market-trend.up { color: var(--success-color); }
+.da-market-trend.down { color: var(--error-color); }
 
 /* ── 임시보관함 (AI 통관 작업실 하단 아코디언) ─────────────────── */
 .draft-tray {

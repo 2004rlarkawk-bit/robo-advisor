@@ -1,8 +1,7 @@
 /**
  * 데이터 분석 페이지 — 관세청 무역통계 시각화
  *
- * 구성: 내 무역 대시보드(저장된 거래 집계) → 내 품목 시장 트렌드(관세청)
- *      → 이번 주 고시환율 → 울산항 입출항(울산항만공사).
+ * 구성: 내 무역 대시보드(저장된 거래 집계 + 내 시장 리포트) → 내 품목 시장 트렌드(관세청).
  * 국가별 관세청 통계는 화면에 그리지 않고 '내 시장 리포트' 조인 계산에만 쓴다.
  *
  * 차트는 외부 라이브러리 없이 SVG 직접 렌더.
@@ -16,12 +15,9 @@ import type { SavedTrade } from '../types';
 import {
   getCountryTradeStats,
   getItemTradeStats,
-  getCustomsExchangeRate,
-  type ExchangeRate,
   CountryTradeStat,
   ItemTradeStat,
 } from '../services/customsApiService';
-import { getUpaPortSchedule, type UpaVesselRow } from '../services/upaPortService';
 
 const COLOR_EXPORT = '#0b57d0'; // 수출
 const COLOR_IMPORT = '#1baf7a'; // 수입
@@ -227,47 +223,6 @@ function DataTable({ head, rows }: { head: string[]; rows: (string | number)[][]
   );
 }
 
-// ===== 월별 내 거래 바 차트 (금액 + 건수) =====
-
-function MyMonthlyChart({ months, currency }: {
-  months: { month: string; count: number; amount: number }[];
-  currency: string;
-}) {
-  const W = 640;
-  const H = 190;
-  const PAD = { l: 8, r: 8, t: 30, b: 26 };
-  const iw = W - PAD.l - PAD.r;
-  const ih = H - PAD.t - PAD.b;
-  const useAmount = months.some((m) => m.amount > 0);
-  const valueOf = (m: { count: number; amount: number }) => (useAmount ? m.amount : m.count);
-  const maxV = Math.max(1, ...months.map(valueOf));
-  const slot = iw / months.length;
-  const barW = Math.min(64, slot * 0.55);
-  const fmtVal = (v: number) => (useAmount ? `${currency} ${Math.round(v).toLocaleString()}` : `${v}건`);
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="월별 내 거래 차트">
-      {months.map((m, i) => {
-        const v = valueOf(m);
-        const h = Math.max(4, (v / maxV) * ih);
-        const x = PAD.l + slot * i + (slot - barW) / 2;
-        const y = PAD.t + ih - h;
-        return (
-          <g key={m.month}>
-            <rect x={x} y={y} width={barW} height={h} rx={6} fill={COLOR_EXPORT} opacity={0.9} />
-            <text x={x + barW / 2} y={y - 8} textAnchor="middle" fontSize={11} fontWeight={700} fill="#334155">
-              {fmtVal(v)}
-            </text>
-            <text x={x + barW / 2} y={H - 8} textAnchor="middle" fontSize={11} fill={INK_MUTED}>
-              {Number(m.month.slice(5))}월{useAmount ? ` · ${m.count}건` : ''}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
 function ChartCard({ title, badge, right, children }: {
   title: string; badge?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode;
 }) {
@@ -370,10 +325,6 @@ const isValidHsCode = (v: string) => /^\d{6,10}$/.test(v);
 export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProps = {}) {
   const range = useMemo(() => recentRange(6), []);
   const [countryState, setCountryState] = useState<LoadState<CountryTradeStat>>(idleState);
-  // 이번 주 관세청 고시환율 (과세가격 환산 기준)
-  const [rates, setRates] = useState<ExchangeRate[] | null>(null);
-  // 울산항만공사 공공데이터 — 울산항 선박 입출항
-  const [upaRows, setUpaRows] = useState<UpaVesselRow[] | null>(null);
   const [itemState, setItemState] = useState<LoadState<ItemTradeStat>>(idleState);
   // 작성 중인 거래에 유효한 HS코드가 있으면 그 품목부터 보여준다 (없으면 샘플 코드)
   const currentHs = cleanHsCode(currentItem?.hsCode ?? '');
@@ -395,16 +346,6 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
         // 조회 실패(미로그인 등) 시 내 거래 섹션만 생략 — 페이지 나머지는 정상 동작
       }
     })();
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    if (!isSupabaseConfigured) return; // 테스트 등 미설정 환경에서는 두 카드 모두 생략
-    let cancelled = false;
-    void Promise.all(['USD', 'EUR', 'JPY', 'CNY'].map((c) => getCustomsExchangeRate(c, 'export')))
-      .then((result) => { if (!cancelled) setRates(result); })
-      .catch(() => { /* 환율 조회 실패 시 카드만 생략 */ });
-    void getUpaPortSchedule(8).then((rows) => { if (!cancelled) setUpaRows(rows); });
     return () => { cancelled = true; };
   }, []);
 
@@ -612,75 +553,46 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
             <div className="da-my-tile"><span className="da-my-tile-lab">누적 거래금액</span><span className="da-my-tile-val da-my-tile-amount">{myStats.amounts.map(([cur, sum]) => `${cur} ${Math.round(sum).toLocaleString()}`).join(' · ') || '—'}</span></div>
           </div>
 
-          {/* 월별 내 거래 — 메인 그래프 */}
-          {myStats.months.length >= 2 && (
-            <div className="da-block">
-              <span className="da-my-col-title">월별 내 거래 ({myStats.domCurrency} 기준)</span>
-              <MyMonthlyChart months={myStats.months} currency={myStats.domCurrency} />
-            </div>
-          )}
-
-          {/* 품목 구성 — 금액 비중 가로 막대 + 시장 트렌드 연결 */}
-          <div className="da-block">
-            <span className="da-my-col-title">품목 구성</span>
-            <div className="da-items">
-              {(() => {
-                const amountOf = (it: { amounts: Map<string, number> }) =>
-                  it.amounts.get(myStats.domCurrency) ?? 0;
-                const maxAmount = Math.max(1, ...myStats.items.map(amountOf));
-                return myStats.items.map((it) => {
-                  const hasHs = isValidHsCode(it.hsCode);
-                  const amountText = [...it.amounts.entries()].map(([cur, sum]) => `${cur} ${Math.round(sum).toLocaleString()}`).join(' · ');
-                  const ratio = amountOf(it) / maxAmount;
-                  return (
-                    <div className="da-item" key={`${it.name}::${it.hsCode}`}>
-                      <div className="da-item-main">
-                        <div className="da-item-top">
-                          <span className="da-item-name">{it.name}</span>
-                          {hasHs && <span className="da-item-hs">HS {it.hsCode}</span>}
-                          <span className="da-item-meta">거래 {it.count}건{amountText && <> · {amountText}</>}{it.dests.size > 0 && <> · {[...it.dests].join(', ')}</>}</span>
-                        </div>
-                        {amountOf(it) > 0 && (
-                          <span className="da-item-bar"><span style={{ width: `${Math.max(4, ratio * 100)}%` }} /></span>
-                        )}
-                      </div>
-                      {hasHs && (
-                        <button
-                          type="button"
-                          className="da-item-view"
-                          onClick={() => { setHsInput(it.hsCode); setHsQuery(it.hsCode); }}
-                        >
-                          시장 트렌드 보기 ↓
-                        </button>
-                      )}
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-          </div>
-
           {/* 내 시장 리포트 — 내 도착 국가 × 한국 전체 수출 실적 조인 */}
           {marketReport.length > 0 && (
             <div className="da-block">
               <span className="da-my-col-title">내 시장 리포트</span>
               <div className="da-markets">
-                {marketReport.map((m) => (
-                  <div className="da-market" key={m.code}>
-                    <div className="da-market-head">
-                      <span className="da-market-route">{m.ports.join(' · ')} → <b>{m.ko}</b></span>
-                      {m.rank && <span className="da-market-rank">한국 수출 대상국 {m.rank}위</span>}
+                {marketReport.map((m) => {
+                  // 같은 항구가 표기만 다르게 중복 저장된 경우("Long Beach Port"/"LONG BEACH PORT, USA") 정리
+                  const seenPorts = new Set<string>();
+                  const ports = m.ports.filter((p) => {
+                    const key = p.toUpperCase().replace(/,.*$/, '').replace(/\s+PORT$/, '').trim();
+                    if (seenPorts.has(key)) return false;
+                    seenPorts.add(key);
+                    return true;
+                  });
+                  return (
+                    <div className="da-market" key={m.code}>
+                      <div className="da-market-head">
+                        <span className="da-market-route">{ports.join(' / ')} → <b>{m.ko}</b></span>
+                        {m.rank && <span className="da-market-rank">수출 대상국 {m.rank}위</span>}
+                      </div>
+                      <div className="da-market-stats">
+                        <div className="da-market-stat">
+                          <span className="da-market-stat-lab">최근월 수출액</span>
+                          <span className="da-market-stat-val">
+                            {(m.lastExport / 1e8).toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                            <small> 억 달러</small>
+                          </span>
+                        </div>
+                        {m.trendPct !== null && (
+                          <div className="da-market-stat">
+                            <span className="da-market-stat-lab">최근 6개월</span>
+                            <span className={`da-market-stat-val da-market-trend ${m.trendPct >= 0 ? 'up' : 'down'}`}>
+                              {m.trendPct >= 0 ? '+' : ''}{m.trendPct}% {m.trendPct >= 0 ? '↗' : '↘'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <p className="da-market-line">
-                      한국 전체 수출 최근월 <b>{fmtUsd(m.lastExport)}</b>
-                      {m.trendPct !== null && (
-                        <span className={`da-market-trend ${m.trendPct >= 0 ? 'up' : 'down'}`}>
-                          {' '}· 6개월 {m.trendPct >= 0 ? '+' : ''}{m.trendPct}% {m.trendPct >= 0 ? '↗' : '↘'}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -741,57 +653,6 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
         )}
       </ChartCard>
 
-      {/* 이번 주 관세청 고시환율 — 과세가격 환산 기준 */}
-      {rates && rates.length > 0 && (
-        <ChartCard
-          title="이번 주 관세청 고시환율"
-          badge={rates.every((r) => r.source === 'api') ? <SourceBadge source="api" /> : <span className="da-sim-badge">시뮬레이션</span>}
-          right={<span style={{ fontSize: 12, color: '#64748b' }}>수출 적용 · {rates[0].effectiveDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3')} 주간</span>}
-        >
-          <div className="da-rates">
-            {rates.map((r) => (
-              <div className="da-rate" key={r.currency}>
-                <span className="da-rate-cur">{r.currency}</span>
-                <span className="da-rate-val">{r.rate.toLocaleString(undefined, { maximumFractionDigits: 2 })}원</span>
-                <span className="da-rate-name">{r.currencyName}</span>
-              </div>
-            ))}
-          </div>
-          <p className="da-rate-note">수출신고 과세가격 환산에 적용되는 관세청 주간 고시환율이에요.</p>
-        </ChartCard>
-      )}
-
-      {/* 울산항만공사 공공데이터 — 울산항 입출항 현황 */}
-      {upaRows && upaRows.length > 0 && (
-        <ChartCard
-          title="울산항 선박 입출항 현황"
-          badge={upaRows[0].source === 'api'
-            ? <span className="upa-badge">울산항만공사 공공데이터</span>
-            : <span className="da-sim-badge">시뮬레이션 · UPA API 연결 대기</span>}
-          right={myTrades?.some((t) => (t.profile?.loadPort || '').toUpperCase().includes('ULSAN'))
-            ? <span className="upa-hint">내 선적항이 울산이에요 — 출항 일정 참고!</span>
-            : undefined}
-        >
-          <div style={{ overflowX: 'auto' }}>
-            <table className="upa-table">
-              <thead>
-                <tr><th>선박명</th><th>입항 정보</th><th>직전 기항지</th><th>총톤수</th></tr>
-              </thead>
-              <tbody>
-                {upaRows.map((r, i) => (
-                  <tr key={`${r.vesselName}-${i}`}>
-                    <td className="upa-vessel">{r.vesselName}</td>
-                    <td>{r.schedule || '—'}</td>
-                    <td>{r.prevPort || '—'}</td>
-                    <td>{r.tonnage || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="da-rate-note">울산항만공사 개방 데이터 기반 · 선적항이 울산일 때 출항일·선박명 입력에 참고할 수 있어요.</p>
-        </ChartCard>
-      )}
     </div>
   );
 }
