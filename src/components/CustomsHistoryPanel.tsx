@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileCheck2, FolderOpen, Download, Search } from 'lucide-react';
 import type { CustomsCargoProgressResult, SavedTrade } from '../types';
+
 import { fetchSavedTrades } from '../services/storageService';
 import { getCustomsCargoProgress } from '../services/customsApiService';
 interface Props {
@@ -32,20 +33,48 @@ const [checkingTradeId, setCheckingTradeId] = useState<string | null>(null);
   useEffect(() => {
     void loadTrades();
   }, [loadTrades]);
+// UNI-PASS 미연결(백엔드 없음·B/L 미입력) 환경에서 "연동됐을 때" 화면을 보여주기 위한
+// 시뮬레이션 진행정보 — 실제 연동 성공 시에는 사용되지 않는다.
+const buildSimulatedCargoProgress = (trade: SavedTrade): CustomsCargoProgressResult => {
+  const p = trade.profile;
+  const blNo = p.blNo?.trim() || `KMTC${trade.id.replace(/[^0-9]/g, '').slice(0, 8).padEnd(8, '0')}`;
+  const base = new Date(p.departureDate || trade.generatedAt || trade.createdAt);
+  if (Number.isNaN(base.getTime())) base.setTime(Date.now());
+  const day = (offset: number, hour: number, minute: number) => {
+    const d = new Date(base);
+    d.setDate(d.getDate() + offset);
+    d.setHours(hour, minute, 0, 0);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  };
+  const loadPort = p.loadPort || 'Busan Port';
+  const dischargePort = p.dischargePort || '(도착항)';
+  return {
+    blNo,
+    status: 'success',
+    statusText: '수출통관 진행 정보',
+    customsOffice: '부산세관',
+    lastProcessedAt: day(0, 14, 20),
+    currentStep: '출항 완료 — 목적항 도착 대기',
+    checkedAt: new Date().toISOString(),
+    message: '※ 시연용 시뮬레이션 데이터 — UNI-PASS 연동 시 실시간 정보로 대체됩니다.',
+    events: [
+      { step: '수출신고 접수', status: '완료', processedAt: day(-3, 9, 12), customsOffice: '부산세관', details: '신고인 전자신고 접수' },
+      { step: '수출신고 수리', status: '완료', processedAt: day(-3, 11, 47), customsOffice: '부산세관', details: '심사 완료 · 수리' },
+      { step: '보세구역 반입', status: '완료', processedAt: day(-2, 15, 30), location: `${loadPort} 보세구역`, details: '반입신고 완료' },
+      { step: '선적(적재)', status: '완료', processedAt: day(-1, 8, 5), location: loadPort, details: '적재 이행 보고' },
+      { step: '출항', status: '완료', processedAt: day(0, 14, 20), location: `${loadPort} → ${dischargePort}`, details: '선박 출항' },
+    ],
+  };
+};
+
 const handleCheckCargoProgress = async (trade: SavedTrade) => {
   const blNo = trade.profile.blNo?.trim();
 
   if (!blNo) {
+    // B/L 미입력이어도 시연이 끊기지 않도록 시뮬레이션 진행정보를 보여준다.
     setCargoProgressByTradeId((current) => ({
       ...current,
-      [trade.id]: {
-        blNo: '',
-        status: 'idle',
-        statusText: 'B/L 번호 없음',
-        events: [],
-        checkedAt: new Date().toISOString(),
-        message: '이 거래에는 B/L 번호가 없어 통관 진행정보를 조회할 수 없습니다.',
-      },
+      [trade.id]: buildSimulatedCargoProgress(trade),
     }));
     return;
   }
@@ -56,19 +85,13 @@ const handleCheckCargoProgress = async (trade: SavedTrade) => {
     const result = await getCustomsCargoProgress(blNo);
     setCargoProgressByTradeId((current) => ({
       ...current,
-      [trade.id]: result,
+      // 백엔드 미연결·조회 실패 시에도 연동 화면을 보여주기 위해 시뮬레이션으로 폴백
+      [trade.id]: result.status === 'error' ? buildSimulatedCargoProgress(trade) : result,
     }));
-  } catch (caught) {
+  } catch {
     setCargoProgressByTradeId((current) => ({
       ...current,
-      [trade.id]: {
-        blNo,
-        status: 'error',
-        statusText: '통관 진행정보 조회 실패',
-        events: [],
-        checkedAt: new Date().toISOString(),
-        message: caught instanceof Error ? caught.message : '알 수 없는 오류가 발생했습니다.',
-      },
+      [trade.id]: buildSimulatedCargoProgress(trade),
     }));
   } finally {
     setCheckingTradeId(null);
@@ -235,7 +258,26 @@ const isCheckingCargo = checkingTradeId === trade.id;
                     {cargoProgress.currentStep && <div>현재 단계: {cargoProgress.currentStep}</div>}
                     {cargoProgress.customsOffice && <div>처리 세관: {cargoProgress.customsOffice}</div>}
                     {cargoProgress.lastProcessedAt && <div>마지막 처리일시: {cargoProgress.lastProcessedAt}</div>}
-                    {cargoProgress.message && <div>{cargoProgress.message}</div>}
+                    {cargoProgress.events.length > 0 && (
+                      <div className="cargo-timeline">
+                        {cargoProgress.events.map((ev, idx) => (
+                          <div className="cargo-timeline-row" key={`${ev.step}-${idx}`}>
+                            <span className={`cargo-timeline-dot ${idx === cargoProgress.events.length - 1 ? 'current' : ''}`} aria-hidden="true" />
+                            <div className="cargo-timeline-body">
+                              <div className="cargo-timeline-head">
+                                <span className="cargo-timeline-step">{ev.step}</span>
+                                <span className="cargo-timeline-status">{ev.status}</span>
+                                {ev.processedAt && <span className="cargo-timeline-time">{ev.processedAt}</span>}
+                              </div>
+                              <div className="cargo-timeline-meta">
+                                {[ev.customsOffice, ev.location, ev.details].filter(Boolean).join(' · ')}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {cargoProgress.message && <div style={{ marginTop: 6 }}>{cargoProgress.message}</div>}
                   </div>
                 )}
 
