@@ -272,7 +272,7 @@ describe('화주용 통관 입력 폼', () => {
   it('프로필에서 초기화된 화주 기본정보를 표시하고 거래별로 직접 수정할 수 있다', () => {
     const rendered = renderForm();
     const companyInput = Array.from(rendered.container.querySelectorAll('label'))
-      .find((label) => label.textContent === '회사명(상호명)')
+      .find((label) => label.textContent?.startsWith('회사명(상호명)'))
       ?.parentElement?.querySelector<HTMLInputElement>('input');
 
     expect(companyInput?.value).toBe('인천테크');
@@ -304,7 +304,7 @@ describe('화주용 통관 입력 폼', () => {
   it('품목 단위는 한국어 설명을 병기하고 실제 영문 코드만 전달한다', () => {
     const rendered = renderForm();
     const unitSelect = Array.from(rendered.container.querySelectorAll('label'))
-      .find((label) => label.textContent === '단위')
+      .find((label) => label.textContent?.startsWith('단위'))
       ?.parentElement?.querySelector<HTMLSelectElement>('select');
     const optionLabels = Array.from(unitSelect?.options ?? []).map((option) => option.textContent);
 
@@ -338,7 +338,7 @@ describe('화주용 통관 입력 폼', () => {
   it('수출 화주용 거래조건 옵션과 한국어 결제 라벨만 표시한다', () => {
     const rendered = renderForm();
     const incotermsSelect = Array.from(rendered.container.querySelectorAll('label'))
-      .find((label) => label.textContent === 'Incoterms')
+      .find((label) => label.textContent?.startsWith('Incoterms'))
       ?.parentElement?.querySelector<HTMLSelectElement>('select');
     const incotermsValues = Array.from(incotermsSelect?.options ?? []).map((option) => option.value);
 

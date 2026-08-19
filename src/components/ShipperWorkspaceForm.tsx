@@ -56,6 +56,9 @@ const PAYMENT_TERM_OPTIONS = [
 const OTHER_ITEM_UNIT_VALUE = '__OTHER_ITEM_UNIT__';
 const OTHER_PACKAGE_TYPE_VALUE = '__OTHER_PACKAGE_TYPE__';
 
+// 필수 입력 배지 — 미입력 시 문서 생성이 차단(error)되는 항목의 라벨에만 붙인다
+const Req = () => <span className="req-badge">필수</span>;
+
 function numericValue(eventValue: string): NumericInput {
   return eventValue === '' ? '' : Number(eventValue);
 }
@@ -306,13 +309,13 @@ export default function ShipperWorkspaceForm({
       <details className="form-section" open>
         <summary className="form-section-summary">1. 화주 기본정보</summary>
         <div className="form-grid">
-          <div className="form-group" data-field="companyName"><label className="form-label">회사명(상호명)</label><input className="form-input" value={profile.companyName} onChange={(event) => onProfilePatch({
+          <div className="form-group" data-field="companyName"><label className="form-label">회사명(상호명) <Req /></label><input className="form-input" value={profile.companyName} onChange={(event) => onProfilePatch({
             companyName: event.target.value,
             ...(supplemental.isSignerSameAsCompany ? { signedBy: event.target.value } : {}),
           })} placeholder="ABC Logistics Co., Ltd." /></div>
-          <div className="form-group"><label className="form-label">회사 주소</label><input className="form-input" value={profile.companyAddress ?? ''} onChange={(event) => onProfilePatch({ companyAddress: event.target.value })} placeholder="123 Teheran-ro, Gangnam-gu, Seoul, South Korea" /></div>
+          <div className="form-group"><label className="form-label">회사 주소 <Req /></label><input className="form-input" value={profile.companyAddress ?? ''} onChange={(event) => onProfilePatch({ companyAddress: event.target.value })} placeholder="123 Teheran-ro, Gangnam-gu, Seoul, South Korea" /></div>
           <div className="form-group"><label className="form-label">국가</label><CountrySelect className="form-input" value={profile.companyCountry ?? ''} onChange={(value) => onProfilePatch({ companyCountry: value })} /></div>
-          <div className="form-group" data-field="contact"><label className="form-label">회사 연락처</label><input className="form-input" type="tel" value={profile.contact} onChange={(event) => onProfilePatch({ contact: event.target.value })} placeholder="+82-2-1234-5678" /></div>
+          <div className="form-group" data-field="contact"><label className="form-label">회사 연락처 <Req /></label><input className="form-input" type="tel" value={profile.contact} onChange={(event) => onProfilePatch({ contact: event.target.value })} placeholder="+82-2-1234-5678" /></div>
           <div className="form-group" data-field="businessRegistrationNo"><label className="form-label">사업자등록번호</label><input className="form-input" value={profile.businessRegistrationNo ?? ''} onChange={(event) => onProfilePatch({ businessRegistrationNo: event.target.value, taxNo: event.target.value })} placeholder="123-45-67890" /></div>
           <div className="form-group">
             <label className="form-label">서명자 영문명</label>
@@ -375,8 +378,8 @@ export default function ShipperWorkspaceForm({
           <div className="form-group"><label className="form-label">Buyer 회사명</label><input className="form-input" value={profile.buyerName ?? ''} onChange={(e) => patchParty('buyerName', e.target.value)} placeholder="Global Import LLC" /></div>
           <div className="form-group"><label className="form-label">Buyer 영문 주소</label><input className="form-input" value={profile.buyerAddress ?? ''} onChange={(e) => patchParty('buyerAddress', e.target.value)} placeholder="250 Market Street, Los Angeles, CA, United States" /></div>
           <div className="form-group"><label className="form-label">Buyer 국가</label><CountrySelect className="form-input" value={profile.buyerCountry ?? ''} onChange={(value) => patchParty('buyerCountry', value)} /></div>
-          <div className="form-group" data-field="partnerName"><label className="form-label">Consignee 회사명</label><input className="form-input" value={profile.partnerName ?? ''} onChange={(e) => patchParty('partnerName', e.target.value)} placeholder="Global Import LLC" /></div>
-          <div className="form-group"><label className="form-label">Consignee 영문 주소</label><input className="form-input" value={profile.partnerAddress ?? ''} onChange={(e) => patchParty('partnerAddress', e.target.value)} placeholder="250 Market Street, Los Angeles, CA, United States" /></div>
+          <div className="form-group" data-field="partnerName"><label className="form-label">Consignee 회사명 <Req /></label><input className="form-input" value={profile.partnerName ?? ''} onChange={(e) => patchParty('partnerName', e.target.value)} placeholder="Global Import LLC" /></div>
+          <div className="form-group"><label className="form-label">Consignee 영문 주소 <Req /></label><input className="form-input" value={profile.partnerAddress ?? ''} onChange={(e) => patchParty('partnerAddress', e.target.value)} placeholder="250 Market Street, Los Angeles, CA, United States" /></div>
           <div className="form-group"><label className="form-label">Consignee 국가</label><CountrySelect className="form-input" value={profile.partnerCountry ?? ''} onChange={(value) => patchParty('partnerCountry', value)} /></div>
           <div className="form-group"><label className="form-label">Notify Party 회사명</label><input className="form-input" value={profile.notifyPartyName ?? ''} onChange={(e) => patchParty('notifyPartyName', e.target.value)} placeholder="Global Import LLC" /></div>
           <div className="form-group"><label className="form-label">Notify Party 주소</label><input className="form-input" value={profile.notifyPartyAddress ?? ''} onChange={(e) => patchParty('notifyPartyAddress', e.target.value)} placeholder="250 Market Street, Los Angeles, CA, United States" /></div>
@@ -391,7 +394,7 @@ export default function ShipperWorkspaceForm({
               <div className="shipper-item-heading"><strong>품목 {index + 1}</strong><button type="button" className="btn btn-secondary btn-sm" disabled={items.length === 1} onClick={() => removeItem(item.id)}><Trash2 size={14} /> 삭제</button></div>
               <div className="form-grid">
                 <div className="form-group" data-field="itemName">
-                  <label className="form-label">영문 품명 Goods Description <span aria-hidden="true">*</span></label>
+                  <label className="form-label">영문 품명 Goods Description <Req /></label>
                   <input
                     className="form-input"
                     value={item.itemName}
@@ -411,7 +414,7 @@ export default function ShipperWorkspaceForm({
                     </small>
                   )}
                 </div>
-                <div className="form-group" data-field="hsCode"><label className="form-label">HS Code</label><input className="form-input" value={item.hsCode} onChange={(e) => {
+                <div className="form-group" data-field="hsCode"><label className="form-label">HS Code <Req /></label><input className="form-input" value={item.hsCode} onChange={(e) => {
                   hsCodeSuggestions.markHSCodeManuallyEdited(item.id);
                   updateItem(item.id, 'hsCode', e.target.value);
                 }} placeholder={index === 0 ? 'e.g. 6109.10' : ''} /></div>
@@ -512,10 +515,10 @@ export default function ShipperWorkspaceForm({
                     </div>
                   );
                 })()}
-                <div className="form-group" data-field="quantity"><label className="form-label">수량</label><input type="number" min="0" className="form-input" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', numericValue(e.target.value))} /></div>
-                <div className="form-group"><label className="form-label">단위</label><select className="form-input" value={SHIPPER_ITEM_UNIT_OPTIONS.some((option) => option.value === item.unit) ? item.unit : OTHER_ITEM_UNIT_VALUE} onChange={(e) => updateItem(item.id, 'unit', e.target.value === OTHER_ITEM_UNIT_VALUE ? '' : e.target.value)}>{SHIPPER_ITEM_UNIT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}<option value={OTHER_ITEM_UNIT_VALUE}>기타</option></select>{!SHIPPER_ITEM_UNIT_OPTIONS.some((option) => option.value === item.unit) && <input className="form-input shipper-custom-unit-input" aria-label="기타 단위 직접 입력" value={item.unit} maxLength={12} onChange={(e) => updateItem(item.id, 'unit', e.target.value.toUpperCase().replace(/[^A-Z0-9./-]/g, ''))} placeholder="영문 단위 직접 입력 (예: DOZ)" />}</div>
-                <div className="form-group" data-field="unitPrice"><label className="form-label">단가</label><input type="number" min="0" step="any" className="form-input" value={item.unitPrice} onChange={(e) => updateItem(item.id, 'unitPrice', numericValue(e.target.value))} /></div>
-                <div className="form-group"><label className="form-label">통화</label><select className="form-input" value={item.currency} onChange={(e) => updateItem(item.id, 'currency', e.target.value as ShipperItem['currency'])}>{SHIPPER_CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></div>
+                <div className="form-group" data-field="quantity"><label className="form-label">수량 <Req /></label><input type="number" min="0" className="form-input" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', numericValue(e.target.value))} /></div>
+                <div className="form-group"><label className="form-label">단위 <Req /></label><select className="form-input" value={SHIPPER_ITEM_UNIT_OPTIONS.some((option) => option.value === item.unit) ? item.unit : OTHER_ITEM_UNIT_VALUE} onChange={(e) => updateItem(item.id, 'unit', e.target.value === OTHER_ITEM_UNIT_VALUE ? '' : e.target.value)}>{SHIPPER_ITEM_UNIT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}<option value={OTHER_ITEM_UNIT_VALUE}>기타</option></select>{!SHIPPER_ITEM_UNIT_OPTIONS.some((option) => option.value === item.unit) && <input className="form-input shipper-custom-unit-input" aria-label="기타 단위 직접 입력" value={item.unit} maxLength={12} onChange={(e) => updateItem(item.id, 'unit', e.target.value.toUpperCase().replace(/[^A-Z0-9./-]/g, ''))} placeholder="영문 단위 직접 입력 (예: DOZ)" />}</div>
+                <div className="form-group" data-field="unitPrice"><label className="form-label">단가 <Req /></label><input type="number" min="0" step="any" className="form-input" value={item.unitPrice} onChange={(e) => updateItem(item.id, 'unitPrice', numericValue(e.target.value))} /></div>
+                <div className="form-group"><label className="form-label">통화 <Req /></label><select className="form-input" value={item.currency} onChange={(e) => updateItem(item.id, 'currency', e.target.value as ShipperItem['currency'])}>{SHIPPER_CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</select></div>
                 <div className="form-group" data-field="totalAmount"><span className="form-label">금액</span><div className="form-input shipper-readonly-value">{item.currency} {calculateShipperItemAmount(item).toLocaleString()}</div></div>
               </div>
             </div>
@@ -532,7 +535,7 @@ export default function ShipperWorkspaceForm({
       <details className="form-section">
         <summary className="form-section-summary">4. 거래 조건</summary>
         <div className="form-grid">
-          <div className="form-group" data-field="incoterms"><label className="form-label">Incoterms</label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+          <div className="form-group" data-field="incoterms"><label className="form-label">Incoterms <Req /></label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
           <div className="form-group"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
           <div className="form-group shipper-incoterms-place"><label className="form-label">Incoterms 지정 장소 또는 항만</label><input className="form-input" value={supplemental.incotermsPlace} readOnly={incotermsPlaceSource !== null} onChange={(e) => onSupplementalChange({ ...supplemental, incotermsPlace: e.target.value })} placeholder="Busan Port" /><div className="shipper-inline-options"><label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'loadPort'} onChange={(e) => toggleIncotermsPlaceSource('loadPort', e.target.checked)} /> 선적항과 동일</label><label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'dischargePort'} onChange={(e) => toggleIncotermsPlaceSource('dischargePort', e.target.checked)} /> 도착항과 동일</label></div></div>
           {profile.paymentTerms === 'L/C' && <>
@@ -572,8 +575,8 @@ export default function ShipperWorkspaceForm({
       <details className="form-section">
         <summary className="form-section-summary">6. 항만 및 일정</summary>
         <div className="form-grid">
-          <div className="form-group" data-field="loadPort"><label className="form-label">선적항 POL</label><select className="form-input" value={loadPortSelection} onChange={(e) => { if (e.target.value === OTHER_DOMESTIC_PORT_VALUE) setForceCustomLoadPort(true); else { setForceCustomLoadPort(false); onProfilePatch({ loadPort: e.target.value }); } }}><option value="">선적항을 선택하세요</option>{EXPORT_POL_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_DOMESTIC_PORT_VALUE}>기타 국내항</option></select>{loadPortSelection === OTHER_DOMESTIC_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 국내항 직접 입력" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })} placeholder="기타 국내항 직접 입력" />}</div>
-          <div className="form-group" data-field="dischargePort"><label className="form-label">도착항 POD</label><select className="form-input" value={dischargePortSelection} onChange={(e) => { if (e.target.value === OTHER_FOREIGN_PORT_VALUE) setForceCustomDischargePort(true); else { setForceCustomDischargePort(false); onProfilePatch({ dischargePort: e.target.value }); } }}><option value="">도착항을 선택하세요</option>{EXPORT_POD_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_FOREIGN_PORT_VALUE}>기타 해외항</option></select>{dischargePortSelection === OTHER_FOREIGN_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 해외항 직접 입력" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })} placeholder="기타 해외항 직접 입력" />}</div>
+          <div className="form-group" data-field="loadPort"><label className="form-label">선적항 POL {profile.incoterms === 'FOB' && <Req />}</label><select className="form-input" value={loadPortSelection} onChange={(e) => { if (e.target.value === OTHER_DOMESTIC_PORT_VALUE) setForceCustomLoadPort(true); else { setForceCustomLoadPort(false); onProfilePatch({ loadPort: e.target.value }); } }}><option value="">선적항을 선택하세요</option>{EXPORT_POL_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_DOMESTIC_PORT_VALUE}>기타 국내항</option></select>{loadPortSelection === OTHER_DOMESTIC_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 국내항 직접 입력" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })} placeholder="기타 국내항 직접 입력" />}</div>
+          <div className="form-group" data-field="dischargePort"><label className="form-label">도착항 POD {(profile.incoterms === 'CIF' || profile.incoterms === 'CFR') && <Req />}</label><select className="form-input" value={dischargePortSelection} onChange={(e) => { if (e.target.value === OTHER_FOREIGN_PORT_VALUE) setForceCustomDischargePort(true); else { setForceCustomDischargePort(false); onProfilePatch({ dischargePort: e.target.value }); } }}><option value="">도착항을 선택하세요</option>{EXPORT_POD_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_FOREIGN_PORT_VALUE}>기타 해외항</option></select>{dischargePortSelection === OTHER_FOREIGN_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 해외항 직접 입력" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })} placeholder="기타 해외항 직접 입력" />}</div>
           <div className="form-group" data-field="departureDate"><label className="form-label">희망 출항일</label><input type="date" className="form-input" value={profile.departureDate} onChange={(e) => onProfilePatch({ departureDate: e.target.value })} /></div>
           <div className="form-group"><label className="form-label">운송방식</label><select className="form-input" value={profile.loadingMode ?? ''} onChange={(e) => onProfilePatch({ loadingMode: e.target.value === '' ? undefined : e.target.value as TradeProfile['loadingMode'] })}><option value="">미정</option><option value="FCL">FCL</option><option value="LCL">LCL</option></select></div>
         </div>
@@ -582,7 +585,7 @@ export default function ShipperWorkspaceForm({
       <details className="form-section">
         <summary className="form-section-summary">7. 원산지 및 요건서류</summary>
         <div className="form-grid">
-          <div className="form-group" data-field="countryOfOrigin"><label className="form-label">원산지 국가</label><CountrySelect className="form-input" value={profile.countryOfOrigin ?? ''} onChange={(value) => onProfilePatch({ countryOfOrigin: value })} /></div>
+          <div className="form-group" data-field="countryOfOrigin"><label className="form-label">원산지 국가 <Req /></label><CountrySelect className="form-input" value={profile.countryOfOrigin ?? ''} onChange={(value) => onProfilePatch({ countryOfOrigin: value })} /></div>
           <div className="form-group"><label className="form-label">원산지 결정기준</label><select className="form-input" value={supplemental.originCriterion} onChange={(e) => onSupplementalChange({ ...supplemental, originCriterion: e.target.value as ShipperSupplementalState['originCriterion'] })}><option value="">선택하세요</option><option value="세번변경기준">세번변경기준</option><option value="부가가치기준">부가가치기준</option><option value="완전생산기준">완전생산기준</option></select></div>
           <div className="form-group"><span className="form-label">BOM 또는 원료명세서</span><input className="form-input" value="추후 첨부 지원 예정" disabled /></div>
           <div className="form-group"><span className="form-label">수출요건 확인서류</span><input className="form-input" value="추후 첨부 지원 예정" disabled /></div>

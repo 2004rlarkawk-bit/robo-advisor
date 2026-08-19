@@ -131,6 +131,9 @@ const TradeManagerPanel = lazy(() => import('./components/TradeManagerPanel'));
 const IS_DEV_TEST_ENABLED = import.meta.env.DEV && import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
 type TradeOpenMode = 'normal' | 'view' | 'resume';
 
+// 필수 입력 배지 — 미입력 시 문서 생성이 차단(error)되는 항목에만 붙인다
+const Req = () => <span className="req-badge">필수</span>;
+
 export default function App() {
   const [activeMenu, setActiveMenu] = useState<AppMenu>('about');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -2290,7 +2293,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </div>
 
                     <div className="form-group" data-docs="invoice packing_list co" data-field="itemName">
-                      <label className="form-label">품목명</label>
+                      <label className="form-label">품목명 <Req /></label>
                       <input
                         type="text"
                         className="form-input"
@@ -2301,7 +2304,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </div>
 
                     <div className="form-group" data-docs="invoice customs_dec co">
-                      <label className="form-label">HS CODE</label>
+                      <label className="form-label">HS CODE <Req /></label>
                       <input
                         type="text"
                         className="form-input"
@@ -2312,7 +2315,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </div>
 
                     <div className="form-group" data-docs="invoice bl" data-field="loadPort">
-                      <label className="form-label">선적항</label>
+                      <label className="form-label">선적항 {profile.incoterms === 'FOB' && <Req />}</label>
                       <select
                         className="form-input"
                         value={profile.loadPort}
@@ -2326,7 +2329,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </div>
 
                     <div className="form-group" data-docs="invoice bl" data-field="dischargePort">
-                      <label className="form-label">도착항</label>
+                      <label className="form-label">도착항 {(profile.incoterms === 'CIF' || profile.incoterms === 'CFR') && <Req />}</label>
                       <select
                         className="form-input"
                         value={profile.dischargePort}
@@ -2340,7 +2343,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </div>
 
                     <div className="form-group" data-docs="invoice bl insurance" data-field="incoterms">
-                      <label className="form-label">거래조건 (Incoterms)</label>
+                      <label className="form-label">거래조건 (Incoterms) <Req /></label>
                       <select
                         className="form-input"
                         value={profile.incoterms}
@@ -2355,7 +2358,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </div>
 
                     <div className="form-group" data-docs="invoice packing_list co" data-field="quantity">
-                      <label className="form-label">화물 수량</label>
+                      <label className="form-label">화물 수량 <Req /></label>
                       <div className="input-suffix">
                         <input
                           type="number"
@@ -2403,7 +2406,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </div>
 
                     <div className="form-group" data-docs="invoice packing_list co" data-field="companyName">
-                      <label className="form-label">업체명</label>
+                      <label className="form-label">업체명 <Req /></label>
                       <input
                         type="text"
                         className="form-input"
@@ -2414,7 +2417,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </div>
 
                     <div className="form-group" data-docs="invoice packing_list co" data-field="contact">
-                      <label className="form-label">담당자 연락처</label>
+                      <label className="form-label">담당자 연락처 <Req /></label>
                       <input
                         type="text"
                         className="form-input"
@@ -2479,7 +2482,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                       </div>
 
                       <div className="form-group" data-docs="invoice co">
-                        <label className="form-label">원산지</label>
+                        <label className="form-label">원산지 <Req /></label>
                         <select
                           className="form-input"
                           value={profile.countryOfOrigin}
@@ -2496,7 +2499,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                       </div>
 
                       <div className="form-group" data-docs="invoice">
-                        <label className="form-label">수량 단위</label>
+                        <label className="form-label">수량 단위 <Req /></label>
                         <select
                           className="form-input"
                           value={profile.unit}
@@ -2512,7 +2515,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                       </div>
 
                       <div className="form-group" data-docs="invoice" data-field="unitPrice">
-                        <label className="form-label">단가</label>
+                        <label className="form-label">단가 <Req /></label>
                         <input
                           type="number"
                           className="form-input"
@@ -2523,7 +2526,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                       </div>
 
                       <div className="form-group" data-docs="invoice" data-field="totalAmount">
-                        <label className="form-label">총 금액</label>
+                        <label className="form-label">총 금액 <Req /></label>
                         <input
                           type="number"
                           className="form-input"
@@ -2556,7 +2559,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                       </div>
 
                       <div className="form-group" data-docs="invoice customs_dec" data-field="currency">
-                        <label className="form-label">결제 통화</label>
+                        <label className="form-label">결제 통화 <Req /></label>
                         <select
                           className="form-input"
                           value={profile.currency || 'USD'}
@@ -2850,7 +2853,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </summary>
                     <div className="form-grid">
                       <div className="form-group" data-docs="invoice packing_list co">
-                        <label className="form-label">거래처명 (Consignee)</label>
+                        <label className="form-label">거래처명 (Consignee) <Req /></label>
                         <input
                           type="text"
                           className="form-input"
@@ -2861,7 +2864,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                       </div>
 
                       <div className="form-group" data-docs="invoice packing_list co">
-                        <label className="form-label">수입자 주소</label>
+                        <label className="form-label">수입자 주소 <Req /></label>
                         <input
                           type="text"
                           className="form-input"
@@ -2968,7 +2971,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </summary>
                     <div className="form-grid">
                       <div className="form-group" data-docs="invoice packing_list co">
-                        <label className="form-label">수출자 주소</label>
+                        <label className="form-label">수출자 주소 <Req /></label>
                         <input
                           type="text"
                           className="form-input"
