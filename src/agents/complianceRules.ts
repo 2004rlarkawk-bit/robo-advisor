@@ -35,6 +35,13 @@ export const RULE_POLICY = {
   'r11-lc-date-missing':      { severity: 'warning', overridable: false },
   'r12-buyer-address-missing':{ severity: 'warning', overridable: false },
   'r12-buyer-name-missing':   { severity: 'warning', overridable: false },
+  'r13-identical-ports':      { severity: 'error',   overridable: true },
+  'r14-lc-after-shipment':    { severity: 'error',   overridable: true },
+  'r15-origin-not-korea':     { severity: 'error',   overridable: true },
+  'r16-generic-item-name':    { severity: 'error',   overridable: true },
+  'r17-hs-chapter-mismatch':  { severity: 'error',   overridable: true },
+  'r18-port-consignee-country': { severity: 'error', overridable: true },
+  'r19-consignee-country-address': { severity: 'error', overridable: true },
 } as const satisfies Record<string, RulePolicy>;
 
 export type ComplianceRuleId = keyof typeof RULE_POLICY;
@@ -273,6 +280,97 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
       'Buyer 주소는 입력되었는데 Buyer 회사명이 비어 있습니다. 회사명을 입력하세요.'));
   }
 
+  // ── R13. 선적항·도착항 완전 동일 (error, override 가능) ─────
+  // R5(같은 국가)보다 강한 케이스 — 문자열 정규화 후 완전히 같으면 입력 실수가 거의 확실.
+  const portNorm = (s: string) => up(s).replace(/[\s,.]+/g, ' ').trim();
+  if (load && disch && portNorm(load) === portNorm(disch)) {
+    issues.push(mk('r13-identical-ports', 'bl', 'dischargePort',
+      `선적항과 도착항이 동일합니다("${load}"). 국제 운송이 성립하지 않으므로 입력 오류일 가능성이 높습니다. 반송·보세운송 등 특수 사유이면 사유 입력 후 진행하세요.`));
+  }
+
+  // ── R14. 신용장 개설일 > 선적일 (error, override 가능) ─────
+  // 신용장(L/C) 개설 전에 선적하면 은행 매입·대금 회수에서 하자 사유가 된다.
+  // 사전 계약된 사후 개설 등 예외가 있으므로 사유 입력 시 우회 허용.
+  const depDate = (profile.departureDate || '').trim();
+  const lcDateVal = (profile.lcDate || '').trim();
+  if (isLcPayment(profile.paymentTerms) && depDate && lcDateVal && lcDateVal > depDate) {
+    issues.push(mk('r14-lc-after-shipment', 'invoice', 'lcDate',
+      `신용장 개설일(${lcDateVal})이 선적일(${depDate})보다 늦습니다. 신용장 없이 선적한 셈이 되어 은행 매입 거절·대금 회수 위험이 있습니다. 날짜를 확인하세요.`));
+  }
+
+  // ── R15. 수출인데 원산지가 한국 아님 (error, override 가능) ─
+  // 국내 수출 신고에서 원산지가 외국이면 중계무역·반송 등 특수 거래 — 확인 없이 진행하면
+  // 원산지증명·FTA 적용에서 문제가 된다. 정상 사유이면 사유 입력 후 우회.
+  const originVal = (profile.countryOfOrigin || '').trim();
+  const isKoreaOrigin = /korea|한국|대한민국|\bkr\b/i.test(originVal);
+  if (profile.tradeType === 'export' && originVal && !isKoreaOrigin) {
+    issues.push(mk('r15-origin-not-korea', 'customs_dec', 'countryOfOrigin',
+      `수출 신고인데 원산지가 "${originVal}"(한국 아님)으로 입력되어 있습니다. 중계무역·반송 등 특수 거래가 아니라면 원산지를 확인하세요. 특수 거래이면 사유 입력 후 진행하세요.`));
+  }
+
+  // ── R16. 포괄 품명 (error, override 가능) ───────────────
+  // "GOODS", "SAMPLE" 같은 포괄적 품명은 세관이 수리 거부하는 대표 사유 —
+  // 구체적 품명(재질·용도 포함)을 요구한다. 단어 완전 일치(복수형 포함)만 잡아 오탐 방지.
+  const GENERIC_NAMES = new Set([
+    'GOODS', 'GENERAL MERCHANDISE', 'MERCHANDISE', 'SAMPLE', 'SAMPLES', 'PRODUCT', 'PRODUCTS',
+    'ITEM', 'ITEMS', 'CARGO', 'COMMODITY', 'COMMODITIES', 'GIFT', 'GIFTS', 'PARTS', 'ACCESSORIES',
+    'FREIGHT', 'STUFF', '물품', '상품', '제품', '화물', '샘플',
+  ]);
+  const checkGeneric = (name: string, field: string) => {
+    const n = up(name).replace(/[.,!]+$/g, '').trim();
+    if (n && GENERIC_NAMES.has(n)) {
+      issues.push(mk('r16-generic-item-name', 'invoice', field,
+        `품명 "${name}"은(는) 포괄적 표현이라 세관 신고가 수리되지 않을 수 있습니다. 재질·용도를 포함한 구체적 품명으로 작성하세요. 예: "GOODS" → "STAINLESS STEEL KITCHEN KNIFE"`));
+      return true;
+    }
+    return false;
+  };
+  // 단일 품목 필드 + 다품목 각각 검사(같은 이슈 id는 첫 건만 발행해 중복 카드 방지)
+  if (!checkGeneric(itemName, 'itemName')) {
+    for (const it of profile.shipperItems ?? []) {
+      if (checkGeneric(it.itemName || '', 'itemName')) break;
+    }
+  }
+
+  // ── R18. 도착항 ↔ 거래처(Consignee) 국가 불일치 (error, override 가능) ─
+  // 도착항은 6번 섹션, 거래처 국가는 2번 섹션 — 서로 떨어진 칸이라 사람이 눈으로
+  // 대조하기 어렵다. 미국 거래처인데 도착항이 오사카면 복붙·선택 실수가 대부분.
+  // 3국 인도(drop shipment)는 실제 존재하므로 사유 입력 시 우회 허용.
+  // 양쪽 모두 국가 추정이 될 때만 판정(오탐 방지 — R5와 동일 정책).
+  const countryCode = (name?: string): string | null => {
+    const v = (name || '').toLowerCase();
+    if (!v.trim()) return null;
+    if (/korea|한국|대한민국/.test(v)) return 'KR';
+    if (/japan|일본/.test(v)) return 'JP';
+    if (/china|중국/.test(v)) return 'CN';
+    if (/united states|usa|america|미국/.test(v)) return 'US';
+    if (/vietnam|베트남/.test(v)) return 'VN';
+    if (/thailand|태국/.test(v)) return 'TH';
+    if (/singapore|싱가포르/.test(v)) return 'SG';
+    if (/germany|독일/.test(v)) return 'DE';
+    if (/united kingdom|england|britain|영국/.test(v)) return 'GB';
+    return null;
+  };
+  const dischCountry = portCountry(disch);
+  const consigneeCountry = countryCode(profile.partnerCountry);
+  if (disch && dischCountry && consigneeCountry && dischCountry !== consigneeCountry) {
+    issues.push(mk('r18-port-consignee-country', 'bl', 'dischargePort',
+      `도착항 "${disch}"(${dischCountry})과 거래처(Consignee) 국가 "${profile.partnerCountry}"(${consigneeCountry})가 다릅니다. `
+      + '입력 실수가 대부분이니 확인하세요. 3국 인도(drop shipment) 등 정상 거래이면 사유 입력 후 진행하세요.'));
+  } else if (disch && profile.partnerCountry && (!dischCountry || !consigneeCountry)) {
+    skipLog('R18 도착항-거래처 국가 대조 건너뜀 — 국가 추정 불가. 오탐 방지.');
+  }
+
+  // ── R19. 거래처 주소 ↔ 거래처 국가 선택 불일치 (error, override 가능) ─
+  // 주소는 이전 거래에서 복붙하고 국가 셀렉트만 바꾸는(또는 그 반대) 실수 검출.
+  // 주소 문자열에서 국가명이 추정될 때만 판정한다.
+  const addrCountry = countryCode(profile.partnerAddress);
+  if (addrCountry && consigneeCountry && addrCountry !== consigneeCountry) {
+    issues.push(mk('r19-consignee-country-address', 'invoice', 'partnerCountry',
+      `거래처 주소("${(profile.partnerAddress || '').trim()}")에서 추정되는 국가(${addrCountry})와 선택한 거래처 국가 "${profile.partnerCountry}"(${consigneeCountry})가 다릅니다. `
+      + '이전 거래 주소를 복사한 뒤 국가만 바꾼 경우가 많으니 두 값을 확인하세요.'));
+  }
+
   // ── R8. 금액 산술 (error) ───────────────────────────
   // quantity × unit_price = amount.
   //
@@ -353,5 +451,43 @@ export function checkPackingInvoiceConsistency(
     }
   }
 
+  return issues;
+}
+
+
+// ── R17. HS코드 ↔ 품명 분류 불일치 (error, override 가능) ─────────────────
+// 실무에서 가장 흔하고 사람이 봐도 알기 어려운 실수 — 다른 건의 코드를 복붙했거나
+// 앞자리를 착각한 경우. 품명 기반 추천 후보(HSCodeAgent가 항상 먼저 생성)의
+// 류(Chapter, 앞 2자리)와 사용자가 입력한 코드의 류를 대조한다.
+// 후보 중 하나라도 같은 류면 통과, 후보가 없으면 판정 보류(오탐 방지 — R5·R6과 동일 정책).
+export function checkHsChapterMismatch(
+  profile: TradeProfile,
+  hsResult: { status?: string; candidates: { code: string; description: string }[] },
+  logs?: AgentLog[],
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const skipLog = (msg: string) => { if (logs) logs.push(createLog('Compliance Agent', msg, 'info')); };
+
+  const cleaned = (profile.hsCode || '').replace(/[^0-9]/g, '');
+  // 형식이 틀린 코드는 hscode-invalid가 이미 잡는다 — 여기서는 유효 형식만 대조.
+  if (cleaned.length !== 6 && cleaned.length !== 10) return issues;
+  if (hsResult.status === 'invalid') return issues;
+
+  const inputChapter = cleaned.slice(0, 2);
+  const candChapters = (hsResult.candidates || [])
+    .map(c => (c.code || '').replace(/[^0-9]/g, '').slice(0, 2))
+    .filter(ch => ch.length === 2);
+
+  if (candChapters.length === 0) {
+    skipLog('R17 HS 분류 대조 건너뜀 — 품명 기반 추천 후보 없음. 오탐 방지.');
+    return issues;
+  }
+  if (candChapters.includes(inputChapter)) return issues;
+
+  const top = hsResult.candidates[0];
+  const topCode = (top.code || '').replace(/[^0-9]/g, '');
+  issues.push(mk('r17-hs-chapter-mismatch', 'customs_dec', 'hsCode',
+    `입력한 HS코드(${cleaned}, ${inputChapter}류)가 품명 기반 추천 분류(${topCode.slice(0, 2)}류 — ${top.description})와 크게 다릅니다. `
+    + '다른 거래의 코드를 복사했거나 앞자리를 착각한 경우가 많으니 분류를 확인하세요. 특수 분류가 맞다면 사유 입력 후 진행하세요.'));
   return issues;
 }

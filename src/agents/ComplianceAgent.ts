@@ -2,7 +2,7 @@ import { Agent, ComplianceResult, AgentLog, createLog, HSCodeResult } from './ty
 import { TradeProfile, DocumentStatus, ValidationIssue, GeneratedDocuments } from '../types';
 import { validateTradeDocumentsAsync } from '../harness/validatorEngine';
 import { getRelatedLawForIssue } from '../services/lawService';
-import { runComplianceRules, checkPackingInvoiceConsistency } from './complianceRules';
+import { runComplianceRules, checkPackingInvoiceConsistency, checkHsChapterMismatch } from './complianceRules';
 
 export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents: DocumentStatus[]; hsResult?: HSCodeResult; generatedDocs?: GeneratedDocuments; logs: AgentLog[] }, ComplianceResult> {
   readonly name = 'Compliance Agent';
@@ -26,6 +26,9 @@ export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents
 
     // HSCodeAgent의 검증 결과를 통합
     if (hsResult) {
+      // R17. 품명 기반 추천 분류와 입력 코드의 류(Chapter) 대조 — 복붙·앞자리 착각 검출
+      issues.push(...checkHsChapterMismatch(profile, hsResult, logs));
+
       if (hsResult.status === 'invalid') {
         const isMissing = !profile.hsCode || profile.hsCode.trim() === '';
         issues.push({
