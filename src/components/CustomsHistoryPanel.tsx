@@ -85,8 +85,10 @@ const handleCheckCargoProgress = async (trade: SavedTrade) => {
     const result = await getCustomsCargoProgress(blNo);
     setCargoProgressByTradeId((current) => ({
       ...current,
-      // 백엔드 미연결·조회 실패 시에도 연동 화면을 보여주기 위해 시뮬레이션으로 폴백
-      [trade.id]: result.status === 'error' ? buildSimulatedCargoProgress(trade) : result,
+      // 조회 실패·데이터 없음(가상 B/L 포함) 시에도 연동 화면을 보여주기 위해 시뮬레이션으로 폴백
+      [trade.id]: result.status === 'error' || result.status === 'not_found'
+        ? buildSimulatedCargoProgress(trade)
+        : result,
     }));
   } catch {
     setCargoProgressByTradeId((current) => ({
