@@ -3108,7 +3108,7 @@ body {
   background: #fff; color: #64748b; border: 1px solid var(--border-color);
 }
 .rv-hero-blocked-title { font-size: 16px; font-weight: 800; color: var(--text-dark); line-height: 1.4; }
-.rv-hero-blocked-title b { color: var(--warning-color); }
+.rv-hero-blocked-title b { color: #ea580c; }
 .rv-hero-blocked-sub { margin: 6px 0 0; font-size: 13px; color: #8a5a1c; line-height: 1.55; }
 .rv-hero-blocked-sub b { color: #7c4a06; font-weight: 700; }
 

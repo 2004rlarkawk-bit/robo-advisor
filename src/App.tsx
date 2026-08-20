@@ -22,7 +22,8 @@ import {
   ArrowRight,
   Calculator,
   Calendar,
-  OctagonAlert
+  OctagonAlert,
+  Info
 } from 'lucide-react';
 import {
   TradeProfile,
@@ -456,6 +457,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [overrides, setOverrides] = useState<Record<string, string>>({}); // issueKey → 사유
   const [overrideTarget, setOverrideTarget] = useState<ValidationIssue | null>(null);
   const [overrideReason, setOverrideReason] = useState('');
+  // 초안 생성 완료 안내 모달 — 브라우저 alert 대신 앱 톤의 모달로 표시(해결 필요 건수 보관)
+  const [draftNoticeCount, setDraftNoticeCount] = useState<number | null>(null);
   const blockedGenRef = useRef<{ result: any; generationProfile: TradeProfile; writeMode: ReturnType<typeof decideGeneratedTradeWrite> } | null>(null);
   const [feedbackReport, setFeedbackReport] = useState<FeedbackReport | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
@@ -1148,13 +1151,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
         packingXlsxCacheRef.current = null;
         setHasGenerated(true);
         blockedGenRef.current = { result, generationProfile, writeMode };
-        const overridable = blockers.filter((blocker) => blocker.overridable).length;
-        alert(
-          `초안이 생성되었습니다. 제출 전 해결해야 할 오류 ${blockers.length}건이 있어요 — 미리보기·다운로드는 가능하지만 최종 제출은 보류됩니다.` +
-          (overridable > 0
-            ? `\n(그중 ${overridable}건은 아래 검증 결과에서 "경고 무시하고 생성"으로 진행 가능)`
-            : '')
-        );
+        setDraftNoticeCount(blockers.length);
         return;
       }
 
@@ -3949,6 +3946,29 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 <Download size={16} />
                 {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : (previewDocId === 'packing_list' || previewDocId === 'customs_dec') ? 'DOCX 다운로드' : previewDocId === 'bl' ? 'PDF 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 초안 생성 완료 안내 모달 — 브라우저 alert 대체 */}
+      {draftNoticeCount !== null && (
+        <div
+          onClick={() => setDraftNoticeCount(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 92vw)', background: '#fff', borderRadius: 16, padding: '36px 32px 24px', boxShadow: '0 12px 40px rgba(0,0,0,0.25)', textAlign: 'center' }}>
+            <div style={{ width: 64, height: 64, margin: '0 auto 18px', borderRadius: '50%', background: '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-color)' }}>
+              <Info size={30} strokeWidth={2.2} />
+            </div>
+            <h3 style={{ margin: '0 0 18px', fontSize: 22, fontWeight: 800, color: 'var(--text-dark)' }}>초안이 생성되었습니다.</h3>
+            <div style={{ borderTop: '1px solid var(--border-color-subtle)', paddingTop: 18, fontSize: 16, color: 'var(--text-dark)', lineHeight: 1.8 }}>
+              <p style={{ margin: 0 }}>제출 전 확인이 필요한 항목이 <b style={{ color: '#dc2626' }}>{draftNoticeCount}건</b> 있습니다.</p>
+              <p style={{ margin: 0 }}>미리보기와 다운로드는 가능하지만,</p>
+              <p style={{ margin: 0 }}>최종 제출은 보류됩니다.</p>
+            </div>
+            <div style={{ borderTop: '1px solid var(--border-color-subtle)', marginTop: 22, paddingTop: 18 }}>
+              <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={() => setDraftNoticeCount(null)}>확인</button>
             </div>
           </div>
         </div>
