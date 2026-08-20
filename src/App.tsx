@@ -3358,7 +3358,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           // "확인 필요" 칩 숫자(needsCheck = error+warning)와 목록 개수가 일치한다.
                           const order: Record<string, number> = { error: 0, warning: 1 };
                           // card를 가진 이슈(과세가격 환산 등)는 위 사실 카드로 렌더 → 목록에선 제외(중복 방지).
-                          const sorted = [...issues].filter((i) => !i.card && i.severity !== 'info').sort(
+                          // 경고 무시(override) 처리된 error는 해결된 것으로 보고 목록·카운트에서 제외한다.
+                          const sorted = [...issues].filter((i) => !i.card && i.severity !== 'info' && !(i.severity === 'error' && overrides[issueKey(i)])).sort(
                             (a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9)
                           );
                           const sevMeta: Record<string, { label: string; hint: string; cls: string; icon: JSX.Element }> = {
