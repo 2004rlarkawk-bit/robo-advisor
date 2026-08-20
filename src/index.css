@@ -2595,6 +2595,8 @@ body {
 /* AI 추출값 입력칸 — 보라 액센트 제거, 기본 테두리의 깔끔한 흰 입력칸으로 통일 */
 .user-editable { background: #fff; }
 .import-validation-list { margin-top: 16px; }
+/* 검증 메시지의 근거 값(문서별 수치)은 본문과 문단을 나눠 작게 표시 */
+.import-validation-values { margin-top: 7px; font-size: 12.5px; opacity: 0.8; overflow-wrap: anywhere; }
 .import-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .hs-suggestion-list { display: grid; gap: 9px; }
 .hs-suggestion { display: flex; gap: 10px; padding: 13px; border: 1px solid var(--border-color); border-radius: 9px; cursor: pointer; }

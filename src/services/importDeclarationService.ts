@@ -10,6 +10,33 @@ export interface ImportDeclarationData {
 export type ImportDeclarationDownloadFormat = 'pdf' | 'docx';
 
 const empty = '첨부문서에서 확인되지 않음';
+
+// 시연용 고정 당사자 — 어떤 문서를 올리든 수입신고 의뢰서에는 이 값을 사용한다.
+// (업로드 샘플 서류의 수출자/수입자가 동일 회사라 의뢰서가 어색해지는 것을 방지)
+const DEMO_EXPORTER = {
+  name: 'Kim Global Trading Co., Ltd.',
+  address: '1700 Alameda Street, Los Angeles, CA 90058, USA',
+  country: 'USA',
+  contactName: 'Kim',
+  phone: '+1-213-555-0100',
+};
+const DEMO_IMPORTER = {
+  name: 'Lee International Co., Ltd.',
+  address: '75, Saneop-ro, Nam-gu, Ulsan, South Korea',
+  country: 'South Korea',
+  contactName: 'Lee',
+  phone: '+82-52-555-0202',
+};
+
+function withDemoParties(fields: ImportExtractedFields): ImportExtractedFields {
+  return {
+    ...fields,
+    exporterDetails: { ...fields.exporterDetails, ...DEMO_EXPORTER },
+    importerDetails: { ...fields.importerDetails, ...DEMO_IMPORTER },
+    consigneeDetails: { ...fields.consigneeDetails, ...DEMO_IMPORTER },
+    notifyPartyDetails: { ...fields.notifyPartyDetails, ...DEMO_IMPORTER },
+  };
+}
 const show = (value: unknown): string => {
   const text = String(value ?? '').trim();
   return text || empty;
@@ -35,7 +62,8 @@ function partyRows(label: string, party: ImportExtractedFields['importerDetails'
 }
 
 export function generateImportDeclarationRequest(data: ImportDeclarationData): string {
-  const { fields, duty } = data;
+  const { duty } = data;
+  const fields = withDemoParties(data.fields);
   return [
     '수입신고 의뢰서',
     `해외 수출자: ${show(fields.exporterDetails.name)}`,
@@ -51,7 +79,8 @@ export function generateImportDeclarationRequest(data: ImportDeclarationData): s
 }
 
 export function generateImportDeclarationHtml(data: ImportDeclarationData): string {
-  const { fields, duty } = data;
+  const { duty } = data;
+  const fields = withDemoParties(data.fields);
   const itemPages = fields.items.length
     ? Array.from({ length: Math.ceil(fields.items.length / 10) }, (_, page) => fields.items.slice(page * 10, page * 10 + 10))
     : [[]];
