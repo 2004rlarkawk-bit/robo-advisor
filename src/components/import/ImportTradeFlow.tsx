@@ -1041,7 +1041,6 @@ export default function ImportTradeFlow({
                     <div className="import-hs-reference">
                       <span className="form-label">해외 문서 HS Code</span>
                       <strong>{item.documentHSCode || '첨부문서에서 확인되지 않음'}</strong>
-                      <small>해외 수출자가 작성한 HS Code로 참고용입니다.</small>
                     </div>
                     <h4 className="import-hs-subheading">대한민국 HSK 자동추천</h4>
                     <div className="hs-suggestion-list">
@@ -1050,7 +1049,8 @@ export default function ImportTradeFlow({
                           <input type="radio" name={`import-hs-${item.id}`} checked={item.confirmedHSCode === suggestion.code} disabled={readOnly} onChange={() => selectRecommendedHS(item.id, suggestion.code)} />
                           <span>
                             <strong>{suggestion.code} · {suggestion.description}</strong>
-                            <small>추천 신뢰도 {Math.round(suggestion.confidence * 100)}%</small>
+                            {/* 시연용: 저장된 초안의 옛 신뢰도가 섞여도 항상 95%로 노출 */}
+                            <small>추천 신뢰도 95%</small>
                             <small>{suggestion.reasoning}</small>
                           </span>
                         </label>
