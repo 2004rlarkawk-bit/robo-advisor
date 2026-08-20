@@ -200,6 +200,28 @@ export default function ShipperWorkspaceForm({
     onGenerate();
   };
 
+  // Tab 자동 채움 — 빈 입력칸에서 Tab을 누르면 회색 가이드(placeholder) 값이 실제 값으로
+  // 입력되고 포커스는 다음 칸으로 이동한다. "예: 20" 형태는 접두를 떼고 값만("20") 넣는다.
+  // 안내문 성격의 placeholder("직접 입력", "선택", "~ 등")는 유효한 예시가 아니므로 건너뛴다.
+  const handleTabAutofill = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab' || event.shiftKey) return;
+    const el = event.target as HTMLElement;
+    if (!(el instanceof HTMLInputElement) && !(el instanceof HTMLTextAreaElement)) return;
+    if (el instanceof HTMLInputElement && ['checkbox', 'radio', 'date'].includes(el.type)) return;
+    if (el.value !== '' || el.readOnly || el.disabled) return;
+    const placeholder = (el.placeholder || '').trim();
+    if (!placeholder) return;
+    if (/직접 입력|선택하세요|예정$|등$/.test(placeholder) || placeholder === '선택') return;
+    const value = placeholder.replace(/^예[:：]\s*/, '');
+    // React controlled input은 DOM 값 직접 대입으로는 상태가 갱신되지 않으므로
+    // 네이티브 setter + input 이벤트 디스패치로 onChange 경로를 태운다.
+    const proto = el instanceof HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+    setter?.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    // preventDefault 하지 않음 — 값을 채우고 Tab 기본 동작(다음 칸 이동)은 그대로 둔다.
+  };
+
   // 섹션별 초기화 — 해당 아코디언의 입력값만 비운다(로컬 자동저장은 그대로 동작).
   // summary 안의 버튼이라 클릭 시 아코디언 접힘/펼침이 토글되지 않도록 기본 동작을 막는다.
   const sectionResets: Record<number, () => void> = {
@@ -349,7 +371,7 @@ export default function ShipperWorkspaceForm({
   };
 
   return (
-    <div className="form-card shipper-workspace-form">
+    <div className="form-card shipper-workspace-form" onKeyDownCapture={handleTabAutofill}>
       <div className="trade-section-header">
         <div className="trade-section-title">
           <FileSignature size={20} className="text-primary" />

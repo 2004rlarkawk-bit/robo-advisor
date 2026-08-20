@@ -465,6 +465,10 @@ body {
   border-color: #94a3b8;
   color: var(--text-dark);
 }
+/* 접힌 섹션에서는 초기화 버튼 숨김 — 펼쳤을 때만 노출 */
+.form-section:not([open]) .section-reset-btn {
+  display: none;
+}
 
 .form-section-summary::after {
   content: '▾';
