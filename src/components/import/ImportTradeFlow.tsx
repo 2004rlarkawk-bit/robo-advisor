@@ -1013,6 +1013,7 @@ export default function ImportTradeFlow({
             analysis={state.analysis}
             importerCompanyName={role === 'shipper' ? importerCompanyName : undefined}
             hasCertificateOfOriginDocument={state.documents.some((document) => document.type === 'certificate_of_origin')}
+            documentNames={Object.fromEntries(state.documents.map((document) => [document.id, document.name]))}
             readOnly={readOnly}
             onChange={(extracted) => setState((current) => ({
               ...current,
@@ -1202,6 +1203,8 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
     </section>
   );
   const krw = (value: number | null) => value == null ? '확인 필요' : `${Math.round(value).toLocaleString('ko-KR')}원`;
+  // 환율 기준일 YYYYMMDD → YYYY.MM.DD (수출 과세가격 카드와 표기 통일)
+  const ymd = (d: string) => /^\d{8}$/.test(d) ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d;
   return (
     <section className="form-card import-card">
       <div className="import-card-heading"><div><h2>예상 관세액</h2></div><span className="source-badge">API</span></div>
@@ -1209,7 +1212,7 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
         <div><dt>Invoice 통화</dt><dd>{duty.invoiceCurrency}</dd></div>
         <div><dt>Invoice 금액</dt><dd>{duty.invoiceAmount.toLocaleString()}</dd></div>
         <div><dt>적용 환율</dt><dd>{duty.exchangeRate.toLocaleString()}원</dd></div>
-        <div><dt>환율 기준일</dt><dd>{duty.exchangeRateDate}</dd></div>
+        <div><dt>환율 기준일</dt><dd>{ymd(duty.exchangeRateDate)}</dd></div>
         <div><dt>원화 환산금액</dt><dd>{krw(duty.convertedInvoiceKrw)}</dd></div>
         <div><dt>예상 과세가격</dt><dd>{krw(duty.customsValue)}</dd></div>
         <div><dt>기본 관세율</dt><dd>{duty.basicRate}%</dd></div>
