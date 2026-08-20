@@ -691,7 +691,9 @@ export default function ImportTradeFlow({
       dutyError = error instanceof Error ? error.message : '예상세액을 계산할 수 없습니다.';
       console.error('[Import Duty] calculation failed', { error, message: dutyError });
     }
-    const risks = assessImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName);
+    const riskStatusById = new Map(state.risks.map((risk) => [risk.id, risk.status]));
+    const risks = assessImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName)
+      .map((risk) => ({ ...risk, status: riskStatusById.get(risk.id) ?? risk.status }));
     const generatedAt = new Date().toISOString();
     try {
       let persistedDocuments = await persistImportDocuments();
@@ -888,6 +890,23 @@ export default function ImportTradeFlow({
     setSourceFiles({});
     setMessage('');
   };
+  // 리스크는 수정 가능한 2단계(분석 결과)에서 바로 보여야 하므로,
+  // 사용자가 값을 고칠 때마다 현재 입력값 기준으로 다시 계산한다.
+  const liveRisks = useMemo(() => {
+    if (!state.analysis) return [];
+    const statusById = new Map(state.risks.map((risk) => [risk.id, risk.status]));
+    return assessImportRisks(state.documents, state.analysis, state.suggestions, state.dutyError, importerCompanyName)
+      .map((risk) => ({ ...risk, status: statusById.get(risk.id) ?? risk.status }));
+  }, [state.analysis, state.documents, state.suggestions, state.dutyError, state.risks, importerCompanyName]);
+
+  // 재계산으로 목록이 바뀌어도 '확인 완료' 표시가 유실되지 않도록 파생 목록을 그대로 저장한다.
+  const toggleRisk = (id: string) => setState((current) => ({
+    ...current,
+    risks: liveRisks.map((risk) => (risk.id === id
+      ? { ...risk, status: risk.status === 'resolved' ? 'unresolved' : 'resolved' }
+      : risk)),
+  }));
+
   const declarationData = state.analysis ? {
     fields: state.analysis.extracted,
     duty: state.duty ?? undefined,
@@ -1009,6 +1028,12 @@ export default function ImportTradeFlow({
 
       {state.step === 2 && state.analysis && (
         <>
+          <RiskSummary
+            risks={liveRisks}
+            onToggle={readOnly ? undefined : toggleRisk}
+            title="확인·수정이 필요한 항목"
+            description="아래 분석 결과에서 값을 고치면 이 목록도 즉시 다시 계산됩니다."
+          />
           <ImportAnalysisSummary
             analysis={state.analysis}
             importerCompanyName={role === 'shipper' ? importerCompanyName : undefined}
@@ -1229,7 +1254,12 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
   );
 }
 
-function RiskSummary({ risks, onToggle }: { risks: ImportRisk[]; onToggle?: (id: string) => void }) {
+function RiskSummary({ risks, onToggle, title = '종합 리스크', description }: {
+  risks: ImportRisk[];
+  onToggle?: (id: string) => void;
+  title?: string;
+  description?: string;
+}) {
   // 수출 결과 페이지의 확인 항목과 같은 문법: 반드시 수정(high) / 보완 권장(그 외) 두 그룹.
   const blockers = risks.filter((risk) => risk.level === 'high');
   const advisories = risks.filter((risk) => risk.level === 'medium' || risk.level === 'low');
@@ -1287,7 +1317,7 @@ function RiskSummary({ risks, onToggle }: { risks: ImportRisk[]; onToggle?: (id:
 
   return (
     <section className="form-card import-card">
-      <div className="import-card-heading"><div><h2>종합 리스크</h2></div></div>
+      <div className="import-card-heading"><div><h2>{title}</h2></div>{description && <p>{description}</p>}</div>
       {nothingFound ? (
         <div className="risk-pass">
           <CheckCircle2 size={20} />
