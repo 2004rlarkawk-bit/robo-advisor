@@ -445,6 +445,27 @@ body {
   display: none;
 }
 
+/* 섹션별 초기화 버튼 — summary 우측(펼침 화살표 앞)에 작게 배치 */
+.section-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-light);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.section-reset-btn:hover {
+  border-color: #94a3b8;
+  color: var(--text-dark);
+}
+
 .form-section-summary::after {
   content: '▾';
   margin-left: auto;

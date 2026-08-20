@@ -200,6 +200,60 @@ export default function ShipperWorkspaceForm({
     onGenerate();
   };
 
+  // 섹션별 초기화 — 해당 아코디언의 입력값만 비운다(로컬 자동저장은 그대로 동작).
+  // summary 안의 버튼이라 클릭 시 아코디언 접힘/펼침이 토글되지 않도록 기본 동작을 막는다.
+  const sectionResets: Record<number, () => void> = {
+    1: () => {
+      onProfilePatch({ companyName: '', companyAddress: '', companyCountry: '', contact: '', businessRegistrationNo: '', taxNo: '', signedBy: '' });
+      onSupplementalChange({ ...supplemental, isSignerSameAsCompany: false, signerNameBeforeCompany: '' });
+    },
+    2: () => {
+      onProfilePatch({
+        buyerName: '', buyerAddress: '', buyerCountry: '',
+        partnerName: '', partnerAddress: '', partnerCountry: '', partnerContact: '',
+        notifyPartyName: '', notifyPartyAddress: '', notifyPartyContact: '',
+      });
+      onSupplementalChange({ ...supplemental, buyerMatchesConsignee: false, consigneeMatchesNotifyParty: false });
+    },
+    3: () => {
+      onItemsChange([createEmptyShipperItem(`shipper-item-${crypto.randomUUID()}`)]);
+      setShowItemValidation(false);
+    },
+    4: () => {
+      onProfilePatch({ incoterms: '', paymentTerms: '', lcNo: '', lcDate: '', otherReferences: '' });
+      setIncotermsPlaceSource(null);
+      onSupplementalChange({ ...supplemental, incotermsPlace: '' });
+    },
+    5: () => {
+      onProfilePatch({ packageCount: '', eaPerBox: '', packageType: '', grossWeight: '', netWeight: '', weight: '', measurement: '', shippingMarks: '' });
+      setForceCustomPackageType(false);
+      onSupplementalChange({ ...supplemental, hasNoShippingMarks: false, shippingMarksBeforeNoMarks: '' });
+    },
+    6: () => {
+      onProfilePatch({ loadPort: '', dischargePort: '', departureDate: '', loadingMode: undefined });
+      setForceCustomLoadPort(false);
+      setForceCustomDischargePort(false);
+    },
+    7: () => {
+      onProfilePatch({ countryOfOrigin: '' });
+      onSupplementalChange({ ...supplemental, originCriterion: '' });
+    },
+  };
+  const sectionResetButton = (section: number) => (
+    <button
+      type="button"
+      className="section-reset-btn"
+      aria-label={`${section}번 섹션 입력값 초기화`}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        sectionResets[section]();
+      }}
+    >
+      <RotateCcw size={12} /> 초기화
+    </button>
+  );
+
   const handleResetClick = () => {
     setIncotermsPlaceSource(null);
     setForceCustomLoadPort(false);
@@ -307,7 +361,7 @@ export default function ShipperWorkspaceForm({
 
       {/* 2026-07-23 편의성 업그레이드: 화주용 통관 입력 폼 확장 */}
       <details className="form-section" open>
-        <summary className="form-section-summary">1. 화주 기본정보</summary>
+        <summary className="form-section-summary"><span>1. 화주 기본정보</span>{sectionResetButton(1)}</summary>
         <div className="form-grid">
           <div className="form-group" data-field="companyName"><label className="form-label">회사명(상호명) <Req /></label><input className="form-input" value={profile.companyName} onChange={(event) => onProfilePatch({
             companyName: event.target.value,
@@ -349,7 +403,7 @@ export default function ShipperWorkspaceForm({
       </details>
 
       <details className="form-section">
-        <summary className="form-section-summary">2. 거래처 정보</summary>
+        <summary className="form-section-summary"><span>2. 거래처 정보</span>{sectionResetButton(2)}</summary>
         {partnersLoading ? (
           <div className="form-message info" role="status">자주 거래한 거래처를 불러오는 중입니다.</div>
         ) : frequentPartners.length > 0 ? (
@@ -387,7 +441,7 @@ export default function ShipperWorkspaceForm({
       </details>
 
       <details className="form-section">
-        <summary className="form-section-summary">3. 품목 정보</summary>
+        <summary className="form-section-summary"><span>3. 품목 정보</span>{sectionResetButton(3)}</summary>
         <div className="shipper-item-list">
           {items.map((item, index) => (
             <div className="shipper-item-card" key={item.id}>
@@ -532,7 +586,7 @@ export default function ShipperWorkspaceForm({
       </details>
 
       <details className="form-section">
-        <summary className="form-section-summary">4. 거래 조건</summary>
+        <summary className="form-section-summary"><span>4. 거래 조건</span>{sectionResetButton(4)}</summary>
         <div className="form-grid">
           <div className="form-group" data-field="incoterms"><label className="form-label">Incoterms <Req /></label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
           <div className="form-group"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
@@ -546,7 +600,7 @@ export default function ShipperWorkspaceForm({
       </details>
 
       <details className="form-section">
-        <summary className="form-section-summary">5. 포장 정보</summary>
+        <summary className="form-section-summary"><span>5. 포장 정보</span>{sectionResetButton(5)}</summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">포장 수량 (박스 수)</label><input type="number" min="0" className="form-input" value={profile.packageCount ?? ''} onChange={(e) => onProfilePatch({ packageCount: numericValue(e.target.value) })} /></div>
           <div className="form-group"><label className="form-label">박스당 수량 <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={profile.eaPerBox ?? ''} onChange={(e) => onProfilePatch({ eaPerBox: numericValue(e.target.value) })} placeholder="예: 20" /></div>
@@ -572,7 +626,7 @@ export default function ShipperWorkspaceForm({
       </details>
 
       <details className="form-section">
-        <summary className="form-section-summary">6. 항만 및 일정</summary>
+        <summary className="form-section-summary"><span>6. 항만 및 일정</span>{sectionResetButton(6)}</summary>
         <div className="form-grid">
           <div className="form-group" data-field="loadPort"><label className="form-label">선적항 POL {profile.incoterms === 'FOB' && <Req />}</label><select className="form-input" value={loadPortSelection} onChange={(e) => { if (e.target.value === OTHER_DOMESTIC_PORT_VALUE) setForceCustomLoadPort(true); else { setForceCustomLoadPort(false); onProfilePatch({ loadPort: e.target.value }); } }}><option value="">선적항을 선택하세요</option>{EXPORT_POL_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_DOMESTIC_PORT_VALUE}>기타 국내항</option></select>{loadPortSelection === OTHER_DOMESTIC_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 국내항 직접 입력" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })} placeholder="기타 국내항 직접 입력" />}</div>
           <div className="form-group" data-field="dischargePort"><label className="form-label">도착항 POD {(profile.incoterms === 'CIF' || profile.incoterms === 'CFR') && <Req />}</label><select className="form-input" value={dischargePortSelection} onChange={(e) => { if (e.target.value === OTHER_FOREIGN_PORT_VALUE) setForceCustomDischargePort(true); else { setForceCustomDischargePort(false); onProfilePatch({ dischargePort: e.target.value }); } }}><option value="">도착항을 선택하세요</option>{EXPORT_POD_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_FOREIGN_PORT_VALUE}>기타 해외항</option></select>{dischargePortSelection === OTHER_FOREIGN_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 해외항 직접 입력" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })} placeholder="기타 해외항 직접 입력" />}</div>
@@ -582,7 +636,7 @@ export default function ShipperWorkspaceForm({
       </details>
 
       <details className="form-section">
-        <summary className="form-section-summary">7. 원산지 및 요건서류</summary>
+        <summary className="form-section-summary"><span>7. 원산지 및 요건서류</span>{sectionResetButton(7)}</summary>
         <div className="form-grid">
           <div className="form-group" data-field="countryOfOrigin"><label className="form-label">원산지 국가 <Req /></label><CountrySelect className="form-input" value={profile.countryOfOrigin ?? ''} onChange={(value) => onProfilePatch({ countryOfOrigin: value })} /></div>
           <div className="form-group"><label className="form-label">원산지 결정기준</label><select className="form-input" value={supplemental.originCriterion} onChange={(e) => onSupplementalChange({ ...supplemental, originCriterion: e.target.value as ShipperSupplementalState['originCriterion'] })}><option value="">선택하세요</option><option value="세번변경기준">세번변경기준</option><option value="부가가치기준">부가가치기준</option><option value="완전생산기준">완전생산기준</option></select></div>
