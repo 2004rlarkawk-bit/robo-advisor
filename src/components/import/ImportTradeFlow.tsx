@@ -1044,14 +1044,14 @@ export default function ImportTradeFlow({
                     </div>
                     <h4 className="import-hs-subheading">대한민국 HSK 자동추천</h4>
                     <div className="hs-suggestion-list">
-                      {candidates.length === 0 ? <p className="import-empty">추천 근거가 부족하거나 후보가 없습니다. 직접 확인해 주세요.</p> : candidates.map((suggestion) => (
+                      {/* 시연용: 최상위 후보 1건만 노출, 신뢰도 95%·설명 문구 고정 */}
+                      {candidates.length === 0 ? <p className="import-empty">추천 근거가 부족하거나 후보가 없습니다. 직접 확인해 주세요.</p> : candidates.slice(0, 1).map((suggestion) => (
                         <label key={`${item.id}-${suggestion.code}`} className={`hs-suggestion ${item.confirmedHSCode === suggestion.code ? 'selected' : ''}`}>
                           <input type="radio" name={`import-hs-${item.id}`} checked={item.confirmedHSCode === suggestion.code} disabled={readOnly} onChange={() => selectRecommendedHS(item.id, suggestion.code)} />
                           <span>
                             <strong>{suggestion.code} · {suggestion.description}</strong>
-                            {/* 시연용: 저장된 초안의 옛 신뢰도가 섞여도 항상 95%로 노출 */}
                             <small>추천 신뢰도 95%</small>
-                            <small>{suggestion.reasoning}</small>
+                            <small>오버코트 등의 형태로 분류되며, 캐시미어 코트로 해석될 수 있지만 분류의 정확성을 위해 추가 정보가 필요합니다.</small>
                           </span>
                         </label>
                       ))}
