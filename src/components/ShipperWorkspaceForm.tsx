@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { FileSignature, FileText, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertCircle, FileSignature, FileText, PenLine, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import {
   EXPORT_POD_OPTIONS,
   EXPORT_POL_OPTIONS,
@@ -43,6 +43,10 @@ interface Props {
   onSupplementalChange: (state: ShipperSupplementalState) => void;
   onReset: () => void;
   onGenerate: () => void;
+  /** 수출인데 원산지가 한국이 아닐 때(r15) 섹션 7에 인라인 안내 카드를 띄운다 */
+  originIssueActive?: boolean;
+  /** 특수거래 사유 입력(경고 무시) 모달 열기 */
+  onOriginOverrideRequest?: () => void;
 }
 
 const INCOTERMS_OPTIONS: Exclude<Incoterms, ''>[] = ['FOB', 'CFR', 'CIF', 'FAS', 'FCA'];
@@ -93,6 +97,8 @@ export default function ShipperWorkspaceForm({
   onSupplementalChange,
   onReset,
   onGenerate,
+  originIssueActive = false,
+  onOriginOverrideRequest,
 }: Props) {
   const invoiceSummary = summarizeShipperItems(items);
   const hasInvalidWeight = isGrossWeightBelowNet(profile.grossWeight, profile.netWeight);
@@ -657,8 +663,40 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section">
+      <details className="form-section" open={originIssueActive || undefined}>
         <summary className="form-section-summary"><span>7. 원산지 및 요건서류</span>{sectionResetButton(7)}</summary>
+        {originIssueActive && (
+          <div className="origin-notice" role="alert">
+            <span className="origin-notice-ic"><AlertCircle size={22} /></span>
+            <div className="origin-notice-body">
+              <b className="origin-notice-title">원산지를 변경해 주세요</b>
+              <p className="origin-notice-text">
+                현재 원산지가 <b className="origin-bad">"{profile.countryOfOrigin}"</b> 으로 입력되어 있습니다.<br />
+                정확한 수출 신고를 위해 원산지를 <b className="origin-good">"Korea"</b> 로 변경해 주세요.
+              </p>
+              <div className="origin-notice-foot">
+                <span className="origin-notice-basis">근거: 대외무역법 제33조·제34조</span>
+                <div className="origin-notice-actions">
+                  <button
+                    type="button"
+                    className="origin-btn"
+                    onClick={() => {
+                      onProfilePatch({ countryOfOrigin: '' });
+                      document.querySelector<HTMLElement>('[data-field="countryOfOrigin"] select, [data-field="countryOfOrigin"] input')?.focus();
+                    }}
+                  >
+                    <RotateCcw size={14} /> 원산지 다시 선택
+                  </button>
+                  {onOriginOverrideRequest && (
+                    <button type="button" className="origin-btn dark" onClick={onOriginOverrideRequest}>
+                      <PenLine size={14} /> 특수거래 사유 입력
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="form-grid">
           <div className="form-group" data-field="countryOfOrigin"><label className="form-label">원산지 국가 <Req /></label><CountrySelect className="form-input" value={profile.countryOfOrigin ?? ''} onChange={(value) => onProfilePatch({ countryOfOrigin: value })} /></div>
           <div className="form-group"><label className="form-label">원산지 결정기준</label><select className="form-input" value={supplemental.originCriterion} onChange={(e) => onSupplementalChange({ ...supplemental, originCriterion: e.target.value as ShipperSupplementalState['originCriterion'] })}><option value="">선택하세요</option><option value="세번변경기준">세번변경기준</option><option value="부가가치기준">부가가치기준</option><option value="완전생산기준">완전생산기준</option></select></div>

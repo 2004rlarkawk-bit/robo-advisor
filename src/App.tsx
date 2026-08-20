@@ -2109,6 +2109,11 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     );
   }
 */
+  // 수출인데 원산지가 한국이 아닌 경우(r15) — 토스트 대신 섹션 7 안 인라인 안내 카드로 보여준다.
+  const originNotKoreaIssue = issues.find(
+    (i) => i.id === 'r15-origin-not-korea' && !overrides[issueKey(i)]
+  ) ?? null;
+
   return (
     <div className="app-container">
       <OnboardingTour />
@@ -2242,6 +2247,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   onSupplementalChange={(state) => setProfile((current) => ({ ...current, shipperSupplemental: state }))}
                   onReset={handleReset}
                   onGenerate={() => void handleGenerateDocuments()}
+                  originIssueActive={Boolean(originNotKoreaIssue)}
+                  onOriginOverrideRequest={() => {
+                    if (originNotKoreaIssue) { setOverrideTarget(originNotKoreaIssue); setOverrideReason(''); }
+                  }}
                   toolbar={IS_DEV_TEST_ENABLED ? (
                     <div className="dev-test-actions">
                       <span className="dev-badge">DEV</span>
@@ -3765,8 +3774,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         </main>
       </div>
 
-      {/* 입력 화면 수정 안내 배너 — "입력 수정" 클릭 시 해당 필드로 이동하며 무엇을 고칠지 표시 */}
-      {highlightField && !hasGenerated && (
+      {/* 입력 화면 수정 안내 배너 — "입력 수정" 클릭 시 해당 필드로 이동하며 무엇을 고칠지 표시.
+          원산지(r15)는 섹션 7 인라인 카드가 안내하므로 토스트를 띄우지 않는다. */}
+      {highlightField && !hasGenerated && !(highlightField === 'countryOfOrigin' && originNotKoreaIssue) && (
         <div className="field-fix-banner" role="status">
           <span className="ffb-ic"><Pencil size={16} /></span>
           <div className="ffb-text">
