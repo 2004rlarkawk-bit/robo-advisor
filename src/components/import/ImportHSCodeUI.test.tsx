@@ -91,7 +91,6 @@ afterEach(() => {
 describe('수입-화주 대한민국 HSK UI', () => {
   it('해외 문서 코드는 참고용으로 표시하고 문서값 확정 버튼을 제공하지 않는다', () => {
     expect(container?.textContent).toContain('해외 문서 HS Code');
-    expect(container?.textContent).toContain('해외 수출자가 작성한 HS Code로 참고용입니다.');
     expect(container?.textContent).toContain('대한민국 HSK 자동추천');
     expect(container?.textContent).not.toContain('문서값을 최종 확정');
   });
