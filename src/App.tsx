@@ -3457,7 +3457,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                       )}
                                       {basisLaw && (
                                         <details className="mfc-basis" style={{ marginTop: 8 }}>
-                                          <summary style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600, cursor: 'pointer', listStyle: 'none' }}>
+                                          <summary style={{ display: 'inline-block', padding: '3px 10px', borderRadius: 999, background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', fontSize: 12, fontWeight: 600, cursor: 'pointer', listStyle: 'none' }}>
                                             [근거: {basisLaw}] {basisSummary ? '▸' : ''}
                                           </summary>
                                           {basisSummary && (
@@ -3711,8 +3711,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                             {/* overridable error: 사유 입력 후 override(진행) / override됨 배지 */}
                             {issue.severity === 'error' && issue.overridable && (
                               overrides[issueKey(issue)] ? (
-                                <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(16,185,129,0.12)', color: '#065f46', fontSize: 12, fontWeight: 600 }}>
-                                  ✅ 경고 무시 처리됨 — 사유: {overrides[issueKey(issue)]}
+                                <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e8edf3', color: '#334155', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ color: '#15803d', fontWeight: 800 }}>✓</span> 경고 무시 처리됨 — 사유: {overrides[issueKey(issue)]}
                                 </div>
                               ) : (
                                 <button className="mobile-btn mobile-btn-secondary" onClick={() => { setOverrideTarget(issue); setOverrideReason(''); }}>
