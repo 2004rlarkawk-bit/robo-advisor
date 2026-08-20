@@ -40,7 +40,6 @@ export const RULE_POLICY = {
   'r15-origin-not-korea':     { severity: 'error',   overridable: true },
   'r16-generic-item-name':    { severity: 'error',   overridable: true },
   'r17-hs-chapter-mismatch':  { severity: 'error',   overridable: true },
-  'r18-port-consignee-country': { severity: 'error', overridable: true },
   'r19-consignee-country-address': { severity: 'error', overridable: true },
 } as const satisfies Record<string, RulePolicy>;
 
@@ -332,11 +331,7 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     }
   }
 
-  // ── R18. 도착항 ↔ 거래처(Consignee) 국가 불일치 (error, override 가능) ─
-  // 도착항은 6번 섹션, 거래처 국가는 2번 섹션 — 서로 떨어진 칸이라 사람이 눈으로
-  // 대조하기 어렵다. 미국 거래처인데 도착항이 오사카면 복붙·선택 실수가 대부분.
-  // 3국 인도(drop shipment)는 실제 존재하므로 사유 입력 시 우회 허용.
-  // 양쪽 모두 국가 추정이 될 때만 판정(오탐 방지 — R5와 동일 정책).
+  // (R18 도착항↔거래처 국가 대조는 3국 인도 등 정상 거래에서 과검출된다는 피드백으로 제거 — 2026-08-20)
   const countryCode = (name?: string): string | null => {
     const v = (name || '').toLowerCase();
     if (!v.trim()) return null;
@@ -351,15 +346,7 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     if (/united kingdom|england|britain|영국/.test(v)) return 'GB';
     return null;
   };
-  const dischCountry = portCountry(disch);
   const consigneeCountry = countryCode(profile.partnerCountry);
-  if (disch && dischCountry && consigneeCountry && dischCountry !== consigneeCountry) {
-    issues.push(mk('r18-port-consignee-country', 'bl', 'dischargePort',
-      `도착항 "${disch}"(${dischCountry})과 거래처(Consignee) 국가 "${profile.partnerCountry}"(${consigneeCountry})가 다릅니다. `
-      + '입력 실수가 대부분이니 확인하세요. 3국 인도(drop shipment) 등 정상 거래이면 사유 입력 후 진행하세요.'));
-  } else if (disch && profile.partnerCountry && (!dischCountry || !consigneeCountry)) {
-    skipLog('R18 도착항-거래처 국가 대조 건너뜀 — 국가 추정 불가. 오탐 방지.');
-  }
 
   // ── R19. 거래처 주소 ↔ 거래처 국가 선택 불일치 (error, override 가능) ─
   // 주소는 이전 거래에서 복붙하고 국가 셀렉트만 바꾸는(또는 그 반대) 실수 검출.

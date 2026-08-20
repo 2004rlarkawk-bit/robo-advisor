@@ -368,26 +368,9 @@ describe('R17 HS코드 ↔ 품명 분류 불일치', () => {
   });
 });
 
-describe('R18 도착항 ↔ 거래처 국가 불일치', () => {
-  it('도착항 일본 + 거래처 국가 미국 → error(override 가능)', () => {
-    const issue = find(
-      { dischargePort: 'OSAKA, JAPAN', partnerCountry: 'United States' },
-      'r18-port-consignee-country',
-    )!;
-    expect(issue).toBeTruthy();
-    expect(issue.severity).toBe('error');
-    expect(issue.overridable).toBe(true);
-  });
-  it('도착항과 거래처 국가가 같으면 미발행', () => {
-    expect(ids({ dischargePort: 'OSAKA, JAPAN', partnerCountry: 'Japan' }))
-      .not.toContain('r18-port-consignee-country');
-  });
-  it('국가 추정이 안 되는 항구(함부르크 등)는 판정 보류(오탐 방지)', () => {
-    expect(ids({ dischargePort: 'HAMBURG, GERMANY', partnerCountry: 'United States' }))
-      .not.toContain('r18-port-consignee-country');
-  });
-  it('거래처 국가 미입력이면 미발행', () => {
-    expect(ids({ dischargePort: 'OSAKA, JAPAN', partnerCountry: '' }))
+describe('R18 제거됨 — 도착항 ↔ 거래처 국가 대조는 발행하지 않는다', () => {
+  it('도착항 일본 + 거래처 국가 미국이어도 미발행(3국 인도 과검출 방지)', () => {
+    expect(ids({ dischargePort: 'OSAKA, JAPAN', partnerCountry: 'United States' }))
       .not.toContain('r18-port-consignee-country');
   });
 });

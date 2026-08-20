@@ -396,7 +396,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
         source: 'simulation',
       });
 
-    // 123-45-67890: 체크섬 불일치 → error
+    // 123-45-67890: 체크섬 불일치 → warning(보완 권장 — 생성은 차단하지 않음)
     const badBizProfile: TradeProfile = {
       ...baseAsyncProfile,
       businessRegistrationNo: '123-45-67890',
@@ -406,7 +406,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     const badIssue = badIssues.find(i => i.id === 'bizno-invalid');
 
     expect(badIssue).toBeDefined();
-    expect(badIssue?.severity).toBe('error');
+    expect(badIssue?.severity).toBe('warning');
 
     // 124-81-00998: 체크섬 유효, 국세청 API 미사용 → 형식확인 info
     const okBizProfile: TradeProfile = {
