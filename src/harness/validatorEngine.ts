@@ -564,9 +564,9 @@ export async function validateTradeDocumentsAsync(
         issues.push({
           id: 'bizno-invalid',
           docType: 'customs_dec',
-          // 데모 계정 등 실등록되지 않은 번호가 흔해 생성 차단(반드시 수정)까지는 과함 —
-          // 보완 권장(warning)으로 안내만 하고 진행은 막지 않는다. (2026-08-20)
-          severity: 'warning',
+          severity: 'error',
+          // 국세청 실조회 실패 시 사용자가 통제 불가 — 사유 기록 후 계속 진행 가능
+          overridable: true,
           message: `사업자등록번호 확인 필요: ${biz.statusText} (통관 신고인 정보 불일치 시 세관 반려 사유가 됩니다.)`,
           field: 'businessRegistrationNo',
         });

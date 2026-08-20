@@ -3438,12 +3438,21 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   if (pres) { mainLine = pres.title; }
                                   // 금액 불일치는 칩으로 숫자를 보여주므로 제목을 짧게.
                                   if (issue.amounts) { mainLine = '금액 계산이 일치하지 않습니다'; }
+                                  // 긴 메시지는 첫 문장만 굵은 제목으로, 나머지는 아래 회색 설명으로 분리해
+                                  // 한 덩어리 굵은 문단이 되지 않게 한다. (마침표+공백 기준)
+                                  let descLine = '';
+                                  const sentenceBreak = mainLine.indexOf('. ');
+                                  if (!pres && !issue.amounts && sentenceBreak > 0) {
+                                    descLine = mainLine.slice(sentenceBreak + 2).trim();
+                                    mainLine = mainLine.slice(0, sentenceBreak + 1);
+                                  }
                                   return (
                                     <>
                                       <div className="fix-card__titlerow">
                                         <span className="fix-card__title">{mainLine}</span>
                                         {!isErr && <span className="fix-card__doc">{docLbl}</span>}
                                       </div>
+                                      {descLine && <p className="fix-card__desc">{descLine}</p>}
                                       {isErr && (
                                         <div className="fix-card__meta">
                                           {issue.amounts && (
