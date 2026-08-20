@@ -10,6 +10,7 @@ const cases: Array<[ImportDocumentType, string[]]> = [
   ['packing_list', [
     '포장명세서.pdf', '포장 명세서.pdf', '포장내역서.pdf', '포장 내역서.pdf',
     '포장목록.pdf', '포장 목록.pdf', 'Packing List.pdf', 'P-L.pdf', 'PL.pdf',
+    '패킹리스트.pdf', '패킹 리스트.pdf', '팩킹리스트.pdf', '패킹명세서.pdf',
   ]],
   ['bill_of_lading', [
     '선하증권.pdf', '선하 증권.pdf', '선하증권서.pdf', '해상선하증권.pdf',
@@ -47,6 +48,15 @@ describe('수출입 첨부 문서 파일명 자동분류', () => {
     expect(classifyImportDocumentName('배송송장처리내역.pdf')).toBe('other');
     expect(classifyImportDocumentName('shipping_manifest.pdf')).toBe('other');
     expect(classifyImportDocumentName('포장재_구매목록.pdf')).toBe('other');
+  });
+
+  it('괄호로 묶인 약어도 해당 서류로 분류한다', () => {
+    // 실제 업로드 사례: 전각 솔리드스(／)를 포함한 괄호 표기
+    expect(classifyImportDocumentName('패킹리스트(P／L).pdf')).toBe('packing_list');
+    expect(classifyImportDocumentName('상업송장(C／I).pdf')).toBe('commercial_invoice');
+    expect(classifyImportDocumentName('선하증권(B／L).pdf')).toBe('bill_of_lading');
+    expect(classifyImportDocumentName('[P/L] 2026.pdf')).toBe('packing_list');
+    expect(classifyImportDocumentName('원산지증명서(C/O).pdf')).toBe('certificate_of_origin');
   });
 
   it('세금계산서와 견적송장은 Commercial Invoice로 확정하지 않는다', () => {

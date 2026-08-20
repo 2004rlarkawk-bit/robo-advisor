@@ -22,7 +22,7 @@ export const IMPORT_DOCUMENT_TYPE_LABELS: Record<ImportDocumentType, string> = {
 
 const STRONG_FILE_NAME_HINTS: Array<[RegExp, ImportDocumentType]> = [
   [/(?:상업\s*송장(?:서)?|COMMERCIAL\s+INVOICE|(?:^|\s)C\s*(?:\/\s*)?I(?=\s|$))/, 'commercial_invoice'],
-  [/(?:포장\s*(?:명세서|내역서|목록)|PACKING\s+LIST|(?:^|\s)P\s*(?:\/\s*)?L(?=\s|$))/, 'packing_list'],
+  [/(?:포장\s*(?:명세서|내역서|목록)|[패팩]킹\s*(?:리스트|명세서?)|PACKING\s+LIST|(?:^|\s)P\s*(?:\/\s*)?L(?=\s|$))/, 'packing_list'],
   [/(?:해상\s*)?선하\s*증권(?:서)?|BILL\s+OF\s+LADING|(?:^|\s)B\s*(?:\/\s*)?L(?=\s|$)/, 'bill_of_lading'],
   [/(?:원산지\s*증명(?:서)?|CERTIFICATE\s+OF\s+ORIGIN|(?:^|\s)C\s*(?:\/\s*)?O(?=\s|$))/, 'certificate_of_origin'],
   [/(?:수출\s*운송\s*의뢰서|운송\s*의뢰서|선적\s*의뢰서|선적\s*요청|SHIPPING\s+(?:REQUEST|INSTRUCTION|ORDER)|EXPORT\s+TRANSPORT\s+REQUEST|TRANSPORT\s+REQUEST|(?:^|\s)(?:T\s*(?:\/\s*)?R|S\s*(?:\/\s*)?I)(?=\s|$))/, 'transport_request'],
@@ -37,7 +37,8 @@ function normalizedClassificationText(fileName: string): string {
   return fileName
     .normalize('NFKC')
     .replace(/\.(pdf|png|jpe?g)$/i, '')
-    .replace(/[._-]+/g, ' ')
+    // '패킹리스트(P/L).pdf'처럼 약어가 괄호에 묶이면 토큰 경계가 사라지므로 괄호류도 구분자로 본다.
+    .replace(/[._\-()[\]{}<>]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .toUpperCase();
