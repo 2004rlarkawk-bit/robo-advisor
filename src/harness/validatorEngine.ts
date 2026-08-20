@@ -6,6 +6,16 @@ import { estimateDuty } from '../services/unipassService';
 import { getRelatedLawForIssue } from '../services/lawService';
 
 /**
+ * 영상 시연용 플래그.
+ * '원산지증명서 필요 여부'(co-required)와 '보험 필요 여부 확인'(insurance-needed-check)은
+ * 시연 시나리오에 불필요해 아예 발행하지 않는다. 이슈 자체를 만들지 않으므로
+ * 보완 권장 목록·"확인 필요" 개수·초안 생성 모달 건수가 모두 동일하게 줄어든다.
+ * 시연이 끝나면 false 로 바꾸면 원래 동작으로 즉시 복귀한다.
+ */
+export const DEMO_HIDE_OPTIONAL_DOC_CHECKS = true;
+
+
+/**
  * 외부 API(Supabase 엣지함수) 호출에 개별 상한을 둔다.
  * 엣지함수 콜드스타트·중단 시 invoke가 무한 대기하면 재검증 전체가 오케스트레이터
  * 30초 타임아웃으로 실패한다("규정 검증 실패: 작업 타임아웃"). 각 호출을 ms 안에
@@ -319,7 +329,7 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
   //
   // 답변('yes'/'no')이 있으면 이슈를 발행하지 않는다 — 미답변일 때만 확인 질문을 띄운다.
   // ('yes'의 신청자료 정리·발급기관 안내는 답변 직후 카드 안에서 보여주고, 재검증 후에는 남기지 않는다.)
-  if (profile.tradeType === 'export' && !profile.coNeeded) {
+  if (!DEMO_HIDE_OPTIONAL_DOC_CHECKS && profile.tradeType === 'export' && !profile.coNeeded) {
     issues.push({
       id: 'co-required',
       docType: 'co',
@@ -371,7 +381,7 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
         field: 'insuranceConfirmed',
       });
     } else if (!insuranceMandatory && profile.tradeType === 'export') {
-      if (profile.insuranceNeeded === undefined) {
+      if (!DEMO_HIDE_OPTIONAL_DOC_CHECKS && profile.insuranceNeeded === undefined) {
         issues.push({
           id: 'insurance-needed-check',
           docType: 'insurance',

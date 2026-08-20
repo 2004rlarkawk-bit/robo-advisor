@@ -4004,7 +4004,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               <p style={{ margin: 0 }}>미리보기와 다운로드는 가능하지만,</p>
               <p style={{ margin: 0 }}>최종 제출은 보류됩니다.</p>
             </div>
-            <div style={{ borderTop: '1px solid var(--border-color-subtle)', marginTop: 22, paddingTop: 18 }}>
+            <div style={{ borderTop: '1px solid var(--border-color-subtle)', marginTop: 22, paddingTop: 18, display: 'flex', justifyContent: 'center' }}>
               <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={() => setDraftNoticeCount(null)}>확인</button>
             </div>
           </div>

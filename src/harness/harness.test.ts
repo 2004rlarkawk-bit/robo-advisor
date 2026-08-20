@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { determineRequiredDocuments, calculateReadiness } from './rulesEngine';
-import { validateTradeDocuments, validateTradeDocumentsAsync, validateRequiredInputs } from './validatorEngine';
+import { validateTradeDocuments, validateTradeDocumentsAsync, validateRequiredInputs, DEMO_HIDE_OPTIONAL_DOC_CHECKS } from './validatorEngine';
 import { runComplianceRules } from '../agents/complianceRules';
 import { OrchestratorAgent } from '../agents/OrchestratorAgent';
 import { HSCodeAgent } from '../agents/HSCodeAgent';
@@ -262,7 +262,8 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(insuranceDoc?.status).toBe('completed');
   });
 
-  it('수출 거래의 co-required 이슈는 coNeeded 답변에 따라 노출·해소된다', async () => {
+  // 시연 플래그가 켜져 있으면 co-required 자체를 발행하지 않으므로 건너뛴다.
+  it.skipIf(DEMO_HIDE_OPTIONAL_DOC_CHECKS)('수출 거래의 co-required 이슈는 coNeeded 답변에 따라 노출·해소된다', async () => {
     const base: TradeProfile = {
       tradeType: 'export',
       itemName: '기계부품',
