@@ -318,6 +318,11 @@ body {
   margin: 0 auto;
 }
 
+/* 서비스 소개(히어로 풀블리드 디자인)만 폭 제한 해제 */
+.workspace-area--full {
+  max-width: none;
+}
+
 /* Heading section */
 .page-heading {
   text-align: center;

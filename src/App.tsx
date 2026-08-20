@@ -2132,7 +2132,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         />
 
         <main className="content-body">
-          <div className="workspace-area">
+          {/* 서비스 소개는 히어로가 화면을 꽉 채우는 디자인이라 폭 제한(1000px) 예외 */}
+          <div className={`workspace-area${activeMenu === 'about' ? ' workspace-area--full' : ''}`}>
             <Suspense fallback={<div className="workspace-loading">화면을 불러오는 중입니다.</div>}>
             {activeMenu === 'about' ? <AboutPanel onStart={() => setActiveMenu('dashboard')} />
             : activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
