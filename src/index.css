@@ -586,7 +586,6 @@ body {
 .shipper-hs-suggestion__body p { margin: 0; font-size: 13px; font-weight: 600; }
 .shipper-hs-suggestion__body small { color: var(--text-light); line-height: 1.45; }
 /* 영문 품명은 파란 톤으로 강조해 한글명과 구분 */
-.shipper-hs-suggestion__eng { color: var(--primary-color); font-weight: 600; }
 .shipper-hs-confidence { border-radius: 999px; padding: 2px 7px; background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 700; }
 .shipper-hs-confidence.is-medium { background: #fffbeb; color: #b45309; }
 .shipper-hs-applied { margin-top: 8px; color: #047857; font-size: 12px; font-weight: 700; }

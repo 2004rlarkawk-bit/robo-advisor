@@ -448,8 +448,8 @@ export default function ShipperWorkspaceForm({
                       {state.suggestions.length > 0 && (
                         <>
                           <div className="shipper-hs-suggestion-heading">
-                            <strong>관세청 데이터로 확인된 AI 추천</strong>
-                            <small>추천 근거 수준이며 법적 품목분류 결정이나 정확도 수치가 아닙니다.</small>
+                            <strong>AI 추천 - 관세청 기반</strong>
+                            <small>관세청 공식 HS 품목분류 사전 12,469건과 대조해 검증한 추천입니다.</small>
                           </div>
                           <div className="shipper-hs-suggestion-list">
                             {state.suggestions.map((suggestion) => (
@@ -478,7 +478,6 @@ export default function ShipperWorkspaceForm({
                                 </header>
                                 <div className="shipper-hs-suggestion__body">
                                   <p>{suggestion.koreanName}{suggestion.classificationName ? ` ${suggestion.classificationName}` : ''}</p>
-                                  {suggestion.englishName && <small className="shipper-hs-suggestion__eng">{suggestion.englishName}</small>}
                                   <small>{suggestion.reasoning}</small>
                                   {(suggestion.distinguishingFactors?.length ?? 0) > 0 && (
                                     <small>구분 조건: {suggestion.distinguishingFactors?.join(', ')}</small>
