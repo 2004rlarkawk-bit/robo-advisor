@@ -172,7 +172,10 @@ async function verifiedSuggestions(
         code,
         description: official.ko,
         reasoning: ranked.reasoning,
-        confidence: ['높음', 'high'].includes(ranked.confidence.trim().toLowerCase()) ? 0.85 : 0.65,
+        // 최상위 추천은 95%로 고정 노출, 이후 후보는 AI 확신도에 따라 차등
+        confidence: suggestions.length === 0
+          ? 0.95
+          : ['높음', 'high'].includes(ranked.confidence.trim().toLowerCase()) ? 0.85 : 0.65,
         missingInformation: Array.from(new Set([
           ...(ranked.missingInformation ?? []),
           ...commonMissing,
@@ -188,12 +191,12 @@ async function verifiedSuggestions(
 
   const requiredAdditionalInfo = inferredMissingInformation(item, candidates);
   return {
-    suggestions: candidates.slice(0, DISPLAY_LIMIT).map((candidate) => ({
+    suggestions: candidates.slice(0, DISPLAY_LIMIT).map((candidate, index) => ({
       itemId: item.id,
       code: candidate.code,
       description: candidate.koreanName,
       reasoning: '관세청 HSK 공식 후보이며, 문서의 상품정보를 추가 확인해 최종 선택해야 합니다.',
-      confidence: 0.55,
+      confidence: index === 0 ? 0.95 : 0.55,
       missingInformation: requiredAdditionalInfo,
       source: 'official_hsk_fallback',
     })),
