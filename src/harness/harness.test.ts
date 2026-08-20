@@ -288,11 +288,9 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(beforeIssue?.message).toContain('필요 여부 확인');
     expect(before.documents?.documents.find(d => d.id === 'co')?.status).toBe('external_pending');
 
-    // 예 → 발급기관 안내 이슈로 전환(여전히 확인 목록에 남음), 문서는 external_pending 유지.
+    // 예 → 답변됐으므로 이슈는 해소(재발행 안 함), 문서는 external_pending 유지.
     const yes = await orchestrator.run({ profile: { ...base, coNeeded: 'yes', countryOfOrigin: '대한민국' }, useLLM: false });
-    const yesIssue = yes.issues?.issues.find(i => i.id === 'co-required');
-    expect(yesIssue).toBeDefined();
-    expect(yesIssue?.message).toContain('상공회의소 발급 대상');
+    expect(yes.issues?.issues.find(i => i.id === 'co-required')).toBeUndefined();
     expect(yes.documents?.documents.find(d => d.id === 'co')?.status).toBe('external_pending');
 
     // 아니오 → 이슈 미발행 + 문서 불필요 처리.

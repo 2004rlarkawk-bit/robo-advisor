@@ -1556,7 +1556,11 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   const handleCoNeededAnswer = async (answer: 'yes' | 'no') => {
     const updatedProfile = { ...profile, coNeeded: answer };
     setProfile(updatedProfile);
-    await rerunAgents(updatedProfile);
+    // 'yes'는 바로 재검증하지 않는다 — 같은 카드에서 원산지 선택·신청자료 정리를
+    // 이어서 보여주고, 다음 재검증부터는 답변됐으므로 보완 권장에 다시 뜨지 않는다.
+    if (answer === 'no') {
+      await rerunAgents(updatedProfile);
+    }
   };
 
   const handleSolveOrigin = async () => {

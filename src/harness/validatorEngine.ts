@@ -317,16 +317,15 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
   // ② yes면 신청자료 정리·발급기관 안내
   // 로 흐른다.
   //
-  // 답변이 'no'면 이슈를 발행하지 않는다.
-  if (profile.tradeType === 'export' && profile.coNeeded !== 'no') {
+  // 답변('yes'/'no')이 있으면 이슈를 발행하지 않는다 — 미답변일 때만 확인 질문을 띄운다.
+  // ('yes'의 신청자료 정리·발급기관 안내는 답변 직후 카드 안에서 보여주고, 재검증 후에는 남기지 않는다.)
+  if (profile.tradeType === 'export' && !profile.coNeeded) {
     issues.push({
       id: 'co-required',
       docType: 'co',
       severity: 'warning',
       message:
-        profile.coNeeded === 'yes'
-          ? '원산지증명서: 상공회의소 발급 대상 (아래 신청자료 정리를 참고해 발급기관에서 신청을 진행해 주세요.)'
-          : '원산지증명서: 필요 여부 확인 (구매자가 FTA 적용 또는 원산지증명서를 요청했는지 확인해 주세요.)',
+        '원산지증명서: 필요 여부 확인 (구매자가 FTA 적용 또는 원산지증명서를 요청했는지 확인해 주세요.)',
       field: 'coNeeded',
     });
   }
