@@ -3833,6 +3833,8 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 
 .da-block { margin-bottom: 22px; display: flex; flex-direction: column; gap: 10px; }
 .da-block:last-child { margin-bottom: 4px; }
+/* 대시보드 지표 타일과 시장 리포트 사이 — 경계선을 긋고 여백을 넉넉히 분리 */
+.da-block--divided { border-top: 1px solid var(--border-color-subtle); margin-top: 12px; padding-top: 28px; }
 
 .da-item-main { display: flex; flex-direction: column; gap: 7px; }
 .da-item-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

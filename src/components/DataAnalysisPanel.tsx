@@ -555,7 +555,7 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
 
           {/* 내 시장 리포트 — 내 도착 국가 × 한국 전체 수출 실적 조인 */}
           {marketReport.length > 0 && (
-            <div className="da-block">
+            <div className="da-block da-block--divided">
               <span className="da-my-col-title">내 시장 리포트</span>
               <div className="da-markets">
                 {marketReport.map((m) => {
