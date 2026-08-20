@@ -1874,7 +1874,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   );
   const isIssueLiveResolved = (issue: ValidationIssue) =>
     LIVE_CHECK_ID.test(issue.id) && !liveInputIssueIds.has(issue.id);
-  const fixListResolvedCount = fixListIssues.filter(isIssueLiveResolved).length;
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 
@@ -3108,13 +3107,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     /* 고칠 항목 체크리스트 — 결과↔입력 왕복 없이 이 화면에서 전부 수정 */
                     <div className="fixlist">
                       <h3 className="info-title">고칠 항목 {fixListIssues.length}건</h3>
-                      <p className="fixlist-sub">
-                        {fixListResolvedCount >= fixListIssues.length
-                          ? '모두 해결! [다시 생성해 재검증]을 눌러 반영하세요.'
-                          : fixListResolvedCount > 0
-                            ? `${fixListResolvedCount}건 해결됨 — 나머지도 항목을 누르면 입력칸으로 이동해요.`
-                            : '항목을 누르면 해당 입력칸으로 이동해요.'}
-                      </p>
                       {(() => {
                         // 한 줄 요약 행 — 전체 문구는 title 툴팁 + 클릭 시 상단 배너로.
                         // 요약 아래엔 "어떻게 고치는지"(예시·조건)만 작게 남긴다. 근거 조문은 결과 화면 담당.
