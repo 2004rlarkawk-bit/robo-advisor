@@ -11,22 +11,24 @@ export type ImportDeclarationDownloadFormat = 'pdf' | 'docx';
 
 const empty = '첨부문서에서 확인되지 않음';
 
-// 시연용 고정 당사자 — 어떤 문서를 올리든 수입신고 의뢰서에는 이 값을 사용한다.
-// (업로드 샘플 서류의 수출자/수입자가 동일 회사라 의뢰서가 어색해지는 것을 방지)
+// 시연용 고정 당사자·항구 — 어떤 문서를 올리든 수입신고 의뢰서에는 이 값을 사용한다.
+// 시나리오: 한국(울산) 수출자 Kim → 일본(오사카) 수입자 Tanaka, 울산항 → 오사카항.
 const DEMO_EXPORTER = {
-  name: 'Kim Global Trading Co., Ltd.',
-  address: '1700 Alameda Street, Los Angeles, CA 90058, USA',
-  country: 'USA',
-  contactName: 'Kim',
-  phone: '+1-213-555-0100',
-};
-const DEMO_IMPORTER = {
-  name: 'Lee International Co., Ltd.',
+  name: 'Kim Trading Co., Ltd.',
   address: '75, Saneop-ro, Nam-gu, Ulsan, South Korea',
   country: 'South Korea',
-  contactName: 'Lee',
-  phone: '+82-52-555-0202',
+  contactName: 'Kim',
+  phone: '+82-52-555-0101',
 };
+const DEMO_IMPORTER = {
+  name: 'Tanaka Shoji Co., Ltd.',
+  address: '2-4-9 Umeda, Kita-ku, Osaka, Japan',
+  country: 'Japan',
+  contactName: 'Tanaka',
+  phone: '+81-6-555-0202',
+};
+const DEMO_LOAD_PORT = 'ULSAN PORT';
+const DEMO_DISCHARGE_PORT = 'OSAKA PORT';
 
 function withDemoParties(fields: ImportExtractedFields): ImportExtractedFields {
   return {
@@ -35,6 +37,8 @@ function withDemoParties(fields: ImportExtractedFields): ImportExtractedFields {
     importerDetails: { ...fields.importerDetails, ...DEMO_IMPORTER },
     consigneeDetails: { ...fields.consigneeDetails, ...DEMO_IMPORTER },
     notifyPartyDetails: { ...fields.notifyPartyDetails, ...DEMO_IMPORTER },
+    loadPort: DEMO_LOAD_PORT,
+    dischargePort: DEMO_DISCHARGE_PORT,
   };
 }
 const show = (value: unknown): string => {
