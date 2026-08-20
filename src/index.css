@@ -3095,17 +3095,19 @@ body {
 
 /* 차단 상태 히어로 — 100% 대신 해결 유도 (색·문구로 "아직 제출 불가" 명확히) */
 /* 한 줄 컴팩트 배너 — 아이콘 + 제목만, 세로 중앙 정렬. 좌우 여백은 유지, 상하만 축소. */
+/* 제출 차단 배너 — 노란 박스 대신 흰 카드 톤(목업), 숫자 강조색만 경고색 유지 */
 .rv-hero-blocked {
   display: flex; align-items: center; gap: 14px;
-  padding: 16px 28px;
-  background: var(--warning-bg); border: 1px solid #fcd9a5;
+  padding: 18px 28px;
+  background: #ffffff; border: 1px solid var(--border-color-strong);
+  border-radius: 14px;
 }
 .rv-hero-blocked-ic {
   width: 40px; height: 40px; flex-shrink: 0; border-radius: 11px;
   display: flex; align-items: center; justify-content: center;
-  background: #fff; color: var(--warning-color); border: 1px solid #fcd9a5;
+  background: #fff; color: #64748b; border: 1px solid var(--border-color);
 }
-.rv-hero-blocked-title { font-size: 16px; font-weight: 800; color: #7c4a06; line-height: 1.4; }
+.rv-hero-blocked-title { font-size: 16px; font-weight: 800; color: var(--text-dark); line-height: 1.4; }
 .rv-hero-blocked-title b { color: var(--warning-color); }
 .rv-hero-blocked-sub { margin: 6px 0 0; font-size: 13px; color: #8a5a1c; line-height: 1.55; }
 .rv-hero-blocked-sub b { color: #7c4a06; font-weight: 700; }
