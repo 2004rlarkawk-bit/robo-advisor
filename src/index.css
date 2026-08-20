@@ -3717,36 +3717,39 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 }
 .draft-tray-item.customs .draft-tray-actions.vertical { padding-left: 24px; gap: 7px; }
 .draft-tray-item.customs .draft-tray-actions.vertical .draft-tray-resume { padding-top: 7px; padding-bottom: 7px; }
-/* 원산지 인라인 안내 카드 (섹션 7) — 토스트 대신 폼 안에서 안내 */
-.origin-notice {
-  display: flex; gap: 14px; margin: 14px 0 16px; padding: 18px 20px;
-  border: 1px solid #cbd5e1; border-radius: 12px; background: #fff;
+/* 폼 섹션 인라인 수정 안내 카드 — 다크 토스트와 같은 톤, 섹션 안에서 안내 */
+.inline-fix-card {
+  display: flex; align-items: flex-start; gap: 13px;
+  margin: 14px 0 16px; padding: 15px 16px 14px;
+  border-radius: 12px; background: #1e293b; color: #fff;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18);
 }
-.origin-notice-ic {
-  flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  border: 2px solid #0f172a; color: #0f172a;
+.inline-fix-card .ifc-ic {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--warning-color); color: #fff;
 }
-.origin-notice-body { flex: 1; min-width: 0; }
-.origin-notice-title { display: block; font-size: 15.5px; font-weight: 800; color: #0f172a; }
-.origin-notice-text { margin: 6px 0 0; font-size: 13.5px; color: #334155; line-height: 1.65; }
-.origin-notice-text .origin-bad { color: #0f172a; }
-.origin-notice-text .origin-good { color: #0b57d0; }
-.origin-notice-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
-.origin-notice-basis {
-  font-size: 12px; color: #64748b; border: 1px solid #e2e8f0; border-radius: 8px;
-  padding: 6px 10px; background: #f8fafc;
+.inline-fix-card .ifc-body { flex: 1; min-width: 0; }
+.inline-fix-card .ifc-title { display: block; font-size: 14px; font-weight: 700; }
+.inline-fix-card .ifc-text { margin: 5px 0 0; font-size: 13px; color: #e2e8f0; line-height: 1.6; }
+.inline-fix-card .hl-bad { color: #fb923c; font-weight: 800; }
+.inline-fix-card .hl-good { color: #60a5fa; font-weight: 800; }
+.inline-fix-card .ifc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 9px; }
+.inline-fix-card .ifc-basis { font-size: 12px; color: #94a3b8; }
+.inline-fix-card .ifc-actions { display: flex; gap: 8px; }
+.inline-fix-card .ifc-btn {
+  border: none; border-radius: 8px; padding: 8px 18px;
+  font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
 }
-.origin-notice-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.origin-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid #cbd5e1; background: #fff; color: #334155;
-  font-size: 13px; font-weight: 700; padding: 9px 14px; border-radius: 9px;
-  cursor: pointer; font-family: inherit;
+.inline-fix-card .ifc-btn.primary { background: #2563eb; color: #fff; }
+.inline-fix-card .ifc-btn.primary:hover { background: #1d4ed8; }
+.inline-fix-card .ifc-btn.ghost { background: transparent; border: 1px solid #475569; color: #e2e8f0; padding: 7px 14px; }
+.inline-fix-card .ifc-btn.ghost:hover { border-color: #94a3b8; }
+.inline-fix-card .ifc-close {
+  flex-shrink: 0; background: none; border: none; color: #94a3b8;
+  font-size: 15px; cursor: pointer; padding: 2px 4px; line-height: 1;
 }
-.origin-btn:hover { border-color: #94a3b8; }
-.origin-btn.dark { background: #0f172a; border-color: #0f172a; color: #fff; }
-.origin-btn.dark:hover { background: #1e293b; }
+.inline-fix-card .ifc-close:hover { color: #fff; }
 .customs-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .customs-meta .meta-dot { color: #cbd5e1; }
 /* 통관 상태 조회 결과 카드 — 메타 아이콘 행 */

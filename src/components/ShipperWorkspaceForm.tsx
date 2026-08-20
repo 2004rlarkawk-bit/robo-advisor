@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AlertCircle, FileSignature, FileText, PenLine, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { FileSignature, FileText, PenLine, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import {
   EXPORT_POD_OPTIONS,
   EXPORT_POL_OPTIONS,
@@ -122,25 +122,40 @@ export default function ShipperWorkspaceForm({
   fixNotice = null,
   onDismissFixNotice,
 }: Props) {
-  // 인라인 수정 안내 카드 — fixNotice가 가리키는 섹션에만 렌더
+  // 인라인 수정 안내 카드 — fixNotice가 가리키는 섹션에만 렌더.
+  // 카드를 닫아도 섹션이 접히지 않도록 details의 open은 이펙트로만 켠다(제어 안 함).
   const fixSection = fixNotice ? SHIPPER_FIELD_SECTION[fixNotice.fieldKey] : undefined;
+  const [originDismissed, setOriginDismissed] = useState(false);
+  useEffect(() => { if (originIssueActive) setOriginDismissed(false); }, [originIssueActive]);
+  const showOriginCard = originIssueActive && !originDismissed;
+
+  useEffect(() => {
+    const section = fixSection ?? (showOriginCard ? 7 : undefined);
+    if (!section) return;
+    const el = document.querySelector<HTMLDetailsElement>(`details[data-form-section="${section}"]`);
+    if (el) el.open = true;
+  }, [fixSection, showOriginCard]);
+
   const fixNoticeCard = (section: number) => {
     if (!fixNotice || fixSection !== section) return null;
     return (
-      <div className="origin-notice" role="alert">
-        <span className="origin-notice-ic"><AlertCircle size={22} /></span>
-        <div className="origin-notice-body">
-          <b className="origin-notice-title">입력값을 확인해 주세요</b>
-          <p className="origin-notice-text">{fixNotice.message}</p>
-          <div className="origin-notice-foot">
-            {fixNotice.basis ? <span className="origin-notice-basis">근거: {fixNotice.basis}</span> : <span />}
+      <div className="inline-fix-card" role="alert">
+        <span className="ifc-ic"><PenLine size={17} /></span>
+        <div className="ifc-body">
+          <b className="ifc-title">강조된 항목을 수정하세요</b>
+          <p className="ifc-text">{fixNotice.message}</p>
+          <div className="ifc-foot">
+            {fixNotice.basis ? <span className="ifc-basis">근거: {fixNotice.basis}</span> : <span />}
             {onDismissFixNotice && (
-              <div className="origin-notice-actions">
-                <button type="button" className="origin-btn" onClick={onDismissFixNotice}>확인</button>
+              <div className="ifc-actions">
+                <button type="button" className="ifc-btn primary" onClick={onDismissFixNotice}>확인</button>
               </div>
             )}
           </div>
         </div>
+        {onDismissFixNotice && (
+          <button type="button" className="ifc-close" onClick={onDismissFixNotice} aria-label="안내 닫기">✕</button>
+        )}
       </div>
     );
   };
@@ -432,7 +447,7 @@ export default function ShipperWorkspaceForm({
       {statusContent}
 
       {/* 2026-07-23 편의성 업그레이드: 화주용 통관 입력 폼 확장 */}
-      <details className="form-section" open>
+      <details className="form-section" data-form-section={1} open>
         <summary className="form-section-summary"><span>1. 화주 기본정보</span>{sectionResetButton(1)}</summary>
         {fixNoticeCard(1)}
         <div className="form-grid">
@@ -475,7 +490,7 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section" open={fixSection === 2 || undefined}>
+      <details className="form-section" data-form-section={2}>
         <summary className="form-section-summary"><span>2. 거래처 정보</span>{sectionResetButton(2)}</summary>
         {fixNoticeCard(2)}
         {partnersLoading ? (
@@ -514,7 +529,7 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section" open={fixSection === 3 || undefined}>
+      <details className="form-section" data-form-section={3}>
         <summary className="form-section-summary"><span>3. 품목 정보</span>{sectionResetButton(3)}</summary>
         {fixNoticeCard(3)}
         <div className="shipper-item-list">
@@ -660,7 +675,7 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section" open={fixSection === 4 || undefined}>
+      <details className="form-section" data-form-section={4}>
         <summary className="form-section-summary"><span>4. 거래 조건</span>{sectionResetButton(4)}</summary>
         {fixNoticeCard(4)}
         <div className="form-grid">
@@ -675,7 +690,7 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section" open={fixSection === 5 || undefined}>
+      <details className="form-section" data-form-section={5}>
         <summary className="form-section-summary"><span>5. 포장 정보</span>{sectionResetButton(5)}</summary>
         {fixNoticeCard(5)}
         <div className="form-grid">
@@ -702,7 +717,7 @@ export default function ShipperWorkspaceForm({
         {hasInvalidWeight && <div className="form-message error" role="alert">총중량 G.W.은 순중량 N.W.보다 작을 수 없습니다.</div>}
       </details>
 
-      <details className="form-section" open={fixSection === 6 || undefined}>
+      <details className="form-section" data-form-section={6}>
         <summary className="form-section-summary"><span>6. 항만 및 일정</span>{sectionResetButton(6)}</summary>
         {fixNoticeCard(6)}
         <div className="form-grid">
@@ -713,39 +728,31 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section" open={originIssueActive || fixSection === 7 || undefined}>
+      <details className="form-section" data-form-section={7}>
         <summary className="form-section-summary"><span>7. 원산지 및 요건서류</span>{sectionResetButton(7)}</summary>
         {fixNoticeCard(7)}
-        {originIssueActive && (
-          <div className="origin-notice" role="alert">
-            <span className="origin-notice-ic"><AlertCircle size={22} /></span>
-            <div className="origin-notice-body">
-              <b className="origin-notice-title">원산지를 변경해 주세요</b>
-              <p className="origin-notice-text">
-                현재 원산지가 <b className="origin-bad">"{profile.countryOfOrigin}"</b> 으로 입력되어 있습니다.<br />
-                정확한 수출 신고를 위해 원산지를 <b className="origin-good">"Korea"</b> 로 변경해 주세요.
+        {showOriginCard && (
+          <div className="inline-fix-card" role="alert">
+            <span className="ifc-ic"><PenLine size={17} /></span>
+            <div className="ifc-body">
+              <b className="ifc-title">강조된 항목을 수정하세요</b>
+              <p className="ifc-text">
+                원산지가 <b className="hl-bad">{profile.countryOfOrigin}</b>으로 입력돼 있습니다.<br />
+                일반 수출거래 기준으로 <b className="hl-good">Korea</b>로 변경해 주세요.
               </p>
-              <div className="origin-notice-foot">
-                <span className="origin-notice-basis">근거: 대외무역법 제33조·제34조</span>
-                <div className="origin-notice-actions">
-                  <button
-                    type="button"
-                    className="origin-btn"
-                    onClick={() => {
-                      onProfilePatch({ countryOfOrigin: '' });
-                      document.querySelector<HTMLElement>('[data-field="countryOfOrigin"] select, [data-field="countryOfOrigin"] input')?.focus();
-                    }}
-                  >
-                    <RotateCcw size={14} /> 원산지 다시 선택
-                  </button>
+              <div className="ifc-foot">
+                <span className="ifc-basis">근거: 대외무역법 제33조·제34조</span>
+                <div className="ifc-actions">
                   {onOriginOverrideRequest && (
-                    <button type="button" className="origin-btn dark" onClick={onOriginOverrideRequest}>
-                      <PenLine size={14} /> 특수거래 사유 입력
+                    <button type="button" className="ifc-btn ghost" onClick={onOriginOverrideRequest}>
+                      특수거래 사유 입력
                     </button>
                   )}
+                  <button type="button" className="ifc-btn primary" onClick={() => setOriginDismissed(true)}>확인</button>
                 </div>
               </div>
             </div>
+            <button type="button" className="ifc-close" onClick={() => setOriginDismissed(true)} aria-label="안내 닫기">✕</button>
           </div>
         )}
         <div className="form-grid">
