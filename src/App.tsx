@@ -2156,13 +2156,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               </>
             )
             : <>
-            {/* Page Title & Subtitle */}
-            <div className="page-heading">
+            {/* Page Title & Subtitle — 수출 결과 화면에서는 결과에 집중하도록 제목·선택 패널을 숨긴다 */}
+            {!(tradeDirection === 'export' && hasGenerated) && <div className="page-heading">
               <h1 className="page-title">항만 수출입 문서 자동화 서비스</h1>
               <p className="page-subtitle">AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.</p>
-            </div>
+            </div>}
 
-            {!isDocumentManagerReadOnlyView && <div className="trade-selector-panel">
+            {!isDocumentManagerReadOnlyView && !(tradeDirection === 'export' && hasGenerated) && <div className="trade-selector-panel">
               <TradeDirectionSelector value={tradeDirection} onChange={handleTradeDirectionChange} />
               <TradeRoleSelector
                 value={workspaceRole}
@@ -3238,9 +3238,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     <div className="rv-track"><div className="rv-track-fill" style={{ width: `${readiness.percent}%` }} /></div>
                     <div className="rv-hero-msg">
                       화주 서류 <b>{ownReadyCount}/{ownDocs.length}</b> 생성 완료
-                      {isSubmitReady
-                        ? <> — 제출 준비가 끝났어요.</>
-                        : readiness.nextStepLabel ? <> — {readiness.nextStepLabel}</> : null}
+                      {!isSubmitReady && readiness.nextStepLabel ? <> — {readiness.nextStepLabel}</> : null}
                     </div>
                     {externalPendingCount > 0 && (
                       <p className="rv-hero-ext">
