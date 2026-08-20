@@ -43,7 +43,7 @@ import {
 import './styles/feedbackReport.css';
 import AuthPage from './components/AuthPage';
 import OnboardingPage from './components/OnboardingPage';
-import ShipperWorkspaceForm from './components/ShipperWorkspaceForm';
+import ShipperWorkspaceForm, { SHIPPER_FIELD_SECTION } from './components/ShipperWorkspaceForm';
 import OnboardingTour from './components/OnboardingTour';
 import TradeDirectionSelector from './components/trade/TradeDirectionSelector';
 import TradeRoleSelector from './components/trade/TradeRoleSelector';
@@ -628,6 +628,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   // "입력 화면에서 수정" — 이슈가 가리키는 입력 필드로 이동해 강조 + 무엇을 고칠지 안내
   const [highlightField, setHighlightField] = useState<string | null>(null);
   const [highlightHint, setHighlightHint] = useState<string>('');
+  // [입력 수정]으로 진입한 이슈 — 폼 섹션 상단 인라인 안내 카드용 (토스트 5초 타이머와 별개로 유지)
+  const [activeFixIssue, setActiveFixIssue] = useState<ValidationIssue | null>(null);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearFieldHighlight = () => {
@@ -635,11 +637,13 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     document.querySelectorAll('.field-focus').forEach((e) => e.classList.remove('field-focus'));
     setHighlightField(null);
     setHighlightHint('');
+    setActiveFixIssue(null);
   };
 
   const goToFieldFix = (issue: ValidationIssue) => {
     setHighlightHint(issue.message);
     setHighlightField(issueToFieldKey(issue));
+    setActiveFixIssue(issue);
     setHasGenerated(false);
   };
 
@@ -2113,6 +2117,22 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     (i) => i.id === 'r15-origin-not-korea' && !overrides[issueKey(i)]
   ) ?? null;
 
+  // [입력 수정] 진입 이슈 → 폼 섹션 인라인 안내 카드 데이터.
+  // 해소되면(라이브 검증 통과) 자동으로 사라진다. r15 원산지는 전용 카드가 있어 제외.
+  const activeFixFieldKey = activeFixIssue ? issueToFieldKey(activeFixIssue) : '';
+  const shipperFixNotice = (() => {
+    if (!activeFixIssue || isIssueLiveResolved(activeFixIssue)) return null;
+    if (activeFixFieldKey === 'countryOfOrigin' && originNotKoreaIssue) return null;
+    if (!(activeFixFieldKey in SHIPPER_FIELD_SECTION)) return null;
+    const rawMsg = activeFixIssue.message || '';
+    const basisMatch = rawMsg.match(/\s*\[근거:\s*([^\]]+)\]\s*$/);
+    return {
+      fieldKey: activeFixFieldKey,
+      message: basisMatch ? rawMsg.slice(0, basisMatch.index).trimEnd() : rawMsg,
+      basis: activeFixIssue.basis?.law || (basisMatch ? basisMatch[1].trim() : undefined),
+    };
+  })();
+
   return (
     <div className="app-container">
       <OnboardingTour />
@@ -2250,6 +2270,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   onOriginOverrideRequest={() => {
                     if (originNotKoreaIssue) { setOverrideTarget(originNotKoreaIssue); setOverrideReason(''); }
                   }}
+                  fixNotice={shipperFixNotice}
+                  onDismissFixNotice={() => setActiveFixIssue(null)}
                   toolbar={IS_DEV_TEST_ENABLED ? (
                     <div className="dev-test-actions">
                       <span className="dev-badge">DEV</span>
@@ -3767,8 +3789,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       </div>
 
       {/* 입력 화면 수정 안내 배너 — "입력 수정" 클릭 시 해당 필드로 이동하며 무엇을 고칠지 표시.
-          원산지(r15)는 섹션 7 인라인 카드가 안내하므로 토스트를 띄우지 않는다. */}
-      {highlightField && !hasGenerated && !(highlightField === 'countryOfOrigin' && originNotKoreaIssue) && (
+          폼 섹션 인라인 카드(원산지 전용/일반)가 안내하는 경우에는 토스트를 띄우지 않는다. */}
+      {highlightField && !hasGenerated
+        && !(highlightField === 'countryOfOrigin' && originNotKoreaIssue)
+        && !shipperFixNotice && (
         <div className="field-fix-banner" role="status">
           <span className="ffb-ic"><Pencil size={16} /></span>
           <div className="ffb-text">

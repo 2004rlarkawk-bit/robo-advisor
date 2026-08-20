@@ -47,6 +47,9 @@ interface Props {
   originIssueActive?: boolean;
   /** 특수거래 사유 입력(경고 무시) 모달 열기 */
   onOriginOverrideRequest?: () => void;
+  /** [입력 수정]으로 진입한 이슈 — 해당 섹션 상단에 인라인 안내 카드 표시 */
+  fixNotice?: ShipperFixNotice | null;
+  onDismissFixNotice?: () => void;
 }
 
 const INCOTERMS_OPTIONS: Exclude<Incoterms, ''>[] = ['FOB', 'CFR', 'CIF', 'FAS', 'FCA'];
@@ -62,6 +65,23 @@ const OTHER_PACKAGE_TYPE_VALUE = '__OTHER_PACKAGE_TYPE__';
 
 // 필수 입력 배지 — 미입력 시 문서 생성이 차단(error)되는 항목의 라벨에만 붙인다
 const Req = () => <span className="req-badge">필수</span>;
+
+// 검증 이슈 필드 → 폼 섹션 번호 매핑 — [입력 수정] 클릭 시 해당 섹션 상단에 인라인 안내 카드를 띄운다.
+export const SHIPPER_FIELD_SECTION: Record<string, number> = {
+  companyName: 1, companyAddress: 1, contact: 1, businessRegistrationNo: 1, signerName: 1,
+  partnerName: 2, partnerCountry: 2, partnerAddress: 2,
+  itemName: 3, hsCode: 3, quantity: 3, unitPrice: 3, totalAmount: 3, unit: 3, invoiceAmount: 3,
+  incoterms: 4, paymentTerms: 4, currency: 4, invoiceNo: 4, invoiceDate: 4, lcNo: 4, lcDate: 4,
+  weight: 5, netWeight: 5, grossWeight: 5, packageCount: 5, packageType: 5, eaPerBox: 5,
+  loadPort: 6, dischargePort: 6, departureDate: 6, arrivalDate: 6, vessel: 6,
+  countryOfOrigin: 7,
+};
+
+export interface ShipperFixNotice {
+  fieldKey: string;
+  message: string;
+  basis?: string;
+}
 
 function numericValue(eventValue: string): NumericInput {
   return eventValue === '' ? '' : Number(eventValue);
@@ -99,7 +119,31 @@ export default function ShipperWorkspaceForm({
   onGenerate,
   originIssueActive = false,
   onOriginOverrideRequest,
+  fixNotice = null,
+  onDismissFixNotice,
 }: Props) {
+  // 인라인 수정 안내 카드 — fixNotice가 가리키는 섹션에만 렌더
+  const fixSection = fixNotice ? SHIPPER_FIELD_SECTION[fixNotice.fieldKey] : undefined;
+  const fixNoticeCard = (section: number) => {
+    if (!fixNotice || fixSection !== section) return null;
+    return (
+      <div className="origin-notice" role="alert">
+        <span className="origin-notice-ic"><AlertCircle size={22} /></span>
+        <div className="origin-notice-body">
+          <b className="origin-notice-title">입력값을 확인해 주세요</b>
+          <p className="origin-notice-text">{fixNotice.message}</p>
+          <div className="origin-notice-foot">
+            {fixNotice.basis ? <span className="origin-notice-basis">근거: {fixNotice.basis}</span> : <span />}
+            {onDismissFixNotice && (
+              <div className="origin-notice-actions">
+                <button type="button" className="origin-btn" onClick={onDismissFixNotice}>확인</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
   const invoiceSummary = summarizeShipperItems(items);
   const hasInvalidWeight = isGrossWeightBelowNet(profile.grossWeight, profile.netWeight);
   const hsCodeSuggestions = useShipperHSCodeSuggestions(items);
@@ -390,6 +434,7 @@ export default function ShipperWorkspaceForm({
       {/* 2026-07-23 편의성 업그레이드: 화주용 통관 입력 폼 확장 */}
       <details className="form-section" open>
         <summary className="form-section-summary"><span>1. 화주 기본정보</span>{sectionResetButton(1)}</summary>
+        {fixNoticeCard(1)}
         <div className="form-grid">
           <div className="form-group" data-field="companyName"><label className="form-label">회사명(상호명) <Req /></label><input className="form-input" value={profile.companyName} onChange={(event) => onProfilePatch({
             companyName: event.target.value,
@@ -430,8 +475,9 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section">
+      <details className="form-section" open={fixSection === 2 || undefined}>
         <summary className="form-section-summary"><span>2. 거래처 정보</span>{sectionResetButton(2)}</summary>
+        {fixNoticeCard(2)}
         {partnersLoading ? (
           <div className="form-message info" role="status">자주 거래한 거래처를 불러오는 중입니다.</div>
         ) : frequentPartners.length > 0 ? (
@@ -468,8 +514,9 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section">
+      <details className="form-section" open={fixSection === 3 || undefined}>
         <summary className="form-section-summary"><span>3. 품목 정보</span>{sectionResetButton(3)}</summary>
+        {fixNoticeCard(3)}
         <div className="shipper-item-list">
           {items.map((item, index) => (
             <div className="shipper-item-card" key={item.id}>
@@ -613,8 +660,9 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section">
+      <details className="form-section" open={fixSection === 4 || undefined}>
         <summary className="form-section-summary"><span>4. 거래 조건</span>{sectionResetButton(4)}</summary>
+        {fixNoticeCard(4)}
         <div className="form-grid">
           <div className="form-group" data-field="incoterms"><label className="form-label">Incoterms <Req /></label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
           <div className="form-group"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
@@ -627,8 +675,9 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section">
+      <details className="form-section" open={fixSection === 5 || undefined}>
         <summary className="form-section-summary"><span>5. 포장 정보</span>{sectionResetButton(5)}</summary>
+        {fixNoticeCard(5)}
         <div className="form-grid">
           <div className="form-group"><label className="form-label">포장 수량 (박스 수)</label><input type="number" min="0" className="form-input" value={profile.packageCount ?? ''} onChange={(e) => onProfilePatch({ packageCount: numericValue(e.target.value) })} /></div>
           <div className="form-group"><label className="form-label">박스당 수량 <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={profile.eaPerBox ?? ''} onChange={(e) => onProfilePatch({ eaPerBox: numericValue(e.target.value) })} placeholder="예: 20" /></div>
@@ -653,8 +702,9 @@ export default function ShipperWorkspaceForm({
         {hasInvalidWeight && <div className="form-message error" role="alert">총중량 G.W.은 순중량 N.W.보다 작을 수 없습니다.</div>}
       </details>
 
-      <details className="form-section">
+      <details className="form-section" open={fixSection === 6 || undefined}>
         <summary className="form-section-summary"><span>6. 항만 및 일정</span>{sectionResetButton(6)}</summary>
+        {fixNoticeCard(6)}
         <div className="form-grid">
           <div className="form-group" data-field="loadPort"><label className="form-label">선적항 POL {profile.incoterms === 'FOB' && <Req />}</label><select className="form-input" value={loadPortSelection} onChange={(e) => { if (e.target.value === OTHER_DOMESTIC_PORT_VALUE) setForceCustomLoadPort(true); else { setForceCustomLoadPort(false); onProfilePatch({ loadPort: e.target.value }); } }}><option value="">선적항을 선택하세요</option>{EXPORT_POL_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_DOMESTIC_PORT_VALUE}>기타 국내항</option></select>{loadPortSelection === OTHER_DOMESTIC_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 국내항 직접 입력" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })} placeholder="기타 국내항 직접 입력" />}</div>
           <div className="form-group" data-field="dischargePort"><label className="form-label">도착항 POD {(profile.incoterms === 'CIF' || profile.incoterms === 'CFR') && <Req />}</label><select className="form-input" value={dischargePortSelection} onChange={(e) => { if (e.target.value === OTHER_FOREIGN_PORT_VALUE) setForceCustomDischargePort(true); else { setForceCustomDischargePort(false); onProfilePatch({ dischargePort: e.target.value }); } }}><option value="">도착항을 선택하세요</option>{EXPORT_POD_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_FOREIGN_PORT_VALUE}>기타 해외항</option></select>{dischargePortSelection === OTHER_FOREIGN_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 해외항 직접 입력" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })} placeholder="기타 해외항 직접 입력" />}</div>
@@ -663,8 +713,9 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      <details className="form-section" open={originIssueActive || undefined}>
+      <details className="form-section" open={originIssueActive || fixSection === 7 || undefined}>
         <summary className="form-section-summary"><span>7. 원산지 및 요건서류</span>{sectionResetButton(7)}</summary>
+        {fixNoticeCard(7)}
         {originIssueActive && (
           <div className="origin-notice" role="alert">
             <span className="origin-notice-ic"><AlertCircle size={22} /></span>
