@@ -440,6 +440,15 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     document.querySelector('.content-body')?.scrollTo?.(0, 0);
   }, [hasGenerated]);
+
+  // 사이드바 메뉴 전환 시 항상 페이지 최상단부터 보이게 한다.
+  // (AI 통관 작업실 등에서 아래로 스크롤한 채 다른 메뉴를 눌러도 이전 위치가 남지 않도록)
+  // 문서관리 조회 복귀의 스크롤 복원(handleDocumentManagerListReady)은 이 초기화 뒤에
+  // requestAnimationFrame으로 실행되므로 충돌하지 않는다.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.querySelector('.content-body')?.scrollTo?.(0, 0);
+  }, [activeMenu]);
   
   const [documents, setDocuments] = useState<DocumentStatus[]>([]);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
