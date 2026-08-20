@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, Eye, FileText, OctagonAlert, RefreshCw, Search } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Eye, FileText, OctagonAlert, RefreshCw, Search, Terminal } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
 import ImportAnalysisSummary from './ImportAnalysisSummary';
@@ -7,6 +7,7 @@ import ImportDocumentComparison from './ImportDocumentComparison';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 import {
   analyzeImportDocuments,
+  IMPORT_DOCUMENT_TYPE_LABELS,
   normalizeImportAnalysisResult,
   syncLegacyImportFields,
 } from '../../services/importDocumentAnalysisService';
@@ -333,6 +334,24 @@ export default function ImportTradeFlow({
   const [state, setState] = useState<CachedState>(() => loadCached(cacheKey));
   const [sourceFiles, setSourceFiles] = useState<Record<string, File>>({});
   const [busy, setBusy] = useState(false);
+  // 수출 흐름의 Pipeline Runner 콘솔과 같은 형태로 수입 AI 분석 진행을 보여준다.
+  const [analysisLogs, setAnalysisLogs] = useState<{ time: string; agent: string; message: string; level: 'info' | 'success' }[]>([]);
+  const [showAnalysisConsole, setShowAnalysisConsole] = useState(false);
+  const analysisTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const analysisLogEndRef = useRef<HTMLDivElement | null>(null);
+
+  const pushAnalysisLog = useCallback((agent: string, message: string, level: 'info' | 'success' = 'info') => {
+    const time = new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+    setAnalysisLogs((current) => [...current, { time, agent, message, level }]);
+  }, []);
+
+  useEffect(() => {
+    analysisLogEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [analysisLogs]);
+
+  useEffect(() => () => {
+    if (analysisTickerRef.current) clearInterval(analysisTickerRef.current);
+  }, []);
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState(false);
   const [showInProgressConfirmation, setShowInProgressConfirmation] = useState(false);
@@ -459,6 +478,12 @@ export default function ImportTradeFlow({
       }
     }
     setBusy(true);
+    setAnalysisLogs([]);
+    setShowAnalysisConsole(true);
+    pushAnalysisLog('Orchestrator Agent', `수입 문서 분석 파이프라인 가동 시작... (문서 ${state.documents.length}건)`);
+    state.documents.forEach((document) => {
+      pushAnalysisLog('Document Agent', `"${document.name}" (${IMPORT_DOCUMENT_TYPE_LABELS[document.type]}) 분석 대기열 등록`);
+    });
     if (import.meta.env.DEV) {
       console.debug('[Import Document Analysis] attachment resolution', state.documents.map((document) => ({
         id: `${document.id.slice(0, 6)}…`,
@@ -486,7 +511,24 @@ export default function ImportTradeFlow({
         throw new ImportFileResolutionError(failures);
       }
       setSourceFiles(resolvedFiles);
+      pushAnalysisLog('Document Agent', `파일 ${analyzableDocuments.length}건 로드 완료 — 텍스트 추출 시작`, 'success');
+      {
+        const stages = [
+          '문서 텍스트 추출 중...',
+          '핵심 필드 매핑 중 (Invoice · B/L · P/L)...',
+          '문서 간 값 대조·불일치 점검 중...',
+          '분석 결과 정규화 중...',
+        ];
+        let stageIndex = 0;
+        if (analysisTickerRef.current) clearInterval(analysisTickerRef.current);
+        analysisTickerRef.current = setInterval(() => {
+          if (stageIndex < stages.length) pushAnalysisLog('Analysis Agent', stages[stageIndex++]);
+        }, 1100);
+      }
       const result = await analyzeImportDocuments(analyzableDocuments, resolvedFiles);
+      if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
+      pushAnalysisLog('Orchestrator Agent', '분석 완료 — 추출값을 분석 결과 폼에 반영했습니다.', 'success');
+      setTimeout(() => setShowAnalysisConsole(false), 900);
       const failedIds = new Set(failures.map((failure) => failure.documentId));
       const documents = state.documents.map((document) => {
           if (failedIds.has(document.id)) {
@@ -582,6 +624,9 @@ export default function ImportTradeFlow({
         })),
       }));
       setMessage(errorMessage);
+      if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
+      pushAnalysisLog('Orchestrator Agent', '분석 실패 — 오류 내용을 확인해 주세요.');
+      setTimeout(() => setShowAnalysisConsole(false), 900);
     } finally {
       setBusy(false);
     }
@@ -838,6 +883,51 @@ export default function ImportTradeFlow({
           : readOnly ? undefined : (step) => setState((current) => ({ ...current, step }))}
         canMoveTo={canBrowseReadOnlyResultSteps ? (step) => step === 2 || step === 3 : undefined}
       />
+      {showAnalysisConsole && (
+        <div className="console-overlay">
+          <div className="console-modal">
+            <div className="console-header">
+              <div className="console-title-group">
+                <Terminal size={16} />
+                <span>PortAI Agent Pipeline Runner</span>
+              </div>
+              <div className="console-dots">
+                <span className="console-dot red"></span>
+                <span className="console-dot yellow"></span>
+                <span className="console-dot green"></span>
+              </div>
+            </div>
+            <div className="console-body">
+              {analysisLogs.map((log, index) => (
+                <div className="log-row" key={index}>
+                  <span className="log-time">[{log.time}]</span>
+                  <span className="log-agent">{log.agent}:</span>
+                  <span className={`log-text-content ${log.level}`}>{log.message}</span>
+                </div>
+              ))}
+              {busy && (
+                <div className="log-row">
+                  <span className="log-time">⏳</span>
+                  <span className="log-agent" style={{ color: '#fb7185' }}>Pipeline:</span>
+                  <span className="log-text-content" style={{ color: '#fb7185', fontStyle: 'italic' }}>
+                    수입 문서 AI 분석 처리 중...
+                  </span>
+                </div>
+              )}
+              <div ref={analysisLogEndRef} />
+            </div>
+            <div className="console-footer">
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowAnalysisConsole(false)}
+                disabled={busy}
+              >
+                콘솔 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {message && <div className={`form-message ${state.dutyError && state.step === 3 ? 'warning' : 'error'}`} role="alert">{message}</div>}
       {!isDraftHydrated && <div className="draft-save-status saving" role="status">초안 복원 중...</div>}
       {draftSaveStatus === 'error' && <div className="form-message error" role="alert">초안 자동 저장에 실패했습니다.</div>}
