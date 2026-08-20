@@ -95,7 +95,6 @@ export default function ImportAnalysisSummary({
     <section className="form-card import-card">
       <div className="import-card-heading">
         <div><span className="ai-badge">AI 추출값</span><h2>분석 결과 확인 및 수정</h2></div>
-        <p>첨부문서에서 확인된 값만 자동 입력했습니다. 잘못되거나 누락된 값만 수정해 주세요.</p>
       </div>
 
       <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>

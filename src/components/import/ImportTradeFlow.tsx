@@ -352,6 +352,11 @@ export default function ImportTradeFlow({
   useEffect(() => () => {
     if (analysisTickerRef.current) clearInterval(analysisTickerRef.current);
   }, []);
+
+  // 단계 전환 시 스크롤이 하단에 남지 않도록 항상 페이지 맨 위에서 시작
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [state.step]);
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState(false);
   const [showInProgressConfirmation, setShowInProgressConfirmation] = useState(false);
@@ -653,6 +658,24 @@ export default function ImportTradeFlow({
         return setMessage('모든 품목의 대한민국 HSK 10자리 코드를 공식 후보에서 선택하거나 직접 입력해 확정해 주세요.');
       }
     }
+    // 세액·의뢰서·리스크 산출도 Pipeline Runner 콘솔로 진행 상황을 보여준다.
+    setAnalysisLogs([]);
+    setShowAnalysisConsole(true);
+    pushAnalysisLog('Orchestrator Agent', '세액·의뢰서·리스크 산출 파이프라인 가동 시작...');
+    pushAnalysisLog('HSCode Agent', `품목 ${fields.items.length}건 HSK 코드 확정값 검증 완료`, 'success');
+    {
+      const stages = [
+        '관세율 조회 · 예상세액 계산 중...',
+        '운송의뢰서 초안 구성 중...',
+        '리스크 점검 중 (서류 누락 · 값 불일치)...',
+        '결과 저장 · 정리 중...',
+      ];
+      let stageIndex = 0;
+      if (analysisTickerRef.current) clearInterval(analysisTickerRef.current);
+      analysisTickerRef.current = setInterval(() => {
+        if (stageIndex < stages.length) pushAnalysisLog('Duty Agent', stages[stageIndex++]);
+      }, 1000);
+    }
     try {
       duty = role === 'shipper'
         ? await calculateEstimatedImportDuty({
@@ -736,11 +759,17 @@ export default function ImportTradeFlow({
         tradeId,
       });
       setMessage(dutyError ? `${dutyError} 사유를 표시한 상태로 다음 단계로 이동했습니다.` : '');
+      if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
+      pushAnalysisLog('Orchestrator Agent', '산출 완료 — 결과 페이지로 이동합니다.', 'success');
+      setTimeout(() => setShowAnalysisConsole(false), 800);
     } catch (error) {
       console.error('[Import Trade] generated 상태 저장 실패:', error);
       setMessage(error instanceof Error
         ? error.message
         : '확인 결과를 저장하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
+      if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
+      pushAnalysisLog('Orchestrator Agent', '산출 실패 — 오류 내용을 확인해 주세요.');
+      setTimeout(() => setShowAnalysisConsole(false), 800);
     } finally {
       setBusy(false);
     }

@@ -2189,7 +2189,11 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               <p className="page-subtitle">AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.</p>
             </div>}
 
-            {!isDocumentManagerReadOnlyView && !(tradeDirection === 'export' && hasGenerated) && <div className="trade-selector-panel">
+            {/* 결과·후속 단계에서는 거래 유형/역할 선택 패널을 숨긴다 (수출 결과 화면과 동일 정책) */}
+            {!isDocumentManagerReadOnlyView
+              && !(tradeDirection === 'export' && hasGenerated)
+              && !(tradeDirection === 'import' && workspaceCurrentStep > 1)
+              && <div className="trade-selector-panel">
               <TradeDirectionSelector value={tradeDirection} onChange={handleTradeDirectionChange} />
               <TradeRoleSelector
                 value={workspaceRole}
