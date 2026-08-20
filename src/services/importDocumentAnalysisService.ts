@@ -120,9 +120,93 @@ function normalizeItem(value: unknown, index: number): ImportItem {
   };
 }
 
+const ITEM_MERGE_FIELDS: Array<keyof ImportItem> = [
+  'itemNo',
+  'sku',
+  'description',
+  'koreanDescription',
+  'documentHSCode',
+  'confirmedHSCode',
+  'modelName',
+  'specification',
+  'material',
+  'composition',
+  'fabricConstruction',
+  'productForm',
+  'processingState',
+  'gender',
+  'intendedUse',
+  'originCountry',
+  'quantity',
+  'quantityUnit',
+  'unitPrice',
+  'currency',
+  'amount',
+  'packageCount',
+  'packageUnit',
+  'netWeight',
+  'grossWeight',
+  'measurement',
+  'shippingMarks',
+];
+
+function normalizedItemIdentity(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/^\s*item\s*\d+\s*[:.)-]?\s*/i, '')
+    .replace(/[^a-z0-9가-힣]/g, '');
+}
+
+function normalizedHSCode(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+function canMergeCrossDocumentItems(existing: ImportItem, candidate: ImportItem): boolean {
+  const existingSources = new Set(existing.sourceDocumentIds);
+  const candidateSources = new Set(candidate.sourceDocumentIds);
+  if (!existingSources.size || !candidateSources.size) return false;
+  if (candidate.sourceDocumentIds.some((sourceId) => existingSources.has(sourceId))) return false;
+
+  const existingDescription = normalizedItemIdentity(existing.description);
+  const candidateDescription = normalizedItemIdentity(candidate.description);
+  if (!existingDescription || existingDescription !== candidateDescription) return false;
+
+  const conflicting = (left: string | undefined, right: string | undefined, normalize = normalizedItemIdentity) =>
+    Boolean(left && right && normalize(left) !== normalize(right));
+
+  if (conflicting(existing.itemNo, candidate.itemNo)) return false;
+  if (conflicting(existing.sku, candidate.sku)) return false;
+  if (conflicting(existing.modelName, candidate.modelName)) return false;
+  if (conflicting(existing.documentHSCode, candidate.documentHSCode, normalizedHSCode)) return false;
+  return true;
+}
+
+function mergeCrossDocumentItems(items: ImportItem[]): ImportItem[] {
+  return items.reduce<ImportItem[]>((merged, candidate) => {
+    const existing = merged.find((item) => canMergeCrossDocumentItems(item, candidate));
+    if (!existing) {
+      merged.push(candidate);
+      return merged;
+    }
+
+    ITEM_MERGE_FIELDS.forEach((field) => {
+      if (!existing[field] && candidate[field]) {
+        (existing as unknown as Record<string, unknown>)[field] = candidate[field];
+      }
+    });
+    existing.sourceDocumentIds = Array.from(new Set([
+      ...existing.sourceDocumentIds,
+      ...candidate.sourceDocumentIds,
+    ]));
+    return merged;
+  }, []);
+}
+
 export function normalizeImportExtractedFields(value: unknown): ImportExtractedFields {
   const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   let items = Array.isArray(raw.items) ? raw.items.map(normalizeItem) : [];
+  items = mergeCrossDocumentItems(items);
   if (
     items.length === 0
     && [raw.productDescription, raw.quantity, raw.originCountry].some((entry) => text(entry))
