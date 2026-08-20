@@ -304,7 +304,7 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
   const isKoreaOrigin = /korea|한국|대한민국|\bkr\b/i.test(originVal);
   if (profile.tradeType === 'export' && originVal && !isKoreaOrigin) {
     issues.push(mk('r15-origin-not-korea', 'customs_dec', 'countryOfOrigin',
-      `수출 신고인데 원산지가 "${originVal}"(한국 아님)으로 입력되어 있습니다. 중계무역·반송 등 특수 거래가 아니라면 원산지를 확인하세요. 특수 거래이면 사유 입력 후 진행하세요.`));
+      `원산지 정보 확인 필요. 수출물품의 원산지가 '${originVal}'으로 입력되어 있습니다. 실제 물품의 원산지와 일치하는지 확인해 주세요.`));
   }
 
   // ── R16. 포괄 품명 (error, override 가능) ───────────────

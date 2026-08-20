@@ -3410,6 +3410,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                             if (i.id === 'r2-departure-missing' || i.field === 'departureDate') return { title: '선적일 확인', desc: '선적일이 비어 있습니다. 확정 시 입력을 권장합니다.' };
                             if (i.field === 'hsCode') return { title: 'HS CODE 확인', desc: '품목에 맞는 HS CODE를 확인·입력하세요.' };
                             if (i.id === 'insurance-missing') return { title: '적하보험증권 준비', desc: 'CIF 조건에서는 적하보험증권이 필요합니다.' };
+                            if (i.id === 'r15-origin-not-korea') {
+                              const origin = /원산지가 '([^']+)'/.exec(i.message || '')?.[1] ?? '';
+                              return {
+                                title: '원산지 정보 확인 필요',
+                                desc: `수출물품의 원산지가 '${origin}'으로 입력되어 있습니다. 실제 물품의 원산지와 일치하는지 확인해 주세요.`,
+                              };
+                            }
                             return null;
                           };
                           let lastSev: string | null = null;
@@ -3469,7 +3476,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   if (issue.amounts) { mainLine = '금액 계산이 일치하지 않습니다'; }
                                   // 긴 메시지는 첫 문장만 굵은 제목으로, 나머지는 아래 회색 설명으로 분리해
                                   // 한 덩어리 굵은 문단이 되지 않게 한다. (마침표+공백 기준)
-                                  let descLine = '';
+                                  // present()가 손질한 설명이 있으면 그대로 쓰고, 없을 때만 문장 분리로 만든다.
+                                  let descLine = pres?.desc ?? '';
                                   const sentenceBreak = mainLine.indexOf('. ');
                                   if (!pres && !issue.amounts && sentenceBreak > 0) {
                                     descLine = mainLine.slice(sentenceBreak + 2).trim();

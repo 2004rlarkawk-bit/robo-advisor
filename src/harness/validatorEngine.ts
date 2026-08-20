@@ -7,12 +7,14 @@ import { getRelatedLawForIssue } from '../services/lawService';
 
 /**
  * 영상 시연용 플래그.
- * '원산지증명서 필요 여부'(co-required)와 '보험 필요 여부 확인'(insurance-needed-check)은
- * 시연 시나리오에 불필요해 아예 발행하지 않는다. 이슈 자체를 만들지 않으므로
- * 보완 권장 목록·"확인 필요" 개수·초안 생성 모달 건수가 모두 동일하게 줄어든다.
+ * 아래 세 이슈는 시연 시나리오에 불필요해 아예 발행하지 않는다.
+ *   co-required            원산지증명서 필요 여부
+ *   insurance-needed-check 보험 필요 여부 확인
+ *   bizno-invalid          사업자등록번호 국세청 미등록
+ * 이슈 자체를 만들지 않으므로 목록·"확인 필요" 개수·초안 생성 모달 건수가 모두 함께 줄어든다.
  * 시연이 끝나면 false 로 바꾸면 원래 동작으로 즉시 복귀한다.
  */
-export const DEMO_HIDE_OPTIONAL_DOC_CHECKS = true;
+export const DEMO_HIDE_EXTRA_EXPORT_ISSUES = true;
 
 
 /**
@@ -329,7 +331,7 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
   //
   // 답변('yes'/'no')이 있으면 이슈를 발행하지 않는다 — 미답변일 때만 확인 질문을 띄운다.
   // ('yes'의 신청자료 정리·발급기관 안내는 답변 직후 카드 안에서 보여주고, 재검증 후에는 남기지 않는다.)
-  if (!DEMO_HIDE_OPTIONAL_DOC_CHECKS && profile.tradeType === 'export' && !profile.coNeeded) {
+  if (!DEMO_HIDE_EXTRA_EXPORT_ISSUES && profile.tradeType === 'export' && !profile.coNeeded) {
     issues.push({
       id: 'co-required',
       docType: 'co',
@@ -381,7 +383,7 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
         field: 'insuranceConfirmed',
       });
     } else if (!insuranceMandatory && profile.tradeType === 'export') {
-      if (!DEMO_HIDE_OPTIONAL_DOC_CHECKS && profile.insuranceNeeded === undefined) {
+      if (!DEMO_HIDE_EXTRA_EXPORT_ISSUES && profile.insuranceNeeded === undefined) {
         issues.push({
           id: 'insurance-needed-check',
           docType: 'insurance',
@@ -569,7 +571,7 @@ export async function validateTradeDocumentsAsync(
         '사업자번호 조회'
       );
 
-      if (!biz.valid) {
+      if (!DEMO_HIDE_EXTRA_EXPORT_ISSUES && !biz.valid) {
         issues.push({
           id: 'bizno-invalid',
           docType: 'customs_dec',
