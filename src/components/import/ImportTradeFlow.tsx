@@ -925,7 +925,7 @@ export default function ImportTradeFlow({
       </div>
       <ImportStepIndicator
         current={state.step}
-        labels={role === 'shipper' ? ['서류 업로드·AI 분석', '분석 결과·HS 확정', '세액·의뢰서·리스크'] : ['서류 업로드', '서류 확인', '통관 처리']}
+        labels={role === 'shipper' ? ['서류 업로드·AI 분석', '분석 결과·리스크·HS 확정', '세액·의뢰서'] : ['서류 업로드', '서류 확인', '통관 처리']}
         onMove={canBrowseReadOnlyResultSteps
           ? moveToReadOnlyResultStep
           : readOnly ? undefined : (step) => setState((current) => ({ ...current, step }))}
@@ -1031,8 +1031,7 @@ export default function ImportTradeFlow({
           <RiskSummary
             risks={liveRisks}
             onToggle={readOnly ? undefined : toggleRisk}
-            title="확인·수정이 필요한 항목"
-            description="아래 분석 결과에서 값을 고치면 이 목록도 즉시 다시 계산됩니다."
+            description="아래 분석 결과와 HSK 확정에서 값을 고치면 이 목록도 즉시 다시 계산됩니다."
           />
           <ImportAnalysisSummary
             analysis={state.analysis}
@@ -1123,7 +1122,7 @@ export default function ImportTradeFlow({
               onClose={onClose}
               className="import-actions"
               navigationAction={{
-                label: role === 'forwarder' ? '3단계 통관처리 보기' : '3단계 세액·의뢰서·리스크 보기',
+                label: role === 'forwarder' ? '3단계 통관처리 보기' : '3단계 세액·의뢰서 보기',
                 onClick: () => moveToReadOnlyResultStep(3),
               }}
             />
@@ -1162,13 +1161,6 @@ export default function ImportTradeFlow({
             </div>
             {preview && <div className="declaration-preview" dangerouslySetInnerHTML={{ __html: generateImportDeclarationHtml(declarationData) }} />}
           </section>
-          <RiskSummary
-            risks={state.risks}
-            onToggle={readOnly ? undefined : (id) => setState((current) => ({
-              ...current,
-              risks: current.risks.map((risk) => risk.id === id ? { ...risk, status: risk.status === 'resolved' ? 'unresolved' : 'resolved' } : risk),
-            }))}
-          />
           {readOnly && onClose ? <DocumentManagerReadOnlyAction
             onClose={onClose}
             className="import-actions"
@@ -1202,7 +1194,6 @@ export default function ImportTradeFlow({
             tradeId={state.tradeId}
             readOnly={readOnly}
           />
-          <RiskSummary risks={state.risks} />
           {readOnly && onClose
             ? <DocumentManagerReadOnlyAction
               onClose={onClose}
@@ -1254,10 +1245,9 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
   );
 }
 
-function RiskSummary({ risks, onToggle, title = '종합 리스크', description }: {
+function RiskSummary({ risks, onToggle, description }: {
   risks: ImportRisk[];
   onToggle?: (id: string) => void;
-  title?: string;
   description?: string;
 }) {
   // 수출 결과 페이지의 확인 항목과 같은 문법: 반드시 수정(high) / 보완 권장(그 외) 두 그룹.
@@ -1317,7 +1307,7 @@ function RiskSummary({ risks, onToggle, title = '종합 리스크', description 
 
   return (
     <section className="form-card import-card">
-      <div className="import-card-heading"><div><h2>{title}</h2></div>{description && <p>{description}</p>}</div>
+      <div className="import-card-heading"><div><h2>종합 리스크</h2></div>{description && <p>{description}</p>}</div>
       {nothingFound ? (
         <div className="risk-pass">
           <CheckCircle2 size={20} />

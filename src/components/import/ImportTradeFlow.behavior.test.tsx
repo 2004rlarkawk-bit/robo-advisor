@@ -306,7 +306,7 @@ describe('수입 문서관리 조회 모드', () => {
     expect(manualHsInput?.matches(':disabled')).toBe(true);
     expect(button('직접 입력 확정').matches(':disabled')).toBe(true);
 
-    act(() => button('3단계 세액·의뢰서·리스크 보기').click());
+    act(() => button('3단계 세액·의뢰서 보기').click());
     expect(container?.textContent).toContain('수입신고 의뢰서');
     act(() => button('닫기').click());
 
