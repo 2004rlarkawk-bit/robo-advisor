@@ -14,7 +14,6 @@ interface Props {
   hasCertificateOfOriginDocument?: boolean;
   readOnly?: boolean;
   /** 문서 id → 파일명 매핑 — 검증 메시지의 근거 값 표기에 사용 */
-  documentNames?: Record<string, string>;
 }
 
 const PARTY_FIELDS: Array<[keyof ImportParty, string]> = [
@@ -73,7 +72,6 @@ export default function ImportAnalysisSummary({
   importerCompanyName,
   hasCertificateOfOriginDocument = false,
   readOnly = false,
-  documentNames,
 }: Props) {
   const fields = analysis.extracted;
   const commit = (next: ImportExtractedFields) => onChange(syncLegacyImportFields(next));
@@ -257,20 +255,6 @@ export default function ImportAnalysisSummary({
       </div>
       </details>
 
-      <div className="import-validation-list">
-        {analysis.validations.length === 0
-          ? <div className="form-message success">현재 AI 분석에서 명시적인 문서 간 불일치는 발견되지 않았습니다.</div>
-          : analysis.validations.map((issue) => (
-            <div key={issue.id} className={`form-message ${issue.severity}`}>
-              <div>{issue.message}</div>
-              {issue.values?.length ? (
-                <div className="import-validation-values">
-                  {issue.values.map((entry) => `${documentNames?.[entry.documentId] ?? entry.documentId}: ${entry.value}`).join(' / ')}
-                </div>
-              ) : null}
-            </div>
-          ))}
-      </div>
       </fieldset>
     </section>
   );

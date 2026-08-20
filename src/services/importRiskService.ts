@@ -73,6 +73,64 @@ function recommendationFor(field: string): string {
   return '표시된 출처 문서의 서로 다른 값을 대조하고 확인된 최종값으로 수정하세요.';
 }
 
+/**
+ * 영상 시연용 고정 리스크.
+ * 업로드한 파일 내용과 무관하게 항상 동일한 3건(반드시 수정 1 · 보완 권장 2)을 노출한다.
+ * 시연이 끝나면 DEMO_FIXED_IMPORT_RISKS 를 false 로 바꾸면 실제 분석 결과가 그대로 표시된다.
+ */
+export const DEMO_FIXED_IMPORT_RISKS = true;
+
+const DEMO_IMPORT_RISKS: ImportRisk[] = [
+  {
+    id: 'demo-quantity-mismatch',
+    level: 'high',
+    item: '수량 표기 불일치',
+    cause: '상업송장에는 100 EA, 포장명세서에는 110 EA로 기재되어 수량이 일치하지 않습니다.',
+    recommendation: 'C/I와 P/L의 포장 단위·수량을 대조하고 실제 선적 수량으로 확정하세요.',
+    relatedDocuments: ['Commercial Invoice', 'Packing List'],
+    differentValues: ['상업송장: 100 EA', '포장명세서: 110 EA'],
+    status: 'unresolved',
+  },
+  {
+    id: 'demo-shipping-marks',
+    level: 'medium',
+    item: 'Shipping Marks',
+    cause: "선하증권의 Marks & No.에는 상업송장 및 포장명세서에 기재된 'MADE IN KOREA'가 없습니다.",
+    recommendation: 'B/L의 Marks & No.와 C/I·P/L의 화인을 대조하고 운송인에게 정정을 요청하세요.',
+    relatedDocuments: ['Commercial Invoice', 'Packing List', 'Bill of Lading'],
+    differentValues: [
+      '상업송장: DEMO CASHMERE / LOS ANGELES / C/T 1-10 / MADE IN KOREA',
+      '포장명세서: DEMO CASHMERE / LOS ANGELES / C/T 1-10 / MADE IN KOREA',
+      '선하증권: DEMO CASHMERE / LOS ANGELES / C/T 1-10',
+    ],
+    status: 'unresolved',
+  },
+  {
+    id: 'demo-missing-co',
+    level: 'medium',
+    item: '원산지증명서 누락',
+    cause: 'Certificate of Origin이 첨부되지 않아 협정세율 적용 여부를 확인할 수 없습니다.',
+    recommendation: 'FTA 적용을 검토하려면 협정 요건에 맞는 C/O를 수출자에게 요청하세요.',
+    relatedDocuments: ['Certificate of Origin'],
+    status: 'unresolved',
+  },
+];
+
+/**
+ * 화면에 표시할 리스크를 결정한다.
+ * 시연 플래그가 꺼지면 assessImportRisks 의 실제 분석 결과를 그대로 사용한다.
+ */
+export function resolveImportRisks(
+  documents: ImportDocumentMeta[],
+  analysis: ImportAnalysisResult,
+  suggestions: ImportHSCodeSuggestion[] = [],
+  dutyError = '',
+  importerCompanyName = '',
+): ImportRisk[] {
+  if (DEMO_FIXED_IMPORT_RISKS) return DEMO_IMPORT_RISKS.map((risk) => ({ ...risk }));
+  return assessImportRisks(documents, analysis, suggestions, dutyError, importerCompanyName);
+}
+
 export function assessImportRisks(
   documents: ImportDocumentMeta[],
   analysis: ImportAnalysisResult,

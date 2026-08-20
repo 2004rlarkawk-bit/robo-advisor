@@ -16,7 +16,7 @@ import {
   recommendImportHSKForItems,
   validateOfficialImportHSK,
 } from '../../services/importHSCodeSuggestionService';
-import { assessImportRisks } from '../../services/importRiskService';
+import { resolveImportRisks } from '../../services/importRiskService';
 import {
   downloadImportDeclarationRequest,
   generateImportDeclarationHtml,
@@ -577,7 +577,7 @@ export default function ImportTradeFlow({
           selectedCode: '',
           duty: null,
           dutyError: '',
-          risks: assessImportRisks(documents, analysis, suggestions, '', importerCompanyName),
+          risks: resolveImportRisks(documents, analysis, suggestions, '', importerCompanyName),
         };
       });
       if (failures.length > 0) {
@@ -692,7 +692,7 @@ export default function ImportTradeFlow({
       console.error('[Import Duty] calculation failed', { error, message: dutyError });
     }
     const riskStatusById = new Map(state.risks.map((risk) => [risk.id, risk.status]));
-    const risks = assessImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName)
+    const risks = resolveImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName)
       .map((risk) => ({ ...risk, status: riskStatusById.get(risk.id) ?? risk.status }));
     const generatedAt = new Date().toISOString();
     try {
@@ -895,7 +895,7 @@ export default function ImportTradeFlow({
   const liveRisks = useMemo(() => {
     if (!state.analysis) return [];
     const statusById = new Map(state.risks.map((risk) => [risk.id, risk.status]));
-    return assessImportRisks(state.documents, state.analysis, state.suggestions, state.dutyError, importerCompanyName)
+    return resolveImportRisks(state.documents, state.analysis, state.suggestions, state.dutyError, importerCompanyName)
       .map((risk) => ({ ...risk, status: statusById.get(risk.id) ?? risk.status }));
   }, [state.analysis, state.documents, state.suggestions, state.dutyError, state.risks, importerCompanyName]);
 
@@ -1037,7 +1037,6 @@ export default function ImportTradeFlow({
             analysis={state.analysis}
             importerCompanyName={role === 'shipper' ? importerCompanyName : undefined}
             hasCertificateOfOriginDocument={state.documents.some((document) => document.type === 'certificate_of_origin')}
-            documentNames={Object.fromEntries(state.documents.map((document) => [document.id, document.name]))}
             readOnly={readOnly}
             onChange={(extracted) => setState((current) => ({
               ...current,
