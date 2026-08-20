@@ -1104,7 +1104,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setIsProcessing(true);
     setShowConsole(true);
     setConsoleLogs([]);
-    setOverrides({});           // 재생성 = 새 검증. 이전 override 초기화.
+    // 재생성 시 이전 override(경고 무시 사유)는 유지한다 — 같은 이슈(id::field)가 다시
+    // 검출되면 이미 기록한 사유가 계속 적용되어 "반드시 수정"에 재등장하지 않는다.
+    // (입력을 고쳐 이슈가 사라지면 남은 키는 참조되지 않으므로 무해)
     blockedGenRef.current = null;
 
     try {
