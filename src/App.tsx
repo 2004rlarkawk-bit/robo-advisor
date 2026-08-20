@@ -3446,20 +3446,15 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   }
                                   return (
                                     <>
+                                      {/* 문서명 칩(통관신고서 등)은 노이즈라 표시하지 않는다 — 근거 칩만 유지 */}
                                       <div className="fix-card__titlerow">
                                         <span className="fix-card__title">{mainLine}</span>
-                                        {!isErr && <span className="fix-card__doc">{docLbl}</span>}
                                       </div>
                                       {descLine && <p className="fix-card__desc">{descLine}</p>}
-                                      {isErr && (
+                                      {isErr && issue.amounts && (
                                         <div className="fix-card__meta">
-                                          {issue.amounts && (
-                                            <>
-                                              <span className="fix-card__amt"><em>계산 금액</em><b>{issue.amounts.expected.toLocaleString()} {issue.amounts.currency}</b></span>
-                                              <span className="fix-card__amt fix-card__amt--in"><em>입력 금액</em><b>{issue.amounts.actual.toLocaleString()} {issue.amounts.currency}</b></span>
-                                            </>
-                                          )}
-                                          <span className="fix-card__doc fix-card__doc--file"><FileText size={12} />{docLbl}</span>
+                                          <span className="fix-card__amt"><em>계산 금액</em><b>{issue.amounts.expected.toLocaleString()} {issue.amounts.currency}</b></span>
+                                          <span className="fix-card__amt fix-card__amt--in"><em>입력 금액</em><b>{issue.amounts.actual.toLocaleString()} {issue.amounts.currency}</b></span>
                                         </div>
                                       )}
                                       {basisLaw && (
