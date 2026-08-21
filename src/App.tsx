@@ -461,6 +461,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [overrideReason, setOverrideReason] = useState('');
   // 초안 생성 완료 안내 모달 — 브라우저 alert 대신 앱 톤의 모달로 표시(해결 필요 건수 보관)
   const [draftNoticeCount, setDraftNoticeCount] = useState<number | null>(null);
+  // 거래 저장/재생성 완료 안내 모달 — 브라우저 alert(제목이 도메인으로 뜸) 대체.
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const blockedGenRef = useRef<{ result: any; generationProfile: TradeProfile; writeMode: ReturnType<typeof decideGeneratedTradeWrite> } | null>(null);
   const [feedbackReport, setFeedbackReport] = useState<FeedbackReport | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
@@ -1052,14 +1054,14 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       if (writeMode === 'insert') {
         const createdTrade = await createGeneratedTrade(generatedTradeData);
         setCurrentTradeId(createdTrade.id);
-        alert(overrideRecords.length > 0
+        setSaveNotice(overrideRecords.length > 0
           ? `필요 서류가 생성·저장되었습니다. (경고 ${overrideRecords.length}건이 사유 기록 후 무시 처리됨)`
           : '필요 서류가 생성되고 새로운 거래가 저장되었습니다.');
       } else {
         if (!currentTradeId) throw new Error('현재 거래 ID가 없습니다.');
         const updatedTrade = await updateGeneratedTrade(currentTradeId, generatedTradeData);
         if (updatedTrade.id !== currentTradeId) throw new Error('재생성된 거래 ID가 현재 거래와 일치하지 않습니다.');
-        alert(overrideRecords.length > 0
+        setSaveNotice(overrideRecords.length > 0
           ? `필요 서류가 다시 생성되었습니다. (경고 ${overrideRecords.length}건이 사유 기록 후 무시 처리됨)`
           : '수정된 내용으로 필요 서류가 다시 생성되었으며 기존 거래가 업데이트되었습니다.');
       }
@@ -4069,6 +4071,27 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             </div>
             <div style={{ borderTop: '1px solid var(--border-color-subtle)', marginTop: 22, paddingTop: 18, display: 'flex', justifyContent: 'center' }}>
               <button className="btn btn-primary" style={{ minWidth: 200, justifyContent: 'center' }} onClick={() => setDraftNoticeCount(null)}>확인</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 거래 저장/재생성 완료 안내 모달 — 브라우저 alert 대체 */}
+      {saveNotice !== null && (
+        <div
+          onClick={() => setSaveNotice(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 92vw)', background: '#fff', borderRadius: 16, padding: '36px 32px 24px', boxShadow: '0 12px 40px rgba(0,0,0,0.25)', textAlign: 'center' }}>
+            <div style={{ width: 64, height: 64, margin: '0 auto 18px', borderRadius: '50%', background: '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-color)' }}>
+              <Info size={30} strokeWidth={2.2} />
+            </div>
+            <h3 style={{ margin: '0 0 18px', fontSize: 22, fontWeight: 800, color: 'var(--text-dark)' }}>AI 연산 결과 재검증</h3>
+            <div style={{ borderTop: '1px solid var(--border-color-subtle)', paddingTop: 18, fontSize: 16, color: 'var(--text-dark)', lineHeight: 1.8 }}>
+              <p style={{ margin: 0 }}>{saveNotice}</p>
+            </div>
+            <div style={{ borderTop: '1px solid var(--border-color-subtle)', marginTop: 22, paddingTop: 18, display: 'flex', justifyContent: 'center' }}>
+              <button className="btn btn-primary" style={{ minWidth: 200, justifyContent: 'center' }} onClick={() => setSaveNotice(null)}>확인</button>
             </div>
           </div>
         </div>
