@@ -3306,8 +3306,8 @@ body {
 .sev-error   .fix-card__action { border: 1px solid var(--error-color); color: var(--error-color); }
 .sev-error   .fix-card__action:hover { background: var(--error-bg); }
 /* 경고 카드의 액션 버튼은 주요 동작이므로 파랑(primary) — 마커·칩만 앰버 유지 */
-.sev-warning .fix-card__action { border: 1px solid var(--primary-color); color: var(--primary-color); }
-.sev-warning .fix-card__action:hover { background: #eef4fd; }
+.sev-warning .fix-card__action { border: 1px solid var(--warning-color); color: var(--warning-color); }
+.sev-warning .fix-card__action:hover { background: var(--warning-bg); }
 
 /* ── 본문 즉시 보완 액션 — 도안(사진1) 스타일 ── */
 /* 인라인 입력 행: [입력 …단위][실행 버튼] 한 줄 */
@@ -3749,6 +3749,16 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .inline-fix-card .ifc-foot { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 9px; }
 /* 품목 섹션(3) 인라인 안내 카드는 form-grid 안에서 한 줄 전체를 차지해 대상 필드 바로 위에 붙는다. */
 .inline-fix-card--grid { grid-column: 1 / -1; margin: 4px 0 10px; }
+/* 수량 불일치(R10) 구조화 카드 — 숫자 강조 + "해결책" + 구분선 + 확인 우하단 (사진2 레이아웃) */
+.inline-fix-card--structured .ifc-text { font-size: 14px; line-height: 1.75; }
+.inline-fix-card--structured .ifc-solution { margin-top: 13px; }
+.inline-fix-card--structured .ifc-solution-label { color: #fff; font-weight: 800; }
+.inline-fix-card--structured .ifc-foot {
+  justify-content: flex-end;
+  border-top: 1px solid rgba(148, 163, 184, 0.28);
+  margin-top: 15px; padding-top: 13px;
+}
+.inline-fix-card--structured .ifc-btn.primary { padding: 9px 26px; font-size: 14px; }
 .inline-fix-card .ifc-basis { font-size: 12px; color: #94a3b8; }
 .inline-fix-card .ifc-actions { display: flex; gap: 8px; }
 .inline-fix-card .ifc-btn {

@@ -81,6 +81,14 @@ export interface ShipperFixNotice {
   fieldKey: string;
   message: string;
   basis?: string;
+  // 패킹↔송장 수량 불일치(R10) 구조화 값 — 있으면 인라인 카드를 숫자 강조 + 해결책 레이아웃으로 렌더.
+  qtyMismatch?: {
+    plTotal: number;
+    invQty: number;
+    boxes: number | null;
+    eaPerBox: number | null;
+    suggestedEaPerBox: number | null;
+  };
 }
 
 function numericValue(eventValue: string): NumericInput {
@@ -136,16 +144,32 @@ export default function ShipperWorkspaceForm({
     if (el) el.open = true;
   }, [fixSection, showOriginCard]);
 
-  const fixNoticeCard = (section: number) => {
-    if (!fixNotice || fixSection !== section) return null;
+  const renderFixNoticeCard = (spanGrid = false) => {
+    if (!fixNotice) return null;
+    const qm = fixNotice.qtyMismatch;
     return (
-      <div className="inline-fix-card" role="alert">
+      <div className={`inline-fix-card${spanGrid ? ' inline-fix-card--grid' : ''}${qm ? ' inline-fix-card--structured' : ''}`} role="alert">
         <span className="ifc-ic"><PenLine size={17} /></span>
         <div className="ifc-body">
           <b className="ifc-title">강조된 항목을 수정하세요</b>
-          <p className="ifc-text">{fixNotice.message}</p>
+          {qm ? (
+            <>
+              <p className="ifc-text">
+                패킹리스트 총 수량 <b className="hl-bad">{qm.plTotal.toLocaleString()}</b>과 상업송장 수량 <b className="hl-good">{qm.invQty.toLocaleString()}</b>이 불일치합니다.
+              </p>
+              <p className="ifc-text ifc-solution">
+                <b className="ifc-solution-label">해결책 :</b>{' '}
+                {qm.suggestedEaPerBox !== null && (
+                  <>박스당 수량을 <b className="hl-bad">{qm.suggestedEaPerBox.toLocaleString()}</b>로 수정하거나,<br /></>
+                )}
+                실제 포장 수량에 맞게 상업송장 수량을 변경해주세요
+              </p>
+            </>
+          ) : (
+            <p className="ifc-text">{fixNotice.message}</p>
+          )}
           <div className="ifc-foot">
-            {fixNotice.basis ? <span className="ifc-basis">근거: {fixNotice.basis}</span> : <span />}
+            {fixNotice.basis && <span className="ifc-basis">근거: {fixNotice.basis}</span>}
             {onDismissFixNotice && (
               <div className="ifc-actions">
                 <button type="button" className="ifc-btn primary" onClick={onDismissFixNotice}>확인</button>
@@ -158,6 +182,17 @@ export default function ShipperWorkspaceForm({
         )}
       </div>
     );
+  };
+  // 섹션 최상단 배너 — 단, 섹션 3(품목)은 필드가 품목 카드 안쪽 깊이 있어
+  // 최상단 배너가 대상 필드와 한 화면에 안 잡힌다 → 섹션 3은 필드 행 바로 위 인라인으로 렌더한다.
+  const fixNoticeCard = (section: number) => {
+    if (!fixNotice || fixSection !== section || section === 3) return null;
+    return renderFixNoticeCard();
+  };
+  // 섹션 3 전용: 대상 필드가 지정 목록에 있을 때 그 필드 행 바로 위에 렌더(그리드 전체폭).
+  const fixNoticeInline = (fieldKeys: string[]) => {
+    if (!fixNotice || fixSection !== 3 || !fieldKeys.includes(fixNotice.fieldKey)) return null;
+    return renderFixNoticeCard(true);
   };
   const invoiceSummary = summarizeShipperItems(items);
   const hasInvalidWeight = isGrossWeightBelowNet(profile.grossWeight, profile.netWeight);
@@ -537,6 +572,7 @@ export default function ShipperWorkspaceForm({
             <div className="shipper-item-card" key={item.id}>
               <div className="shipper-item-heading"><strong>품목 {index + 1}</strong><button type="button" className="btn btn-secondary btn-sm" disabled={items.length === 1} onClick={() => removeItem(item.id)}><Trash2 size={14} /> 삭제</button></div>
               <div className="form-grid">
+                {index === 0 && fixNoticeInline(['itemName', 'hsCode'])}
                 <div className="form-group" data-field="itemName">
                   <label className="form-label">영문 품명 Goods Description <Req /></label>
                   <input
@@ -658,6 +694,7 @@ export default function ShipperWorkspaceForm({
                     </div>
                   );
                 })()}
+                {index === 0 && fixNoticeInline(['quantity', 'unit', 'unitPrice', 'totalAmount', 'invoiceAmount'])}
                 <div className="form-group" data-field="quantity"><label className="form-label">수량 <Req /></label><input type="number" min="0" className="form-input" value={item.quantity} onChange={(e) => updateItem(item.id, 'quantity', numericValue(e.target.value))} /></div>
                 <div className="form-group"><label className="form-label">단위 <Req /></label><select className="form-input" value={SHIPPER_ITEM_UNIT_OPTIONS.some((option) => option.value === item.unit) ? item.unit : OTHER_ITEM_UNIT_VALUE} onChange={(e) => updateItem(item.id, 'unit', e.target.value === OTHER_ITEM_UNIT_VALUE ? '' : e.target.value)}>{SHIPPER_ITEM_UNIT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}<option value={OTHER_ITEM_UNIT_VALUE}>기타</option></select>{!SHIPPER_ITEM_UNIT_OPTIONS.some((option) => option.value === item.unit) && <input className="form-input shipper-custom-unit-input" aria-label="기타 단위 직접 입력" value={item.unit} maxLength={12} onChange={(e) => updateItem(item.id, 'unit', e.target.value.toUpperCase().replace(/[^A-Z0-9./-]/g, ''))} placeholder="영문 단위 직접 입력 (예: DOZ)" />}</div>
                 <div className="form-group" data-field="unitPrice"><label className="form-label">단가 <Req /></label><input type="number" min="0" step="any" className="form-input" value={item.unitPrice} onChange={(e) => updateItem(item.id, 'unitPrice', numericValue(e.target.value))} /></div>

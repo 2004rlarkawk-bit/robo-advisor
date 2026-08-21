@@ -916,13 +916,16 @@ export default function ImportTradeFlow({
 
   return (
     <div className="import-flow">
-      <div className="import-flow-header">
-        <div>
-          <h2>수입 {role === 'shipper' ? '화주' : '포워더'} 업무</h2>
-          <p>{role === 'shipper' ? '해외 수출자가 보낸 해상 서류를 AI로 분석한 뒤 확인·수정합니다.' : '화주 또는 수출지 포워더에게 받은 서류를 저장하고 통관 진행을 추적합니다.'}</p>
+      {/* 소개 헤더(제목·설명·단계 초기화)는 1단계(입력)에서만 노출 — 결과 페이지(2·3단계)에서는 결과에 집중 */}
+      {state.step === 1 && (
+        <div className="import-flow-header">
+          <div>
+            <h2>수입 {role === 'shipper' ? '화주' : '포워더'} 업무</h2>
+            <p>{role === 'shipper' ? '해외 수출자가 보낸 해상 서류를 AI로 분석한 뒤 확인·수정합니다.' : '화주 또는 수출지 포워더에게 받은 서류를 저장하고 통관 진행을 추적합니다.'}</p>
+          </div>
+          {!readOnly && <button type="button" className="btn btn-secondary" onClick={reset}><RefreshCw size={15} /> 단계 초기화</button>}
         </div>
-        {!readOnly && <button type="button" className="btn btn-secondary" onClick={reset}><RefreshCw size={15} /> 단계 초기화</button>}
-      </div>
+      )}
       <ImportStepIndicator
         current={state.step}
         labels={role === 'shipper' ? ['서류 업로드·AI 분석', '분석 결과·리스크·HS 확정', '세액·의뢰서'] : ['서류 업로드', '서류 확인', '통관 처리']}
@@ -1306,7 +1309,7 @@ function RiskSummary({ risks, onToggle, description }: {
 
   return (
     <section className="form-card import-card">
-      <div className="import-card-heading"><div><h2>종합 리스크</h2></div>{description && <p>{description}</p>}</div>
+      <div className="import-card-heading"><div><h2>AI 검증 결과</h2></div>{description && <p>{description}</p>}</div>
       {nothingFound ? (
         <div className="risk-pass">
           <CheckCircle2 size={20} />
