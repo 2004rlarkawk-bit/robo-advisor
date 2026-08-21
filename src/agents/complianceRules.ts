@@ -425,7 +425,7 @@ function packingTotalBoxes(items: InvoiceItem[]): number | null {
 function quantityFixHint(plEA: number, invQty: number, boxes: number | null): string {
   if (boxes !== null && boxes > 0 && invQty % boxes === 0) {
     const suggestedEaPerBox = invQty / boxes;
-    return `박스 ${boxes.toLocaleString()}개 기준 박스당 수량을 ${suggestedEaPerBox.toLocaleString()}개로 고치면 상업송장 수량(${invQty.toLocaleString()})과 맞습니다. 실제 포장이 맞다면 상업송장 수량을 ${plEA.toLocaleString()}으로 수정하세요.`;
+    return `박스 ${boxes.toLocaleString()}개 기준 박스당 수량을 ${suggestedEaPerBox.toLocaleString()}개로 고치면 상업송장 수량(${invQty.toLocaleString()})과 맞습니다.\n실제 포장이 맞다면 상업송장 수량을 ${plEA.toLocaleString()}으로 수정하세요.`;
   }
   return `상업송장 수량을 ${plEA.toLocaleString()}으로 맞추거나, 패킹리스트 박스 내역(박스수 × 박스당 수량)을 ${invQty.toLocaleString()}이 되도록 수정하세요.`;
 }

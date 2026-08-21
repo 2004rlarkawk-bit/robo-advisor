@@ -3274,7 +3274,7 @@ body {
 .fix-card__title { font-size: 15px; font-weight: 800; color: var(--text-dark); line-height: 1.35; letter-spacing: -0.01em; }
 
 /* 설명 — 작고 회색 */
-.fix-card__desc { margin: 6px 0 0; font-size: 13px; color: var(--text-light); line-height: 1.5; }
+.fix-card__desc { margin: 6px 0 0; font-size: 13px; color: var(--text-light); line-height: 1.5; white-space: pre-line; }
 
 /* 서류 칩 */
 .fix-card__doc {
