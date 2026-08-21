@@ -2188,8 +2188,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               </>
             )
             : <>
-            {/* Page Title & Subtitle — 수출 결과 화면에서는 결과에 집중하도록 제목·선택 패널을 숨긴다 */}
-            {!(tradeDirection === 'export' && hasGenerated) && <div className="page-heading">
+            {/* Page Title & Subtitle — 결과 화면(수출: 생성 후 / 수입: 2단계 이후)에서는 결과에 집중하도록 제목을 숨긴다 */}
+            {!(tradeDirection === 'export' && hasGenerated)
+              && !(tradeDirection === 'import' && workspaceCurrentStep > 1)
+              && <div className="page-heading">
               <h1 className="page-title">항만 수출입 문서 자동화 서비스</h1>
               <p className="page-subtitle">AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.</p>
             </div>}
@@ -3297,7 +3299,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                       : doc.id === 'co' ? 'C/O'
                       : doc.id === 'insurance' ? 'I/P' : '서류';
                     const fileReady = hasDoc(doc.id);
-                    const isOwnDoc = doc.id === 'invoice' || doc.id === 'packing_list' || doc.id === 'transport_request';
+                    const isOwnDoc = doc.id === 'invoice' || doc.id === 'packing_list' || doc.id === 'transport_request' || doc.id === 'customs_dec';
                     // 표시 상태 규칙:
                     //  - 화주 서류 + 파일 있음 + 차단 중  → '초안' (볼 수 있지만 제출 전 검토 필요)
                     //  - 화주 서류 + completed + 파일 없음 → '생성 대기' (아직 미생성)
@@ -3349,7 +3351,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   ) : (
                     <>
                     <div className="rv-fixes-head">
-                      <h3 className="rv-fixes-title">{blockingIssuesCount > 0 ? '해결하면 제출할 수 있어요' : '검토 참고 사항'}</h3>
+                      <h3 className="rv-fixes-title">AI 검증 결과</h3>
                     </div>
 
                       {/* 요약 칩 — 검토 완료·확인 필요 개수. 숫자는 아래 실제 렌더 항목 수와 일치한다. */}
