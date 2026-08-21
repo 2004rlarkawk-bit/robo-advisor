@@ -406,6 +406,30 @@ function packingTotalEA(items: InvoiceItem[]): number | null {
   return counted > 0 ? sum : null;
 }
 
+/** 패킹 품목의 총 박스수 — 수량 불일치 시 "박스당 몇 개로 고치면 되는지" 역산용. */
+function packingTotalBoxes(items: InvoiceItem[]): number | null {
+  let sum = 0, counted = 0;
+  for (const it of items) {
+    const r = it as Record<string, any>;
+    const boxes = num(r.boxes ?? r.packageCount);
+    if (boxes !== null && boxes > 0) { sum += boxes; counted++; }
+  }
+  return counted > 0 ? sum : null;
+}
+
+/**
+ * 수량 불일치 해소 방법을 계산해 문장으로 돌려준다.
+ * 박스수로 인보이스 수량이 나누어떨어지면 "박스당 N개로 수정" 같은 구체적 수치를 제시하고,
+ * 안 떨어지면 어느 쪽 값을 맞출지 두 선택지를 제시한다.
+ */
+function quantityFixHint(plEA: number, invQty: number, boxes: number | null): string {
+  if (boxes !== null && boxes > 0 && invQty % boxes === 0) {
+    const suggestedEaPerBox = invQty / boxes;
+    return `박스 ${boxes.toLocaleString()}개 기준 박스당 수량을 ${suggestedEaPerBox.toLocaleString()}개로 고치면 상업송장 수량(${invQty.toLocaleString()})과 맞습니다. 실제 포장이 맞다면 상업송장 수량을 ${plEA.toLocaleString()}으로 수정하세요.`;
+  }
+  return `상업송장 수량을 ${plEA.toLocaleString()}으로 맞추거나, 패킹리스트 박스 내역(박스수 × 박스당 수량)을 ${invQty.toLocaleString()}이 되도록 수정하세요.`;
+}
+
 export function checkPackingInvoiceConsistency(
   invoice: InvoiceData,
   packingList: PackingListData,
@@ -423,8 +447,9 @@ export function checkPackingInvoiceConsistency(
   if (plEA === null) {
     skipLog('R10 수량 대조 건너뜀 — 패킹리스트 박스 내역(박스수/박스당 수량) 미입력. 오탐 방지.');
   } else if (invQty > 0 && plEA !== invQty) {
+    const boxes = packingTotalBoxes(plItems);
     issues.push(mk('r10-packing-qty-mismatch', 'packing_list', 'quantity',
-      `패킹리스트 총 수량(박스 내역 합계 ${plEA.toLocaleString()})이 상업송장 수량(${invQty.toLocaleString()})과 다릅니다. 세관·은행 서류 대조 시 불일치로 걸릴 수 있으니 확인하세요.`));
+      `패킹리스트 총 수량(박스 내역 합계 ${plEA.toLocaleString()})이 상업송장 수량(${invQty.toLocaleString()})과 다릅니다. ${quantityFixHint(plEA, invQty, boxes)}`));
   }
 
   // 품명 대조: 같은 순번 품목의 품명이 다르면 경고(둘 다 값이 있을 때만).

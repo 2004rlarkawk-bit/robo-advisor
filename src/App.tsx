@@ -1157,7 +1157,12 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
         packingXlsxCacheRef.current = null;
         setHasGenerated(true);
         blockedGenRef.current = { result, generationProfile, writeMode };
-        setDraftNoticeCount(blockers.length);
+        // "제출 전 확인 필요" 건수 = 우측 패널에 뜨는 항목 수와 동일하게 계산한다.
+        // 반드시 수정(미override error) + 보완 권장(warning) 둘 다 포함(정보성 info·사실 카드 제외).
+        const noticeCount = issuesList.filter(
+          (i) => !i.card && i.severity !== 'info' && !(i.severity === 'error' && overrides[issueKey(i)])
+        ).length;
+        setDraftNoticeCount(noticeCount);
         return;
       }
 
@@ -4013,7 +4018,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               <p style={{ margin: 0 }}>최종 제출은 보류됩니다.</p>
             </div>
             <div style={{ borderTop: '1px solid var(--border-color-subtle)', marginTop: 22, paddingTop: 18, display: 'flex', justifyContent: 'center' }}>
-              <button className="btn btn-primary" style={{ minWidth: 200 }} onClick={() => setDraftNoticeCount(null)}>확인</button>
+              <button className="btn btn-primary" style={{ minWidth: 200, justifyContent: 'center' }} onClick={() => setDraftNoticeCount(null)}>확인</button>
             </div>
           </div>
         </div>
