@@ -762,8 +762,8 @@ export default function ImportTradeFlow({
       });
       setMessage(dutyError ? `${dutyError} 사유를 표시한 상태로 다음 단계로 이동했습니다.` : '');
       if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
-      pushAnalysisLog('Orchestrator Agent', '산출 완료 — 결과 페이지로 이동합니다.', 'success');
-      setTimeout(() => setShowAnalysisConsole(false), 800);
+      // 자동 닫힘 없음 — 사용자가 [콘솔 닫기]를 눌러야 결과 페이지가 보인다.
+      pushAnalysisLog('Orchestrator Agent', '산출 완료 — [콘솔 닫기]를 누르면 결과 페이지로 이동합니다.', 'success');
     } catch (error) {
       console.error('[Import Trade] generated 상태 저장 실패:', error);
       setMessage(error instanceof Error
@@ -970,7 +970,7 @@ export default function ImportTradeFlow({
             <div className="console-footer">
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={() => setShowAnalysisConsole(false)}
+                onClick={() => { setShowAnalysisConsole(false); window.scrollTo({ top: 0 }); }}
                 disabled={busy}
               >
                 콘솔 닫기
