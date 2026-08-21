@@ -1868,6 +1868,11 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   const completedDocsCount = documents.filter(d => d.status === 'completed').length;
   // 차단(제출/생성 게이트) = 미해결 error만.
   const blockingIssuesCount = unresolvedBlockers(issues, overrides).length;
+  // 결과 배너 표시용 = 반드시 수정(error) + 보완 권장(warning) 합산.
+  // 아래 확인 목록과 동일 기준: card 이슈 제외, 무시(override)된 error 제외 — 배너 숫자와 목록 개수가 일치한다.
+  const bannerIssueCount = issues.filter(
+    (i) => !i.card && i.severity !== 'info' && !(i.severity === 'error' && overrides[issueKey(i)]),
+  ).length;
 
   // 입력 화면 오른쪽 "고칠 항목" 체크리스트 —
   // 마지막 생성에서 나온 오류·보완을 한 번에 보여주고, 항목 클릭 시 해당 입력칸으로 이동한다.
@@ -3215,8 +3220,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   ) : documents.some(d => d.status !== 'not_started') ? (
                     <div className="info-result">
                       <h3 className="info-title">최근 생성 결과</h3>
-                      <div className={`info-result-line ${blockingIssuesCount > 0 ? 'warn' : 'ok'}`}>
-                        {blockingIssuesCount > 0 ? `⚠ 보완 필요 ${blockingIssuesCount}건` : '✓ 검증 통과'} · 생성 완료 {completedDocsCount}건
+                      <div className={`info-result-line ${bannerIssueCount > 0 ? 'warn' : 'ok'}`}>
+                        {bannerIssueCount > 0 ? `⚠ 보완 필요 ${bannerIssueCount}건` : '✓ 검증 통과'} · 생성 완료 {completedDocsCount}건
                       </div>
                       <ul className="info-doc-list">
                         {/* 수출·수입신고 서류는 관세사·신고인 처리 대상이라 "생성 결과" 요약에서는 제외 —
@@ -3268,7 +3273,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   <div className="rv-hero rv-hero-blocked">
                     <span className="rv-hero-blocked-ic"><AlertTriangle size={22} /></span>
                     <div className="rv-hero-blocked-title">
-                      제출 전 <b>{blockingIssuesCount}건</b>을 해결해야 최종 제출할 수 있어요
+                      제출 전 <b>{bannerIssueCount}건</b>을 해결해야 최종 제출할 수 있어요
                     </div>
                   </div>
                 ) : (
