@@ -3282,6 +3282,8 @@ body {
   padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
 }
 .sev-warning .fix-card__doc { background: var(--warning-bg); color: var(--warning-color); border: 1px solid #f2d19a; }
+/* 반드시 수정(빨강) 카드의 서류 칩도 섹션 톤에 맞춘 빨간 필 */
+.sev-error .fix-card__doc { background: var(--error-bg); color: var(--error-color); border: 1px solid #f5c2c7; }
 .fix-card__doc--file { background: #f1f5f9; color: #64748b; border: 1px solid var(--border-color); }
 
 /* 오류 메타 행 — 금액 칩 + 서류 칩 */
