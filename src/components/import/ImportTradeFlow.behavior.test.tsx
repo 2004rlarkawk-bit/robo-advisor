@@ -323,7 +323,8 @@ describe('수입 문서관리 조회 모드', () => {
       readOnly: false,
     });
 
-    expect(container?.textContent).toContain('단계 초기화');
+    // '단계 초기화'는 이제 1단계(입력)에서만 노출된다 — 결과 단계(2·3)에서는 소개 헤더와 함께 숨김.
+    // 편집(normal) 모드 유지 여부는 '완료' 액션 노출 + '닫기'(읽기전용) 미노출 + 아래 입력 활성으로 검증한다.
     expect(container?.textContent).toContain('완료');
     expect(container?.textContent).not.toContain('닫기');
     act(() => button('이전').click());
