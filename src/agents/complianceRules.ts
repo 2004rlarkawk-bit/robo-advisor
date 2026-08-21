@@ -448,8 +448,15 @@ export function checkPackingInvoiceConsistency(
     skipLog('R10 수량 대조 건너뜀 — 패킹리스트 박스 내역(박스수/박스당 수량) 미입력. 오탐 방지.');
   } else if (invQty > 0 && plEA !== invQty) {
     const boxes = packingTotalBoxes(plItems);
+    // 박스 내역이 한 라인일 때의 현재 박스당 수량 — 카드의 "N개 → M개로 수정" 표기용
+    const eaLines = plItems
+      .map((it) => num((it as Record<string, any>).eaPerBox))
+      .filter((v): v is number => v !== null && v > 0);
+    const eaPerBox = eaLines.length === 1 ? eaLines[0] : null;
+    const suggestedEaPerBox = boxes !== null && boxes > 0 && invQty % boxes === 0 ? invQty / boxes : null;
     issues.push(mk('r10-packing-qty-mismatch', 'packing_list', 'quantity',
-      `패킹리스트 총 수량(박스 내역 합계 ${plEA.toLocaleString()})이 상업송장 수량(${invQty.toLocaleString()})과 다릅니다. ${quantityFixHint(plEA, invQty, boxes)}`));
+      `패킹리스트 총 수량(박스 내역 합계 ${plEA.toLocaleString()})이 상업송장 수량(${invQty.toLocaleString()})과 다릅니다. ${quantityFixHint(plEA, invQty, boxes)}`,
+      { qtyMismatch: { plTotal: plEA, invQty, boxes, eaPerBox, suggestedEaPerBox } }));
   }
 
   // 품명 대조: 같은 순번 품목의 품명이 다르면 경고(둘 다 값이 있을 때만).

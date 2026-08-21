@@ -252,6 +252,17 @@ export interface ValidationIssue {
    * message 문자열 파싱 대신 결정론적으로 채운다.
    */
   amounts?: { expected: number; actual: number; currency: string };
+  /**
+   * 패킹↔송장 수량 불일치(R10)의 구조화된 값 — 결과 카드에서 수량 칩과
+   * "어느 쪽을 어떻게 고칠지" 선택지 2줄로 렌더한다.
+   */
+  qtyMismatch?: {
+    plTotal: number;            // 패킹리스트 총수량 (박스 내역 합계)
+    invQty: number;             // 상업송장 수량
+    boxes: number | null;       // 총 박스 수
+    eaPerBox: number | null;    // 현재 박스당 수량 (단일 라인일 때)
+    suggestedEaPerBox: number | null; // invQty가 박스수로 나누어떨어질 때의 권장값
+  };
 }
 
 // ===== AI 검토 리포트 "틀" — 룰(지금)과 GPT(나중)가 같은 구조를 채운다 =====

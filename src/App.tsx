@@ -23,7 +23,9 @@ import {
   Calculator,
   Calendar,
   OctagonAlert,
-  Info
+  Info,
+  PenLine,
+  ChevronRight
 } from 'lucide-react';
 import {
   TradeProfile,
@@ -3481,6 +3483,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   if (pres) { mainLine = pres.title; }
                                   // 금액 불일치는 칩으로 숫자를 보여주므로 제목을 짧게.
                                   if (issue.amounts) { mainLine = '금액 계산이 일치하지 않습니다'; }
+                                  // 수량 불일치(R10)는 칩+선택지 UI로 보여주므로 제목만 짧게.
+                                  if (issue.qtyMismatch) { mainLine = '패킹리스트 수량과 상업송장 수량이 다릅니다.'; }
                                   // 긴 메시지는 첫 문장만 굵은 제목으로, 나머지는 아래 회색 설명으로 분리해
                                   // 한 덩어리 굵은 문단이 되지 않게 한다. (마침표+공백 기준)
                                   // present()가 손질한 설명이 있으면 그대로 쓰고, 없을 때만 문장 분리로 만든다.
@@ -3497,6 +3501,44 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                         <span className="fix-card__title">{mainLine}</span>
                                       </div>
                                       {descLine && <p className="fix-card__desc">{descLine}</p>}
+                                      {issue.qtyMismatch && (() => {
+                                        const qm = issue.qtyMismatch;
+                                        return (
+                                          <div className="qty-mismatch">
+                                            <div className="qm-chips">
+                                              <span className="qm-chip qm-chip--pl">패킹리스트 총수량 <b>{qm.plTotal.toLocaleString()}개</b></span>
+                                              <span className="qm-chip qm-chip--inv">상업송장 수량 <b>{qm.invQty.toLocaleString()}개</b></span>
+                                            </div>
+                                            <p className="qm-guide">실제 포장 수량을 기준으로 하나를 수정해 주세요.</p>
+                                            <div className="qm-options">
+                                              {qm.suggestedEaPerBox !== null && (
+                                                <button
+                                                  type="button"
+                                                  className="qm-option"
+                                                  onClick={() => goToFieldFix({ ...issue, field: 'eaPerBox', message: `박스당 수량을 ${qm.suggestedEaPerBox!.toLocaleString()}개로 수정하면 상업송장 수량(${qm.invQty.toLocaleString()})과 맞습니다.` })}
+                                                >
+                                                  <span className="qm-option-ic blue"><PenLine size={15} /></span>
+                                                  <span className="qm-option-case">총수량이 {qm.invQty.toLocaleString()}개라면</span>
+                                                  <span className="qm-option-sep" aria-hidden="true" />
+                                                  <span className="qm-option-fix">박스당 수량을 {qm.eaPerBox !== null ? <><b>{qm.eaPerBox.toLocaleString()}개</b> → </> : null}<b className="qm-accent">{qm.suggestedEaPerBox.toLocaleString()}개</b>로 수정</span>
+                                                  <ChevronRight size={16} className="qm-option-arrow" />
+                                                </button>
+                                              )}
+                                              <button
+                                                type="button"
+                                                className="qm-option"
+                                                onClick={() => goToFieldFix({ ...issue, field: 'quantity', message: `상업송장 수량을 ${qm.plTotal.toLocaleString()}(으)로 수정하면 패킹리스트 총수량과 맞습니다.` })}
+                                              >
+                                                <span className="qm-option-ic green"><FileText size={15} /></span>
+                                                <span className="qm-option-case">실제 총수량이 {qm.plTotal.toLocaleString()}개라면</span>
+                                                <span className="qm-option-sep" aria-hidden="true" />
+                                                <span className="qm-option-fix">상업송장 수량을 <b>{qm.invQty.toLocaleString()}개</b> → <b className="qm-accent qm-accent--green">{qm.plTotal.toLocaleString()}개</b>로 수정</span>
+                                                <ChevronRight size={16} className="qm-option-arrow" />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        );
+                                      })()}
                                       {isErr && issue.amounts && (
                                         <div className="fix-card__meta">
                                           <span className="fix-card__amt"><em>계산 금액</em><b>{issue.amounts.expected.toLocaleString()} {issue.amounts.currency}</b></span>

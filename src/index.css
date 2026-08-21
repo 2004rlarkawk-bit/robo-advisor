@@ -3744,7 +3744,9 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .inline-fix-card .ifc-text { margin: 5px 0 0; font-size: 13px; color: #e2e8f0; line-height: 1.6; }
 .inline-fix-card .hl-bad { color: #fb923c; font-weight: 800; }
 .inline-fix-card .hl-good { color: #60a5fa; font-weight: 800; }
-.inline-fix-card .ifc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 9px; }
+.inline-fix-card .ifc-foot { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 9px; }
+/* 품목 섹션(3) 인라인 안내 카드는 form-grid 안에서 한 줄 전체를 차지해 대상 필드 바로 위에 붙는다. */
+.inline-fix-card--grid { grid-column: 1 / -1; margin: 4px 0 10px; }
 .inline-fix-card .ifc-basis { font-size: 12px; color: #94a3b8; }
 .inline-fix-card .ifc-actions { display: flex; gap: 8px; }
 .inline-fix-card .ifc-btn {
@@ -3762,6 +3764,39 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .inline-fix-card .ifc-close:hover { color: #fff; }
 .customs-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .customs-meta .meta-dot { color: #cbd5e1; }
+/* 수량 불일치(R10) 카드 — 수량 칩 + 수정 선택지 2줄 */
+.qty-mismatch { margin-top: 10px; }
+.qm-chips { display: flex; gap: 10px; flex-wrap: wrap; }
+.qm-chip { font-size: 13px; color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 9px; padding: 8px 14px; }
+.qm-chip b { font-size: 15px; margin-left: 6px; }
+.qm-chip--pl b { color: #0b57d0; }
+.qm-chip--inv { background: #f0fdf4; border-color: #dcfce7; }
+.qm-chip--inv b { color: #15803d; }
+.qm-guide { margin: 10px 0 8px; font-size: 12.5px; color: #64748b; }
+.qm-options { display: flex; flex-direction: column; gap: 8px; }
+.qm-option {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  border: 1px solid #e2e8f0; border-radius: 10px; background: #fff;
+  padding: 11px 14px; cursor: pointer; font-family: inherit; font-size: 13px;
+  color: #334155; text-align: left; transition: border-color .15s ease;
+}
+.qm-option:hover { border-color: #94a3b8; }
+.qm-option-ic {
+  flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.qm-option-ic.blue { background: #e8f0fe; color: #0b57d0; }
+.qm-option-ic.green { background: #f0fdf4; color: #15803d; }
+.qm-option-case { font-weight: 700; color: #0f172a; white-space: nowrap; }
+.qm-option-sep { width: 1px; align-self: stretch; background: #e2e8f0; }
+.qm-option-fix { flex: 1; min-width: 0; }
+.qm-option-fix .qm-accent { color: #0b57d0; }
+.qm-option-fix .qm-accent--green { color: #15803d; }
+.qm-option-arrow { flex-shrink: 0; color: #94a3b8; }
+@media (max-width: 640px) {
+  .qm-option { flex-wrap: wrap; }
+  .qm-option-sep { display: none; }
+}
 /* 통관 상태 조회 결과 카드 — 메타 아이콘 행 */
 .customs-meta-item { display: inline-flex; align-items: center; gap: 6px; color: #475569; }
 .customs-meta-item svg { color: #94a3b8; flex-shrink: 0; }
