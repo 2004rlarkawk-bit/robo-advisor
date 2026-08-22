@@ -576,6 +576,8 @@ body {
 .confirmation-dialog { width: min(520px, 100%); padding: 24px; border-radius: 16px; background: #fff; box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24); }
 .confirmation-dialog h3 { margin: 0 0 12px; color: var(--text-dark); }
 .confirmation-dialog p { margin: 0; color: var(--text-light); line-height: 1.65; }
+/* 안내 문장이 여러 줄인 다이얼로그 — 문장마다 한 줄씩 끊어 보이도록 간격을 준다. */
+.confirmation-dialog p + p { margin-top: 6px; }
 .confirmation-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 .shipper-readonly-value { min-height: 42px; background: #f8fafc; color: var(--text-light); }
 .shipper-checkbox-row { display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 0 18px 16px; color: var(--text-dark); font-size: 13px; }

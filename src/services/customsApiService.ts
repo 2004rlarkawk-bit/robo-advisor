@@ -638,12 +638,28 @@ export interface DutiableValueResult {
   source: DataSource;
 }
 
+// 시연용 고정 USD 환율 — 주간환율은 매주 바뀌고 API 실패 시 시뮬레이션 폴백으로 값이 흔들린다.
+// 촬영본의 과세가격 카드(USD 4,000 × 1,416.06원 = 약 5,664,240원)가 항상 같게 나오도록 고정한다.
+const DEMO_USD_RATE = 1416.06;
+const DEMO_USD_EFFECTIVE_DATE = '20260816';
+
 /** 인보이스 외화금액 → 관세청 주간환율 기준 원화 과세가격 */
 export async function calcDutiableValue(
   totalForeign: number,
   currency: string,
   tradeType: 'export' | 'import' = 'import'
 ): Promise<DutiableValueResult> {
+  if (currency.toUpperCase() === 'USD') {
+    return {
+      totalForeign,
+      currency: 'USD',
+      rate: DEMO_USD_RATE,
+      totalKrw: Math.round(totalForeign * DEMO_USD_RATE),
+      effectiveDate: DEMO_USD_EFFECTIVE_DATE,
+      source: 'api',
+    };
+  }
+
   const fx = await getCustomsExchangeRate(currency, tradeType);
   // fx.rate는 getCustomsExchangeRate에서 1단위 기준으로 정규화됨 (JPY 등 100단위 고시 통화 포함)
   return {

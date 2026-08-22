@@ -435,6 +435,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [showConsole, setShowConsole] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState<AgentLog[]>([]);
   const [hasGenerated, setHasGenerated] = useState(false);
+  // 최종 제출 완료 안내 — 브라우저 alert(도메인 헤더 노출) 대신 앱 모달로 보여준다.
+  const [submitCompleteNotice, setSubmitCompleteNotice] = useState<string[] | null>(null);
 
   // 결과 리포트 진입 시 항상 페이지 최상단(거래 요약·준비도)부터 보이게 한다.
   // 입력 폼에서 아래로 스크롤한 상태로 생성해도 스크롤 위치가 하단에 남지 않도록 초기화.
@@ -1845,7 +1847,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       } else if (devTestMode) {
         alert('테스트 문서가 정상적으로 제출되었습니다.');
       } else {
-        alert('모든 통관 문서 정보 보완이 완료되었습니다. 관세청 통관 시스템으로 제출합니다.');
+        setSubmitCompleteNotice([
+          '모든 통관 문서 정보 보완이 완료되었습니다.',
+          '관세청 통관 시스템으로 제출합니다.',
+        ]);
       }
       setDevTestMode(null);
       setDevTestMessage('');
@@ -4121,6 +4126,29 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               <button className="btn btn-primary" onClick={confirmOverride}>사유 기록하고 생성</button>
             </div>
           </div>
+        </div>
+      )}
+      {submitCompleteNotice && (
+        <div className="confirmation-backdrop" role="presentation">
+          <section
+            className="confirmation-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="submit-complete-title"
+          >
+            <h3 id="submit-complete-title">최종 제출 완료</h3>
+            {submitCompleteNotice.map((line) => <p key={line}>{line}</p>)}
+            <div className="confirmation-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                autoFocus
+                onClick={() => setSubmitCompleteNotice(null)}
+              >
+                확인
+              </button>
+            </div>
+          </section>
         </div>
       )}
     </div>
