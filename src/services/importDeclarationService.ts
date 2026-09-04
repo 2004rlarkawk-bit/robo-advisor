@@ -11,39 +11,6 @@ export type ImportDeclarationDownloadFormat = 'pdf' | 'docx';
 
 const empty = '첨부문서에서 확인되지 않음';
 
-// 시연용 고정 당사자·항구 — 어떤 문서를 올리든 수입신고 의뢰서에는 이 값을 사용한다.
-// 수입 방향에 맞춘 시나리오: 해외(일본 오사카) 수출자 Tanaka → 국내(한국) 수입자 Kim, 오사카항 → 부산항.
-const DEMO_EXPORTER = {
-  name: 'Tanaka Shoji Co., Ltd.',
-  address: '2-4-9 Umeda, Kita-ku, Osaka, Japan',
-  country: 'Japan',
-  contactName: 'Tanaka',
-  phone: '+81-6-555-0202',
-};
-const DEMO_IMPORTER = {
-  name: 'Kim Trading Co., Ltd.',
-  address: '75, Saneop-ro, Nam-gu, Ulsan, South Korea',
-  country: 'South Korea',
-  contactName: 'Kim',
-  phone: '+82-52-555-0101',
-};
-const DEMO_LOAD_PORT = 'OSAKA PORT';
-const DEMO_DISCHARGE_PORT = 'BUSAN PORT';
-// FOB 지정항은 선적항(적재항)과 일치해야 한다 — 적재항이 오사카이므로 FOB OSAKA.
-const DEMO_INCOTERMS = 'FOB OSAKA';
-
-function withDemoParties(fields: ImportExtractedFields): ImportExtractedFields {
-  return {
-    ...fields,
-    exporterDetails: { ...fields.exporterDetails, ...DEMO_EXPORTER },
-    importerDetails: { ...fields.importerDetails, ...DEMO_IMPORTER },
-    consigneeDetails: { ...fields.consigneeDetails, ...DEMO_IMPORTER },
-    notifyPartyDetails: { ...fields.notifyPartyDetails, ...DEMO_IMPORTER },
-    loadPort: DEMO_LOAD_PORT,
-    dischargePort: DEMO_DISCHARGE_PORT,
-    incoterms: DEMO_INCOTERMS,
-  };
-}
 const show = (value: unknown): string => {
   const text = String(value ?? '').trim();
   return text || empty;
@@ -69,8 +36,7 @@ function partyRows(label: string, party: ImportExtractedFields['importerDetails'
 }
 
 export function generateImportDeclarationRequest(data: ImportDeclarationData): string {
-  const { duty } = data;
-  const fields = withDemoParties(data.fields);
+  const { fields, duty } = data;
   return [
     '수입신고 의뢰서',
     `해외 수출자: ${show(fields.exporterDetails.name)}`,
@@ -86,8 +52,7 @@ export function generateImportDeclarationRequest(data: ImportDeclarationData): s
 }
 
 export function generateImportDeclarationHtml(data: ImportDeclarationData): string {
-  const { duty } = data;
-  const fields = withDemoParties(data.fields);
+  const { fields, duty } = data;
   const itemPages = fields.items.length
     ? Array.from({ length: Math.ceil(fields.items.length / 10) }, (_, page) => fields.items.slice(page * 10, page * 10 + 10))
     : [[]];
@@ -183,8 +148,7 @@ function partyText(party: ImportExtractedFields['importerDetails']): string {
 }
 
 function buildWordDocumentXml(data: ImportDeclarationData): string {
-  const { duty } = data;
-  const fields = withDemoParties(data.fields); // PDF(HTML)와 동일한 시연용 당사자·항구·Incoterms 적용
+  const { fields, duty } = data;
   const section = (title: string, rows: unknown[][]) => `${wordParagraph(title, true, 23)}${wordTable(rows)}`;
   const items = [
     ['No.', '품명', 'HS Code', '원산지', '모델/규격', '수량', '단가/금액'],
