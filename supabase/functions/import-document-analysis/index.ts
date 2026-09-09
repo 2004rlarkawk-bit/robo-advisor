@@ -214,6 +214,29 @@ const analysisSchema = {
   required: ["classifications", "analysis"],
 };
 
+const reconciliationExperimentSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    rules: {
+      type: "array",
+      minItems: 10,
+      maxItems: 10,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          ruleId: { type: "string", enum: ["IR1", "IR2", "IR3", "IR4", "IR5", "IR6", "IR7", "IR8", "IR9", "IR10"] },
+          verdict: { type: "string", enum: ["match", "error", "warning", "skip"] },
+          note: stringField,
+        },
+        required: ["ruleId", "verdict", "note"],
+      },
+    },
+  },
+  required: ["rules"],
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -351,6 +374,80 @@ async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
   };
 }
 
+async function analyzeReconciliationExperiment(apiKey: string, experimentInput: Record<string, unknown>) {
+  const model = Deno.env.get("OPENAI_IMPORT_EXPERIMENT_MODEL")?.trim()
+    || Deno.env.get("OPENAI_MODEL")?.trim()
+    || "gpt-5.6";
+  const prompt = [
+    "아래 JSON은 해상 수입 문서에서 이미 추출한 값이다. ci는 Commercial Invoice, pl은 Packing List, bl은 Bill of Lading이다.",
+    "추측하지 말고 제공된 값만 사용하여 IR1~IR10을 각각 판정하라.",
+    "판정값은 match, error, warning, skip 중 하나만 사용한다.",
+    "공통 원칙: 비교에 필요한 값이 없으면 skip이다. 단 IR8은 C/I가 있으나 HS CODE가 없으면 warning이고, IR10은 필수 문서가 없으면 error이다.",
+    "IR1 품명 일치: 품명이 있는 문서가 2건 미만이면 skip. 2건 이상이면 소문자화·기호 제거 후 2글자 이상 토큰의 Jaccard 유사도를 모든 문서쌍에서 계산한다. 최솟값이 0.5 이상이면 match, 미만이면 warning.",
+    "IR2 수량 일치: C/I와 P/L 수량이 없으면 skip, 같으면 match, 다르면 error.",
+    "IR3 총중량 일치: P/L과 B/L 총중량이 없으면 skip. 차이가 ±0.5% 또는 ±1kg 중 큰 허용치 이내면 match, 초과하면 error.",
+    "IR4 순중량≤총중량: P/L 값이 없으면 skip, 순중량이 총중량 이하면 match, 크면 error.",
+    "IR5 포장 수량 일치: P/L과 B/L 값이 없으면 skip, 같으면 match, 다르면 error.",
+    "IR6 금액 정합: C/I의 단가·수량·총액 중 하나라도 없으면 skip. 단가×수량과 총액 차이가 ±1 또는 ±1% 중 큰 허용치 이내면 match, 초과하면 error.",
+    "IR7 통화 표기: C/I가 없으면 skip, 통화가 있으면 match, 없으면 warning.",
+    "IR8 HS CODE 유효: 어느 문서든 HS가 있고 숫자만 추출해 6자리 이상이면 match, 6자리 미만이면 warning. HS가 없고 C/I가 있으면 warning, C/I도 없으면 skip.",
+    "IR9 Incoterms 유효: C/I 값이 없으면 skip. EXW/FCA/FAS/FOB/CFR/CIF/CPT/CIP/DAP/DPU/DDP면 match, 그 외는 warning.",
+    "IR10 필수 서류: C/I·P/L·B/L이 모두 있으면 match, 하나라도 없으면 error.",
+    "반드시 IR1부터 IR10까지 정확히 한 번씩 모두 반환하고 note에는 판정 근거를 간단히 적어라.",
+    `입력 JSON:\n${JSON.stringify(experimentInput)}`,
+  ].join("\n");
+
+  const startedAt = performance.now();
+  const response = await fetch(OPENAI_RESPONSES_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      instructions: "당신은 해상 수입 서류의 문서 간 정합성을 판정하는 독립 평가자입니다.",
+      input: prompt,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "import_reconciliation_experiment",
+          strict: true,
+          schema: reconciliationExperimentSchema,
+        },
+      },
+      max_output_tokens: 4000,
+      store: false,
+    }),
+  });
+  const responseText = await response.text();
+  let responseData: OpenAIResponse;
+  try {
+    responseData = JSON.parse(responseText);
+  } catch {
+    throw new Error(`OpenAI 실험 응답을 JSON으로 해석할 수 없습니다. HTTP ${response.status}`);
+  }
+  if (!response.ok || responseData.status === "failed") {
+    throw new Error(`OpenAI API 오류(${response.status}): ${responseData.error?.message ?? "실험 요청이 실패했습니다."}`);
+  }
+  const outputText = extractOutputText(responseData);
+  if (!outputText) throw new Error("OpenAI가 실험 판정 결과를 반환하지 않았습니다.");
+  let result: unknown;
+  try {
+    result = JSON.parse(outputText);
+  } catch {
+    throw new Error("OpenAI 실험 판정 결과가 올바른 JSON 형식이 아닙니다.");
+  }
+  if (!isRecord(result) || !Array.isArray(result.rules)) throw new Error("OpenAI 실험 판정 결과 구조가 올바르지 않습니다.");
+  return {
+    result,
+    model,
+    timing: {
+      totalMs: Math.round(performance.now() - startedAt),
+      inputTokens: responseData.usage?.input_tokens,
+      outputTokens: responseData.usage?.output_tokens,
+      reasoningTokens: responseData.usage?.output_tokens_details?.reasoning_tokens,
+    },
+  };
+}
+
 export default {
   async fetch(req: Request): Promise<Response> {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -370,6 +467,19 @@ export default {
         return jsonResponse({ success: false, error: "요청 Body가 올바른 JSON 형식이 아닙니다." }, 400);
       }
       if (!isRecord(body)) return jsonResponse({ success: false, error: "요청 Body는 JSON 객체여야 합니다." }, 400);
+      if ("experimentInput" in body) {
+        stage = "experiment_input_validation";
+        if (!isRecord(body.experimentInput)) {
+          return jsonResponse({ success: false, error: "experimentInput은 JSON 객체여야 합니다." }, 400);
+        }
+        const serialized = JSON.stringify(body.experimentInput);
+        if (serialized.length > 50_000) {
+          return jsonResponse({ success: false, error: "experimentInput이 너무 큽니다." }, 400);
+        }
+        stage = "openai_experiment_request_and_parse";
+        const { result, model, timing } = await analyzeReconciliationExperiment(apiKey, body.experimentInput);
+        return jsonResponse({ success: true, source: "openai", model, timing, ...result });
+      }
       stage = "request_validation";
       const documents = parseDocuments(body.documents);
       documentTypes = documents.map(({ documentType }) => documentType);

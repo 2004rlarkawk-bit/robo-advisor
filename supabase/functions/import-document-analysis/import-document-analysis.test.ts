@@ -41,6 +41,33 @@ function openAIResponse(output: unknown): Response {
 }
 
 describe('import-document-analysis 문서 타입 경계', () => {
+  it('추출값 텍스트 실험 요청을 IR1~IR10 구조로 반환한다', async () => {
+    const rules = Array.from({ length: 10 }, (_, index) => ({
+      ruleId: `IR${index + 1}`,
+      verdict: 'match',
+      note: '일치',
+    }));
+    openAIFetchMock.mockResolvedValue(openAIResponse({ rules }));
+
+    const response = await handler.fetch(new Request('http://local.test', {
+      method: 'POST',
+      body: JSON.stringify({
+        experimentInput: {
+          ci: { description: 'Frozen Mackerel', quantity: 500 },
+          pl: { description: 'Frozen Mackerel', quantity: 500 },
+          bl: { description: 'Frozen Mackerel' },
+        },
+      }),
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.rules).toEqual(rules);
+    const openAIRequest = JSON.parse(openAIFetchMock.mock.calls[0][1].body as string);
+    expect(openAIRequest.input).toContain('IR1부터 IR10까지');
+    expect(openAIRequest.text.format.name).toBe('import_reconciliation_experiment');
+  });
+
   it.each(['commercial_invoice', 'packing_list', 'transport_request', 'other'])(
     '%s 타입을 요청 검증에서 허용한다',
     async (documentType) => {
