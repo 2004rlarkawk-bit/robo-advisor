@@ -108,6 +108,7 @@ describe('수출 화주 HS Code 추천 서비스', () => {
 
     expect(result).toEqual({
       suggestions: [],
+      disambiguation: null,
       additionalInformationRequired: true,
       requiredAdditionalInfo: ['제품 용도', '완제품/부분품 여부'],
     });

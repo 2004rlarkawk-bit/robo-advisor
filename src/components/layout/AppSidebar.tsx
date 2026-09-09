@@ -38,7 +38,20 @@ interface AppSidebarProps {
 export default function AppSidebar({ activeMenu, collapsed, onNavigate }: AppSidebarProps) {
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-      <div className="logo-section">
+      {/* 로고 클릭 = 앱 새로고침. 시연 중 상태가 꼬였을 때 빠르게 초기화하는 용도. */}
+      <div
+        className="logo-section"
+        role="button"
+        tabIndex={0}
+        title="PortAI 새로고침"
+        onClick={() => window.location.reload()}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            window.location.reload();
+          }
+        }}
+      >
         <div className="logo-icon">🚢</div>
         <div>
           <div className="logo-text">PortAI</div>

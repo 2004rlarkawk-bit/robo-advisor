@@ -608,6 +608,7 @@ export default function ShipperWorkspaceForm({
                     state.error !== null ||
                     state.suggestions.length > 0 ||
                     state.additionalInformationRequired ||
+                    state.disambiguation !== null ||
                     applied;
 
                   if (!hasPanel) return null;
@@ -622,6 +623,44 @@ export default function ShipperWorkspaceForm({
                         <div className="shipper-hs-error">
                           <span>{state.error}</span>
                           <button type="button" className="btn btn-secondary btn-sm" onClick={() => hsCodeSuggestions.retry(item.id)}>재시도</button>
+                        </div>
+                      )}
+
+                      {state.disambiguation && !state.loading && !state.error && (
+                        <div className="shipper-hs-disambiguation">
+                          <div className="shipper-hs-suggestion-heading">
+                            <strong>{state.disambiguation.question}</strong>
+                            <small>{state.disambiguation.note}</small>
+                          </div>
+                          <div className="shipper-hs-choice-list">
+                            {state.disambiguation.options.map((option) => (
+                              <button
+                                type="button"
+                                key={option.subheading}
+                                className="shipper-hs-choice"
+                                onClick={() => {
+                                  // 선택한 품목의 공식 영문명으로 품명을 구체화한다.
+                                  // (예: "pen" → "Ball point pens")
+                                  const refinedName = option.englishLabel?.trim();
+                                  if (refinedName) updateItem(item.id, 'itemName', refinedName);
+                                  hsCodeSuggestions.chooseSubheading(
+                                    item.id,
+                                    option.subheading,
+                                    refinedName
+                                  );
+                                }}
+                              >
+                                <span className="shipper-hs-choice__code">{option.formattedSubheading}</span>
+                                <span className="shipper-hs-choice__label">{option.label}</span>
+                                {option.englishLabel && (
+                                  <span className="shipper-hs-choice__en">{option.englishLabel}</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                          <small className="shipper-hs-choice-hint">
+                            위 항목 중 하나를 선택하면 그 범위에서 HS Code를 추천합니다. 해당 항목이 없다면 품명을 더 구체적으로 입력해 주세요.
+                          </small>
                         </div>
                       )}
 
@@ -672,7 +711,7 @@ export default function ShipperWorkspaceForm({
                         </>
                       )}
 
-                      {state.additionalInformationRequired && !state.loading && !state.error && (
+                      {state.additionalInformationRequired && !state.loading && !state.error && !state.disambiguation && (
                         <div className="shipper-hs-additional-info">
                           <strong>추가 확인사항</strong>
                           {state.suggestions.length === 0 && (

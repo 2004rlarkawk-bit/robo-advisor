@@ -88,48 +88,144 @@ export interface HSSearchResult extends HSDataEntry {
  * 랭킹: 코드 접두 일치 > 전체 문구 일치 > 토큰별 (카테고리 > 한글명 > 영문명).
  * "기타"처럼 잎 항목명이 모호한 경우 category 필드가 실질 매칭을 담당합니다.
  */
+/**
+ * 영문 품명에서 토큰이 "단어로" 나오는지 본다(복수형 허용).
+ * 부분문자열만 보면 pen 이 Litopenaeus·Pentafluoroethane 에 걸려
+ * 동점이 무더기로 생기고, 동점 정렬이 코드 오름차순이라 무관한 저번호 품목이 상위를 차지한다.
+ */
+function hasWord(haystack: string, token: string): boolean {
+  if (!/^[a-z0-9]+$/.test(token)) return haystack.includes(token);
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${escaped}(e?s)?([^a-z0-9]|$)`, 'i')
+    .test(haystack);
+}
+
+/**
+ * 무역 현장에서 쓰는 일상 영어 ↔ 관세청 공식 품명 영어의 어휘 격차를 메운다.
+ *
+ * 관세청 품명은 trousers·footwear·apparel 같은 공식 용어를 쓰는데
+ * 사용자는 pants·shoes·clothes 로 입력한다. 이 매핑이 없으면
+ * "pants" 검색에 6103·6203(진짜 바지)이 후보로 아예 들어오지 못하고,
+ * 우연히 이름이 겹친 4203(가죽제 의류)만 남아 잘못된 추천으로 이어진다.
+ */
+const TERM_SYNONYMS: Record<string, string[]> = {
+  pants: ['trousers'],
+  trouser: ['trousers'],
+  clothes: ['apparel', 'garments'],
+  clothing: ['apparel', 'garments'],
+  shoes: ['footwear'],
+  shoe: ['footwear'],
+  sneakers: ['footwear', 'sports footwear'],
+  tshirt: ['t-shirts'],
+  tee: ['t-shirts'],
+  jumper: ['jerseys', 'pullovers'],
+  sweater: ['jerseys', 'pullovers'],
+  hoodie: ['jerseys', 'pullovers', 'sweatshirts'],
+  cellphone: ['telephones'],
+  handphone: ['telephones'],
+  smartphone: ['telephones'],
+  laptop: ['portable automatic data processing machines'],
+  notebook: ['portable automatic data processing machines'],
+  earphone: ['headphones', 'earphones'],
+  earbuds: ['headphones', 'earphones'],
+  bag: ['handbags'],
+  bags: ['handbags'],
+  glove: ['gloves', 'mittens'],
+  gloves: ['mittens'],
+  socks: ['stockings', 'hosiery'],
+  engine: ['internal combustion piston engines'],
+  cosmetics: ['beauty', 'make-up preparations'],
+  car: ['motor cars', 'motor vehicles'],
+  bike: ['bicycles'],
+  furniture: ['seats', 'furniture'],
+};
+
+/** 입력 문구를 관세청 용어 변형까지 포함한 검색어 목록으로 확장한다. */
+function expandQueries(keyword: string): string[] {
+  const base = keyword.trim().toLowerCase();
+  if (!base) return [];
+  const variants = new Set<string>([base]);
+  const words = base.split(/\s+/).filter(Boolean);
+  for (let i = 0; i < words.length; i += 1) {
+    const alternatives = TERM_SYNONYMS[words[i]];
+    if (!alternatives) continue;
+    for (const alternative of alternatives) {
+      const swapped = [...words];
+      swapped[i] = alternative;
+      variants.add(swapped.join(' '));
+    }
+  }
+  return Array.from(variants);
+}
+
 export async function searchHSByKeyword(keyword: string, limit = 8): Promise<HSSearchResult[]> {
   const data = await loadHSData();
   const phrase = normalize(keyword);
   if (!phrase || data.length === 0) return [];
 
   const isDigits = /^\d+$/.test(phrase);
-  // 1글자 토큰은 노이즈라 제외 (예: "및", "용")
-  const tokens = keyword
-    .toLowerCase()
-    .split(/\s+/)
-    .map((t) => normalize(t))
-    .filter((t) => t.length >= 2);
+  // 원문 + 관세청 용어로 치환한 변형들을 함께 검색해 어휘 격차를 메운다.
+  const queries = (isDigits ? [keyword.trim().toLowerCase()] : expandQueries(keyword))
+    .map((query) => ({
+      phrase: normalize(query),
+      phraseRaw: query,
+      // 1글자 토큰은 노이즈라 제외 (예: "및", "용")
+      tokens: query
+        .split(/\s+/)
+        .map((t) => normalize(t))
+        .filter((t) => t.length >= 2),
+    }))
+    .filter((query) => query.phrase.length > 0);
   const results: HSSearchResult[] = [];
 
   for (const e of data) {
     let score = 0;
+    for (const { phrase, phraseRaw, tokens } of queries) {
+    let variantScore = 0;
     if (isDigits) {
-      if (e.code.startsWith(phrase)) score += 10;
+      if (e.code.startsWith(phrase)) variantScore += 10;
     } else {
       const ko = normalize(e.ko);
       const en = normalize(e.en);
       const cat = normalize(e.category);
+      // normalize()는 공백을 지우므로 단어 경계 판정에는 원문을 쓴다.
+      const koRaw = e.ko.toLowerCase();
+      const enRaw = e.en.toLowerCase();
 
       // 전체 문구 일치 (최고 신뢰)
-      if (cat.includes(phrase)) score += 6;
-      if (ko.includes(phrase)) score += 4;
-      if (en.includes(phrase)) score += 2;
+      if (cat.includes(phrase)) variantScore += 6;
+      if (ko.includes(phrase)) variantScore += 4;
+      if (en.includes(phrase)) variantScore += 2;
+      // 단어 단위로 맞은 경우를 부분문자열보다 확실히 위에 둔다.
+      if (hasWord(enRaw, phraseRaw) || hasWord(koRaw, phraseRaw)) variantScore += 5;
+      // 여러 단어로 된 검색어가 품명에 통째로 들어있으면 가장 강한 신호다.
+      // ("ballpoint pen" → "Ball point pens") 이 가점이 없으면 토큰 하나만
+      // 맞은 품목(예: "Pen nibs")과 동점이 되어 순위가 뒤집힌다.
+      if (tokens.length > 1
+        && (cat.includes(phrase) || ko.includes(phrase) || en.includes(phrase))) {
+        variantScore += 7;
+      }
+      // 공식 품명이 검색어 그 자체이면 최우선.
+      if (ko === phrase || en === phrase) variantScore += 8;
 
       // 토큰별 부분 일치 (다단어 품목명 대응)
-      if (score === 0 && tokens.length > 0) {
+      if (variantScore === 0 && tokens.length > 0) {
         let matched = 0;
         for (const t of tokens) {
-          if (cat.includes(t)) { score += 3; matched++; }
-          else if (ko.includes(t)) { score += 2; matched++; }
-          else if (en.includes(t)) { score += 1; matched++; }
+          if (cat.includes(t)) { variantScore += 3; matched++; }
+          else if (ko.includes(t)) { variantScore += 2; matched++; }
+          else if (hasWord(enRaw, t) || hasWord(koRaw, t)) { variantScore += 2; matched++; }
+          else if (en.includes(t)) { variantScore += 1; matched++; }
         }
         // 모든 토큰 매칭 시 가점 (AND 우대)
-        if (matched === tokens.length && tokens.length > 1) score += 3;
+        if (matched === tokens.length && tokens.length > 1) variantScore += 3;
       }
 
       // 카테고리/한글명이 검색어로 시작하면 가점
-      if (cat.startsWith('(' + phrase) || ko.startsWith(phrase)) score += 2;
+      if (cat.startsWith('(' + phrase) || ko.startsWith(phrase)) variantScore += 2;
+    }
+      // 여러 변형 중 가장 잘 맞은 점수를 그 품목의 점수로 삼는다.
+      score = Math.max(score, variantScore);
     }
     if (score > 0) {
       results.push({ ...e, formattedCode: formatCode(e.code), score });
@@ -137,7 +233,12 @@ export async function searchHSByKeyword(keyword: string, limit = 8): Promise<HSS
     if (isDigits && results.length >= limit * 4) break; // 코드 검색은 접두 특성상 조기 종료 가능
   }
 
-  results.sort((a, b) => b.score - a.score || a.code.localeCompare(b.code));
+  // 동점일 때 코드 오름차순으로 정렬하면 무관한 저번호 품목(예: pen → 0306 흰다리새우)이
+  // 상위를 차지한다. 품명이 짧을수록 그 물품 자체를 가리키므로 이를 우선한다.
+  results.sort((a, b) =>
+    b.score - a.score
+    || (a.ko.length + a.en.length) - (b.ko.length + b.en.length)
+    || a.code.localeCompare(b.code));
   return results.slice(0, limit);
 }
 

@@ -30,6 +30,8 @@ function emptyState(): ItemHSCodeSuggestionState {
     appliedSuggestionCode: null,
     additionalInformationRequired: false,
     requiredAdditionalInfo: [],
+    disambiguation: null,
+    chosenSubheading: null,
   };
 }
 
@@ -78,7 +80,8 @@ export function useShipperHSCodeSuggestions(
 
   const requestSuggestions = useCallback(async (
     itemId: string,
-    itemName: string
+    itemName: string,
+    chosenSubheading: string | null = null
   ) => {
     const normalizedItemName = normalizeItemName(itemName);
     const requestId =
@@ -92,13 +95,16 @@ export function useShipperHSCodeSuggestions(
       suggestions: [],
       additionalInformationRequired: false,
       requiredAdditionalInfo: [],
+      disambiguation: null,
+      chosenSubheading,
     });
 
     try {
       const result = await recommendShipperHSCode(
         itemName,
         undefined,
-        itemId
+        itemId,
+        chosenSubheading
       );
       if (!isCurrentRequest(
         itemId,
@@ -112,6 +118,7 @@ export function useShipperHSCodeSuggestions(
         additionalInformationRequired:
           result.additionalInformationRequired,
         requiredAdditionalInfo: result.requiredAdditionalInfo,
+        disambiguation: result.disambiguation ?? null,
       });
     } catch {
       if (!isCurrentRequest(
@@ -127,6 +134,7 @@ export function useShipperHSCodeSuggestions(
           'HS Code 추천 요청에 실패했습니다. 잠시 후 다시 시도해주세요.',
         additionalInformationRequired: false,
         requiredAdditionalInfo: [],
+        disambiguation: null,
       });
     }
   }, [isCurrentRequest, patchState]);
@@ -186,6 +194,8 @@ export function useShipperHSCodeSuggestions(
         appliedSuggestionCode: null,
         additionalInformationRequired: false,
         requiredAdditionalInfo: [],
+        disambiguation: null,
+        chosenSubheading: null,
       });
 
       if (itemName.length < 3) continue;
@@ -245,6 +255,39 @@ export function useShipperHSCodeSuggestions(
     });
   }, [patchState]);
 
+  /**
+   * 되묻기 선택지에서 하나를 고르면 그 소호 범위로 다시 추천한다.
+   *
+   * nextItemName 을 주면 품명 입력칸이 그 값으로 바뀌는데, 그대로 두면
+   * 품명 변경 감지 이펙트가 새 검색을 처음부터 다시 돌려 선택이 무효가 된다.
+   * 그래서 바뀔 이름을 미리 관찰값에 등록해 재요청을 막는다.
+   */
+  const chooseSubheading = useCallback((
+    itemId: string,
+    subheading: string,
+    nextItemName?: string
+  ) => {
+    const item = itemsRef.current.find(
+      (candidate) => candidate.id === itemId
+    );
+    if (!item) return;
+    const requestItemName = (nextItemName ?? item.itemName)
+      .trim()
+      .replace(/\s+/g, ' ');
+    if (nextItemName) {
+      observedNamesRef.current.set(
+        itemId,
+        normalizeItemName(nextItemName)
+      );
+    }
+    const timer = timersRef.current.get(itemId);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(itemId);
+    }
+    void requestSuggestions(itemId, requestItemName, subheading);
+  }, [requestSuggestions]);
+
   const getState = useCallback(
     (itemId: string) => states[itemId] ?? emptyState(),
     [states]
@@ -253,6 +296,7 @@ export function useShipperHSCodeSuggestions(
   return {
     getState,
     retry,
+    chooseSubheading,
     markHSCodeManuallyEdited,
     markSuggestionApplied,
   };

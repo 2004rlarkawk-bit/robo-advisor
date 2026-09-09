@@ -102,12 +102,14 @@ describe('품목별 HS Code 추천 상태', () => {
     expect(recommendMock).toHaveBeenCalledWith(
       'Cotton knitted shirts',
       undefined,
-      'primary-item'
+      'primary-item',
+      null
     );
     expect(recommendMock).toHaveBeenCalledWith(
       'Processed frozen fish',
       undefined,
-      'second-item'
+      'second-item',
+      null
     );
   });
 
