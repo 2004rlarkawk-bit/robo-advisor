@@ -170,6 +170,33 @@ export interface ImportAnalysisResult {
   comparison: ImportComparisonRow[];
 }
 
+export interface ImportDocFields {
+  productDescription?: string;
+  quantity?: string;
+  packageCount?: string;
+  grossWeight?: string;
+  netWeight?: string;
+  unitPrice?: string;
+  totalAmount?: string;
+  currency?: string;
+  hsCode?: string;
+  incoterms?: string;
+}
+
+export type ImportReconciliationInput = Partial<Record<ImportDocumentType, ImportDocFields>>;
+export type ReconciliationStatus = 'pass' | 'fail' | 'skip';
+
+export interface ReconciliationRuleResult {
+  ruleId: string;
+  label: string;
+  severity: ValidationSeverity;
+  status: ReconciliationStatus;
+  passed: boolean;
+  blocking: boolean;
+  evidence: string;
+  documents: ImportDocumentType[];
+}
+
 export interface ImportDocumentClassification {
   id: string;
   type: ImportDocumentType;

@@ -4,7 +4,10 @@ import type {
   ImportDocumentType,
   ImportHSCodeSuggestion,
   ImportRisk,
+  ImportReconciliationInput,
+  UserTradeRole,
 } from '../types/importTrade';
+import { reconcileFromAnalysis, runImportReconciliation } from './importReconciliationEngine';
 
 const DOC_LABEL: Record<ImportDocumentType, string> = {
   commercial_invoice: 'Commercial Invoice',
@@ -78,7 +81,7 @@ function recommendationFor(field: string): string {
  * 업로드한 파일 내용과 무관하게 항상 동일한 3건(반드시 수정 1 · 보완 권장 2)을 노출한다.
  * 시연이 끝나면 DEMO_FIXED_IMPORT_RISKS 를 false 로 바꾸면 실제 분석 결과가 그대로 표시된다.
  */
-export const DEMO_FIXED_IMPORT_RISKS = true;
+export const DEMO_FIXED_IMPORT_RISKS = false;
 
 const DEMO_IMPORT_RISKS: ImportRisk[] = [
   {
@@ -126,9 +129,27 @@ export function resolveImportRisks(
   suggestions: ImportHSCodeSuggestion[] = [],
   dutyError = '',
   importerCompanyName = '',
+  reconciliationInput?: ImportReconciliationInput,
+  role: UserTradeRole = 'shipper',
 ): ImportRisk[] {
   if (DEMO_FIXED_IMPORT_RISKS) return DEMO_IMPORT_RISKS.map((risk) => ({ ...risk }));
-  return assessImportRisks(documents, analysis, suggestions, dutyError, importerCompanyName);
+  const reconciliation = reconciliationInput
+    ? runImportReconciliation(reconciliationInput)
+    : reconcileFromAnalysis(analysis, documents.map((document) => document.type));
+  const ruleRisks: ImportRisk[] = reconciliation
+    .filter((result) => result.status === 'fail')
+    .map((result) => ({
+      id: `reconcile-${result.ruleId}`,
+      level: result.severity === 'error' ? 'high' : 'medium',
+      item: `${result.ruleId}. ${result.label}`,
+      cause: result.evidence,
+      recommendation: 'C/I·P/L·B/L 원본을 대조하고 확인된 값으로 정정하세요.',
+      relatedDocuments: result.documents.map((document) => DOC_LABEL[document] ?? document),
+      status: 'unresolved',
+    }));
+  const existing = assessImportRisks(documents, analysis, suggestions, dutyError, importerCompanyName, role)
+    .filter((risk) => risk.id !== 'reference');
+  return [...ruleRisks, ...existing.filter((risk) => !ruleRisks.some((ruleRisk) => ruleRisk.id === risk.id))];
 }
 
 export function assessImportRisks(
@@ -137,6 +158,9 @@ export function assessImportRisks(
   suggestions: ImportHSCodeSuggestion[] = [],
   dutyError = '',
   importerCompanyName = '',
+  // 포워더 화면에는 대한민국 HSK를 확정하는 입력이 없다 — 화주만 확정 가능하므로
+  // "HS Code 미확정" 리스크를 포워더에게 띄우면 영원히 해소할 방법이 없는 항목이 된다.
+  role: UserTradeRole = 'shipper',
 ): ImportRisk[] {
   // documentId(UUID)가 사용자 화면에 그대로 노출되지 않도록 서류 이름으로 치환
   const docNameOf = (documentId: string): string => {
@@ -211,7 +235,7 @@ export function assessImportRisks(
   }
   fields.items.forEach((item, index) => {
     if (!item.originCountry) add({ id: `origin-${item.id}`, level: 'high', item: `품목 ${index + 1} 원산지 누락`, cause: '첨부문서에서 품목 원산지가 확인되지 않았습니다.', recommendation: 'C/O, C/I, P/L 순으로 품목 원산지를 확인하세요.', relatedDocuments: ['Certificate of Origin', 'Commercial Invoice', 'Packing List'], status: 'unresolved' });
-    if (!item.confirmedHSCode) add({ id: `hs-${item.id}`, level: 'high', item: `품목 ${index + 1} HS Code 미확정`, cause: item.documentHSCode ? '문서 HS Code가 있으나 사용자가 최종 확정하지 않았습니다.' : '문서 HS Code가 없고 추천 후보도 아직 확정되지 않았습니다.', recommendation: recommendationFor('hs'), relatedDocuments: item.sourceDocumentIds, status: 'unresolved' });
+    if (role === 'shipper' && !item.confirmedHSCode) add({ id: `hs-${item.id}`, level: 'high', item: `품목 ${index + 1} HS Code 미확정`, cause: item.documentHSCode ? '문서 HS Code가 있으나 사용자가 최종 확정하지 않았습니다.' : '문서 HS Code가 없고 추천 후보도 아직 확정되지 않았습니다.', recommendation: recommendationFor('hs'), relatedDocuments: item.sourceDocumentIds, status: 'unresolved' });
     const itemSuggestions = suggestions.filter((suggestion) => !suggestion.itemId || suggestion.itemId === item.id);
     if (itemSuggestions.length && Math.max(...itemSuggestions.map((suggestion) => suggestion.confidence)) < 0.7) {
       add({ id: `hs-confidence-${item.id}`, level: 'medium', item: `품목 ${index + 1} HS Code 신뢰도 낮음`, cause: 'AI 추천 후보의 최고 신뢰도가 70% 미만입니다.', recommendation: '추천에 부족하다고 표시된 재질·용도·규격을 확인하고 관세사 검토를 받으세요.', relatedDocuments: item.sourceDocumentIds, status: 'unresolved' });

@@ -17,6 +17,7 @@ import {
   validateOfficialImportHSK,
 } from '../../services/importHSCodeSuggestionService';
 import { resolveImportRisks } from '../../services/importRiskService';
+import { IMPORT_DEMO_SCENARIO } from '../../services/importReconciliationFixtures';
 import {
   downloadImportDeclarationRequest,
   generateImportDeclarationHtml,
@@ -57,6 +58,8 @@ import type { TradeDraftRow } from '../../services/draftCacheService';
 import { deleteTradeDraft, isSubmittedTradeDraft, saveTradeFormDraft } from '../../services/draftCacheService';
 import { useFormDataDraft } from '../../hooks/useFormDataDraft';
 import DocumentManagerReadOnlyAction from '../DocumentManagerReadOnlyAction';
+
+const IMPORT_DEMO_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
 
 interface Props {
   role: UserTradeRole;
@@ -577,7 +580,7 @@ export default function ImportTradeFlow({
           selectedCode: '',
           duty: null,
           dutyError: '',
-          risks: resolveImportRisks(documents, analysis, suggestions, '', importerCompanyName),
+          risks: resolveImportRisks(documents, analysis, suggestions, '', importerCompanyName, undefined, role),
         };
       });
       if (failures.length > 0) {
@@ -637,6 +640,33 @@ export default function ImportTradeFlow({
     }
   };
 
+  const loadDemoScenario = () => {
+    const scenario = IMPORT_DEMO_SCENARIO;
+    setSourceFiles({});
+    setManualHsInputs({});
+    setManualHsErrors({});
+    setMessage('PDF 샘플의 추출값을 규칙 엔진으로 대조했습니다.');
+    setState((current) => ({
+      ...current,
+      step: 2,
+      documents: scenario.documents.map((document) => ({ ...document })),
+      analysis: scenario.analysis,
+      suggestions: [],
+      selectedCode: '',
+      duty: null,
+      dutyError: '',
+      risks: resolveImportRisks(
+        scenario.documents,
+        scenario.analysis,
+        [],
+        '',
+        importerCompanyName,
+        scenario.input,
+        role,
+      ),
+    }));
+  };
+
   const confirmAndCalculate = async () => {
     if (!state.analysis) return;
     setBusy(true);
@@ -692,7 +722,7 @@ export default function ImportTradeFlow({
       console.error('[Import Duty] calculation failed', { error, message: dutyError });
     }
     const riskStatusById = new Map(state.risks.map((risk) => [risk.id, risk.status]));
-    const risks = resolveImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName)
+    const risks = resolveImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName, undefined, role)
       .map((risk) => ({ ...risk, status: riskStatusById.get(risk.id) ?? risk.status }));
     const generatedAt = new Date().toISOString();
     try {
@@ -895,9 +925,9 @@ export default function ImportTradeFlow({
   const liveRisks = useMemo(() => {
     if (!state.analysis) return [];
     const statusById = new Map(state.risks.map((risk) => [risk.id, risk.status]));
-    return resolveImportRisks(state.documents, state.analysis, state.suggestions, state.dutyError, importerCompanyName)
+    return resolveImportRisks(state.documents, state.analysis, state.suggestions, state.dutyError, importerCompanyName, undefined, role)
       .map((risk) => ({ ...risk, status: statusById.get(risk.id) ?? risk.status }));
-  }, [state.analysis, state.documents, state.suggestions, state.dutyError, state.risks, importerCompanyName]);
+  }, [state.analysis, state.documents, state.suggestions, state.dutyError, state.risks, importerCompanyName, role]);
 
   // 재계산으로 목록이 바뀌어도 '확인 완료' 표시가 유실되지 않도록 파생 목록을 그대로 저장한다.
   const toggleRisk = (id: string) => setState((current) => ({
@@ -1025,7 +1055,10 @@ export default function ImportTradeFlow({
           />
           {readOnly && onClose
             ? <DocumentManagerReadOnlyAction onClose={onClose} className="import-actions" />
-            : <div className="import-actions"><button className="btn btn-primary" disabled={busy} onClick={() => void analyze()}>{busy ? 'AI 분석 중…' : 'AI 분석 실행'}</button></div>}
+            : <div className="import-actions">
+              {IMPORT_DEMO_ENABLED && <button type="button" className="btn btn-secondary" disabled={busy} onClick={loadDemoScenario}>데모 데이터</button>}
+              <button className="btn btn-primary" disabled={busy} onClick={() => void analyze()}>{busy ? 'AI 분석 중…' : 'AI 분석 실행'}</button>
+            </div>}
         </>
       )}
 
