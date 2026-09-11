@@ -347,6 +347,22 @@ export interface ImportAnalysisRequestDocument {
   dataUrl: string;
 }
 
+// supabase-js는 Edge Function이 non-2xx를 돌려주면 본문을 버리고
+// "Edge Function returned a non-2xx status code"만 남긴다.
+// 함수가 JSON 본문에 담아 보낸 실제 원인(error 필드)을 꺼내 사용자에게 보여준다.
+async function extractFunctionErrorMessage(error: { message: string; context?: unknown }): Promise<string> {
+  const context = error.context;
+  if (typeof Response !== 'undefined' && context instanceof Response) {
+    try {
+      const body = await context.clone().json() as { error?: unknown };
+      if (typeof body.error === 'string' && body.error.trim() !== '') return body.error;
+    } catch {
+      // 본문이 JSON이 아니면 기본 메시지를 사용한다
+    }
+  }
+  return error.message;
+}
+
 export async function buildImportAnalysisRequestDocuments(
   documents: ImportDocumentMeta[],
   filesById: Record<string, File>,
@@ -402,14 +418,15 @@ export async function analyzeImportDocuments(
   const edgeMs = performance.now() - edgeStartedAt;
 
   if (error) {
+    const detail = await extractFunctionErrorMessage(error);
     if (import.meta.env.DEV) {
       console.error('[Export Forwarder Analysis] Edge request failed', {
         stage: 'edge_request',
-        message: error.message,
+        message: detail,
         documentTypes: payload.map(({ documentType }) => documentType),
       });
     }
-    throw new Error(`AI 문서 분석 요청에 실패했습니다: ${error.message}`);
+    throw new Error(`AI 문서 분석 요청에 실패했습니다: ${detail}`);
   }
   if (!data?.success || !data?.analysis) {
     if (import.meta.env.DEV) {
