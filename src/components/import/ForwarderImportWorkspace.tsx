@@ -25,13 +25,16 @@ import {
   type ForwarderCaseState,
   type ForwarderImportCase,
 } from '../../types/forwarderCase';
-import type { CargoTrackingResult } from '../../types/importTrade';
+import type { CargoTrackingResult, ImportDocumentMeta } from '../../types/importTrade';
 import {
   deriveForwarderCase,
   listForwarderCases,
   saveForwarderCaseState,
 } from '../../services/forwarderCaseService';
 import { lookupImportCargo } from '../../services/cargoProgressService';
+import { IMPORT_DOCUMENT_TYPE_LABELS } from '../../services/importDocumentAnalysisService';
+import { loadTradeAttachmentFile } from '../../services/tradeAttachmentStorageService';
+import { downloadArrivalNoticeDocx } from '../../services/arrivalNoticeDocxService';
 import ImportDocumentComparison from './ImportDocumentComparison';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 
@@ -55,6 +58,18 @@ function formatEta(eta: string): string {
   return eta ? eta.slice(0, 10) : '미정';
 }
 
+/** ETA까지 남은 날짜 배지 — 임박(D-3 이내)·지남을 색으로 구분해 우선순위를 보여준다 */
+function etaDday(eta: string): { label: string; tone: 'overdue' | 'imminent' | 'normal' } | null {
+  const date = new Date(eta.slice(0, 10));
+  if (Number.isNaN(date.getTime())) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((date.getTime() - today.getTime()) / 86400000);
+  if (days < 0) return { label: `D+${-days}`, tone: 'overdue' };
+  if (days === 0) return { label: 'D-DAY', tone: 'imminent' };
+  return { label: `D-${days}`, tone: days <= 3 ? 'imminent' : 'normal' };
+}
+
 export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Props) {
   const [cases, setCases] = useState<ForwarderImportCase[] | null>(null);
   const [error, setError] = useState('');
@@ -67,6 +82,8 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
   const [returnFormOpen, setReturnFormOpen] = useState(false);
   const [returnReason, setReturnReason] = useState('');
   const [detailTab, setDetailTab] = useState<DetailTab>('overview');
+  const [docBusyId, setDocBusyId] = useState<string | null>(null);
+  const [anBusy, setAnBusy] = useState(false);
   const [queueFilter, setQueueFilter] = useState<QueueFilter>('active');
 
   const load = useCallback(async () => {
@@ -128,6 +145,30 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
     if (await persist(caseItem, { stage })) setDetailTab(nextTab);
   }, [persist]);
 
+  // 화주가 올린 원본 서류를 새 탭에서 연다 — 대사 결과의 근거를 눈으로 확인하는 실무 필수 동작
+  const openSourceDocument = useCallback(async (documentMeta: ImportDocumentMeta) => {
+    if (!documentMeta.storageBucket || !documentMeta.storagePath) return;
+    setDocBusyId(documentMeta.id);
+    setError('');
+    try {
+      const file = await loadTradeAttachmentFile({
+        storageBucket: documentMeta.storageBucket,
+        storagePath: documentMeta.storagePath,
+        fileName: documentMeta.name,
+        mimeType: documentMeta.mimeType,
+        documentType: documentMeta.type === 'unknown' ? 'other' : documentMeta.type,
+      }, userId);
+      const url = URL.createObjectURL(file);
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      console.error('원본 서류 열기 실패:', err);
+      setError('원본 파일을 열지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setDocBusyId(null);
+    }
+  }, [userId]);
+
   const lookupCargo = useCallback(async (blNo: string) => {
     setCargoBusy(true);
     try {
@@ -187,7 +228,15 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
           <dl className="fwd-head-grid">
             <div><dt>송하인</dt><dd>{selected.shipperName}</dd></div>
             <div><dt>선박</dt><dd>{selected.vesselName || '-'}</dd></div>
-            <div><dt>ETA</dt><dd>{formatEta(selected.eta)}</dd></div>
+            <div><dt>ETA</dt><dd>
+              {formatEta(selected.eta)}
+              {(() => {
+                const dday = etaDday(selected.eta);
+                return dday && selected.stage !== 'done'
+                  ? <span className={`fwd-dday is-${dday.tone}`}>{dday.label}</span>
+                  : null;
+              })()}
+            </dd></div>
             <div><dt>접수일</dt><dd>{selected.requestedAt.slice(0, 10)}</dd></div>
           </dl>
           <div className="fwd-progress" aria-label="업무 진행 단계">
@@ -378,7 +427,36 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
           </section>
         )}
 
-        {detailTab === 'review' && <ImportDocumentComparison rows={selected.snapshot.analysis.comparison} />}
+        {detailTab === 'review' && (
+          <>
+            <section className="form-card import-card">
+              <div className="import-card-heading">
+                <div><h2>원본 서류</h2><p>화주가 제출한 원본을 열어 대사 결과의 근거를 직접 확인합니다.</p></div>
+              </div>
+              {selected.snapshot.documents.filter((doc) => doc.storagePath).length === 0 ? (
+                <p className="fwd-doc-empty">보관된 원본 파일이 없습니다.</p>
+              ) : (
+                <ul className="fwd-doc-list">
+                  {selected.snapshot.documents.filter((doc) => doc.storagePath).map((doc) => (
+                    <li key={doc.id}>
+                      <span className="fwd-doc-type">{IMPORT_DOCUMENT_TYPE_LABELS[doc.type] ?? '기타서류'}</span>
+                      <span className="fwd-doc-name">{doc.name}</span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={docBusyId !== null}
+                        onClick={() => void openSourceDocument(doc)}
+                      >
+                        {docBusyId === doc.id ? '여는 중…' : '원본 열기'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <ImportDocumentComparison rows={selected.snapshot.analysis.comparison} />
+          </>
+        )}
 
         {detailTab === 'clearance' && stageIndex >= FORWARDER_STAGE_ORDER.indexOf('clearance') && (
           <>
@@ -421,6 +499,28 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
                   {cargo.arrivalPort && <p className="cargo-meta">도착항 {cargo.arrivalPort} · 화물관리번호 {cargo.cargoNo}</p>}
                 </div>
               )}
+            </section>
+            <section className="form-card import-card">
+              <div className="import-card-heading fwd-an-heading">
+                <div><h2>도착통지서(A/N) 발행</h2><p>이 건의 B/L·선박·화물 정보로 화주에게 보낼 도착통지서를 생성합니다.</p></div>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={anBusy}
+                  onClick={() => {
+                    setAnBusy(true);
+                    void downloadArrivalNoticeDocx(selected)
+                      .catch((err) => {
+                        console.error('A/N 생성 실패:', err);
+                        setError('도착통지서를 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+                      })
+                      .finally(() => setAnBusy(false));
+                  }}
+                >
+                  {anBusy ? '생성 중…' : 'A/N 생성·다운로드 (DOCX)'}
+                </button>
+              </div>
+              <p className="import-notice">청구 금액란은 비워서 발행되므로 정산 금액을 기재한 뒤 화주에게 전달하세요. 전달본은 아래에 첨부해 이력으로 보관할 수 있습니다.</p>
             </section>
             <ArrivalNoticeUploader
               value={selected.arrivalNotice}
@@ -541,25 +641,31 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
                 <tr><th>ETA</th><th>수입 건</th><th>상태</th><th>다음 조치</th></tr>
               </thead>
               <tbody>
-                {visibleCases.map((item) => (
-                  <tr key={item.tradeId} className="fwd-row" onClick={() => openCase(item.tradeId)}>
-                    <td>{formatEta(item.eta)}</td>
-                    <td className="fwd-case-cell">
-                      <strong>{item.importer}</strong>
-                      <span>{item.blNo} · {item.vesselName || '선박 미정'}</span>
-                      {item.origin === 'shipper_request' && <span className="fwd-origin is-request">화주 의뢰</span>}
-                    </td>
-                    <td>
-                      <span className={`fwd-stage-badge ${STAGE_BADGE_CLASS[item.stage]}`}>{FORWARDER_STAGE_LABEL[item.stage]}</span>
-                      {item.returnRequest && (
-                        <span className={`fwd-return-badge${item.returnRequest.resolvedAt ? ' is-resolved' : ''}`}>
-                          {item.returnRequest.resolvedAt ? '재제출됨' : item.shipperEditing ? '화주 수정 중' : '보완 요청'}
-                        </span>
-                      )}
-                    </td>
-                    <td className="fwd-next-cell">{item.nextAction}{item.blockerCount > 0 && <span className="fwd-blocker-inline">차단 {item.blockerCount}</span>}</td>
-                  </tr>
-                ))}
+                {visibleCases.map((item) => {
+                  const dday = etaDday(item.eta);
+                  return (
+                    <tr key={item.tradeId} className="fwd-row" onClick={() => openCase(item.tradeId)}>
+                      <td className="fwd-eta-cell">
+                        {formatEta(item.eta)}
+                        {dday && item.stage !== 'done' && <span className={`fwd-dday is-${dday.tone}`}>{dday.label}</span>}
+                      </td>
+                      <td className="fwd-case-cell">
+                        <strong>{item.importer}</strong>
+                        <span>{item.blNo} · {item.vesselName || '선박 미정'}</span>
+                        {item.origin === 'shipper_request' && <span className="fwd-origin is-request">화주 의뢰</span>}
+                      </td>
+                      <td>
+                        <span className={`fwd-stage-badge ${STAGE_BADGE_CLASS[item.stage]}`}>{FORWARDER_STAGE_LABEL[item.stage]}</span>
+                        {item.returnRequest && (
+                          <span className={`fwd-return-badge${item.returnRequest.resolvedAt ? ' is-resolved' : ''}`}>
+                            {item.returnRequest.resolvedAt ? '재제출됨' : item.shipperEditing ? '화주 수정 중' : '보완 요청'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="fwd-next-cell">{item.nextAction}{item.blockerCount > 0 && <span className="fwd-blocker-inline">차단 {item.blockerCount}</span>}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

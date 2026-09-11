@@ -4310,3 +4310,22 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .revise-notice { border-color: #fca5a5 !important; }
 .revise-notice h2 { color: #b91c1c; }
 .revise-notice-text { margin: 6px 0 0; padding: 10px 13px; border-left: 3px solid #dc2626; background: #fef2f2; border-radius: 0 8px 8px 0; font-size: 12.5px; font-weight: 600; color: #16233b; line-height: 1.65; white-space: pre-line; }
+
+/* ===== 포워더 큐 — D-day·완료 접기·원본 서류·A/N 발행 ===== */
+.fwd-dday { display: inline-block; margin-left: 7px; padding: 2px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 800; background: #f1f5f9; color: #64748b; vertical-align: 1px; white-space: nowrap; }
+.fwd-dday.is-imminent { background: #fff7ed; color: #c2410c; }
+.fwd-dday.is-overdue { background: #fee2e2; color: #b91c1c; }
+.fwd-eta-cell { white-space: nowrap; }
+
+.fwd-done-group { margin-top: 12px; }
+.fwd-done-group > summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: #64748b; padding: 6px 2px; }
+.fwd-done-group[open] > summary { color: #334155; }
+.fwd-done-group .fwd-row { opacity: 0.75; }
+
+.fwd-doc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.fwd-doc-list li { display: flex; align-items: center; gap: 10px; border: 1px solid #e2e8f0; border-radius: 9px; padding: 8px 12px; }
+.fwd-doc-type { flex-shrink: 0; font-size: 11px; font-weight: 800; color: #0b57d0; background: #eef4ff; border-radius: 6px; padding: 3px 8px; white-space: nowrap; }
+.fwd-doc-name { flex: 1; font-size: 12.5px; color: #16233b; font-weight: 600; word-break: break-all; }
+.fwd-doc-empty { color: #94a3b8; font-size: 12.5px; text-align: center; padding: 10px 0; }
+
+.fwd-an-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
