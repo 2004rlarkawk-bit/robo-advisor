@@ -98,6 +98,7 @@ import {
 import { decideGeneratedTradeWrite } from './services/tradePersistencePolicy';
 import { resolveWorkspaceRole, type WorkspaceRole } from './utils/workspaceRole';
 import {
+  applyMatchPatchToProfile,
   matchUploadedExportDocuments,
   type ExportDocMatchResult,
 } from './services/exportDocumentMatchService';
@@ -412,6 +413,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   // 업로드한 보유 서류 ↔ 폼 입력값 대조 결과. 서류 생성은 기존대로 입력값 기준으로 진행한다.
   const [exportDocMatches, setExportDocMatches] = useState<ExportDocMatchResult[]>([]);
   const [isMatchingExportDocs, setIsMatchingExportDocs] = useState(false);
+  // 개별 [이 값으로 수정]으로 입력값만 바꾼 상태 — 재생성 전까지 안내를 띄운다.
+  const [hasPendingMatchEdits, setHasPendingMatchEdits] = useState(false);
   const [isForwarderSaving, setIsForwarderSaving] = useState(false);
 
   const tradeDraftDefaultProfile: TradeProfile = {
@@ -1140,7 +1143,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     }
   };
 
-  const handleGenerateDocuments = async () => {
+  const handleGenerateDocuments = async (profileOverride?: TradeProfile) => {
     if (isProcessing) return;
     const goodsDescriptionError = getGoodsDescriptionValidationMessage(shipperItems);
     if (goodsDescriptionError) {
@@ -1162,7 +1165,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
 
     try {
       // 테스트/일반 입력 모두 같은 문서번호 규칙을 사용하며 레거시 DEV/TEST 식별자는 저장하지 않습니다.
-      const generationProfile = createNormalDocumentIdentifiers(profile);
+      const generationProfile = createNormalDocumentIdentifiers(profileOverride ?? profile);
       setProfile(generationProfile);
       const orchestrator = new OrchestratorAgent();
       const result = await orchestrator.run({ profile: generationProfile, useLLM: getSettings().useLLM });
@@ -1730,10 +1733,20 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     }
   };
 
-  /** 대조 결과에서 업로드 서류 쪽 값을 폼 입력값으로 가져온다. */
+  /**
+   * 대조 결과에서 '수정 권장' 값을 입력값으로 가져온다.
+   * 여러 항목을 골라 누를 수 있으므로 여기서 바로 재생성하지 않는다
+   * (반영 후 패널의 [수정 반영해 재생성]으로 한 번에 다시 만든다).
+   */
   const applyUploadedValue = (field: string, value: string) => {
-    setProfile((current) => ({ ...current, [field]: value } as TradeProfile));
-    setSaveNotice('입력값을 수정 권장 값으로 바꿨습니다. 서류를 다시 생성해 주세요.');
+    setProfile((current) => applyMatchPatchToProfile(current, { [field]: value }));
+    setHasPendingMatchEdits(true);
+  };
+
+  /** 대조 결과를 바탕으로 서류를 다시 생성한다 — 파이프라인 콘솔을 그대로 띄운다. */
+  const regenerateAfterMatchEdits = (overrideProfile?: TradeProfile) => {
+    setHasPendingMatchEdits(false);
+    void handleGenerateDocuments(overrideProfile);
   };
 
   /**
@@ -1748,10 +1761,11 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         if (patch[row.field] === undefined) patch[row.field] = row.uploadedValue;
       });
     });
-    const fieldCount = Object.keys(patch).length;
-    if (!fieldCount) return;
-    setProfile((current) => ({ ...current, ...patch } as TradeProfile));
-    setSaveNotice(`불일치 ${fieldCount}개 항목을 수정 권장 값으로 바꿨습니다. 서류를 다시 생성해 주세요.`);
+    if (!Object.keys(patch).length) return;
+    const nextProfile = applyMatchPatchToProfile(profile, patch);
+    setProfile(nextProfile);
+    // 상태 반영을 기다리지 않도록 방금 만든 프로필을 그대로 넘겨 재생성한다.
+    regenerateAfterMatchEdits(nextProfile);
   };
 
   /** 화주가 직접 올린 서류 원본 내려받기 — Storage에 저장된 파일을 그대로 내려준다. */
@@ -3270,7 +3284,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                       <RotateCcw size={16} />
                       초기화
                     </button>
-                    <button className="btn btn-primary" onClick={handleGenerateDocuments} disabled={isProcessing}>
+                    <button className="btn btn-primary" onClick={() => void handleGenerateDocuments()} disabled={isProcessing}>
                       <FileText size={16} />
                       {isProcessing ? '생성 중...' : '필요 서류 자동 생성'}
                     </button>
@@ -3458,8 +3472,21 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           {totalMatchMismatches > 0 ? `불일치 ${totalMatchMismatches}건` : '모두 일치'}
                         </span>
                       )}
-                      {!isMatchingExportDocs && totalMatchMismatches > 0 && (
-                        <button className="rv-match-apply-all" onClick={applyAllSuggestedValues}>
+                      {!isMatchingExportDocs && hasPendingMatchEdits && (
+                        <button
+                          className="rv-match-apply-all"
+                          disabled={isProcessing}
+                          onClick={() => regenerateAfterMatchEdits()}
+                        >
+                          수정 반영해 재생성
+                        </button>
+                      )}
+                      {!isMatchingExportDocs && !hasPendingMatchEdits && totalMatchMismatches > 0 && (
+                        <button
+                          className="rv-match-apply-all"
+                          disabled={isProcessing}
+                          onClick={applyAllSuggestedValues}
+                        >
                           전체 반영 수정
                         </button>
                       )}

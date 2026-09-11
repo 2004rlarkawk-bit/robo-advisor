@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { matchUploadedExportDocuments } from './exportDocumentMatchService';
+import { applyMatchPatchToProfile, matchUploadedExportDocuments } from './exportDocumentMatchService';
 import type { ShipperItem, TradeProfile } from '../types';
 import type { TradeAttachment } from '../types/tradeFormData';
 import type { ImportExtractedFields } from '../types/importTrade';
@@ -133,5 +133,34 @@ describe('matchUploadedExportDocuments', () => {
       profile, items, dependencies: deps(extracted()),
     });
     expect(results).toEqual([]);
+  });
+
+  it('품목 필드는 shipperItems 첫 품목에도 반영한다', () => {
+    const base = {
+      ...profile,
+      shipperItems: [
+        { id: '1', itemName: 'coat', hsCode: '6201201000', quantity: 15, unit: 'EA', unitPrice: 150, currency: 'USD' },
+        { id: '2', itemName: 'hat', hsCode: '6505009000', quantity: 3, unit: 'EA', unitPrice: 20, currency: 'USD' },
+      ],
+    } as unknown as TradeProfile;
+
+    const next = applyMatchPatchToProfile(base, {
+      itemName: 'Frozen Hairtail',
+      quantity: '5,000',
+      totalAmount: '21250.00',
+    });
+
+    expect(next.shipperItems?.[0].itemName).toBe('Frozen Hairtail');
+    expect(next.shipperItems?.[0].quantity).toBe(5000);
+    // 둘째 품목은 건드리지 않는다.
+    expect(next.shipperItems?.[1].itemName).toBe('hat');
+    // 숫자 필드는 숫자로 저장한다.
+    expect(next.totalAmount).toBe(21250);
+  });
+
+  it('품목 외 필드는 프로필에만 반영한다', () => {
+    const next = applyMatchPatchToProfile(profile, { invoiceNo: 'INV-2026-123456' });
+    expect(next.invoiceNo).toBe('INV-2026-123456');
+    expect(next.itemName).toBe(profile.itemName);
   });
 });

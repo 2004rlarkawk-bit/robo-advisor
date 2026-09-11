@@ -249,3 +249,42 @@ export async function matchUploadedExportDocuments(input: {
 
   return results;
 }
+
+/** 품목 단위로 관리되는 필드 — profile.shipperItems[0]에 반영해야 서류에 실제로 반영된다. */
+const ITEM_FIELDS = new Set(['itemName', 'hsCode', 'quantity', 'unitPrice']);
+/** 숫자로 저장되는 필드 — 문자열로 넣으면 계산·검증이 깨진다. */
+const NUMERIC_FIELDS = new Set([
+  'quantity', 'unitPrice', 'totalAmount', 'invoiceAmount',
+  'packageCount', 'netWeight', 'grossWeight', 'weight', 'eaPerBox',
+]);
+
+function toNumeric(value: string): number | '' {
+  const parsed = Number(value.replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : '';
+}
+
+/**
+ * 대조 결과의 '수정 권장' 값들을 프로필에 반영한다.
+ * 품목 필드는 shipperItems 첫 품목에 함께 반영해야 생성 서류에 나타난다.
+ */
+export function applyMatchPatchToProfile(
+  current: TradeProfile,
+  patch: Record<string, string>,
+): TradeProfile {
+  const next: Record<string, unknown> = { ...current };
+  const itemPatch: Record<string, unknown> = {};
+
+  Object.entries(patch).forEach(([field, rawValue]) => {
+    const value = NUMERIC_FIELDS.has(field) ? toNumeric(rawValue) : rawValue;
+    next[field] = value;
+    if (ITEM_FIELDS.has(field)) itemPatch[field] = value;
+  });
+
+  const items = current.shipperItems;
+  if (items?.length && Object.keys(itemPatch).length) {
+    next.shipperItems = items.map((item, index) => (
+      index === 0 ? { ...item, ...itemPatch } : item
+    ));
+  }
+  return next as unknown as TradeProfile;
+}
