@@ -17,6 +17,14 @@ interface Props {
   onListReady?: () => void;
 }
 
+/** 포워더 보완 요청이 걸려 있어 화주 조치가 필요한 거래인지 */
+function hasActiveReturnRequest(trade: SavedTrade): boolean {
+  if ((trade.tradeDirection ?? trade.profile.tradeType) !== 'import') return false;
+  if (trade.tradeRole === 'forwarder') return false;
+  const state = (trade.forwarderCase as ForwarderCaseState | null) ?? null;
+  return Boolean(state?.returnRequest && !state.returnRequest.resolvedAt);
+}
+
 /** 화주가 제출한 수입 거래의 포워더 진행 상태 — 문서관리 행에 타임라인으로 보여준다. */
 function ForwarderProgress({ trade, onRevise }: { trade: SavedTrade; onRevise?: (trade: SavedTrade) => void }) {
   if ((trade.tradeDirection ?? trade.profile.tradeType) !== 'import') return null;
@@ -75,11 +83,10 @@ export default function DocumentManagerPanel({
     setError('');
 
     try {
-      setTrades(
-        filterDocumentManagerTrades(
-          await fetchSubmittedTrades()
-        )
-      );
+      const loaded = filterDocumentManagerTrades(await fetchSubmittedTrades());
+      setTrades(loaded);
+      // 포워더 보완 요청이 걸린 거래가 있으면 화주가 바로 볼 수 있게 패널을 자동으로 펼친다.
+      if (loaded.some((trade) => hasActiveReturnRequest(trade))) setOpen(true);
     } catch (caught) {
       console.error(
         '[Document Manager] submitted trades query failed:',
@@ -153,6 +160,9 @@ export default function DocumentManagerPanel({
             <span className="doc-panel-count">
               {trades.length}건
             </span>
+            {trades.some(hasActiveReturnRequest) && (
+              <span className="doc-panel-alert">보완 요청 {trades.filter(hasActiveReturnRequest).length}건</span>
+            )}
           </span>
 
           <span className="doc-panel-sub">
