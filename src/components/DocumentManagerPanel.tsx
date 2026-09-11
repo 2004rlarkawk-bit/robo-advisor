@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown, Copy, CornerUpLeft } from 'lucide-react';
+import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown, Copy, CornerUpLeft, Mail } from 'lucide-react';
 import type { SavedTrade } from '../types';
 import {
   FORWARDER_STAGE_LABEL,
@@ -8,6 +8,7 @@ import {
 } from '../types/forwarderCase';
 import { deleteSavedTrade, fetchSubmittedTrades } from '../services/storageService';
 import { filterDocumentManagerTrades } from '../services/tradeListPolicy';
+import { hasActiveShipperReturnRequest } from '../services/forwarderCaseService';
 
 interface Props {
   onLoad: (trade: SavedTrade) => void;
@@ -15,6 +16,12 @@ interface Props {
   /** 포워더 보완 요청을 받은 수입 거래를 다시 열어 수정하러 이동 */
   onRevise?: (trade: SavedTrade) => void;
   onListReady?: () => void;
+}
+
+function formatMailDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return `${date.getMonth() + 1}월 ${date.getDate()}일 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 /** 화주가 제출한 수입 거래의 포워더 진행 상태 — 문서관리 행에 타임라인으로 보여준다. */
@@ -42,15 +49,24 @@ function ForwarderProgress({ trade, onRevise }: { trade: SavedTrade; onRevise?: 
         ))}
       </div>
       {returnPending && returnRequest && (
-        <div className="dm-fwd-return">
-          <div className="dm-fwd-return-text">
-            <strong><CornerUpLeft size={13} /> 포워더가 보완을 요청했습니다</strong>
-            <p>{returnRequest.reason}</p>
+        <div className="dm-mail">
+          <div className="dm-mail-head">
+            <span className="dm-mail-title"><Mail size={14} /> 포워더 보완 요청</span>
+            <span className="dm-mail-date">{formatMailDate(returnRequest.requestedAt)}</span>
+          </div>
+          <div className="dm-mail-body">
+            <p className="dm-mail-greeting"><strong>{trade.profile.companyName || '담당자'}님</strong>, 안녕하세요.</p>
+            <p>전달해 주신 서류를 검토한 결과, 아래 항목의 보완이 필요합니다.</p>
+            <blockquote className="dm-mail-quote">{returnRequest.reason}</blockquote>
+            <p>수정 후 다시 제출해 주시면 통관 검토를 이어서 진행하겠습니다.</p>
+            <p className="dm-mail-sign">— 담당 포워더 드림</p>
           </div>
           {onRevise && (
-            <button type="button" className="btn btn-primary dm-fwd-revise" onClick={() => onRevise(trade)}>
-              수정하러 가기
-            </button>
+            <div className="dm-mail-actions">
+              <button type="button" className="btn btn-primary" onClick={() => onRevise(trade)}>
+                <CornerUpLeft size={14} /> 지금 수정하러 가기
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -75,11 +91,10 @@ export default function DocumentManagerPanel({
     setError('');
 
     try {
-      setTrades(
-        filterDocumentManagerTrades(
-          await fetchSubmittedTrades()
-        )
-      );
+      const loaded = filterDocumentManagerTrades(await fetchSubmittedTrades());
+      setTrades(loaded);
+      // 포워더 보완 요청이 걸린 거래가 있으면 화주가 바로 볼 수 있게 패널을 자동으로 펼친다.
+      if (loaded.some((trade) => hasActiveShipperReturnRequest(trade))) setOpen(true);
     } catch (caught) {
       console.error(
         '[Document Manager] submitted trades query failed:',
@@ -153,6 +168,9 @@ export default function DocumentManagerPanel({
             <span className="doc-panel-count">
               {trades.length}건
             </span>
+            {trades.some(hasActiveShipperReturnRequest) && (
+              <span className="doc-panel-alert">보완 요청 {trades.filter(hasActiveShipperReturnRequest).length}건</span>
+            )}
           </span>
 
           <span className="doc-panel-sub">

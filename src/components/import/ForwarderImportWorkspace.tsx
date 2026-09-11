@@ -61,6 +61,8 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
   const [saving, setSaving] = useState(false);
   const [cargo, setCargo] = useState<CargoTrackingResult | null>(null);
   const [cargoBusy, setCargoBusy] = useState(false);
+  // 조회용 B/L — 추출값을 기본으로 쓰되, 추출이 틀리거나 비어 있으면 직접 고쳐서 조회할 수 있게 한다.
+  const [cargoBlNo, setCargoBlNo] = useState('');
   const [returnFormOpen, setReturnFormOpen] = useState(false);
   const [returnReason, setReturnReason] = useState('');
   const [detailTab, setDetailTab] = useState<DetailTab>('overview');
@@ -136,6 +138,8 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
   const openCase = (tradeId: string) => {
     setSelectedId(tradeId);
     setCargo(null);
+    const opened = cases?.find((item) => item.tradeId === tradeId);
+    setCargoBlNo(opened && opened.blNo !== '-' ? opened.blNo : '');
     setReturnFormOpen(false);
     setReturnReason('');
     setDetailTab('overview');
@@ -349,9 +353,19 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
               <div className="cargo-query">
                 <label className="form-group">
                   <span className="form-label">M/H B/L 번호</span>
-                  <input className="form-input" value={selected.blNo} readOnly />
+                  <input
+                    className="form-input"
+                    value={cargoBlNo}
+                    onChange={(event) => setCargoBlNo(event.target.value)}
+                    placeholder="B/L 번호 입력"
+                  />
                 </label>
-                <button type="button" className="btn btn-primary" disabled={cargoBusy} onClick={() => void lookupCargo(selected.blNo)}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={cargoBusy || cargoBlNo.trim() === ''}
+                  onClick={() => void lookupCargo(cargoBlNo.trim())}
+                >
                   <Search size={16} /> {cargoBusy ? '조회 중…' : '조회'}
                 </button>
               </div>
