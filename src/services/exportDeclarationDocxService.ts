@@ -79,7 +79,7 @@ function mapItem(it: TradeItem, idx: number, total: number, ctx: {
     goods_name: s(it.description),
     trade_name: '',       // 소스 없음
     brand: '',            // 소스 없음
-    model_spec: '',       // 소스 없음
+    model_spec: s(it.detail),  // 상세 정보(색상·재질·규격) — 품명은 기본 품명 유지
     composition: '',      // 소스 없음
     qty_unit: Number(it.quantity) > 0 ? `${Number(it.quantity).toLocaleString()} ${s(it.unit)}`.trim() : '',
     unit_price: num(it.unitPrice),

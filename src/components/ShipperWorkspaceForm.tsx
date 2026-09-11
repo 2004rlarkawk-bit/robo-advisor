@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { FileSignature, FileText, PenLine, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { FileSignature, FileText, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import {
   EXPORT_POD_OPTIONS,
   EXPORT_POL_OPTIONS,
@@ -12,6 +12,7 @@ import type { TradeAttachment } from '../types/tradeFormData';
 import CountrySelect from './CountrySelect';
 import TradeAttachmentUploader from './TradeAttachmentUploader';
 import { useShipperHSCodeSuggestions } from '../hooks/useShipperHSCodeSuggestions';
+import { buildHSItemDetails, normalizeGoodsDescription } from '../services/goodsDescriptionService';
 import {
   fetchFrequentTradePartners,
   type FrequentTradePartner,
@@ -204,6 +205,82 @@ export default function ShipperWorkspaceForm({
   const invoiceSummary = summarizeShipperItems(items);
   const hasInvalidWeight = isGrossWeightBelowNet(profile.grossWeight, profile.netWeight);
   const hsCodeSuggestions = useShipperHSCodeSuggestions(items);
+  // 품목별 자연어 설명 → 영문 품명 정리 (AI). 입력값은 서류에 저장하지 않는 보조 입력이다.
+  const [describeText, setDescribeText] = useState<Record<string, string>>({});
+  const [describeBusy, setDescribeBusy] = useState<Record<string, boolean>>({});
+  const [describeError, setDescribeError] = useState<Record<string, string>>({});
+
+  /**
+   * "검정색 남자 가죽 재킷" → 품명 "Men's Leather Jacket" + 상세 "Black" 으로 채우고,
+   * 정리 과정에서 얻은 재질·성별 속성을 넣어 HS Code를 다시 추천한다.
+   */
+
+  /** 자연어 설명 → 영문 품명 정리 입력칸. 추가 확인사항·되묻기 패널에서 함께 쓴다. */
+  const renderDescribeBox = (item: ShipperItem, title: string) => (
+      <div className="shipper-describe">
+        <label className="form-label" htmlFor={`describe-${item.id}`}>
+          {title}
+        </label>
+        <div className="shipper-describe-row">
+          <input
+            id={`describe-${item.id}`}
+            className="form-input"
+            value={describeText[item.id] ?? ''}
+            onChange={(event) => setDescribeText((current) => ({ ...current, [item.id]: event.target.value }))}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                void handleNormalizeDescription(item);
+              }
+            }}
+            placeholder="예: 검정색 남자 가죽 재킷입니다"
+            disabled={describeBusy[item.id]}
+          />
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={describeBusy[item.id] || !(describeText[item.id] ?? '').trim()}
+            onClick={() => void handleNormalizeDescription(item)}
+          >
+            <Sparkles size={14} /> {describeBusy[item.id] ? '정리 중…' : 'AI로 품명 정리'}
+          </button>
+        </div>
+        <small className="form-help">
+          한글로 편하게 적으면 영문 품명과 상세 정보로 정리하고 HS Code를 다시 추천합니다.
+        </small>
+        {describeError[item.id] && (
+          <small className="form-help form-help-error" role="alert">{describeError[item.id]}</small>
+        )}
+      </div>
+  );
+
+  const handleNormalizeDescription = async (item: ShipperItem) => {
+    const text = (describeText[item.id] ?? '').trim();
+    if (!text) {
+      setDescribeError((current) => ({ ...current, [item.id]: '품목 설명을 입력해 주세요.' }));
+      return;
+    }
+    setDescribeBusy((current) => ({ ...current, [item.id]: true }));
+    setDescribeError((current) => ({ ...current, [item.id]: '' }));
+    try {
+      const result = await normalizeGoodsDescription(text, item.itemName);
+      updateItem(item.id, 'itemName', result.baseName);
+      updateItem(item.id, 'detail', result.detail);
+      hsCodeSuggestions.recommendWithDetails(
+        item.id,
+        buildHSItemDetails(result.detail, result.attributes),
+        result.baseName,
+      );
+      setDescribeText((current) => ({ ...current, [item.id]: '' }));
+    } catch (error) {
+      setDescribeError((current) => ({
+        ...current,
+        [item.id]: error instanceof Error ? error.message : '품명을 정리하지 못했습니다.',
+      }));
+    } finally {
+      setDescribeBusy((current) => ({ ...current, [item.id]: false }));
+    }
+  };
   const [showItemValidation, setShowItemValidation] = useState(false);
   const [incotermsPlaceSource, setIncotermsPlaceSource] = useState<'loadPort' | 'dischargePort' | null>(null);
   const [forceCustomLoadPort, setForceCustomLoadPort] = useState(false);
@@ -601,6 +678,29 @@ export default function ShipperWorkspaceForm({
                     </small>
                   )}
                 </div>
+                <div className="form-group" data-field="itemDetail">
+                  <label className="form-label">상세 정보 (선택)</label>
+                  <div className="shipper-detail-row">
+                    <input
+                      className="form-input"
+                      value={item.detail ?? ''}
+                      onChange={(event) => updateItem(item.id, 'detail', event.target.value)}
+                      placeholder="예: Blue Ink, Plastic Body"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      title="상세 정보를 반영해 HS Code를 다시 추천합니다"
+                      disabled={!(item.detail ?? '').trim() || item.itemName.trim().length < 3}
+                      onClick={() => hsCodeSuggestions.recommendWithDetails(
+                        item.id,
+                        buildHSItemDetails(item.detail),
+                      )}
+                    >
+                      HS 재추천
+                    </button>
+                  </div>
+                </div>
                 <div className="form-group" data-field="hsCode"><label className="form-label">HS Code <Req /></label><input className="form-input" value={item.hsCode} onChange={(e) => {
                   hsCodeSuggestions.markHSCodeManuallyEdited(item.id);
                   updateItem(item.id, 'hsCode', e.target.value);
@@ -666,8 +766,9 @@ export default function ShipperWorkspaceForm({
                             ))}
                           </div>
                           <small className="shipper-hs-choice-hint">
-                            위 항목 중 하나를 선택하면 그 범위에서 HS Code를 추천합니다. 해당 항목이 없다면 품명을 더 구체적으로 입력해 주세요.
+                            위 항목 중 하나를 선택하면 그 범위에서 HS Code를 추천합니다. 해당 항목이 없다면 아래에 설명을 적어 주세요.
                           </small>
+                          {renderDescribeBox(item, '또는 한글로 설명해 주세요')}
                         </div>
                       )}
 
@@ -731,6 +832,7 @@ export default function ShipperWorkspaceForm({
                               ))}
                             </ul>
                           )}
+                          {renderDescribeBox(item, '상세 정보를 더 입력해 주세요')}
                         </div>
                       )}
 

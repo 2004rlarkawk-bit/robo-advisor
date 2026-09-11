@@ -42,6 +42,12 @@ export type ShipperCurrency = 'USD' | 'EUR' | 'JPY' | 'CNY' | 'KRW' | 'GBP';
 export interface ShipperItem {
   id: string;
   itemName: string;
+  /**
+   * 색상·재질·규격 등 상세 정보. 상업송장에만 품명 뒤에 덧붙인다.
+   * 포장명세서·선하증권은 기본 품명만 쓰는 실무 관행을 따른다.
+   * (예: itemName "Ballpoint Pen" + detail "Blue Ink" → C/I "Ballpoint Pen, Blue Ink")
+   */
+  detail?: string;
   hsCode: string;
   quantity: NumericInput;
   /** 표준 영문 단위 코드 또는 사용자가 직접 입력한 영문 단위. */
@@ -319,7 +325,11 @@ export interface PartyInfo {
  * packages는 packageCount(number)+packageUnit(string)로 분해.
  */
 export interface TradeItem {
-  description: string;    // 품명 → C/I·P/L goods_description
+  description: string;    // 기본 품명 → P/L·B/L goods_description
+  /** 상세 품명(색상·재질 포함) → C/I goods_description. 없으면 description을 쓴다. */
+  detailedDescription?: string;
+  /** 색상·재질·규격 원문 → 수출신고서 규격(model_spec)란. 품명과 분리해서 싣는다. */
+  detail?: string;
   hsCode: string;         // → C/I goods_spec
   quantity: number;       // 수량(개수) → C/I quantity. net_weight와 다른 값이다.
   unit: string;

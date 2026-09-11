@@ -4373,3 +4373,18 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .fwd-pick-sev.is-check { background: #fef9ec; color: #b45309; }
 .fwd-pick-text { font-size: 12px; color: #334155; line-height: 1.55; }
 .fwd-pick-text strong { color: #16233b; }
+
+/* 품목 상세 정보 + HS 재추천 버튼 */
+.shipper-detail-row { display: flex; gap: 8px; align-items: stretch; }
+.shipper-detail-row .form-input { flex: 1; min-width: 0; }
+.shipper-detail-row .btn { white-space: nowrap; }
+
+/* 추가 확인사항 — 자연어 설명을 영문 품명으로 정리 */
+.shipper-describe {
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e2e8f0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.shipper-describe .form-label { margin: 0; font-weight: 700; color: var(--text-dark); }
+.shipper-describe-row { display: flex; gap: 8px; align-items: stretch; }
+.shipper-describe-row .form-input { flex: 1; min-width: 0; }
+.shipper-describe-row .btn { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }

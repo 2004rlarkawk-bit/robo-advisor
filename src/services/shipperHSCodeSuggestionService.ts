@@ -16,7 +16,16 @@ import type {
   VerifiedHSCodeSuggestion,
 } from '../types/hsCodeSuggestion';
 
+import {
+  annotateApparelNames,
+  apparelPrefixesForQuery,
+  apparelScopeOf,
+  composeApparelGoodsName,
+} from './hsApparelNomenclature';
+
 const LOCAL_CANDIDATE_LIMIT = 30;
+/** 의류 후보 확장 상한 — 남성·여성·편물·가죽 호를 함께 담아야 한다. */
+const APPAREL_CANDIDATE_LIMIT = 60;
 const DISPLAY_SUGGESTION_LIMIT = 3;
 
 export function normalizeHSKCode(code: string): string {
@@ -97,8 +106,7 @@ async function buildCandidateContext(
     seen.add(code);
     candidates.push({
       code,
-      koreanName: result.ko,
-      englishName: result.en,
+      ...annotateApparelNames(code, result.ko, result.en),
       ...(result.category
         ? { classificationName: result.category }
         : {}),
@@ -119,7 +127,8 @@ async function buildCandidateContext(
 async function expandCandidateContext(
   initialCandidates: HSCodeCandidateContext[],
   prefixes: string[],
-  debugItemId?: string
+  debugItemId?: string,
+  limit = LOCAL_CANDIDATE_LIMIT
 ): Promise<HSCodeCandidateContext[]> {
   const expanded = new Map<string, HSCodeCandidateContext>();
 
@@ -133,8 +142,7 @@ async function expandCandidateContext(
       if (!isTenDigitHSK(code) || expanded.has(code)) continue;
       expanded.set(code, {
         code,
-        koreanName: result.ko,
-        englishName: result.en,
+        ...annotateApparelNames(code, result.ko, result.en),
         ...(result.category
           ? { classificationName: result.category }
           : {}),
@@ -150,7 +158,7 @@ async function expandCandidateContext(
 
   const candidates = Array.from(expanded.values()).slice(
     0,
-    LOCAL_CANDIDATE_LIMIT
+    limit
   );
   if (import.meta.env.DEV) {
     console.debug(
@@ -222,6 +230,8 @@ function inferOfficialNamePrefixes(
 
 
 const DISAMBIGUATION_OPTION_LIMIT = 5;
+/** 의류는 성별 × 소재 조합이라 선택지를 더 보여준다. */
+const APPAREL_OPTION_LIMIT = 9;
 
 /** 10자리 HSK에서 6자리 소호를 추출한다. */
 export function subheadingOf(code: string): string {
@@ -384,18 +394,33 @@ export function detectDisambiguation(
   // 한 소호만 최고점이면 입력이 후보를 구분한 것 → 질문하지 않는다.
   if (tiedAll.length < 2) return null;
 
-  // 서로 다른 호(4자리)가 섞이면 "pen → 페니실린" 같은 잡음이 선택지에 낀다.
-  // 가장 많이 걸린 호 하나로 좁혀 같은 계열 안에서만 되묻는다.
-  const headingCounts = new Map<string, number>();
-  for (const group of tiedAll) {
-    const heading = group.subheading.slice(0, 4);
-    headingCounts.set(heading, (headingCounts.get(heading) ?? 0) + 1);
+  // 의류는 성별·소재가 서로 다른 호로 갈린다(6201 남성용 / 6202 여성용 / 4203 가죽).
+  // 아래처럼 한 호로 좁히면 여성용·가죽 선택지가 사라지므로, 의류 후보끼리는 호를 합쳐 되묻는다.
+  const apparelTied = tiedAll.filter((group) => apparelScopeOf(group.subheading) !== null);
+  const isApparel = apparelTied.length >= 2;
+
+  // 의류 품명은 "overcoat·raincoat·car-coat"처럼 검색어가 여러 번 들어가 점수가 부풀기 쉽다.
+  // 동점만 남기면 "코트류"(가죽)처럼 한 번만 언급된 소호가 빠지므로, 의류는 검색어에
+  // 걸린(score ≥ 1) 의류 소호를 모두 선택지로 올린다.
+  let tied = isApparel
+    ? Array.from(groups.values()).filter(
+      (group) => group.score >= 1 && apparelScopeOf(group.subheading) !== null
+    )
+    : apparelTied;
+  if (!isApparel) {
+    // 서로 다른 호(4자리)가 섞이면 "pen → 페니실린" 같은 잡음이 선택지에 낀다.
+    // 가장 많이 걸린 호 하나로 좁혀 같은 계열 안에서만 되묻는다.
+    const headingCounts = new Map<string, number>();
+    for (const group of tiedAll) {
+      const heading = group.subheading.slice(0, 4);
+      headingCounts.set(heading, (headingCounts.get(heading) ?? 0) + 1);
+    }
+    const dominantHeading = Array.from(headingCounts.entries())
+      .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))[0][0];
+    tied = tiedAll.filter(
+      (group) => group.subheading.slice(0, 4) === dominantHeading
+    );
   }
-  const dominantHeading = Array.from(headingCounts.entries())
-    .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))[0][0];
-  const tied = tiedAll.filter(
-    (group) => group.subheading.slice(0, 4) === dominantHeading
-  );
   if (tied.length < 2) return null;
 
   // 선택지로 내밀 소호 중 하나라도 검색어 전체를 품명에 담고 있어야 한다.
@@ -404,21 +429,35 @@ export function detectDisambiguation(
   if (!tied.some((group) => mentionsQuery(group.best))) return null;
 
   // 부속품·무의미 라벨은 선택지에서 제외한다.
-  const usable = tied.filter(
-    (group) => !looksLikeAccessory(group.best) && !isMeaninglessLabel(group.best.koreanName)
-  );
+  // 의류는 소호 기준(성별·소재)으로 라벨을 보여주므로 말단 품명 필터가 필요 없다.
+  // ("그 밖의 방직용 섬유로 만든 것"이 부속품 패턴 "~용 "에 걸려 빠지는 문제 방지)
+  const usable = isApparel
+    ? tied
+    : tied.filter(
+      (group) => !looksLikeAccessory(group.best) && !isMeaninglessLabel(group.best.koreanName)
+    );
   if (usable.length < 2) return null;
 
   const seenLabels = new Set<string>();
   const options: HSCodeDisambiguationOption[] = usable
-    .sort((a, b) => (b.count - a.count) || a.subheading.localeCompare(b.subheading))
-    .map((group) => ({
-      subheading: group.subheading,
-      formattedSubheading: formatSubheading(group.subheading),
-      label: group.best.koreanName,
-      englishLabel: group.best.englishName,
-      candidateCount: group.count,
-    }))
+    .sort((a, b) => isApparel
+      // 의류는 호(성별)·소호(소재) 순으로 나열해 남성용·여성용이 묶여 보이게 한다.
+      ? a.subheading.localeCompare(b.subheading)
+      : (b.count - a.count) || a.subheading.localeCompare(b.subheading))
+    .map((group) => {
+      const scope = isApparel ? apparelScopeOf(group.subheading) : null;
+      return {
+        subheading: group.subheading,
+        formattedSubheading: formatSubheading(group.subheading),
+        // 의류는 공식 품명이 모두 같아 구분점(성별·소재)을 라벨로 쓴다.
+        label: scope ? scope.shortKo : group.best.koreanName,
+        // 고르면 이 값이 품명이 되므로 의류는 "Men's Wool Coat" 형태로 만든다.
+        englishLabel: scope
+          ? composeApparelGoodsName(group.subheading, itemName) ?? group.best.englishName
+          : group.best.englishName,
+        candidateCount: group.count,
+      };
+    })
     // 품명이 똑같은 소호는 선택지로 내밀어도 사용자가 고를 수 없다.
     .filter((option) => {
       const key = option.label.trim();
@@ -426,14 +465,18 @@ export function detectDisambiguation(
       seenLabels.add(key);
       return true;
     })
-    .slice(0, DISAMBIGUATION_OPTION_LIMIT);
+    .slice(0, isApparel ? APPAREL_OPTION_LIMIT : DISAMBIGUATION_OPTION_LIMIT);
 
   // 서로 구분되는 선택지가 2개 미만이면 되묻는 의미가 없다.
   if (options.length < 2) return null;
 
   return {
-    question: '정확한 HS CODE 분류를 위해 제품 종류를 선택해 주세요.',
-    note: `입력하신 "${itemName.trim()}"만으로는 관세청 품목 ${options.length}개가 모두 해당되어 하나로 좁힐 수 없습니다.`,
+    question: isApparel
+      ? '정확한 HS CODE 분류를 위해 성별과 소재를 선택해 주세요.'
+      : '정확한 HS CODE 분류를 위해 제품 종류를 선택해 주세요.',
+    note: isApparel
+      ? `의류는 품명이 같아도 성별·소재에 따라 HS Code가 달라집니다. "${itemName.trim()}"에 맞는 항목을 골라 주세요.`
+      : `입력하신 "${itemName.trim()}"만으로는 관세청 품목 ${options.length}개가 모두 해당되어 하나로 좁힐 수 없습니다.`,
     options,
   };
 }
@@ -496,14 +539,22 @@ export async function recommendShipperHSCode(
       normalizedItemName,
       initialCandidateCodes
     );
+  // 의류 품목 단어(jacket·coat 등)는 사전 품명에 없어서 검색으로 못 찾는 소호가 있다.
+  // 보조표 색인으로 해당 소호를 끌어오고, 이 몫은 5개 상한과 따로 센다.
+  const apparelPrefixes = chosenSubheading
+    ? []
+    : apparelPrefixesForQuery(normalizedItemName);
   const discoveryPrefixes = Array.from(new Set([
+    ...apparelPrefixes,
     ...discovery.suggestedPrefixes,
     ...officialNamePrefixes,
-  ])).slice(0, 5);
+  ])).slice(0, 5 + apparelPrefixes.length);
   const expandedCandidateCodes = await expandCandidateContext(
     initialCandidateCodes,
     discoveryPrefixes,
-    debugItemId
+    debugItemId,
+    // 의류는 성별·소재 조합으로 여러 호를 한꺼번에 끌어오므로 상한을 넉넉히 둔다.
+    apparelPrefixes.length > 0 ? APPAREL_CANDIDATE_LIMIT : LOCAL_CANDIDATE_LIMIT
   );
   // 사용자가 고른 소호가 있으면 그 안에서만 추천한다.
   // 확장 과정에서 다른 소호가 다시 섞이면 선택이 무시된 것처럼 보인다.

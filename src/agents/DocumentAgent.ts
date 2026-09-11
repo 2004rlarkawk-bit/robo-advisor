@@ -1,6 +1,6 @@
 import { Agent, DocumentResult, HSCodeResult, AgentLog, createLog } from './types';
 import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, CustomsDeclarationData, Shipment, TransportRequestData } from '../types';
-import { tradeItemAmount } from '../utils/shipment';
+import { composeDetailedDescription, tradeItemAmount } from '../utils/shipment';
 import { determineRequiredDocuments } from '../harness/rulesEngine';
 import { autoFillDocumentFields } from '../services/claudeService';
 import { getCustomsExchangeRate } from '../services/customsApiService';
@@ -25,6 +25,8 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
       : profile.shipperItems?.length
         ? profile.shipperItems.map((item, index) => ({
             description: item.itemName || '',
+            detailedDescription: composeDetailedDescription(item.itemName, item.detail),
+            detail: (item.detail || '').trim() || undefined,
             hsCode: item.hsCode || '',
             quantity: Number(item.quantity) || 0,
             unit: item.unit || '',
@@ -126,9 +128,11 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
       logs.push(createLog(this.name, '상업송장(Invoice) 데이터 조립 중...', 'info'));
       
       // 다품목: 각 품목 금액을 계산(extractedAmount ?? 수량×단가)해 합산한다. amount는 저장 않고 계산.
+      // 상업송장은 색상·재질까지 적는 실무 관행을 따라 상세 품명을 쓴다.
+      // 포장명세서·선하증권은 기본 품명만 쓴다(아래 packingItems 참고).
       const invoiceItems = items.map((it, i) => ({
         no: i + 1,
-        description: it.description,
+        description: it.detailedDescription || it.description,
         hsCode: it.hsCode || hsResult.topCode || '',
         countryOfOrigin: profile.countryOfOrigin || '',
         quantity: it.quantity,

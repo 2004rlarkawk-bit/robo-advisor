@@ -13,7 +13,8 @@ const DEFAULT_MODEL = "gpt-4o-mini";
 type OpenAIAction =
   | "suggest-hs-code"
   | "generate-feedback"
-  | "auto-fill-document";
+  | "auto-fill-document"
+  | "normalize-goods-description";
 
 interface HSCodeRequest {
   action: "suggest-hs-code";
@@ -545,6 +546,90 @@ function normalizeDocumentFields(
     paymentTerms,
     currency,
   };
+}
+
+
+/**
+ * 품목 자연어 설명 → 무역서류용 영문 품명 정규화.
+ *
+ * 사용자가 "검정색 남자 가죽 재질의 재킷입니다"처럼 적으면
+ *   baseName   "Men's Leather Jacket"   → 품명(C/I·P/L·B/L·수출신고서 공통)
+ *   detail     "Black"                  → 상세(C/I 품명 뒤·수출신고서 규격란)
+ *   attributes { material, gender, ... } → HS 분류 추천 입력
+ * 으로 나눠 돌려준다. 입력에 없는 사실은 만들지 않는다.
+ */
+interface GoodsDescriptionRequest {
+  action: "normalize-goods-description";
+  text?: string;
+  currentItemName?: string;
+}
+
+const GOODS_ATTRIBUTE_KEYS = [
+  "material",
+  "composition",
+  "gender",
+  "ageGroup",
+  "intendedUse",
+  "productForm",
+  "processingState",
+] as const;
+
+async function handleGoodsDescriptionNormalize(
+  apiKey: string,
+  body: GoodsDescriptionRequest,
+): Promise<Response> {
+  const text = getString(body.text, 500);
+  const currentItemName = getString(body.currentItemName, 200);
+  if (!text && !currentItemName) {
+    return jsonResponse({ success: false, error: "품목 설명을 입력해 주세요." }, 400);
+  }
+
+  const systemPrompt = [
+    "You convert a product description (often Korean) into trade-document English for export paperwork.",
+    "Return ONLY a JSON object with keys: baseName, detail, attributes.",
+    "- baseName: concise standard English goods name in Title Case, as used on a commercial invoice.",
+    "  Include gender and main material when stated (e.g. \"Men's Leather Jacket\"). Exclude color and size.",
+    "- detail: English comma-separated secondary specs such as color, size, model, finish (e.g. \"Black, Size M-L\").",
+    "  Keep what a color or spec refers to when the input says so (e.g. \"blue ink\" -> \"Blue Ink\", not \"Blue\").",
+    "  Empty string if none stated.",
+    "- attributes: object for customs classification with optional keys:",
+    `  ${GOODS_ATTRIBUTE_KEYS.join(", ")}. Use short lowercase English values. Omit unknown keys.`,
+    "Rules: never invent facts that are not in the input. No Korean characters in any output value.",
+    "Do not add brand names or quantities. Do not wrap the JSON in markdown.",
+  ].join("\n");
+
+  const userMessage = [
+    currentItemName ? `Current goods name: ${currentItemName}` : "",
+    text ? `User description: ${text}` : "",
+  ].filter(Boolean).join("\n");
+
+  const outputText = await callOpenAI(apiKey, systemPrompt, userMessage);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(extractJson(outputText));
+  } catch {
+    return jsonResponse({ success: false, error: "품명 정리 결과를 해석하지 못했습니다." }, 502);
+  }
+  if (!isRecord(parsed)) {
+    return jsonResponse({ success: false, error: "품명 정리 결과 형식이 올바르지 않습니다." }, 502);
+  }
+
+  const hasHangul = (value: string) => /[\uAC00-\uD7A3]/.test(value);
+  const baseName = getString(parsed.baseName, 200);
+  const detail = getString(parsed.detail, 300);
+  if (!baseName || hasHangul(baseName) || hasHangul(detail)) {
+    return jsonResponse({ success: false, error: "영문 품명을 만들지 못했습니다. 설명을 조금 더 구체적으로 적어 주세요." }, 422);
+  }
+
+  const attributes: Record<string, string> = {};
+  const rawAttributes = isRecord(parsed.attributes) ? parsed.attributes : {};
+  for (const key of GOODS_ATTRIBUTE_KEYS) {
+    const value = getString(rawAttributes[key], 100);
+    if (value && !hasHangul(value)) attributes[key] = value;
+  }
+
+  return jsonResponse({ success: true, baseName, detail, attributes });
 }
 
 async function handleHSCodeSuggestion(
@@ -1119,6 +1204,12 @@ export default {
           return await handleDocumentAutoFill(
             apiKey,
             rawBody as unknown as DocumentRequest,
+          );
+
+        case "normalize-goods-description":
+          return await handleGoodsDescriptionNormalize(
+            apiKey,
+            rawBody as unknown as GoodsDescriptionRequest,
           );
 
         default:

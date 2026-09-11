@@ -6,6 +6,7 @@ import {
 } from 'react';
 import type { ShipperItem } from '../types';
 import type {
+  HSCodeItemDetails,
   ItemHSCodeSuggestionState,
 } from '../types/hsCodeSuggestion';
 import {
@@ -81,7 +82,8 @@ export function useShipperHSCodeSuggestions(
   const requestSuggestions = useCallback(async (
     itemId: string,
     itemName: string,
-    chosenSubheading: string | null = null
+    chosenSubheading: string | null = null,
+    itemDetails?: HSCodeItemDetails
   ) => {
     const normalizedItemName = normalizeItemName(itemName);
     const requestId =
@@ -102,7 +104,7 @@ export function useShipperHSCodeSuggestions(
     try {
       const result = await recommendShipperHSCode(
         itemName,
-        undefined,
+        itemDetails,
         itemId,
         chosenSubheading
       );
@@ -288,6 +290,39 @@ export function useShipperHSCodeSuggestions(
     void requestSuggestions(itemId, requestItemName, subheading);
   }, [requestSuggestions]);
 
+  /**
+   * 상세 정보(재질·성별·용도 등)를 반영해 다시 추천한다.
+   * 타이핑마다 자동 재검색하지 않고, 사용자가 버튼을 눌렀을 때만 호출한다.
+   * nextItemName 을 주면 chooseSubheading 과 같은 이유로 관찰값에 먼저 등록해
+   * 품명 변경 이펙트가 상세 없이 재검색해 결과를 덮어쓰지 않게 한다.
+   */
+  const recommendWithDetails = useCallback((
+    itemId: string,
+    itemDetails: HSCodeItemDetails,
+    nextItemName?: string
+  ) => {
+    const item = itemsRef.current.find(
+      (candidate) => candidate.id === itemId
+    );
+    if (!item) return;
+    const requestItemName = (nextItemName ?? item.itemName)
+      .trim()
+      .replace(/\s+/g, ' ');
+    if (normalizeItemName(requestItemName).length < 3) return;
+    if (nextItemName) {
+      observedNamesRef.current.set(
+        itemId,
+        normalizeItemName(nextItemName)
+      );
+    }
+    const timer = timersRef.current.get(itemId);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(itemId);
+    }
+    void requestSuggestions(itemId, requestItemName, null, itemDetails);
+  }, [requestSuggestions]);
+
   const getState = useCallback(
     (itemId: string) => states[itemId] ?? emptyState(),
     [states]
@@ -297,6 +332,7 @@ export function useShipperHSCodeSuggestions(
     getState,
     retry,
     chooseSubheading,
+    recommendWithDetails,
     markHSCodeManuallyEdited,
     markSuggestionApplied,
   };
