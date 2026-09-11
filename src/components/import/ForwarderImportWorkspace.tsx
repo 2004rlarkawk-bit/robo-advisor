@@ -40,6 +40,8 @@ import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 
 interface Props {
   userId: string;
+  /** A/N 레터헤드에 들어갈 발행 포워더 상호 */
+  issuerName?: string;
   /** Pre-alert를 화주 의뢰 없이 직접 등록해야 할 때 기존 업로드 플로우로 전환 */
   onDirectUpload: () => void;
 }
@@ -70,7 +72,7 @@ function etaDday(eta: string): { label: string; tone: 'overdue' | 'imminent' | '
   return { label: `D-${days}`, tone: days <= 3 ? 'imminent' : 'normal' };
 }
 
-export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Props) {
+export default function ForwarderImportWorkspace({ userId, issuerName = '', onDirectUpload }: Props) {
   const [cases, setCases] = useState<ForwarderImportCase[] | null>(null);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -513,7 +515,7 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
                   disabled={anBusy}
                   onClick={() => {
                     setAnBusy(true);
-                    void downloadArrivalNoticeDocx(selected)
+                    void downloadArrivalNoticeDocx(selected, issuerName)
                       .catch((err) => {
                         console.error('A/N 생성 실패:', err);
                         setError('도착통지서를 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.');
