@@ -52,6 +52,7 @@ const STAGE_BADGE_CLASS: Record<ForwarderCaseStage, string> = {
 };
 
 type DetailTab = 'overview' | 'review' | 'clearance';
+type QueueFilter = 'active' | 'received' | 'blockers' | 'done';
 
 function formatEta(eta: string): string {
   return eta ? eta.slice(0, 10) : '미정';
@@ -83,6 +84,7 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
   const [detailTab, setDetailTab] = useState<DetailTab>('overview');
   const [docBusyId, setDocBusyId] = useState<string | null>(null);
   const [anBusy, setAnBusy] = useState(false);
+  const [queueFilter, setQueueFilter] = useState<QueueFilter>('active');
 
   const load = useCallback(async () => {
     setError('');
@@ -186,10 +188,20 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
     setDetailTab('overview');
   };
 
+  const finishClearance = (caseItem: ForwarderImportCase) => {
+    const arrivalNoticeNote = caseItem.arrivalNotice?.storagePath
+      ? ''
+      : '\n\n도착통지서(A/N)가 첨부되지 않았습니다.';
+    if (window.confirm(`실제 통관·반출 확인이 끝난 건인가요?${arrivalNoticeNote}\n\n완료 처리 후에는 업무 큐의 완료 건으로 이동합니다.`)) {
+      void moveToStage(caseItem, 'done', 'overview');
+    }
+  };
+
   // ---------- 상세 화면 ----------
   if (selected) {
     const stageIndex = FORWARDER_STAGE_ORDER.indexOf(selected.stage);
     const blockers = selected.issues.filter((issue) => issue.severity === 'blocker');
+    const unresolvedBlockers = blockers.filter((issue) => !issue.resolved);
     const checks = selected.issues.filter((issue) => issue.severity === 'check');
     const infos = selected.issues.filter((issue) => issue.severity === 'info');
     const canFinishReview = selected.blockerCount === 0;
@@ -304,12 +316,21 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
               <div><h2>이슈 점검</h2></div>
               <span className="source-badge">{selected.blockerCount + selected.checkCount}건 미처리</span>
             </div>
+            {unresolvedBlockers.length > 0 && (
+              <div className="fwd-blocker-alert" role="alert">
+                <AlertTriangle size={17} />
+                <div>
+                  <strong>통관 진행 전 해결할 차단 이슈 {unresolvedBlockers.length}건</strong>
+                  <span>{unresolvedBlockers.map((issue) => issue.title).join(' · ')}</span>
+                </div>
+              </div>
+            )}
             {[
               { label: '업무 차단', items: blockers, className: 'is-blocker' },
               { label: '확인 필요', items: checks, className: 'is-check' },
               { label: '참고', items: infos, className: 'is-info' },
             ].filter((group) => group.items.length > 0).map((group) => (
-              <details key={group.label} className="fwd-issue-group">
+              <details key={group.label} className="fwd-issue-group" open={group.label === '업무 차단'}>
                 <summary>{group.label} <span>{group.items.length}</span></summary>
                 <div className="fwd-issue-list">
                   {group.items.map((issue) => (
@@ -530,7 +551,7 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
           )}
           {!returnPending && selected.stage === 'clearance' && (
             <>
-              <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void moveToStage(selected, 'done', 'overview')}>
+              <button type="button" className="btn btn-primary" disabled={saving} onClick={() => finishClearance(selected)}>
                 <CheckCircle2 size={15} /> 통관 완료 처리
               </button>
               {!selected.arrivalNotice?.storagePath && <p className="fwd-action-hint">도착통지서(A/N)를 첨부해 두면 완료 이력에 함께 보관됩니다.</p>}
@@ -551,6 +572,18 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
     active: cases?.filter((item) => item.stage !== 'done').length ?? 0,
     blockers: cases?.reduce((total, item) => total + item.blockerCount, 0) ?? 0,
   };
+  const visibleCases = (cases ?? []).filter((item) => {
+    if (queueFilter === 'active') return item.stage !== 'done';
+    if (queueFilter === 'received') return item.stage === 'received';
+    if (queueFilter === 'blockers') return item.blockerCount > 0;
+    return item.stage === 'done';
+  });
+  const filterOptions: { value: QueueFilter; label: string; count: number }[] = [
+    { value: 'active', label: '진행 중', count: summary.active },
+    { value: 'received', label: '신규 접수', count: cases?.filter((item) => item.stage === 'received').length ?? 0 },
+    { value: 'blockers', label: '차단', count: cases?.filter((item) => item.blockerCount > 0).length ?? 0 },
+    { value: 'done', label: '완료', count: cases?.filter((item) => item.stage === 'done').length ?? 0 },
+  ];
 
   return (
     <div className="fwd-workspace">
@@ -571,6 +604,22 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
 
         {error && <div className="form-message error">{error}</div>}
 
+        {cases !== null && cases.length > 0 && (
+          <div className="fwd-filter-bar" aria-label="업무 목록 필터">
+            {filterOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={queueFilter === option.value ? 'is-active' : ''}
+                onClick={() => setQueueFilter(option.value)}
+              >
+                {option.label} <span>{option.count}</span>
+              </button>
+            ))}
+            <span className="fwd-sort-note">차단 건 · 업무 단계 · ETA 순</span>
+          </div>
+        )}
+
         {cases === null && <p className="fwd-empty">업무 목록을 불러오는 중…</p>}
 
         {cases !== null && cases.length === 0 && (
@@ -581,61 +630,46 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
           </div>
         )}
 
-        {cases !== null && cases.length > 0 && (() => {
-          const renderRow = (item: ForwarderImportCase) => {
-            const dday = etaDday(item.eta);
-            return (
-              <tr key={item.tradeId} className="fwd-row" onClick={() => openCase(item.tradeId)}>
-                <td className="fwd-eta-cell">
-                  {formatEta(item.eta)}
-                  {dday && item.stage !== 'done' && <span className={`fwd-dday is-${dday.tone}`}>{dday.label}</span>}
-                </td>
-                <td className="fwd-case-cell">
-                  <strong>{item.importer}</strong>
-                  <span>{item.blNo} · {item.vesselName || '선박 미정'}</span>
-                  {item.origin === 'shipper_request' && <span className="fwd-origin is-request">화주 의뢰</span>}
-                </td>
-                <td>
-                  <span className={`fwd-stage-badge ${STAGE_BADGE_CLASS[item.stage]}`}>{FORWARDER_STAGE_LABEL[item.stage]}</span>
-                  {item.returnRequest && (
-                    <span className={`fwd-return-badge${item.returnRequest.resolvedAt ? ' is-resolved' : ''}`}>
-                      {item.returnRequest.resolvedAt ? '재제출됨' : item.shipperEditing ? '화주 수정 중' : '보완 요청'}
-                    </span>
-                  )}
-                </td>
-                <td className="fwd-next-cell">{item.nextAction}{item.blockerCount > 0 && <span className="fwd-blocker-inline">차단 {item.blockerCount}</span>}</td>
-              </tr>
-            );
-          };
-          const activeCases = cases.filter((item) => item.stage !== 'done');
-          const doneCases = cases.filter((item) => item.stage === 'done');
-          return (
-            <>
-              <div className="import-table-wrap">
-                <table className="import-table fwd-queue-table">
-                  <thead>
-                    <tr><th>ETA</th><th>수입 건</th><th>상태</th><th>다음 조치</th></tr>
-                  </thead>
-                  <tbody>
-                    {activeCases.length > 0
-                      ? activeCases.map(renderRow)
-                      : <tr><td colSpan={4} className="fwd-doc-empty">진행 중인 건이 없습니다.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-              {doneCases.length > 0 && (
-                <details className="fwd-done-group">
-                  <summary>완료된 건 {doneCases.length}건 보기</summary>
-                  <div className="import-table-wrap">
-                    <table className="import-table fwd-queue-table">
-                      <tbody>{doneCases.map(renderRow)}</tbody>
-                    </table>
-                  </div>
-                </details>
-              )}
-            </>
-          );
-        })()}
+        {cases !== null && visibleCases.length === 0 && (
+          <p className="fwd-filter-empty">이 조건에 해당하는 업무가 없습니다.</p>
+        )}
+
+        {cases !== null && visibleCases.length > 0 && (
+          <div className="import-table-wrap">
+            <table className="import-table fwd-queue-table">
+              <thead>
+                <tr><th>ETA</th><th>수입 건</th><th>상태</th><th>다음 조치</th></tr>
+              </thead>
+              <tbody>
+                {visibleCases.map((item) => {
+                  const dday = etaDday(item.eta);
+                  return (
+                    <tr key={item.tradeId} className="fwd-row" onClick={() => openCase(item.tradeId)}>
+                      <td className="fwd-eta-cell">
+                        {formatEta(item.eta)}
+                        {dday && item.stage !== 'done' && <span className={`fwd-dday is-${dday.tone}`}>{dday.label}</span>}
+                      </td>
+                      <td className="fwd-case-cell">
+                        <strong>{item.importer}</strong>
+                        <span>{item.blNo} · {item.vesselName || '선박 미정'}</span>
+                        {item.origin === 'shipper_request' && <span className="fwd-origin is-request">화주 의뢰</span>}
+                      </td>
+                      <td>
+                        <span className={`fwd-stage-badge ${STAGE_BADGE_CLASS[item.stage]}`}>{FORWARDER_STAGE_LABEL[item.stage]}</span>
+                        {item.returnRequest && (
+                          <span className={`fwd-return-badge${item.returnRequest.resolvedAt ? ' is-resolved' : ''}`}>
+                            {item.returnRequest.resolvedAt ? '재제출됨' : item.shipperEditing ? '화주 수정 중' : '보완 요청'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="fwd-next-cell">{item.nextAction}{item.blockerCount > 0 && <span className="fwd-blocker-inline">차단 {item.blockerCount}</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );

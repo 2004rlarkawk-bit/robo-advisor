@@ -160,9 +160,11 @@ export function deriveForwarderCase(trade: SavedTrade): ForwarderImportCase | nu
   };
 }
 
-/** 업무 큐 정렬: 진행 단계 우선(접수→검토→통관), 완료는 뒤로, 같은 단계면 ETA 오름차순. */
+/** 업무 큐 정렬: 미해결 차단 건을 최우선으로, 이어 업무 단계·ETA 순으로 배치한다. */
 export function sortForwarderCases(cases: ForwarderImportCase[]): ForwarderImportCase[] {
   return [...cases].sort((a, b) => {
+    const blockerDiff = Number(b.blockerCount > 0) - Number(a.blockerCount > 0);
+    if (blockerDiff !== 0) return blockerDiff;
     const stageDiff = FORWARDER_STAGE_ORDER.indexOf(a.stage) - FORWARDER_STAGE_ORDER.indexOf(b.stage);
     if (stageDiff !== 0) return stageDiff;
     if (a.eta !== b.eta) return (a.eta || '9999').localeCompare(b.eta || '9999');
