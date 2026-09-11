@@ -9,6 +9,8 @@ interface Props {
   onLoad: (trade: SavedTrade) => void; // 이어서 작업 (작업실로 불러오기)
   /** AI 통관 작업실 내 임시보관함 모드 — 최근 3건만 컴팩트하게 표시 */
   embedded?: boolean;
+  /** 현재 선택된 역할의 거래만 표시 — 화주·포워더 거래가 섞여 보이지 않게 한다 */
+  roleFilter?: 'shipper' | 'forwarder';
 }
 
 const MEMO_KEY = 'portai_trade_memos_v1';
@@ -62,7 +64,7 @@ function fmtDate(iso: string) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export default function TradeManagerPanel({ onLoad, embedded }: Props) {
+export default function TradeManagerPanel({ onLoad, embedded, roleFilter }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -80,14 +82,17 @@ export default function TradeManagerPanel({ onLoad, embedded }: Props) {
     setIsLoading(true);
     setError('');
     try {
-      setTrades(filterTradeManagerTrades(await fetchTradeManagerTrades()));
+      const loaded = filterTradeManagerTrades(await fetchTradeManagerTrades());
+      setTrades(roleFilter
+        ? loaded.filter((trade) => (trade.tradeRole ?? 'shipper') === roleFilter)
+        : loaded);
     } catch (caught) {
       console.error('[Trade Manager] generated trades query failed:', caught);
       setError('진행 중인 거래를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [roleFilter]);
 
   useEffect(() => { void loadTrades(); }, [loadTrades]);
 
