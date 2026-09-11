@@ -355,7 +355,24 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
                   <Search size={16} /> {cargoBusy ? '조회 중…' : '조회'}
                 </button>
               </div>
-              {cargo && <p className="cargo-status-text"><strong>{cargo.status}</strong> · {cargo.detail}</p>}
+              {cargo && (
+                <div className="cargo-result">
+                  <p className="cargo-status-text">
+                    <strong>{cargo.status}</strong> · {cargo.detail}
+                    {cargo.source === 'simulation' && <span className="da-sim-badge">시뮬레이션</span>}
+                  </p>
+                  {cargo.lookupStatus !== 'empty' && (
+                    <ol className="cargo-steps">
+                      {cargo.timeline.map((step) => (
+                        <li key={step.label} className={`${step.completed ? 'is-done' : ''}${step.current ? ' is-current' : ''}`}>
+                          {step.label}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  {cargo.arrivalPort && <p className="cargo-meta">도착항 {cargo.arrivalPort} · 화물관리번호 {cargo.cargoNo}</p>}
+                </div>
+              )}
             </section>
             <ArrivalNoticeUploader
               value={selected.arrivalNotice}
