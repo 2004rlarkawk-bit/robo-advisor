@@ -3173,6 +3173,12 @@ body {
 .rv-match-total { font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
 .rv-match-total.ok { background: var(--success-bg); color: var(--success-color); }
 .rv-match-total.bad { background: var(--warning-bg); color: var(--warning-color); }
+.rv-match-apply-all {
+  margin-left: auto; border: 1px solid var(--primary-color); background: var(--primary-color); color: #fff;
+  padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.rv-match-apply-all:hover { filter: brightness(0.94); }
+.rv-match-suggest { font-weight: 700; color: var(--primary-color); }
 .rv-match-loading { margin: 10px 0 0; font-size: 13px; color: var(--text-light); }
 .rv-match-doc { margin-top: 14px; }
 .rv-match-doc-head {

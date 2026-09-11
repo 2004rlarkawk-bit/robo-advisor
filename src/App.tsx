@@ -1733,7 +1733,25 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   /** 대조 결과에서 업로드 서류 쪽 값을 폼 입력값으로 가져온다. */
   const applyUploadedValue = (field: string, value: string) => {
     setProfile((current) => ({ ...current, [field]: value } as TradeProfile));
-    setSaveNotice(`입력값을 업로드한 서류의 값으로 바꿨습니다. 서류를 다시 생성해 주세요.`);
+    setSaveNotice('입력값을 수정 권장 값으로 바꿨습니다. 서류를 다시 생성해 주세요.');
+  };
+
+  /**
+   * 불일치 항목의 수정 권장 값을 한 번에 반영한다.
+   * 같은 필드가 여러 서류에서 겹치면 먼저 나온 서류(C/I 우선 정렬 순서)의 값을 쓴다.
+   */
+  const applyAllSuggestedValues = () => {
+    const patch: Record<string, string> = {};
+    exportDocMatches.forEach((match) => {
+      match.rows.forEach((row) => {
+        if (row.status !== 'mismatch' || !row.uploadedValue) return;
+        if (patch[row.field] === undefined) patch[row.field] = row.uploadedValue;
+      });
+    });
+    const fieldCount = Object.keys(patch).length;
+    if (!fieldCount) return;
+    setProfile((current) => ({ ...current, ...patch } as TradeProfile));
+    setSaveNotice(`불일치 ${fieldCount}개 항목을 수정 권장 값으로 바꿨습니다. 서류를 다시 생성해 주세요.`);
   };
 
   /** 화주가 직접 올린 서류 원본 내려받기 — Storage에 저장된 파일을 그대로 내려준다. */
@@ -3440,6 +3458,11 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           {totalMatchMismatches > 0 ? `불일치 ${totalMatchMismatches}건` : '모두 일치'}
                         </span>
                       )}
+                      {!isMatchingExportDocs && totalMatchMismatches > 0 && (
+                        <button className="rv-match-apply-all" onClick={applyAllSuggestedValues}>
+                          전체 반영 수정
+                        </button>
+                      )}
                     </div>
                     {isMatchingExportDocs ? (
                       <p className="rv-match-loading">업로드한 서류를 읽어 입력값과 대조하는 중입니다…</p>
@@ -3463,14 +3486,16 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                         ) : (
                           <table className="rv-match-table">
                             <thead>
-                              <tr><th>항목</th><th>내가 올린 서류</th><th>PortAI 입력값</th><th>결과</th></tr>
+                              <tr><th>항목</th><th>현재 입력값</th><th>수정 권장</th><th>결과</th></tr>
                             </thead>
                             <tbody>
                               {match.rows.map((row) => (
                                 <tr key={`${match.attachmentId}-${row.field}-${row.label}`} className={`rv-match-${row.status}`}>
                                   <th>{row.label}</th>
-                                  <td>{row.uploadedValue || '—'}</td>
                                   <td>{row.formValue || '—'}</td>
+                                  <td className={row.status === 'mismatch' ? 'rv-match-suggest' : undefined}>
+                                    {row.uploadedValue || '—'}
+                                  </td>
                                   <td>
                                     {row.status === 'match' && <span className="rv-match-badge ok">일치</span>}
                                     {row.status === 'unknown' && <span className="rv-match-badge na">확인 불가</span>}
