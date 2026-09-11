@@ -1371,6 +1371,31 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     try {
       const reopened = await reopenSubmittedImportTradeForRevision(trade.id);
       await handleResumeSavedTradeFromDocumentManager(reopened);
+
+      // 값을 고치는 화면은 2단계(분석 결과)이므로 그리로 열고,
+      // 무엇을 고쳐야 하는지 포워더의 요청 사유를 상단 안내 카드로 띄운다.
+      if (!user) return;
+      const role = reopened.tradeRole ?? 'shipper';
+      const cacheKey = `portai_import_draft:${user.id}:${role}`;
+      try {
+        const cached = JSON.parse(localStorage.getItem(cacheKey) ?? 'null') as Record<string, unknown> | null;
+        if (cached) {
+          const forwarderState = (reopened.forwarderCase ?? trade.forwarderCase) as
+            | import('./types/forwarderCase').ForwarderCaseState
+            | null;
+          const reason = forwarderState?.returnRequest?.reason ?? '';
+          localStorage.setItem(cacheKey, JSON.stringify({
+            ...cached,
+            step: 2,
+            reviseNotice: reason ? { reason } : null,
+          }));
+          setWorkspaceCurrentStep(2);
+          setImportWorkspaceVersion((version) => version + 1);
+        }
+      } catch (cacheError) {
+        // 안내 카드 없이 3단계로 열리는 것뿐이므로 흐름을 막지 않는다.
+        console.warn('보완 수정 안내 캐시 패치 실패:', cacheError);
+      }
     } catch (err) {
       console.error('보완 수정용 거래 재오픈 실패:', err);
       alert('거래를 다시 열지 못했습니다. 잠시 후 다시 시도해 주세요.');
@@ -2377,16 +2402,20 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         />
 
         <main className="content-body">
-          {/* 포워더 보완 요청 도착 알림 — 문서 관리 화면 밖 어디서든 보이는 안내 바 */}
-          {returnRequestCount > 0 && activeMenu !== 'docs' && (
-            <button type="button" className="return-alert-bar" onClick={() => setActiveMenu('docs')}>
-              <Mail size={15} />
-              <span>포워더 보완 요청 <strong>{returnRequestCount}건</strong>이 도착했습니다.</span>
-              <span className="return-alert-cta">확인하러 가기 →</span>
-            </button>
-          )}
           {/* 서비스 소개는 히어로가 화면을 꽉 채우는 디자인이라 폭 제한(1000px) 예외 */}
           <div className={`workspace-area${activeMenu === 'about' ? ' workspace-area--full' : ''}`}>
+            {/* 포워더 보완 요청 도착 알림(화주용) — 문서 관리 밖 어디서든 보이되,
+                포워더 수입 큐에서 작업 중일 때는 큐의 배지와 중복이므로 숨긴다. */}
+            {returnRequestCount > 0
+              && activeMenu !== 'docs'
+              && !(activeMenu === 'dashboard' && tradeDirection === 'import' && workspaceRole === 'forwarder')
+              && (
+                <button type="button" className="return-alert-bar" onClick={() => setActiveMenu('docs')}>
+                  <Mail size={15} />
+                  <span>포워더 보완 요청 <strong>{returnRequestCount}건</strong>이 도착했습니다.</span>
+                  <span className="return-alert-cta">확인하러 가기 →</span>
+                </button>
+              )}
             <Suspense fallback={<div className="workspace-loading">화면을 불러오는 중입니다.</div>}>
             {activeMenu === 'about' ? <AboutPanel onStart={() => setActiveMenu('dashboard')} />
             : activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />

@@ -4274,7 +4274,7 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 /* ===== 보완 요청 알림 (사이드바 배지 + 상단 알림 바 + 메일형 카드) ===== */
 .menu-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 19px; height: 19px; margin-left: auto; padding: 0 6px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 800; }
 
-.return-alert-bar { display: flex; align-items: center; gap: 9px; width: 100%; max-width: 1000px; margin: 0 auto 14px; padding: 11px 16px; border: 1.5px solid #fca5a5; border-radius: 10px; background: #fef2f2; color: #b91c1c; font-size: 13.5px; cursor: pointer; text-align: left; }
+.return-alert-bar { display: flex; align-items: center; gap: 9px; width: 100%; margin: 0 0 14px; padding: 11px 16px; border: 1.5px solid #fca5a5; border-radius: 10px; background: #fef2f2; color: #b91c1c; font-size: 13.5px; cursor: pointer; text-align: left; }
 .return-alert-bar:hover { background: #fee2e2; }
 .return-alert-bar strong { font-weight: 800; }
 .return-alert-cta { margin-left: auto; font-weight: 800; white-space: nowrap; }
@@ -4289,3 +4289,8 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .dm-mail-quote { margin: 8px 0; padding: 9px 12px; border-left: 3px solid #dc2626; background: #f8fafc; border-radius: 0 7px 7px 0; white-space: pre-line; color: #16233b; font-weight: 600; }
 .dm-mail-sign { color: #64748b; }
 .dm-mail-actions { display: flex; justify-content: flex-end; padding: 0 14px 12px; }
+
+/* 수입 2단계 — 포워더 보완 요청 수정 안내 카드 */
+.revise-notice { border-color: #fca5a5 !important; }
+.revise-notice h2 { color: #b91c1c; }
+.revise-notice-text { margin: 6px 0 0; padding: 10px 13px; border-left: 3px solid #dc2626; background: #fef2f2; border-radius: 0 8px 8px 0; font-size: 12.5px; font-weight: 600; color: #16233b; line-height: 1.65; white-space: pre-line; }

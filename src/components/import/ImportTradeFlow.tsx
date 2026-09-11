@@ -106,6 +106,8 @@ export interface CachedState {
   generatedAt: string | null;
   tradeId?: string;
   existingStatus?: PersistedTradeStatus;
+  /** 포워더 보완 요청으로 다시 연 거래 — 2단계 상단에 수정 안내 카드를 띄운다 */
+  reviseNotice?: { reason: string } | null;
 }
 const EMPTY: CachedState = {
   step: 1,
@@ -1067,6 +1069,23 @@ export default function ImportTradeFlow({
 
       {state.step === 2 && state.analysis && (
         <>
+          {state.reviseNotice && (
+            <section className="form-card import-card revise-notice">
+              <div className="import-card-heading">
+                <div><h2>포워더 보완 요청</h2><p>아래 항목을 수정한 뒤 끝까지 진행해 다시 제출하면 포워더에게 회신됩니다.</p></div>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setState((current) => ({ ...current, reviseNotice: null }))}
+                  >
+                    확인
+                  </button>
+                )}
+              </div>
+              <p className="revise-notice-text">{state.reviseNotice.reason}</p>
+            </section>
+          )}
           <RiskSummary
             risks={liveRisks}
             onToggle={readOnly ? undefined : toggleRisk}
