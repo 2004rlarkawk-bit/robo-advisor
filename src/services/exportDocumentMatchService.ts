@@ -11,6 +11,7 @@ import type { ImportDocumentMeta, ImportExtractedFields } from '../types/importT
 import type { TradeAttachment, TradeAttachmentDocumentType } from '../types/tradeFormData';
 import type { ShipperItem, TradeProfile } from '../types';
 import { parseTradeNumber } from '../utils/number';
+import { areEquivalentTradeFieldValues, isAbsentTradeValue } from '../utils/tradeValueNormalization';
 
 export type ExportMatchStatus = 'match' | 'mismatch' | 'unknown';
 
@@ -77,9 +78,24 @@ const NUMERIC_FIELDS = new Set([
  */
 const NUMERIC_COMPARE_FIELDS = new Set([...NUMERIC_FIELDS, 'measurement']);
 
+/**
+ * HS부호는 숫자만 비교한다("8471.30-1000" = "8471301000").
+ * 국제 서류는 6단위, 폼은 10단위(HSK)로 적는 경우가 흔해 앞 6자리 이상이 겹치면 일치로 본다.
+ */
+function isSameHSCode(left: string, right: string): boolean {
+  const a = left.replace(/\D/g, '');
+  const b = right.replace(/\D/g, '');
+  if (a.length < 6 || b.length < 6) return a === b;
+  return a.startsWith(b) || b.startsWith(a);
+}
+
 function compare(field: string, uploadedValue: string, formValue: string): ExportMatchStatus {
-  if (!uploadedValue || !formValue) return 'unknown';
+  // "N/A", "-", "미기재"는 값이 없는 것 — 불일치가 아니라 확인 불가로 둔다.
+  if (isAbsentTradeValue(uploadedValue) || isAbsentTradeValue(formValue)) return 'unknown';
   if (normalize(uploadedValue) === normalize(formValue)) return 'match';
+  if (field === 'hsCode') return isSameHSCode(uploadedValue, formValue) ? 'match' : 'mismatch';
+  // 항구명(Busan / Busan Port), 포장 종류(CT / CARTON), Incoterms(FOB BUSAN / FOB)는 의미로 비교한다.
+  if (areEquivalentTradeFieldValues(field, uploadedValue, formValue)) return 'match';
   if (!NUMERIC_COMPARE_FIELDS.has(field)) return 'mismatch';
   // 숫자는 표기(1,800 / 1800.00 / 1.25 M3)가 달라도 값이 같으면 일치로 본다.
   const left = parseTradeNumber(uploadedValue);

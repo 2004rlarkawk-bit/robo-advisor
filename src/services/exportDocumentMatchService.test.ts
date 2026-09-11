@@ -126,6 +126,51 @@ describe('matchUploadedExportDocuments', () => {
     expect(result.rows.find((row) => row.label === '용적(CBM)')?.status).toBe('match');
   });
 
+  it('서류의 N/A·대시·미기재 표기는 불일치가 아니라 확인 불가로 둔다', async () => {
+    const [result] = await matchUploadedExportDocuments({
+      attachments: [attachment()],
+      profile, items,
+      dependencies: deps(extracted({ currency: 'N/A', incoterms: '-' })),
+    });
+    expect(result.rows.find((row) => row.label === '통화')?.status).toBe('unknown');
+    expect(result.rows.find((row) => row.label === 'Incoterms')?.status).toBe('unknown');
+  });
+
+  it('HS부호는 구두점을 무시하고, 6단위와 10단위가 겹치면 일치로 본다', async () => {
+    const hs = (documentHSCode: string) => deps(extracted({
+      items: [{ description: 'coat', documentHSCode, quantity: '15' }] as unknown as ImportExtractedFields['items'],
+    }));
+    const status = async (code: string) => {
+      const [result] = await matchUploadedExportDocuments({ attachments: [attachment()], profile, items, dependencies: hs(code) });
+      return result.rows.find((row) => row.label === 'HS Code')?.status;
+    };
+    expect(await status('6201.20-1000')).toBe('match');
+    expect(await status('6201.20')).toBe('match');
+    expect(await status('6202201000')).toBe('mismatch');
+  });
+
+  it('Incoterms·포장 종류·항구는 표기가 달라도 의미가 같으면 일치로 본다', async () => {
+    const [invoice] = await matchUploadedExportDocuments({
+      attachments: [attachment()], profile, items,
+      dependencies: deps(extracted({ incoterms: 'FOB BUSAN' })),
+    });
+    expect(invoice.rows.find((row) => row.label === 'Incoterms')?.status).toBe('match');
+
+    const [packing] = await matchUploadedExportDocuments({
+      attachments: [attachment({ documentType: 'packing_list' })],
+      profile: { ...profile, packageType: 'CARTON' } as TradeProfile, items,
+      dependencies: deps(extracted({ packageUnit: 'CTNS' })),
+    });
+    expect(packing.rows.find((row) => row.label === '포장 종류')?.status).toBe('match');
+
+    const [transport] = await matchUploadedExportDocuments({
+      attachments: [attachment({ documentType: 'transport_request' })],
+      profile: { ...profile, loadPort: 'Busan Port' } as TradeProfile, items,
+      dependencies: deps(extracted({ loadPort: 'BUSAN' })),
+    });
+    expect(transport.rows.find((row) => row.label === '선적항')?.status).toBe('match');
+  });
+
   it('한쪽 값이 없으면 확인 불가로 둔다', async () => {
     const [result] = await matchUploadedExportDocuments({
       attachments: [attachment()],

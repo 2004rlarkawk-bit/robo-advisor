@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeExportPortValue } from '../constants/ports';
 import {
   areEquivalentTradeFieldValues,
+  isAbsentTradeValue,
   normalizeIncotermsCode,
   normalizePackageTypeValue,
 } from './tradeValueNormalization';
@@ -35,5 +36,15 @@ describe('수출 자동입력 값 의미 정규화', () => {
 
   it('일반 문자열은 공백과 대소문자만 다르면 동일하다', () => {
     expect(areEquivalentTradeFieldValues('companyName', '  ACME   Trading ', 'acme trading')).toBe(true);
+  });
+});
+
+describe('isAbsentTradeValue', () => {
+  it.each(['', '  ', '-', '—', 'N/A', 'na', '미기재', '(미기재)', '없음', 'null'])('%j는 값 없음으로 본다', (value) => {
+    expect(isAbsentTradeValue(value)).toBe(true);
+  });
+
+  it.each(['0', 'FOB', 'USD', 'NAVY'])('%j는 실제 값으로 본다', (value) => {
+    expect(isAbsentTradeValue(value)).toBe(false);
   });
 });

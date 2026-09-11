@@ -6,6 +6,7 @@ import type {
   ReconciliationRuleResult,
 } from '../types/importTrade';
 import { IMPORT_RECONCILIATION_RULES } from './importReconciliationRules';
+import { isAbsentTradeValue } from '../utils/tradeValueNormalization';
 
 export function runImportReconciliation(input: ImportReconciliationInput): ReconciliationRuleResult[] {
   return IMPORT_RECONCILIATION_RULES.map((rule) => {
@@ -50,11 +51,9 @@ const FIELD_ALIASES: Array<[keyof ImportDocFields, RegExp]> = [
   ['incoterms', /(incoterms|인코텀|거래\s*조건|price\s*term)/i],
   ['hsCode', /\bhs\b/i],
 ];
-const ABSENT_VALUES = new Set(['', '-', '—', '(미기재)', 'n/a', 'na', '없음', '미기재', '해당없음', 'unknown', 'null']);
-
 function meaningful(value: string | undefined): string | undefined {
   const trimmed = (value ?? '').trim();
-  return !trimmed || ABSENT_VALUES.has(trimmed.toLowerCase()) ? undefined : trimmed;
+  return isAbsentTradeValue(trimmed) ? undefined : trimmed;
 }
 
 export function buildReconciliationInput(
