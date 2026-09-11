@@ -1089,7 +1089,9 @@ export default function ImportTradeFlow({
           <RiskSummary
             risks={liveRisks}
             onToggle={readOnly ? undefined : toggleRisk}
-            description="아래 분석 결과와 HSK 확정에서 값을 고치면 이 목록도 즉시 다시 계산됩니다."
+            description={role === 'shipper'
+              ? '아래 분석 결과에서 값을 고치면 이 목록도 즉시 다시 계산됩니다. 서류 간 불일치처럼 어느 값이 맞는지 여기서 판단하기 어려운 항목은, 제출하면 포워더가 원본 서류와 대조해 검토·판단합니다.'
+              : '아래 분석 결과와 HSK 확정에서 값을 고치면 이 목록도 즉시 다시 계산됩니다.'}
           />
           <ImportAnalysisSummary
             analysis={state.analysis}
@@ -1226,10 +1228,19 @@ export default function ImportTradeFlow({
               onClick: () => moveToReadOnlyResultStep(2),
             }}
           /> : (
-            <div className="import-actions">
-              <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button>
-              <button className="btn btn-primary" disabled={busy} onClick={() => void complete()}>{busy ? '완료 처리 중…' : '완료'}</button>
-            </div>
+            <>
+              {liveRisks.some((risk) => risk.status !== 'resolved') && (
+                <p className="import-notice">
+                  남아 있는 확인 항목 {liveRisks.filter((risk) => risk.status !== 'resolved').length}건은
+                  제출과 함께 포워더에게 전달되어, 포워더가 원본 서류를 대조해 확인·판단합니다.
+                  여기서 직접 고칠 수 있는 값이 아니라면 그대로 제출해도 됩니다.
+                </p>
+              )}
+              <div className="import-actions">
+                <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button>
+                <button className="btn btn-primary" disabled={busy} onClick={() => void complete()}>{busy ? '완료 처리 중…' : '완료'}</button>
+              </div>
+            </>
           )}
         </>
       )}
