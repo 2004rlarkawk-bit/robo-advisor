@@ -206,6 +206,9 @@ export function hydrateImportDraft(
   draft: TradeDraftRow | null,
 ): CachedState {
   if (!draft?.form_data) return current;
+  // 이어서 작업할 거래가 이미 로드된 상태에서 서버 초안이 다른(또는 무소속) 거래의
+  // 것이면 이전 세션의 잔재이므로 무시한다 — 보완 수정 재개가 1단계로 튕기던 원인.
+  if (current.tradeId && draft.trade_id !== current.tradeId) return current;
   const persistedDocuments = draft.form_data.attachments
     .map(tradeAttachmentToImportDocument)
     .filter((document): document is ImportDocumentMeta => document !== null);
