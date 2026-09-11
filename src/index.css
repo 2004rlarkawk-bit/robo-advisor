@@ -4153,6 +4153,13 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .fwd-queue-status { margin: 5px 0 0; font-size: 13px; color: #64748b; }
 .fwd-queue-status strong { color: #334155; }
 .fwd-queue-status span { color: #b91c1c; font-weight: 700; }
+.fwd-filter-bar { display: flex; align-items: center; gap: 5px; margin: 16px 0 10px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; overflow-x: auto; }
+.fwd-filter-bar button { flex: 0 0 auto; border: 0; border-radius: 7px; padding: 7px 9px; background: transparent; color: #64748b; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.fwd-filter-bar button:hover { color: #334155; background: #f1f5f9; }
+.fwd-filter-bar button.is-active { color: #0b57d0; background: #fff; box-shadow: 0 1px 2px rgb(15 23 42 / 10%); }
+.fwd-filter-bar button span { margin-left: 3px; color: inherit; opacity: .75; }
+.fwd-sort-note { margin-left: auto; padding: 0 6px; color: #94a3b8; font-size: 11px; white-space: nowrap; }
+.fwd-filter-empty { margin: 20px 0; color: #64748b; text-align: center; font-size: 13px; }
 .fwd-more-menu { position: relative; }
 .fwd-more-menu summary { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1px solid #d7dee9; border-radius: 8px; color: #475569; cursor: pointer; list-style: none; }
 .fwd-more-menu summary::-webkit-details-marker { display: none; }
@@ -4196,6 +4203,12 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .fwd-next-banner { display: flex; align-items: center; gap: 7px; margin: 12px 0 0; padding: 9px 12px; border-radius: 9px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 13px; }
 .fwd-next-banner strong { font-weight: 800; }
 
+.fwd-blocker-alert { display: flex; align-items: flex-start; gap: 9px; margin: 12px 0 10px; padding: 11px 12px; border: 1px solid #fecaca; border-radius: 9px; background: #fef2f2; color: #991b1b; }
+.fwd-blocker-alert svg { flex: 0 0 auto; margin-top: 1px; }
+.fwd-blocker-alert div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fwd-blocker-alert strong { font-size: 13px; }
+.fwd-blocker-alert span { overflow: hidden; color: #b91c1c; font-size: 12px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+
 .fwd-tabs { display: flex; gap: 2px; border-bottom: 1px solid #e2e8f0; }
 .fwd-tabs button { padding: 9px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #64748b; font-size: 13px; font-weight: 700; cursor: pointer; }
 .fwd-tabs button:hover:not(:disabled) { color: #334155; }
@@ -4228,6 +4241,9 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
   .fwd-queue-actions { justify-content: space-between; }
   .fwd-progress-step { padding-inline: 5px; font-size: 10.5px; }
   .fwd-tabs button { flex: 1; padding-inline: 6px; }
+  .fwd-sort-note { display: none; }
+  .fwd-filter-bar { margin-inline: -2px; }
+  .fwd-blocker-alert span { white-space: normal; }
 }
 
 /* ===== 포워더 보완 요청(반송) + 화주 진행 타임라인 ===== */
