@@ -2446,7 +2446,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             : <>
             {/* Page Title & Subtitle — 결과 화면(수출: 생성 후 / 수입: 2단계 이후)에서는 결과에 집중하도록 제목을 숨긴다 */}
             {tradeDirection === 'import' && workspaceRole === 'forwarder' && !forwarderDirectUpload && !isDocumentManagerReadOnlyView && <div className="fwd-page-heading">
-              <div><p className="fwd-eyebrow">OPERATIONS / IMPORT</p><h1>수입 업무 관리</h1><p className="fwd-page-description">의뢰 접수부터 서류 검토, 통관 협업까지.</p></div>
+              <div><p className="fwd-eyebrow">DOCUMENTS / IMPORT</p><h1>수입 서류 작업실</h1><p className="fwd-page-description">화주가 보낸 서류를 검토하고, 도착통지서 작성까지 이어갑니다.</p></div>
               <div className="fwd-context-controls">
                 <label>거래 유형<select value={tradeDirection} onChange={(e) => handleTradeDirectionChange(e.target.value as TradeDirection)}><option value="import">수입</option><option value="export">수출</option></select></label>
                 <label>사용자 역할<select value={workspaceRole} disabled={userProfile.service_role !== 'integrated'} onChange={(e) => handleWorkspaceRoleChange(e.target.value === 'forwarder' ? 'forwarder' : 'shipper')}><option value="forwarder">포워더</option>{userProfile.service_role === 'integrated' && <option value="shipper">화주</option>}</select></label>

@@ -17,9 +17,10 @@ interface Props {
   /** 카드 상단 안내 문구 */
   notice?: string;
   description?: string;
+  attachmentLabel?: string;
 }
 
-export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId, readOnly = false, headerAction, notice, description }: Props) {
+export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId, readOnly = false, headerAction, notice, description, attachmentLabel }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -106,7 +107,7 @@ export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId
       ) : (
         <label className="arrival-notice-picker">
           <Paperclip size={20} />
-          <span><strong>{busy ? '업로드 중' : '도착통지서 첨부'}</strong><small>PDF, DOCX 또는 이미지 파일</small></span>
+          <span><strong>{busy ? '업로드 중' : attachmentLabel ?? '도착통지서 첨부'}</strong><small>PDF, DOCX 또는 이미지 파일</small></span>
           {/* 포워더가 워크스페이스에서 발행한 A/N(DOCX)도 그대로 보관할 수 있게 허용 */}
           <input disabled={busy} type="file" accept=".pdf,.png,.jpg,.jpeg,.docx" onChange={(event) => void selectFile(event.target.files?.[0])} />
         </label>

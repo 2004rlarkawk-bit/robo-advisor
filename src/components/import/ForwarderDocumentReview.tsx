@@ -3,7 +3,7 @@ import type { ImportComparisonRow } from '../../types/importTrade';
 import { COMPARISON_LABELS, IMPORT_FIELD_LABELS, comparisonStatus, hasDocumentValue } from '../../utils/forwarderPresentation';
 
 export default function ForwarderDocumentReview({ rows }: { rows: ImportComparisonRow[] }) {
-  const [onlyDifferences, setOnlyDifferences] = useState(false);
+  const [onlyDifferences, setOnlyDifferences] = useState(() => rows.some((row) => comparisonStatus(row) === 'mismatch'));
   const differences = rows.filter((row) => comparisonStatus(row) === 'mismatch').length;
   const incomplete = rows.filter((row) => ['single', 'missing'].includes(comparisonStatus(row))).length;
   const visible = rows.filter((row) => !onlyDifferences || comparisonStatus(row) === 'mismatch')
