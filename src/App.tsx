@@ -25,7 +25,8 @@ import {
   OctagonAlert,
   Info,
   PenLine,
-  ChevronRight
+  ChevronRight,
+  Paperclip
 } from 'lucide-react';
 import {
   TradeProfile,
@@ -84,7 +85,10 @@ import {
   updateGeneratedTrade,
   getSettings
 } from './services/storageService';
-import { moveTradeAttachmentsToScope } from './services/tradeAttachmentStorageService';
+import {
+  loadTradeAttachmentFile,
+  moveTradeAttachmentsToScope,
+} from './services/tradeAttachmentStorageService';
 import {
   clearWorkspaceSession,
   loadWorkspaceSession,
@@ -93,6 +97,10 @@ import {
 } from './services/workspaceSessionService';
 import { decideGeneratedTradeWrite } from './services/tradePersistencePolicy';
 import { resolveWorkspaceRole, type WorkspaceRole } from './utils/workspaceRole';
+import {
+  matchUploadedExportDocuments,
+  type ExportDocMatchResult,
+} from './services/exportDocumentMatchService';
 import {
   EMPTY_SHIPPER_SUPPLEMENTAL_STATE,
   getGoodsDescriptionValidationMessage,
@@ -398,6 +406,12 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setForwarderDirectUpload(false);
   }, [tradeDirection, workspaceRole]);
   const [forwarderAttachments, setForwarderAttachments] = useState<TradeAttachment[]>([]);
+  // 화주가 이미 보유한 수출서류(상업송장·포장명세서 등)를 직접 올린 첨부.
+  // PortAI 생성본 대신 문서함에 노출하며, 파일 내용은 읽지 않는다.
+  const [shipperAttachments, setShipperAttachments] = useState<TradeAttachment[]>([]);
+  // 업로드한 보유 서류 ↔ 폼 입력값 대조 결과. 서류 생성은 기존대로 입력값 기준으로 진행한다.
+  const [exportDocMatches, setExportDocMatches] = useState<ExportDocMatchResult[]>([]);
+  const [isMatchingExportDocs, setIsMatchingExportDocs] = useState(false);
   const [isForwarderSaving, setIsForwarderSaving] = useState(false);
 
   const tradeDraftDefaultProfile: TradeProfile = {
@@ -433,8 +447,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     profile: workspaceDraftProfile,
     defaultProfile: tradeDraftDefaultProfile,
     setProfile: setWorkspaceDraftProfile,
-    attachments: workspaceRole === 'forwarder' ? forwarderAttachments : [],
-    setAttachments: workspaceRole === 'forwarder' ? setForwarderAttachments : undefined,
+    attachments: workspaceRole === 'forwarder' ? forwarderAttachments : shipperAttachments,
+    setAttachments: workspaceRole === 'forwarder' ? setForwarderAttachments : setShipperAttachments,
     currentStep: workspaceCurrentStep,
     tradeId: currentTradeId,
   });
@@ -561,6 +575,19 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     const { buildExportDeclarationDocx } = await import('./services/exportDeclarationDocxService');
     const blob = await buildExportDeclarationDocx(customsDeclarationData);
     customsDocxCacheRef.current = { sig, blob };
+    return blob;
+  };
+
+  // 운송의뢰서는 고정 템플릿이 없어 docx 라이브러리로 직접 조립한다. 미리보기는 기존 HTML 그대로 두고,
+  // 다운로드만 같은 transportRequestData로 만든 docx Blob을 반환(캐시)한다.
+  const transportRequestDocxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
+  const getTransportRequestBlob = async (): Promise<Blob | null> => {
+    if (!transportRequestData) return null;
+    const sig = JSON.stringify(transportRequestData);
+    if (transportRequestDocxCacheRef.current?.sig === sig) return transportRequestDocxCacheRef.current.blob;
+    const { buildTransportRequestDocx } = await import('./services/transportRequestDocxService');
+    const blob = await buildTransportRequestDocx(transportRequestData);
+    transportRequestDocxCacheRef.current = { sig, blob };
     return blob;
   };
 
@@ -700,6 +727,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setProfile({ ...tradeDraftDefaultProfile, tradeType: 'export' });
     setForwarderForm(createEmptyForwarderFormState());
     setForwarderAttachments([]);
+    setShipperAttachments([]);
     setCurrentTradeId(null);
     setCurrentTradeStatus(null);
     setWorkspaceCurrentStep(1);
@@ -1012,6 +1040,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   setHsCandidates([]);
   setHsDisambiguation(null);
   setForwarderAttachments([]);
+  setShipperAttachments([]);
   setWorkspaceCurrentStep(1);
   setCurrentTradeId(null);
   setCurrentTradeStatus(null);
@@ -1051,6 +1080,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
         profile: { ...generationProfile, hsCode: generationProfile.hsCode || result.hs?.topCode || '' },
         tradeDirection: 'export' as const,
         tradeRole: workspaceRole,
+        // 화주가 직접 올린 보유 서류도 거래에 함께 저장한다 — 문서함에서 생성본과 같이 관리된다.
+        attachments: shipperAttachments,
         documents: result.documents?.documents || [],
         issues: issuesList,
         generatedDocs: {
@@ -1154,6 +1185,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       setDocuments(result.documents?.documents || []);
       setIssues(result.issues?.issues || []);
       setFeedbackReport(result.feedback?.report || null);
+      void runExportDocumentMatch();
       setHsCandidates(result.hs?.candidates || []);
       setHsDisambiguation(result.hs?.disambiguation || null);
 
@@ -1249,6 +1281,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setWorkspaceCurrentStep(2);
     hasSubmittedTradeRef.current = t.status === 'submitted';
     setProfile(t.profile);
+    setShipperAttachments(t.attachments ?? []);
     setDocuments(t.documents);
     setIssues(t.issues);
     setHtmlTemplates((t.generatedDocs?.htmlTemplates as Record<string, string>) || {});
@@ -1333,6 +1366,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
         setForwarderAttachments(draft.form_data?.attachments ?? trade.attachments ?? []);
       } else if (direction === 'export') {
         setProfile(draft.profile);
+        setShipperAttachments(draft.form_data?.attachments ?? trade.attachments ?? []);
         setHasGenerated(restoredStep > 1);
       }
     } catch (error) {
@@ -1670,6 +1704,55 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     setTimeout(cleanup, 60000); // onafterprint 미발화 브라우저 대비
   };
 
+  /**
+   * 업로드한 보유 서류를 읽어 폼 입력값과 대조한다.
+   * 서류 생성 결과에는 영향을 주지 않으며, 실패해도 생성 흐름을 막지 않는다.
+   */
+  const runExportDocumentMatch = async () => {
+    if (!user || shipperAttachments.length === 0) {
+      setExportDocMatches([]);
+      return;
+    }
+    setIsMatchingExportDocs(true);
+    try {
+      const matches = await matchUploadedExportDocuments({
+        attachments: shipperAttachments,
+        profile,
+        items: shipperItems,
+        userId: user.id,
+      });
+      setExportDocMatches(matches);
+    } catch (error) {
+      console.error('[Export Match] 대조 실행 실패:', error);
+      setExportDocMatches([]);
+    } finally {
+      setIsMatchingExportDocs(false);
+    }
+  };
+
+  /** 대조 결과에서 업로드 서류 쪽 값을 폼 입력값으로 가져온다. */
+  const applyUploadedValue = (field: string, value: string) => {
+    setProfile((current) => ({ ...current, [field]: value } as TradeProfile));
+    setSaveNotice(`입력값을 업로드한 서류의 값으로 바꿨습니다. 서류를 다시 생성해 주세요.`);
+  };
+
+  /** 화주가 직접 올린 서류 원본 내려받기 — Storage에 저장된 파일을 그대로 내려준다. */
+  const handleDownloadUploadedDoc = async (attachment: TradeAttachment) => {
+    if (!user) return;
+    try {
+      const file = await loadTradeAttachmentFile(attachment, user.id);
+      const url = URL.createObjectURL(file);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = attachment.fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('[Export Attachment] 원본 다운로드 실패:', error);
+      alert('업로드한 서류를 내려받지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    }
+  };
+
   const handleDownloadDoc = async (docId: string) => {
     // 상업송장: 고정 docx 템플릿에서 생성한 Blob을 docx로 저장 + 같은 Blob을 인쇄해 PDF로도 저장.
     if (docId === 'invoice') {
@@ -1739,6 +1822,30 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       const a = document.createElement('a');
       a.href = url;
       a.download = getDocFileName('customs_dec').replace(/\.pdf$/i, '.docx');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+
+    // 수출 운송의뢰서: docx 라이브러리로 조립한 Blob을 다운로드(미리보기는 기존 HTML 그대로 유지).
+    if (docId === 'transport_request') {
+      let blob: Blob | null = null;
+      try {
+        blob = await getTransportRequestBlob();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : '수출 운송의뢰서 생성에 실패했습니다.');
+        return;
+      }
+      if (!blob) {
+        alert('운송의뢰서 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = getDocFileName('transport_request').replace(/\.pdf$/i, '.docx');
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1921,6 +2028,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   const ownDocs = documents.filter(d => d.status !== 'external_pending' && d.status !== 'not_needed');
   const ownReadyCount = ownDocs.filter(d => hasDoc(d.id)).length;
   const externalPendingCount = documents.filter(d => d.status === 'external_pending').length;
+  const totalMatchMismatches = exportDocMatches.reduce((sum, match) => sum + match.mismatchCount, 0);
   const isGenerationBlocked = blockingIssuesCount > 0;
   const isSubmitReady = !isGenerationBlocked && ownDocs.length > 0 && ownReadyCount === ownDocs.length;
 
@@ -2310,6 +2418,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   isProcessing={isProcessing}
                   profileSignerDefault={userProfile.contact_name?.trim() || ''}
                   tradeId={currentTradeId}
+                  attachments={shipperAttachments}
+                  onAttachmentsChange={setShipperAttachments}
                   onProfilePatch={(patch) => setProfile((current) => ({ ...current, ...patch }))}
                   onItemsChange={handleShipperItemsChange}
                   onSupplementalChange={(state) => setProfile((current) => ({ ...current, shipperSupplemental: state }))}
@@ -3319,6 +3429,75 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   </div>
                 )}
 
+                {/* 2-1. 내 서류 대조 — 업로드한 원본에서 추출한 값과 입력값이 어긋나는 항목을 알려준다.
+                        서류 생성은 입력값 기준으로 이미 끝났고, 여기서는 확인·정정만 유도한다. */}
+                {(isMatchingExportDocs || exportDocMatches.length > 0) && (
+                  <div className="rv-panel rv-match-panel">
+                    <div className="rv-panel-head">
+                      내 서류 대조
+                      {!isMatchingExportDocs && (
+                        <span className={`rv-match-total${totalMatchMismatches > 0 ? ' bad' : ' ok'}`}>
+                          {totalMatchMismatches > 0 ? `불일치 ${totalMatchMismatches}건` : '모두 일치'}
+                        </span>
+                      )}
+                    </div>
+                    {isMatchingExportDocs ? (
+                      <p className="rv-match-loading">업로드한 서류를 읽어 입력값과 대조하는 중입니다…</p>
+                    ) : exportDocMatches.map((match) => (
+                      <div className="rv-match-doc" key={match.attachmentId}>
+                        <div className="rv-match-doc-head">
+                          <span className="rv-match-doc-name">
+                            <Paperclip size={13} /> {match.documentLabel} · {match.fileName}
+                          </span>
+                          <button
+                            className="rv-match-open"
+                            onClick={() => void handleDownloadUploadedDoc(
+                              shipperAttachments.find((a) => a.id === match.attachmentId)!,
+                            )}
+                          >
+                            원본 열기
+                          </button>
+                        </div>
+                        {match.error ? (
+                          <p className="rv-match-error">{match.error}</p>
+                        ) : (
+                          <table className="rv-match-table">
+                            <thead>
+                              <tr><th>항목</th><th>내가 올린 서류</th><th>PortAI 입력값</th><th>결과</th></tr>
+                            </thead>
+                            <tbody>
+                              {match.rows.map((row) => (
+                                <tr key={`${match.attachmentId}-${row.field}-${row.label}`} className={`rv-match-${row.status}`}>
+                                  <th>{row.label}</th>
+                                  <td>{row.uploadedValue || '—'}</td>
+                                  <td>{row.formValue || '—'}</td>
+                                  <td>
+                                    {row.status === 'match' && <span className="rv-match-badge ok">일치</span>}
+                                    {row.status === 'unknown' && <span className="rv-match-badge na">확인 불가</span>}
+                                    {row.status === 'mismatch' && (
+                                      <div className="rv-match-fix">
+                                        <span className="rv-match-badge bad">불일치</span>
+                                        {row.uploadedValue && (
+                                          <button onClick={() => applyUploadedValue(row.field, row.uploadedValue)}>
+                                            이 값으로 수정
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </div>
+                    ))}
+                    <p className="rv-match-note">
+                      추출값 기반 대조라 100% 정확하지 않을 수 있습니다. 불일치 항목은 원본과 함께 확인해 주세요.
+                    </p>
+                  </div>
+                )}
+
                 {/* 3. 서류 현황 — 한 줄 = 한 서류 (상태 + 완료 시 보기·다운로드) */}
                 <div className="rv-panel">
                   <div className="rv-panel-head">서류 현황 · {documents.length}건</div>
@@ -3359,7 +3538,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                               </button>
                               <button
                                 className="rv-ib"
-                                title={doc.id === 'invoice' ? 'DOCX + PDF 저장' : (doc.id === 'packing_list' || doc.id === 'customs_dec') ? 'DOCX 다운로드' : 'PDF 저장'}
+                                title={doc.id === 'invoice' ? 'DOCX + PDF 저장' : (doc.id === 'packing_list' || doc.id === 'customs_dec' || doc.id === 'transport_request') ? 'DOCX 다운로드' : 'PDF 저장'}
                                 onClick={() => handleDownloadDoc(doc.id)}
                               >
                                 <Download size={17} />
@@ -4070,7 +4249,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : (previewDocId === 'packing_list' || previewDocId === 'customs_dec') ? 'DOCX 다운로드' : previewDocId === 'bl' ? 'PDF 다운로드' : 'PDF 저장 (텍스트)'}
+                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : (previewDocId === 'packing_list' || previewDocId === 'customs_dec' || previewDocId === 'transport_request') ? 'DOCX 다운로드' : previewDocId === 'bl' ? 'PDF 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
             </div>
           </div>
