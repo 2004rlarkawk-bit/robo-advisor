@@ -8,7 +8,9 @@ import {
   normalizeExportPortValue,
 } from '../constants/ports';
 import type { Incoterms, NumericInput, ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
+import type { TradeAttachment } from '../types/tradeFormData';
 import CountrySelect from './CountrySelect';
+import TradeAttachmentUploader from './TradeAttachmentUploader';
 import { useShipperHSCodeSuggestions } from '../hooks/useShipperHSCodeSuggestions';
 import {
   fetchFrequentTradePartners,
@@ -38,6 +40,9 @@ interface Props {
   profileSignerDefault?: string;
   tradeId?: string | null;
   userId?: string;
+  /** 화주가 이미 보유한 수출서류 첨부 — 전달되면 8번 섹션(보유 서류 첨부)이 노출된다. */
+  attachments?: TradeAttachment[];
+  onAttachmentsChange?: (attachments: TradeAttachment[]) => void;
   onProfilePatch: (patch: Partial<TradeProfile>) => void;
   onItemsChange: (items: ShipperItem[]) => void;
   onSupplementalChange: (state: ShipperSupplementalState) => void;
@@ -120,6 +125,8 @@ export default function ShipperWorkspaceForm({
   profileSignerDefault = '',
   tradeId,
   userId,
+  attachments = [],
+  onAttachmentsChange,
   onProfilePatch,
   onItemsChange,
   onSupplementalChange,
@@ -838,6 +845,24 @@ export default function ShipperWorkspaceForm({
           <div className="form-group"><span className="form-label">수출요건 확인서류</span><input className="form-input" value="추후 첨부 지원 예정" disabled /></div>
         </div>
       </details>
+
+      {onAttachmentsChange && userId && (
+        <details className="form-section" data-form-section={8}>
+          <summary className="form-section-summary"><span>8. 이미 가진 서류 첨부 (선택)</span></summary>
+          <p className="form-section-note">
+            상업송장·포장명세서처럼 이미 발행받은 서류가 있으면 여기에 올려 주세요.
+            올린 서류는 PortAI가 생성한 문서 대신 문서함에 표시되며, 나머지 서류만 자동 생성됩니다.
+            파일 내용은 자동으로 읽지 않으므로, 생성 후 문서함에서 입력값과 직접 대조해 주세요.
+          </p>
+          <TradeAttachmentUploader
+            userId={userId}
+            scopeId={tradeId || 'draft'}
+            attachments={attachments}
+            onChange={onAttachmentsChange}
+            pdfOnly
+          />
+        </details>
+      )}
 
       <div className="form-actions">
         <button type="button" className="btn btn-secondary" onClick={handleResetClick}><RotateCcw size={16} /> 초기화</button>
