@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { FileText, Paperclip, Trash2 } from 'lucide-react';
 import {
   removeTradeAttachment,
@@ -12,9 +12,13 @@ interface Props {
   userId: string;
   tradeId?: string;
   readOnly?: boolean;
+  /** 카드 우측 상단 액션(예: 포워더 워크스페이스의 A/N 생성 버튼) */
+  headerAction?: ReactNode;
+  /** 카드 상단 안내 문구 */
+  notice?: string;
 }
 
-export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId, readOnly = false }: Props) {
+export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId, readOnly = false, headerAction, notice }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -82,9 +86,14 @@ export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId
   return (
     <section className="form-card import-card arrival-notice-card">
       <div className="import-card-heading">
-        <div><span className="ai-badge">별도 첨부</span><h2>도착통지서 (Arrival Notice)</h2></div>
-        <p>도착통지서가 없으면 거래는 진행 중으로 저장됩니다.</p>
+        <div>
+          <span className="ai-badge">별도 첨부</span>
+          <h2>도착통지서 (Arrival Notice)</h2>
+          <p>도착통지서가 없으면 거래는 진행 중으로 저장됩니다.</p>
+        </div>
+        {headerAction}
       </div>
+      {notice && <p className="import-notice">{notice}</p>}
       {displayValue ? (
         <div className="arrival-notice-file">
           <FileText size={20} />
