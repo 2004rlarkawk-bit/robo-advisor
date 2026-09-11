@@ -1,18 +1,67 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown, Copy } from 'lucide-react';
+import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown, Copy, CornerUpLeft } from 'lucide-react';
 import type { SavedTrade } from '../types';
+import {
+  FORWARDER_STAGE_LABEL,
+  FORWARDER_STAGE_ORDER,
+  type ForwarderCaseState,
+} from '../types/forwarderCase';
 import { deleteSavedTrade, fetchSubmittedTrades } from '../services/storageService';
 import { filterDocumentManagerTrades } from '../services/tradeListPolicy';
 
 interface Props {
   onLoad: (trade: SavedTrade) => void;
   onCopy: (trade: SavedTrade) => void;
+  /** 포워더 보완 요청을 받은 수입 거래를 다시 열어 수정하러 이동 */
+  onRevise?: (trade: SavedTrade) => void;
   onListReady?: () => void;
+}
+
+/** 화주가 제출한 수입 거래의 포워더 진행 상태 — 문서관리 행에 타임라인으로 보여준다. */
+function ForwarderProgress({ trade, onRevise }: { trade: SavedTrade; onRevise?: (trade: SavedTrade) => void }) {
+  if ((trade.tradeDirection ?? trade.profile.tradeType) !== 'import') return null;
+  if (trade.tradeRole === 'forwarder') return null;
+
+  const state = (trade.forwarderCase as ForwarderCaseState | null) ?? null;
+  const stage = state?.stage ?? 'received';
+  const stageIndex = FORWARDER_STAGE_ORDER.indexOf(stage);
+  const returnRequest = state?.returnRequest;
+  const returnPending = Boolean(returnRequest && !returnRequest.resolvedAt);
+
+  return (
+    <div className="dm-fwd">
+      <div className="dm-fwd-line">
+        <span className="dm-fwd-label">포워더 진행</span>
+        {FORWARDER_STAGE_ORDER.map((item, index) => (
+          <span
+            key={item}
+            className={`dm-fwd-step${index === stageIndex ? ' is-current' : ''}${index < stageIndex ? ' is-done' : ''}`}
+          >
+            {FORWARDER_STAGE_LABEL[item]}
+          </span>
+        ))}
+      </div>
+      {returnPending && returnRequest && (
+        <div className="dm-fwd-return">
+          <div className="dm-fwd-return-text">
+            <strong><CornerUpLeft size={13} /> 포워더가 보완을 요청했습니다</strong>
+            <p>{returnRequest.reason}</p>
+          </div>
+          {onRevise && (
+            <button type="button" className="btn btn-primary dm-fwd-revise" onClick={() => onRevise(trade)}>
+              수정하러 가기
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function DocumentManagerPanel({
   onLoad,
   onCopy,
+  onRevise,
   onListReady,
 }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
@@ -158,6 +207,7 @@ export default function DocumentManagerPanel({
                     </div>
                     {route && <span className="draft-tray-route">{route}</span>}
                     <span className="draft-tray-time">{formatDate(trade)}</span>
+                    <ForwarderProgress trade={trade} onRevise={onRevise} />
                   </div>
                   <div className="draft-tray-actions">
                     <button type="button" className="draft-tray-resume" onClick={() => onLoad(trade)}>

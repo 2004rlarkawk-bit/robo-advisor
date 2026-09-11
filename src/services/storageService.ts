@@ -178,6 +178,7 @@ async function carryForwarderCase(
   tradeId: string | undefined,
   userId: string,
   payload: ReturnType<typeof importTradePayload>,
+  options: { markReturnResolved?: boolean } = {},
 ): Promise<void> {
   if (!tradeId) return;
   const { data } = await supabase
@@ -187,7 +188,12 @@ async function carryForwarderCase(
     .eq('user_id', userId)
     .maybeSingle();
   const existing = (data?.workflow_data as TradeWorkflowData | null)?.forwarderCase;
-  if (existing) payload.workflow_data = { ...payload.workflow_data, forwarderCase: existing };
+  if (!existing) return;
+  // 화주가 보완 요청을 받고 재제출하는 시점이면 요청을 '회신됨'으로 기록한다.
+  const carried = options.markReturnResolved && existing.returnRequest && !existing.returnRequest.resolvedAt
+    ? { ...existing, returnRequest: { ...existing.returnRequest, resolvedAt: new Date().toISOString() } }
+    : existing;
+  payload.workflow_data = { ...payload.workflow_data, forwarderCase: carried };
 }
 
 /** 수입 확인 단계 성공 시 DB에 generated 상태를 기록합니다. */
@@ -213,7 +219,9 @@ export async function createCompletedImportTrade(snapshot: ImportTradeSnapshot):
   const userId = await getRequiredUserId();
   const completedStatus = getCompletedImportStatus(snapshot.role, snapshot.arrivalNotice);
   const payload = importTradePayload(userId, snapshot, completedStatus);
-  await carryForwarderCase(snapshot.tradeId, userId, payload);
+  await carryForwarderCase(snapshot.tradeId, userId, payload, {
+    markReturnResolved: snapshot.role === 'shipper' && completedStatus === 'submitted',
+  });
 
   if (snapshot.tradeId) {
     const { data, error } = await supabase
@@ -291,6 +299,26 @@ export async function updateGeneratedTrade(tradeId: string, data: GeneratedTrade
   }
   if (!row) throw new Error('이미 최종 제출되었거나 수정할 수 없는 거래입니다.');
   return mapTradeRow(row);
+}
+
+/**
+ * 포워더 보완 요청을 받은 화주가 제출된 수입 거래를 다시 열어 수정할 수 있도록
+ * 같은 row의 status만 generated로 되돌린다(거래관리·작업실에서 이어서 작업 가능).
+ */
+export async function reopenSubmittedImportTradeForRevision(tradeId: string): Promise<SavedTrade> {
+  const userId = await getRequiredUserId();
+  const { data, error } = await supabase
+    .from('trades')
+    .update({ status: 'generated' })
+    .eq('id', tradeId)
+    .eq('user_id', userId)
+    .eq('status', 'submitted')
+    .eq('direction', 'import')
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('다시 열 수입 거래를 찾지 못했습니다.');
+  return mapTradeRow(data as TradeRow);
 }
 
 // [EDIT: Trade Persistence] 캐시에 남은 currentTradeId가 실제 DB에 존재하는지 현재 사용자 범위에서 확인합니다.

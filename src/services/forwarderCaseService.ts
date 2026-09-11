@@ -63,7 +63,18 @@ function deriveStage(trade: SavedTrade, state: ForwarderCaseState | null): Forwa
   return 'received';
 }
 
-function deriveNextAction(stage: ForwarderCaseStage, blockerCount: number, hasArrivalNotice: boolean): string {
+function deriveNextAction(
+  stage: ForwarderCaseStage,
+  blockerCount: number,
+  hasArrivalNotice: boolean,
+  state: ForwarderCaseState | null,
+  shipperEditing: boolean,
+): string {
+  const returnRequest = state?.returnRequest;
+  if (returnRequest) {
+    if (returnRequest.resolvedAt) return '화주 재제출 확인 — 재검토 시작';
+    return shipperEditing ? '화주 수정 중 — 재제출 대기' : '화주 보완 회신 대기';
+  }
   switch (stage) {
     case 'received':
       return '서류 대사 결과 확인';
@@ -82,11 +93,15 @@ export function deriveForwarderCase(trade: SavedTrade): ForwarderImportCase | nu
   if ((trade.tradeDirection ?? trade.profile.tradeType) !== 'import' || !snapshot) return null;
 
   const role = trade.tradeRole ?? snapshot.role;
-  // 화주 거래는 최종 제출된 것만 '의뢰 수신'으로 들어온다(작성 중인 거래는 화주 소관).
-  if (role === 'shipper' && trade.status !== 'submitted') return null;
   if (role !== 'shipper' && role !== 'forwarder') return null;
 
   const state = (trade.forwarderCase as ForwarderCaseState | null) ?? null;
+  const returnRequest = state?.returnRequest ?? null;
+  // 화주 거래는 최종 제출된 것만 '의뢰 수신'으로 들어온다(작성 중인 거래는 화주 소관).
+  // 단 보완 요청으로 화주가 다시 열어 수정 중인 건은 '화주 수정 중'으로 큐에 남긴다.
+  const shipperEditing = role === 'shipper' && trade.status !== 'submitted';
+  if (shipperEditing && !(returnRequest && !returnRequest.resolvedAt)) return null;
+
   const issues = deriveIssues(snapshot, state);
   const blockerCount = issues.filter((issue) => issue.severity === 'blocker' && !issue.resolved).length;
   const checkCount = issues.filter((issue) => issue.severity === 'check' && !issue.resolved).length;
@@ -106,10 +121,12 @@ export function deriveForwarderCase(trade: SavedTrade): ForwarderImportCase | nu
     issues,
     blockerCount,
     checkCount,
-    nextAction: deriveNextAction(stage, blockerCount, Boolean(arrivalNotice?.storagePath)),
+    nextAction: deriveNextAction(stage, blockerCount, Boolean(arrivalNotice?.storagePath), state, shipperEditing),
     requestedAt: trade.submittedAt ?? trade.createdAt,
     updatedAt: state?.updatedAt ?? trade.updatedAt ?? trade.createdAt,
     arrivalNotice,
+    returnRequest,
+    shipperEditing,
     snapshot,
     trade,
   };
@@ -160,6 +177,7 @@ export async function saveForwarderCaseState(
     stage: patch.stage ?? previous?.stage ?? 'received',
     issueResolutions: { ...(previous?.issueResolutions ?? {}), ...(patch.issueResolutions ?? {}) },
     arrivalNotice: patch.arrivalNotice !== undefined ? patch.arrivalNotice : previous?.arrivalNotice ?? null,
+    returnRequest: patch.returnRequest !== undefined ? patch.returnRequest : previous?.returnRequest ?? null,
     updatedAt: new Date().toISOString(),
   };
 

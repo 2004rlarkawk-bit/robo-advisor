@@ -37,12 +37,22 @@ export interface ForwarderCaseIssue {
   resolved: boolean;
 }
 
+/** 포워더 → 화주 보완 요청(반송). 화주가 수정·재제출하면 resolvedAt이 기록된다. */
+export interface ForwarderReturnRequest {
+  reason: string;
+  /** 요청 근거가 된 이슈 제목들 (화주에게 그대로 보여준다) */
+  issueTitles: string[];
+  requestedAt: string;
+  resolvedAt?: string;
+}
+
 /** trades.workflow_data.forwarderCase 로 저장되는 포워더 운영 상태 */
 export interface ForwarderCaseState {
   stage: ForwarderCaseStage;
   /** 이슈 id → 확인 완료 여부 (포워더가 건별로 체크) */
   issueResolutions?: Record<string, boolean>;
   arrivalNotice?: ArrivalNoticeMeta | null;
+  returnRequest?: ForwarderReturnRequest | null;
   updatedAt: string;
 }
 
@@ -65,6 +75,9 @@ export interface ForwarderImportCase {
   requestedAt: string;
   updatedAt: string;
   arrivalNotice: ArrivalNoticeMeta | null;
+  returnRequest: ForwarderReturnRequest | null;
+  /** 보완 요청 후 화주가 거래를 다시 열어 수정하고 있는 상태 */
+  shipperEditing: boolean;
   snapshot: ImportTradeSnapshot;
   trade: SavedTrade;
 }
