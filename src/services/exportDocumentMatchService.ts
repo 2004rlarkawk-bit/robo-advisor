@@ -188,6 +188,34 @@ function toDocumentMeta(attachment: TradeAttachment): ImportDocumentMeta {
   };
 }
 
+
+/**
+ * 동시 분석 요청 수 제한.
+ * 여러 서류를 한꺼번에 쏘면 OpenAI가 과부하(503)·레이트리밋(429)으로 거절할 확률이 올라간다.
+ */
+const MAX_CONCURRENT_MATCHES = 2;
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, values.length) },
+    async () => {
+      while (nextIndex < values.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await mapper(values[index]);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+}
+
 export interface MatchDependencies {
   analyze: typeof analyzeImportDocuments;
   loadFile: typeof loadTradeAttachmentFile;
@@ -217,7 +245,7 @@ export async function matchUploadedExportDocuments(input: {
   const targets = attachments.filter((attachment) => COMPARABLE_TYPES.includes(attachment.documentType));
   if (!targets.length) return [];
 
-  const results = await Promise.all(targets.map(async (attachment): Promise<ExportDocMatchResult> => {
+  const results = await mapWithConcurrency(targets, MAX_CONCURRENT_MATCHES, async (attachment): Promise<ExportDocMatchResult> => {
     const base = {
       attachmentId: attachment.id,
       fileName: attachment.fileName,
@@ -245,7 +273,7 @@ export async function matchUploadedExportDocuments(input: {
         error: `업로드한 서류를 읽지 못해 대조하지 못했습니다. (${detail})`,
       };
     }
-  }));
+  });
 
   return results;
 }
