@@ -230,12 +230,19 @@ export async function matchUploadedExportDocuments(input: {
       const rows = buildRows(attachment.documentType, response.analysis.extracted, profile, items);
       return { ...base, rows, mismatchCount: rows.filter((row) => row.status === 'mismatch').length };
     } catch (error) {
-      console.error('[Export Match] 업로드 서류 대조 실패:', { fileName: attachment.fileName, error });
+      console.error('[Export Match] 업로드 서류 대조 실패:', {
+        fileName: attachment.fileName,
+        storageBucket: attachment.storageBucket,
+        code: (error as { code?: string })?.code,
+        status: (error as { status?: string })?.status,
+        error,
+      });
+      const detail = error instanceof Error ? error.message : String(error);
       return {
         ...base,
         rows: [],
         mismatchCount: 0,
-        error: '업로드한 서류를 읽지 못해 대조하지 못했습니다.',
+        error: `업로드한 서류를 읽지 못해 대조하지 못했습니다. (${detail})`,
       };
     }
   }));
