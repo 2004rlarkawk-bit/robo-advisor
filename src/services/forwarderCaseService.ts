@@ -142,6 +142,26 @@ export function sortForwarderCases(cases: ForwarderImportCase[]): ForwarderImpor
   });
 }
 
+/** 화주 관점: 포워더 보완 요청이 걸려 있어 조치가 필요한 거래인지 */
+export function hasActiveShipperReturnRequest(trade: SavedTrade): boolean {
+  if ((trade.tradeDirection ?? trade.profile.tradeType) !== 'import') return false;
+  if (trade.tradeRole === 'forwarder') return false;
+  const state = (trade.forwarderCase as ForwarderCaseState | null) ?? null;
+  return Boolean(state?.returnRequest && !state.returnRequest.resolvedAt);
+}
+
+/** 화주에게 도착한 보완 요청 수 — 사이드바 알림 배지·상단 알림 바에 쓴다. */
+export async function countShipperReturnRequests(): Promise<number> {
+  if (!isSupabaseConfigured) return 0;
+  try {
+    const trades = await fetchSavedTrades('submitted');
+    return trades.filter(hasActiveShipperReturnRequest).length;
+  } catch (err) {
+    console.warn('보완 요청 수 조회 실패:', err);
+    return 0;
+  }
+}
+
 /** 포워더 업무 큐 목록 조회 */
 export async function listForwarderCases(): Promise<ForwarderImportCase[]> {
   if (!isSupabaseConfigured) return [];

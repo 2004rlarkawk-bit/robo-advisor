@@ -33,9 +33,11 @@ interface AppSidebarProps {
   activeMenu: AppMenu;
   collapsed: boolean;
   onNavigate: (menu: AppMenu) => void;
+  /** 메뉴별 알림 수 — 0이면 표시하지 않는다 (예: 문서 관리의 포워더 보완 요청) */
+  badges?: Partial<Record<AppMenu, number>>;
 }
 
-export default function AppSidebar({ activeMenu, collapsed, onNavigate }: AppSidebarProps) {
+export default function AppSidebar({ activeMenu, collapsed, onNavigate, badges }: AppSidebarProps) {
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       {/* 로고 클릭 = 앱 새로고침. 시연 중 상태가 꼬였을 때 빠르게 초기화하는 용도. */}
@@ -68,6 +70,7 @@ export default function AppSidebar({ activeMenu, collapsed, onNavigate }: AppSid
             >
               <Icon size={18} />
               {label}
+              {(badges?.[menu] ?? 0) > 0 && <span className="menu-badge">{badges?.[menu]}</span>}
             </div>
           </li>
         ))}

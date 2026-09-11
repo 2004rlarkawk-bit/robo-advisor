@@ -26,7 +26,8 @@ import {
   Info,
   PenLine,
   ChevronRight,
-  Paperclip
+  Paperclip,
+  Mail
 } from 'lucide-react';
 import {
   TradeProfile,
@@ -98,6 +99,7 @@ import {
 } from './services/workspaceSessionService';
 import { decideGeneratedTradeWrite } from './services/tradePersistencePolicy';
 import { resolveWorkspaceRole, type WorkspaceRole } from './utils/workspaceRole';
+import { countShipperReturnRequests } from './services/forwarderCaseService';
 import {
   applyMatchPatchToProfile,
   documentIdForAttachmentType,
@@ -408,6 +410,22 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   useEffect(() => {
     setForwarderDirectUpload(false);
   }, [tradeDirection, workspaceRole]);
+
+  // 화주에게 도착한 포워더 보완 요청 수 — 사이드바 배지·상단 알림 바에 표시한다.
+  const [returnRequestCount, setReturnRequestCount] = useState(0);
+  useEffect(() => {
+    if (!user) {
+      setReturnRequestCount(0);
+      return;
+    }
+    let cancelled = false;
+    void countShipperReturnRequests().then((count) => {
+      if (!cancelled) setReturnRequestCount(count);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, activeMenu]);
   const [forwarderAttachments, setForwarderAttachments] = useState<TradeAttachment[]>([]);
   // 화주가 이미 보유한 수출서류(상업송장·포장명세서 등)를 직접 올린 첨부.
   // PortAI 생성본 대신 문서함에 노출하며, 파일 내용은 읽지 않는다.
@@ -2344,6 +2362,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         activeMenu={activeMenu}
         collapsed={sidebarCollapsed}
         onNavigate={handleAppNavigate}
+        badges={{ docs: returnRequestCount }}
       />
 
       {/* 2. Main Portal Contents */}
@@ -2358,6 +2377,14 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         />
 
         <main className="content-body">
+          {/* 포워더 보완 요청 도착 알림 — 문서 관리 화면 밖 어디서든 보이는 안내 바 */}
+          {returnRequestCount > 0 && activeMenu !== 'docs' && (
+            <button type="button" className="return-alert-bar" onClick={() => setActiveMenu('docs')}>
+              <Mail size={15} />
+              <span>포워더 보완 요청 <strong>{returnRequestCount}건</strong>이 도착했습니다.</span>
+              <span className="return-alert-cta">확인하러 가기 →</span>
+            </button>
+          )}
           {/* 서비스 소개는 히어로가 화면을 꽉 채우는 디자인이라 폭 제한(1000px) 예외 */}
           <div className={`workspace-area${activeMenu === 'about' ? ' workspace-area--full' : ''}`}>
             <Suspense fallback={<div className="workspace-loading">화면을 불러오는 중입니다.</div>}>
