@@ -450,26 +450,6 @@ export async function deleteSavedTrade(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// [EDIT: Supabase Auth] 로그인한 사용자에게 보이는 모든 trade를 삭제합니다.
-export async function clearSavedTrades(): Promise<void> {
-  // [EDIT: Document Management] 문서관리 화면에 보이는 최종 전송 거래만 전체 삭제 대상으로 삼습니다.
-  const trades = await fetchSubmittedTrades();
-  if (trades.length === 0) return;
-
-  for (const trade of trades) {
-    await deleteSavedTrade(trade.id);
-  }
-}
-
-export function deleteTrade(id: string): void {
-  const trades = getSavedTrades().filter(t => t.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
-}
-
-export function clearAllTrades(): void {
-  localStorage.removeItem(STORAGE_KEY);
-}
-
 // ===== 설정 저장 =====
 
 export interface AppSettings {
@@ -511,55 +491,4 @@ export function saveSettings(settings: Partial<AppSettings>): void {
 
   // 같은 탭의 다른 컴포넌트가 설정 변경을 즉시 반영할 수 있도록 알림
   window.dispatchEvent(new CustomEvent('portai-settings-changed'));
-}
-
-// ===== 통계 조회 (데이터 분석 탭용) =====
-
-export interface TradeAnalytics {
-  totalTrades: number;
-  exportCount: number;
-  importCount: number;
-  issuesByType: Record<string, number>;
-  tradesByMonth: { month: string; count: number }[];
-  completionRate: number;
-}
-
-export function getAnalytics(): TradeAnalytics {
-  const trades = getSavedTrades();
-  
-  const issuesByType: Record<string, number> = {};
-  let totalCompleted = 0;
-  let totalDocs = 0;
-  const monthMap: Record<string, number> = {};
-
-  for (const trade of trades) {
-    // 이슈 유형 카운트
-    for (const issue of trade.issues) {
-      const key = issue.field;
-      issuesByType[key] = (issuesByType[key] || 0) + 1;
-    }
-    
-    // 문서 완료율
-    for (const doc of trade.documents) {
-      totalDocs++;
-      if (doc.status === 'completed') totalCompleted++;
-    }
-
-    // 월별 거래 수
-    const month = trade.createdAt.substring(0, 7); // "2026-07"
-    monthMap[month] = (monthMap[month] || 0) + 1;
-  }
-
-  const tradesByMonth = Object.entries(monthMap)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, count]) => ({ month, count }));
-
-  return {
-    totalTrades: trades.length,
-    exportCount: trades.filter(t => t.profile.tradeType === 'export').length,
-    importCount: trades.filter(t => t.profile.tradeType === 'import').length,
-    issuesByType,
-    tradesByMonth,
-    completionRate: totalDocs > 0 ? Math.round((totalCompleted / totalDocs) * 100) : 0,
-  };
 }

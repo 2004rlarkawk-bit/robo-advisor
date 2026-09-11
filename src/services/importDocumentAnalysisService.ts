@@ -65,15 +65,6 @@ const text = (value: unknown): string =>
 const textArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(text).filter(Boolean) : text(value).split(/[,;\n]/).map((v) => v.trim()).filter(Boolean);
 
-export const EMPTY_IMPORT_PARTY: ImportParty = {
-  name: '',
-  address: '',
-  country: '',
-  contactName: '',
-  phone: '',
-  email: '',
-};
-
 function normalizeParty(value: unknown, legacyName = ''): ImportParty {
   const party = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   return {

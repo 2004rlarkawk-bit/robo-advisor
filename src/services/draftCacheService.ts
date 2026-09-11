@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { DocumentStatus, TradeProfile, TradeRole, TradeStatus, TradeType, ValidationIssue } from '../types';
+import type { TradeProfile, TradeRole, TradeType } from '../types';
 import type { TradeAttachment, TradeFormDataV3 } from '../types/tradeFormData';
 import { sanitizeTradeProfile } from '../utils/tradeProfile';
 import { tradeFormDataToProfile, tradeProfileToFormData } from './tradeDataMapper';
@@ -38,30 +38,6 @@ export interface DraftSnapshot {
   tradeId: string | null;
   updatedAt: string;
   source: 'local' | 'database';
-}
-
-export interface HsCandidateCache {
-  code: string;
-  description: string;
-  confidence: string;
-  reasoning: string;
-}
-
-// 이전 구현의 화면 전체 캐시 타입과 함수는 기존 호출부 호환을 위해 유지합니다.
-export interface CachedTradeDraft {
-  version: number;
-  savedAt: string;
-  profile: TradeProfile;
-  currentTradeId: string | null;
-  hasGenerated: boolean;
-  documents: DocumentStatus[];
-  issues: ValidationIssue[];
-  htmlTemplates: Record<string, string>;
-  aiFeedback: string;
-  hsCandidates: HsCandidateCache[];
-  activeMenu?: string;
-  dashboardMode?: string;
-  tradeStatus: TradeStatus;
 }
 
 export function getTradeDraftCacheKey(userId: string, direction: TradeType = 'export', role: TradeRole = 'shipper'): string {
@@ -331,30 +307,4 @@ export async function deleteTradeDraft(userId: string, direction: TradeType = 'e
 
   if (error) throw error;
   lastDatabaseSnapshots.delete(draftIdentity(userId, direction, role));
-}
-
-export function loadDraftCache(userId: string): CachedTradeDraft | null {
-  try {
-    const raw = localStorage.getItem(getTradeDraftCacheKey(userId));
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    if (!isObject(parsed) || parsed.version !== LEGACY_DRAFT_CACHE_VERSION || !isObject(parsed.profile)) return null;
-    return { ...parsed, profile: sanitizeTradeProfile(parsed.profile as unknown as TradeProfile) } as unknown as CachedTradeDraft;
-  } catch {
-    return null;
-  }
-}
-
-export function saveDraftCache(userId: string, draft: Omit<CachedTradeDraft, 'version' | 'savedAt'>): void {
-  const payload: CachedTradeDraft = {
-    ...draft,
-    profile: sanitizeTradeProfile(draft.profile),
-    version: LEGACY_DRAFT_CACHE_VERSION,
-    savedAt: new Date().toISOString(),
-  };
-  localStorage.setItem(getTradeDraftCacheKey(userId), JSON.stringify(payload));
-}
-
-export function clearDraftCache(userId: string): void {
-  removeDraftFromLocal(userId);
 }

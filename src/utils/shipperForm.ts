@@ -16,7 +16,6 @@ export const SHIPPER_ITEM_UNIT_OPTIONS: { value: ShipperItemUnit; label: string 
   { value: 'L', label: 'L (리터)' },
   { value: 'ROLL', label: 'ROLL (롤)' },
 ];
-export const SHIPPER_ITEM_UNITS: ShipperItemUnit[] = SHIPPER_ITEM_UNIT_OPTIONS.map(({ value }) => value);
 export const SHIPPER_CURRENCIES: ShipperCurrency[] = ['USD', 'EUR', 'JPY', 'CNY', 'KRW', 'GBP'];
 export const SHIPPER_PACKAGE_TYPE_OPTIONS = [
   { value: 'CARTON', label: 'Carton (카톤/상자)', aliases: ['CTN', 'CTNS', 'CARTONS'] },

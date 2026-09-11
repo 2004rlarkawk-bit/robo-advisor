@@ -49,10 +49,6 @@ export const EXPORT_POD_OPTIONS: PortOption[] = [
   { value: 'Hamburg Port', label: 'Hamburg Port (함부르크항)' },
 ];
 
-// 기존 import 호환. 신규 화면은 역할 구분 없는 EXPORT_* 이름을 사용한다.
-export const EXPORT_SHIPPER_LOAD_PORT_OPTIONS = EXPORT_POL_OPTIONS;
-export const EXPORT_SHIPPER_DISCHARGE_PORT_OPTIONS = EXPORT_POD_OPTIONS;
-
 export const OTHER_DOMESTIC_PORT_VALUE = '__OTHER_DOMESTIC_PORT__';
 export const OTHER_FOREIGN_PORT_VALUE = '__OTHER_FOREIGN_PORT__';
 
