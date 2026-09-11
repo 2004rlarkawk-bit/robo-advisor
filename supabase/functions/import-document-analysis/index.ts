@@ -279,6 +279,59 @@ function extractOutputText(response: OpenAIResponse): string {
     .map((item) => item.text as string).join("\n").trim();
 }
 
+
+/** 일시적 장애(과부하·레이트리밋·게이트웨이)로 판단해 재시도할 HTTP 상태. */
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+const MAX_ATTEMPTS = 4;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * OpenAI 호출을 일시적 오류에 한해 지수 백오프로 재시도한다.
+ * 503 "servers are currently overloaded"처럼 잠시 뒤 성공하는 경우가 많아,
+ * 한 번의 실패로 문서 분석 전체가 끊기지 않도록 한다.
+ * 잘못된 요청·인증 오류(4xx 대부분)는 재시도해도 같으므로 즉시 반환한다.
+ */
+async function fetchOpenAIWithRetry(
+  url: string,
+  init: RequestInit,
+  label: string,
+): Promise<{ response: Response; responseText: string; attempts: number }> {
+  let lastStatus = 0;
+  let lastText = "";
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(url, init);
+      const responseText = await response.text();
+      if (response.ok || !RETRYABLE_STATUS.has(response.status)) {
+        return { response, responseText, attempts: attempt };
+      }
+      lastStatus = response.status;
+      lastText = responseText;
+      if (attempt === MAX_ATTEMPTS) {
+        return { response, responseText, attempts: attempt };
+      }
+    } catch (error) {
+      // 네트워크 단절도 재시도 대상. 마지막 시도면 그대로 올린다.
+      if (attempt === MAX_ATTEMPTS) throw error;
+      lastStatus = 0;
+      lastText = error instanceof Error ? error.message : String(error);
+    }
+    const waitMs = Math.min(500 * 2 ** (attempt - 1), 4000);
+    console.warn("[import-document-analysis] OpenAI 재시도", {
+      label,
+      attempt,
+      status: lastStatus,
+      waitMs,
+      detail: lastText.slice(0, 200),
+    });
+    await sleep(waitMs);
+  }
+  throw new Error(`${label} 요청을 ${MAX_ATTEMPTS}회 시도했지만 실패했습니다.`);
+}
+
 async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
   const model = Deno.env.get("OPENAI_IMPORT_DOCUMENT_MODEL")?.trim()
     || Deno.env.get("OPENAI_MODEL")?.trim()
@@ -323,7 +376,7 @@ async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
       : { type: "input_image", image_url: document.dataUrl, detail: "high" });
   }
   const openAiStartedAt = performance.now();
-  const response = await fetch(OPENAI_RESPONSES_URL, {
+  const { response, responseText } = await fetchOpenAIWithRetry(OPENAI_RESPONSES_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
@@ -334,8 +387,7 @@ async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
       max_output_tokens: 12000,
       store: false,
     }),
-  });
-  const responseText = await response.text();
+  }, "문서 분석");
   const openAiMs = performance.now() - openAiStartedAt;
   debugLog("AI raw response", {
     httpStatus: response.status,
@@ -398,7 +450,7 @@ async function analyzeReconciliationExperiment(apiKey: string, experimentInput: 
   ].join("\n");
 
   const startedAt = performance.now();
-  const response = await fetch(OPENAI_RESPONSES_URL, {
+  const { response, responseText } = await fetchOpenAIWithRetry(OPENAI_RESPONSES_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({
@@ -416,8 +468,7 @@ async function analyzeReconciliationExperiment(apiKey: string, experimentInput: 
       max_output_tokens: 4000,
       store: false,
     }),
-  });
-  const responseText = await response.text();
+  }, "정합성 실험");
   let responseData: OpenAIResponse;
   try {
     responseData = JSON.parse(responseText);
