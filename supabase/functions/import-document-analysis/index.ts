@@ -336,6 +336,9 @@ async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
   const model = Deno.env.get("OPENAI_IMPORT_DOCUMENT_MODEL")?.trim()
     || Deno.env.get("OPENAI_MODEL")?.trim()
     || "gpt-5.6";
+  // 문서 판독은 추론보다 인식 작업이라 추론 강도를 낮춰 응답 시간을 줄인다.
+  // 필요 시 OPENAI_IMPORT_REASONING_EFFORT로 조절(low/medium/high, "off"면 미전송).
+  const reasoningEffort = Deno.env.get("OPENAI_IMPORT_REASONING_EFFORT")?.trim() || "low";
   const content: Array<Record<string, unknown>> = [{
     type: "input_text",
     text: [
@@ -384,6 +387,7 @@ async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
       instructions: "당신은 해상 수입 문서를 정확히 판독하는 전문가입니다. 첨부 원문에 근거한 정보만 구조화하세요.",
       input: [{ role: "user", content }],
       text: { format: { type: "json_schema", name: "import_document_analysis", strict: true, schema: analysisSchema } },
+      ...(reasoningEffort !== "off" ? { reasoning: { effort: reasoningEffort } } : {}),
       max_output_tokens: 12000,
       store: false,
     }),
