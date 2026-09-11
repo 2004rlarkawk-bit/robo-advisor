@@ -324,21 +324,21 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
                     className="btn btn-secondary"
                     disabled={saving}
                     onClick={() => {
-                      // 자동 채움은 화주가 읽을 문장이므로 차단 이슈 위주로, 같은 항목 중복 없이 최대 4건만 담는다.
-                      const unresolvedBlockers = selected.issues.filter((issue) => issue.severity === 'blocker' && !issue.resolved);
-                      const source = unresolvedBlockers.length > 0
-                        ? unresolvedBlockers
-                        : selected.issues.filter((issue) => issue.severity === 'check' && !issue.resolved);
+                      // 자동 채움은 화주가 읽을 문장 — 차단·확인 필요를 구분해 담되, 같은 항목 중복 없이 요약한다.
                       const seenTitles = new Set<string>();
-                      const lines = source
+                      const dedupe = (severity: 'blocker' | 'check') => selected.issues
+                        .filter((issue) => issue.severity === severity && !issue.resolved)
                         .filter((issue) => {
                           if (seenTitles.has(issue.title)) return false;
                           seenTitles.add(issue.title);
                           return true;
-                        })
-                        .slice(0, 4)
-                        .map((issue) => `· ${issue.detail}`);
-                      setReturnReason(lines.join('\n'));
+                        });
+                      const blockerLines = dedupe('blocker').slice(0, 4).map((issue) => `· ${issue.detail}`);
+                      const checkLines = dedupe('check').slice(0, 4).map((issue) => `· ${issue.detail}`);
+                      const sections: string[] = [];
+                      if (blockerLines.length > 0) sections.push(`[반드시 수정]\n${blockerLines.join('\n')}`);
+                      if (checkLines.length > 0) sections.push(`[함께 확인 요청]\n${checkLines.join('\n')}`);
+                      setReturnReason(sections.join('\n\n'));
                       setReturnFormOpen(true);
                     }}
                   >
