@@ -324,8 +324,21 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
                     className="btn btn-secondary"
                     disabled={saving}
                     onClick={() => {
-                      const openIssues = selected.issues.filter((issue) => issue.severity !== 'info' && !issue.resolved);
-                      setReturnReason(openIssues.map((issue) => `· ${issue.title}: ${issue.detail}`).join('\n'));
+                      // 자동 채움은 화주가 읽을 문장이므로 차단 이슈 위주로, 같은 항목 중복 없이 최대 4건만 담는다.
+                      const unresolvedBlockers = selected.issues.filter((issue) => issue.severity === 'blocker' && !issue.resolved);
+                      const source = unresolvedBlockers.length > 0
+                        ? unresolvedBlockers
+                        : selected.issues.filter((issue) => issue.severity === 'check' && !issue.resolved);
+                      const seenTitles = new Set<string>();
+                      const lines = source
+                        .filter((issue) => {
+                          if (seenTitles.has(issue.title)) return false;
+                          seenTitles.add(issue.title);
+                          return true;
+                        })
+                        .slice(0, 4)
+                        .map((issue) => `· ${issue.detail}`);
+                      setReturnReason(lines.join('\n'));
                       setReturnFormOpen(true);
                     }}
                   >

@@ -20,12 +20,40 @@ import {
 } from '../types/forwarderCase';
 import { fetchSavedTrades } from './storageService';
 
+// 검증 결과의 field는 영문 키(grossWeight 등)로 오는 경우가 있어 화면용 한글 라벨로 바꾼다.
+const ISSUE_FIELD_LABELS: Record<string, string> = {
+  grossWeight: '총중량',
+  netWeight: '순중량',
+  productDescription: '품목 설명',
+  quantity: '수량',
+  totalAmount: '총 금액',
+  unitPrice: '단가',
+  currency: '통화',
+  importer: '수입자',
+  consignee: '수하인',
+  shipper: '송하인',
+  notifyParty: '통지처',
+  blNo: 'B/L 번호',
+  invoiceNo: '송장 번호',
+  hsCode: 'HS코드',
+  loadPort: '선적항',
+  dischargePort: '도착항',
+  incoterms: '인코텀즈',
+  packageCount: '포장 수량',
+  originCountry: '원산지',
+  vesselName: '선박명',
+};
+
+function issueTitleOf(field: string): string {
+  return ISSUE_FIELD_LABELS[field] ?? field;
+}
+
 function validationToIssue(validation: ImportValidation, resolutions: Record<string, boolean>): ForwarderCaseIssue {
   const id = `v-${validation.id}`;
   return {
     id,
     severity: validation.severity === 'error' ? 'blocker' : validation.severity === 'warning' ? 'check' : 'info',
-    title: validation.field,
+    title: issueTitleOf(validation.field),
     detail: validation.message,
     documents: validation.documents,
     resolved: resolutions[id] === true,

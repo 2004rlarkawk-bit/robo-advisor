@@ -3,6 +3,7 @@ import { Layers, Trash2, FolderOpen, AlertTriangle, CheckCircle2, X, Clock, Sear
 import type { SavedTrade } from '../types';
 import { deleteSavedTrade, fetchTradeManagerTrades } from '../services/storageService';
 import { filterTradeManagerTrades } from '../services/tradeListPolicy';
+import { hasActiveShipperReturnRequest } from '../services/forwarderCaseService';
 
 interface Props {
   onLoad: (trade: SavedTrade) => void; // 이어서 작업 (작업실로 불러오기)
@@ -183,6 +184,9 @@ export default function TradeManagerPanel({ onLoad, embedded }: Props) {
                       <span className={`trade-type-badge ${p.tradeType}`}>{p.tradeType === 'export' ? '수출' : '수입'}</span>
                       <span className="draft-tray-name">{p.itemName || '(품목명 없음)'}</span>
                       <span className="draft-tray-status" style={{ color: st.color, background: st.bg }}>{st.text}</span>
+                      {hasActiveShipperReturnRequest(trade) && (
+                        <span className="draft-tray-status" style={{ color: '#b91c1c', background: '#fee2e2' }}>포워더 보완 요청 수정 중</span>
+                      )}
                     </div>
                     {route && <span className="draft-tray-route">{route}</span>}
                     <span className="draft-tray-time">{fmtDate(trade.updatedAt ?? trade.createdAt)}</span>
