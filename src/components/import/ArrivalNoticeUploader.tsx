@@ -106,7 +106,8 @@ export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId
         <label className="arrival-notice-picker">
           <Paperclip size={20} />
           <span><strong>{busy ? '업로드 중' : '도착통지서 첨부'}</strong><small>업로드가 완료된 Storage 경로만 거래에 저장합니다.</small></span>
-          <input disabled={busy} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => void selectFile(event.target.files?.[0])} />
+          {/* 포워더가 워크스페이스에서 발행한 A/N(DOCX)도 그대로 보관할 수 있게 허용 */}
+          <input disabled={busy} type="file" accept=".pdf,.png,.jpg,.jpeg,.docx" onChange={(event) => void selectFile(event.target.files?.[0])} />
         </label>
       )}
       {error && <div className="form-message error" role="alert">{error}</div>}
