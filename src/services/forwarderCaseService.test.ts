@@ -102,6 +102,41 @@ describe('deriveForwarderCase', () => {
   });
 });
 
+describe('보완 요청(반송) 루프', () => {
+  const baseRequest = { reason: '총중량 불일치 확인 요청', issueTitles: ['총중량'], requestedAt: '2026-09-10T00:00:00.000Z' };
+
+  it('요청 중이면 다음 조치가 회신 대기로 바뀌고 화주 수정 중에도 큐에 남는다', () => {
+    const waiting = deriveForwarderCase(makeTrade({
+      forwarderCase: { stage: 'review', returnRequest: baseRequest, updatedAt: '2026-09-10T00:00:00.000Z' },
+    }));
+    expect(waiting?.nextAction).toBe('화주 보완 회신 대기');
+    expect(waiting?.shipperEditing).toBe(false);
+
+    const editing = deriveForwarderCase(makeTrade({
+      status: 'generated',
+      forwarderCase: { stage: 'review', returnRequest: baseRequest, updatedAt: '2026-09-10T00:00:00.000Z' },
+    }));
+    expect(editing).not.toBeNull();
+    expect(editing?.shipperEditing).toBe(true);
+    expect(editing?.nextAction).toBe('화주 수정 중 — 재제출 대기');
+  });
+
+  it('화주가 재제출해 회신되면 재검토 시작을 안내한다', () => {
+    const resolved = deriveForwarderCase(makeTrade({
+      forwarderCase: {
+        stage: 'review',
+        returnRequest: { ...baseRequest, resolvedAt: '2026-09-11T00:00:00.000Z' },
+        updatedAt: '2026-09-11T00:00:00.000Z',
+      },
+    }));
+    expect(resolved?.nextAction).toBe('화주 재제출 확인 — 재검토 시작');
+  });
+
+  it('보완 요청이 없는 미제출 화주 거래는 여전히 큐에서 제외된다', () => {
+    expect(deriveForwarderCase(makeTrade({ status: 'generated' }))).toBeNull();
+  });
+});
+
 describe('sortForwarderCases', () => {
   it('진행 단계 우선, 완료 건은 뒤로 보낸다', () => {
     const received = deriveForwarderCase(makeTrade({ id: 'a' }))!;

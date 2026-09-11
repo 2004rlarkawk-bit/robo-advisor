@@ -82,6 +82,7 @@ import {
   createCompletedImportTrade,
   fetchSavedTradeById,
   markTradeAsSubmitted,
+  reopenSubmittedImportTradeForRevision,
   updateGeneratedTrade,
   getSettings
 } from './services/storageService';
@@ -1347,6 +1348,17 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     documentManagerPreviewOriginRef.current = origin;
   };
 
+  // 포워더 보완 요청을 받은 제출 거래를 다시 열어(status를 generated로 되돌려) 작업실에서 수정한다.
+  const handleReviseReturnedImportTrade = async (trade: SavedTrade) => {
+    try {
+      const reopened = await reopenSubmittedImportTradeForRevision(trade.id);
+      await handleResumeSavedTradeFromDocumentManager(reopened);
+    } catch (err) {
+      console.error('보완 수정용 거래 재오픈 실패:', err);
+      alert('거래를 다시 열지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    }
+  };
+
   const handleResumeSavedTradeFromDocumentManager = async (trade: SavedTrade) => {
     // 조회 출처 snapshot/readOnly 상태가 이어서 작업에 전파되지 않도록 먼저 제거한다.
     setPreviewDocId(null);
@@ -2365,6 +2377,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 <DocumentManagerPanel
                   onLoad={handleLoadSavedTradeFromDocumentManager}
                   onCopy={handleCopySavedTrade}
+                  onRevise={(trade) => void handleReviseReturnedImportTrade(trade)}
                   onListReady={handleDocumentManagerListReady}
                 />
               </>

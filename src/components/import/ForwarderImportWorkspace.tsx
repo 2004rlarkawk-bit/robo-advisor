@@ -2,7 +2,7 @@
  * 포워더 수입 워크스페이스 — 여러 수입 건을 관리하는 업무 큐 + 건별 상세.
  *
  * 화주의 3단계 위저드와 달리 진행 상태·다음 조치 중심으로 구성한다.
- *  - 목록: ETA·수입자·B/L·상태·차단 이슈·다음 조치
+ *  - 목록: ETA·수입 건·상태·다음 조치
  *  - 상세: 이슈(차단/확인/참고) → 문서 대사 → 통관·도착 관리 → 완료
  * 운영 상태는 forwarderCaseService를 통해 workflow_data.forwarderCase에 저장한다.
  */
@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  CornerUpLeft,
   Inbox,
   MoreHorizontal,
   RefreshCw,
@@ -60,6 +61,8 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
   const [saving, setSaving] = useState(false);
   const [cargo, setCargo] = useState<CargoTrackingResult | null>(null);
   const [cargoBusy, setCargoBusy] = useState(false);
+  const [returnFormOpen, setReturnFormOpen] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
   const [detailTab, setDetailTab] = useState<DetailTab>('overview');
 
   const load = useCallback(async () => {
@@ -133,6 +136,8 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
   const openCase = (tradeId: string) => {
     setSelectedId(tradeId);
     setCargo(null);
+    setReturnFormOpen(false);
+    setReturnReason('');
     setDetailTab('overview');
   };
 
@@ -143,6 +148,7 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
     const checks = selected.issues.filter((issue) => issue.severity === 'check');
     const infos = selected.issues.filter((issue) => issue.severity === 'info');
     const canFinishReview = selected.blockerCount === 0;
+    const returnPending = Boolean(selected.returnRequest && !selected.returnRequest.resolvedAt);
 
     return (
       <div className="fwd-workspace">
@@ -184,6 +190,46 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
         </section>
 
         {error && <div className="form-message error">{error}</div>}
+
+        {selected.returnRequest && (
+          <section className={`fwd-return-banner${selected.returnRequest.resolvedAt ? ' is-resolved' : ''}`}>
+            <div className="fwd-return-head">
+              <CornerUpLeft size={16} />
+              <strong>
+                {selected.returnRequest.resolvedAt
+                  ? '화주가 수정 후 재제출했습니다'
+                  : selected.shipperEditing
+                    ? '화주가 서류를 수정하고 있습니다'
+                    : '화주에게 보완을 요청했습니다 — 회신 대기 중'}
+              </strong>
+              <span className="fwd-return-date">{selected.returnRequest.requestedAt.slice(0, 10)} 요청</span>
+            </div>
+            <p className="fwd-return-reason">{selected.returnRequest.reason}</p>
+            <div className="fwd-return-actions">
+              {selected.returnRequest.resolvedAt ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={saving}
+                  onClick={() => void persist(selected, { returnRequest: null, stage: 'review' })}
+                >
+                  재검토 시작
+                </button>
+              ) : (
+                !selected.shipperEditing && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={saving}
+                    onClick={() => void persist(selected, { returnRequest: null })}
+                  >
+                    요청 취소
+                  </button>
+                )
+              )}
+            </div>
+          </section>
+        )}
 
         <nav className="fwd-tabs" aria-label="수입 업무 상세 탭">
           <button type="button" className={detailTab === 'overview' ? 'is-active' : ''} onClick={() => setDetailTab('overview')}>개요</button>
@@ -232,6 +278,59 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
                 </div>
               </details>
             ))}
+
+            {!selected.returnRequest && (selected.stage === 'received' || selected.stage === 'review') && (
+              <div className="fwd-return-form">
+                {returnFormOpen ? (
+                  <>
+                    <label className="form-group">
+                      <span className="form-label">화주에게 전달할 보완 요청 사유</span>
+                      <textarea
+                        className="form-input fwd-return-textarea"
+                        rows={3}
+                        value={returnReason}
+                        onChange={(event) => setReturnReason(event.target.value)}
+                        placeholder="예: B/L과 P/L의 총중량이 달라 확인이 필요합니다."
+                      />
+                    </label>
+                    <div className="fwd-return-actions">
+                      <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => setReturnFormOpen(false)}>취소</button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={saving || returnReason.trim() === ''}
+                        onClick={() => {
+                          const openIssues = selected.issues.filter((issue) => issue.severity !== 'info' && !issue.resolved);
+                          void persist(selected, {
+                            returnRequest: {
+                              reason: returnReason.trim(),
+                              issueTitles: openIssues.map((issue) => issue.title),
+                              requestedAt: new Date().toISOString(),
+                            },
+                          }).then(() => setReturnFormOpen(false));
+                        }}
+                      >
+                        <CornerUpLeft size={15} /> 보완 요청 보내기
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={saving}
+                    onClick={() => {
+                      const openIssues = selected.issues.filter((issue) => issue.severity !== 'info' && !issue.resolved);
+                      setReturnReason(openIssues.map((issue) => `· ${issue.title}: ${issue.detail}`).join('\n'));
+                      setReturnFormOpen(true);
+                    }}
+                  >
+                    <CornerUpLeft size={15} /> 화주에게 보완 요청
+                  </button>
+                )}
+                <p className="fwd-action-hint">서류 자체를 고쳐야 하는 문제는 확인 처리 대신 화주에게 돌려보내 수정·재제출을 받으세요.</p>
+              </div>
+            )}
           </section>
         )}
 
@@ -256,7 +355,24 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
                   <Search size={16} /> {cargoBusy ? '조회 중…' : '조회'}
                 </button>
               </div>
-              {cargo && <p className="cargo-status-text"><strong>{cargo.status}</strong> · {cargo.detail}</p>}
+              {cargo && (
+                <div className="cargo-result">
+                  <p className="cargo-status-text">
+                    <strong>{cargo.status}</strong> · {cargo.detail}
+                    {cargo.source === 'simulation' && <span className="da-sim-badge">시뮬레이션</span>}
+                  </p>
+                  {cargo.lookupStatus !== 'empty' && (
+                    <ol className="cargo-steps">
+                      {cargo.timeline.map((step) => (
+                        <li key={step.label} className={`${step.completed ? 'is-done' : ''}${step.current ? ' is-current' : ''}`}>
+                          {step.label}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  {cargo.arrivalPort && <p className="cargo-meta">도착항 {cargo.arrivalPort} · 화물관리번호 {cargo.cargoNo}</p>}
+                </div>
+              )}
             </section>
             <ArrivalNoticeUploader
               value={selected.arrivalNotice}
@@ -269,12 +385,15 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
         )}
 
         <div className="import-actions fwd-actions">
-          {selected.stage === 'received' && (
+          {returnPending && (
+            <p className="fwd-action-hint">화주 보완 회신을 기다리는 중에는 단계를 진행하지 않습니다.</p>
+          )}
+          {!returnPending && selected.stage === 'received' && (
             <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void moveToStage(selected, 'review', 'review')}>
               서류 검토 시작
             </button>
           )}
-          {selected.stage === 'review' && (
+          {!returnPending && selected.stage === 'review' && (
             <>
               <button type="button" className="btn btn-primary" disabled={saving || !canFinishReview} onClick={() => void moveToStage(selected, 'clearance', 'clearance')}>
                 검토 완료 — 통관 진행
@@ -282,13 +401,18 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
               {!canFinishReview && <p className="fwd-action-hint">차단 이슈를 모두 확인 처리해야 통관 진행으로 넘어갈 수 있습니다.</p>}
             </>
           )}
-          {selected.stage === 'clearance' && (
+          {!returnPending && selected.stage === 'clearance' && (
             <>
               <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void moveToStage(selected, 'done', 'overview')}>
                 <CheckCircle2 size={15} /> 통관 완료 처리
               </button>
               {!selected.arrivalNotice?.storagePath && <p className="fwd-action-hint">도착통지서(A/N)를 첨부해 두면 완료 이력에 함께 보관됩니다.</p>}
             </>
+          )}
+          {!returnPending && selected.stage === 'done' && (
+            <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => void moveToStage(selected, 'clearance', 'clearance')}>
+              통관 진행으로 되돌리기
+            </button>
           )}
         </div>
       </div>
@@ -345,7 +469,14 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
                       <span>{item.blNo} · {item.vesselName || '선박 미정'}</span>
                       {item.origin === 'shipper_request' && <span className="fwd-origin is-request">화주 의뢰</span>}
                     </td>
-                    <td><span className={`fwd-stage-badge ${STAGE_BADGE_CLASS[item.stage]}`}>{FORWARDER_STAGE_LABEL[item.stage]}</span></td>
+                    <td>
+                      <span className={`fwd-stage-badge ${STAGE_BADGE_CLASS[item.stage]}`}>{FORWARDER_STAGE_LABEL[item.stage]}</span>
+                      {item.returnRequest && (
+                        <span className={`fwd-return-badge${item.returnRequest.resolvedAt ? ' is-resolved' : ''}`}>
+                          {item.returnRequest.resolvedAt ? '재제출됨' : item.shipperEditing ? '화주 수정 중' : '보완 요청'}
+                        </span>
+                      )}
+                    </td>
                     <td className="fwd-next-cell">{item.nextAction}{item.blockerCount > 0 && <span className="fwd-blocker-inline">차단 {item.blockerCount}</span>}</td>
                   </tr>
                 ))}
