@@ -851,8 +851,8 @@ export default function ShipperWorkspaceForm({
           <summary className="form-section-summary"><span>8. 이미 가진 서류 첨부 (선택)</span></summary>
           <p className="form-section-note">
             상업송장·포장명세서처럼 이미 발행받은 서류가 있으면 여기에 올려 주세요.
-            올린 서류는 PortAI가 생성한 문서 대신 문서함에 표시되며, 나머지 서류만 자동 생성됩니다.
-            파일 내용은 자동으로 읽지 않으므로, 생성 후 문서함에서 입력값과 직접 대조해 주세요.
+            서류 생성은 입력값 기준으로 그대로 진행되며, 올린 서류는 생성 후 결과 화면의
+            &lsquo;내 서류 대조&rsquo;에서 입력값과 어긋나는 항목만 따로 알려 드립니다.
           </p>
           <TradeAttachmentUploader
             userId={userId}
