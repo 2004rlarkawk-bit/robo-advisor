@@ -5,6 +5,7 @@ import {
   FileCheck2,
   FolderKanban,
   LayoutDashboard,
+  PhoneCall,
   Settings,
   UserRound,
   type LucideIcon,
@@ -53,7 +54,7 @@ export default function AppSidebar({ activeMenu, collapsed, onNavigate, badges }
           }
         }}
       >
-        <div className="logo-icon"><Anchor size={26} strokeWidth={1.6} /></div>
+        <div className="logo-icon">🚢</div>
         <div>
           <div className="logo-text">PortAI</div>
           <div className="logo-sub">스마트 물류 & 통관 자동화 플랫폼</div>
@@ -80,7 +81,14 @@ export default function AppSidebar({ activeMenu, collapsed, onNavigate, badges }
         ))}
       </ul>
 
-      <button type="button" className="support-card support-guide" onClick={() => onNavigate('guide')}><BookOpen size={17} /><span>이용 가이드<small>업무 흐름과 기능 안내</small></span></button>
+      <div className="support-card">
+        <div className="support-title">
+          <PhoneCall size={14} />
+          고객지원센터
+        </div>
+        <div className="support-phone">02-1234-5678</div>
+        <div className="support-time">평일 09:00 - 18:00</div>
+      </div>
     </aside>
   );
 }
