@@ -16,11 +16,9 @@ interface Props {
   headerAction?: ReactNode;
   /** 카드 상단 안내 문구 */
   notice?: string;
-  description?: string;
-  attachmentLabel?: string;
 }
 
-export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId, readOnly = false, headerAction, notice, description, attachmentLabel }: Props) {
+export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId, readOnly = false, headerAction, notice }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -91,7 +89,7 @@ export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId
         <div>
           <span className="ai-badge">별도 첨부</span>
           <h2>도착통지서 (Arrival Notice)</h2>
-          <p>{description ?? '도착통지서가 없으면 거래는 진행 중으로 저장됩니다.'}</p>
+          <p>도착통지서가 없으면 거래는 진행 중으로 저장됩니다.</p>
         </div>
         {headerAction}
       </div>
@@ -99,7 +97,7 @@ export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId
       {displayValue ? (
         <div className="arrival-notice-file">
           <FileText size={20} />
-          <div><strong title={displayValue.fileName}>{displayValue.fileName}</strong><span>{(displayValue.sizeBytes / 1024).toFixed(1)} KB · {displayValue.fileName.split('.').pop()?.toUpperCase() || '파일'}</span></div>
+          <div><strong>{displayValue.fileName}</strong><span>{(displayValue.sizeBytes / 1024).toFixed(1)} KB · {displayValue.mimeType}</span></div>
           {!readOnly && <button type="button" disabled={busy} className="icon-btn import-delete" title="도착통지서 삭제" aria-label="도착통지서 삭제" onClick={() => void removeFile()}><Trash2 size={16} /></button>}
         </div>
       ) : readOnly ? (
@@ -107,7 +105,7 @@ export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId
       ) : (
         <label className="arrival-notice-picker">
           <Paperclip size={20} />
-          <span><strong>{busy ? '업로드 중' : attachmentLabel ?? '도착통지서 첨부'}</strong><small>PDF, DOCX 또는 이미지 파일</small></span>
+          <span><strong>{busy ? '업로드 중' : '도착통지서 첨부'}</strong><small>업로드가 완료된 Storage 경로만 거래에 저장합니다.</small></span>
           {/* 포워더가 워크스페이스에서 발행한 A/N(DOCX)도 그대로 보관할 수 있게 허용 */}
           <input disabled={busy} type="file" accept=".pdf,.png,.jpg,.jpeg,.docx" onChange={(event) => void selectFile(event.target.files?.[0])} />
         </label>

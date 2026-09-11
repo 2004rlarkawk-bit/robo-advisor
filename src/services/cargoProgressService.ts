@@ -14,10 +14,8 @@ const DEMO_PROGRESS: Record<string, { cargoNo: string; status: string; detail: s
   },
 };
 
-export function buildTimeline(status: string) {
-  // '수입신고 수리' must not stop at the shorter '수입신고' match.
-  const matched = STEPS.filter((step) => status.includes(step)).sort((a, b) => b.length - a.length)[0];
-  const currentIndex = matched ? STEPS.indexOf(matched) : -1;
+function buildTimeline(status: string) {
+  const currentIndex = Math.max(0, STEPS.findIndex((step) => status.includes(step)));
   return STEPS.map((label, index) => ({ label, completed: index <= currentIndex, current: index === currentIndex }));
 }
 

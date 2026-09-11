@@ -66,15 +66,10 @@ export default function AppSidebar({ activeMenu, collapsed, onNavigate, badges }
           <li key={menu}>
             <div
               className={`menu-item ${activeMenu === menu ? 'active' : ''}`}
-              role="button"
-              aria-label={label}
-              tabIndex={0}
-              aria-current={activeMenu === menu ? 'page' : undefined}
               onClick={() => onNavigate(menu)}
-              onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNavigate(menu); } }}
             >
               <Icon size={18} />
-              <span className="menu-label">{label}</span>
+              {label}
               {(badges?.[menu] ?? 0) > 0 && <span className="menu-badge">{badges?.[menu]}</span>}
             </div>
           </li>
