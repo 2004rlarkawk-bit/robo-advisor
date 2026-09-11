@@ -62,9 +62,12 @@ interface Props {
     values: Partial<ForwarderFormState>,
     sourceFiles: Record<string, string>,
   ) => ForwarderAutoFillApplicationResult;
+  /** PDF만 받는다. 화주 '보유 서류 첨부'처럼 원본 서식 그대로 보관해야 하는 곳에서 사용. */
+  pdfOnly?: boolean;
 }
 
-function acceptedFile(file: File): boolean {
+function acceptedFile(file: File, pdfOnly: boolean): boolean {
+  if (pdfOnly) return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
   return ACCEPTED_MIME_TYPES.has(file.type) || /\.(pdf|png|jpe?g)$/i.test(file.name);
 }
 
@@ -74,6 +77,7 @@ export default function TradeAttachmentUploader({
   attachments,
   onChange,
   onApplyAnalysis,
+  pdfOnly = false,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pendingFiles, setPendingFiles] = useState<Record<string, File>>({});
@@ -85,10 +89,10 @@ export default function TradeAttachmentUploader({
 
   const addFiles = async (files: File[]) => {
     if (!files.length || busy) return;
-    const invalid = files.filter((file) => !acceptedFile(file));
+    const invalid = files.filter((file) => !acceptedFile(file, pdfOnly));
     if (invalid.length) {
       setMessageKind('error');
-      setMessage('PDF, PNG, JPEG 파일만 업로드할 수 있습니다.');
+      setMessage(pdfOnly ? 'PDF 파일만 업로드할 수 있습니다.' : 'PDF, PNG, JPEG 파일만 업로드할 수 있습니다.');
       return;
     }
     const fresh = files.filter((file) => !attachments.some(
@@ -213,7 +217,7 @@ export default function TradeAttachmentUploader({
       >
         <FileUp size={32} />
         <h3>수출 서류를 한 번에 첨부해 주세요</h3>
-        <p>C/I, P/L, 수출 운송의뢰서, 수출신고필증 및 기타서류 · PDF, PNG, JPEG</p>
+        <p>C/I, P/L, 수출 운송의뢰서, 수출신고필증 및 기타서류 · {pdfOnly ? 'PDF' : 'PDF, PNG, JPEG'}</p>
         <button
           type="button"
           className="btn btn-secondary"
@@ -227,23 +231,26 @@ export default function TradeAttachmentUploader({
           hidden
           multiple
           type="file"
-          accept=".pdf,.png,.jpg,.jpeg"
+          accept={pdfOnly ? ".pdf" : ".pdf,.png,.jpg,.jpeg"}
           onChange={(event: ChangeEvent<HTMLInputElement>) => {
             void addFiles(Array.from(event.target.files ?? []));
             event.target.value = '';
           }}
         />
       </div>
-      <div className="import-actions">
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={busy || attachments.length === 0 || !onApplyAnalysis}
-          onClick={() => void analyze()}
-        >
-          <Sparkles size={16} /> {busy ? 'AI 분석 중…' : 'AI 분석 및 빈 필드 자동입력'}
-        </button>
-      </div>
+      {/* 빈 필드 자동입력은 포워더 폼 전용 — 핸들러가 없으면(화주 보유 서류 첨부) 버튼 자체를 숨긴다. */}
+      {onApplyAnalysis && (
+        <div className="import-actions">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy || attachments.length === 0}
+            onClick={() => void analyze()}
+          >
+            <Sparkles size={16} /> {busy ? 'AI 분석 중…' : 'AI 분석 및 빈 필드 자동입력'}
+          </button>
+        </div>
+      )}
       {message && <div className={`form-message ${messageKind}`} role="status">{message}</div>}
       {conflicts.length > 0 && (
         <div className="form-message warning" role="status">

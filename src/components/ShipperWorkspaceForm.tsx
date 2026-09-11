@@ -40,6 +40,9 @@ interface Props {
   profileSignerDefault?: string;
   tradeId?: string | null;
   userId?: string;
+  /** 화주가 이미 보유한 수출서류 첨부 — 전달되면 8번 섹션(보유 서류 첨부)이 노출된다. */
+  attachments?: TradeAttachment[];
+  onAttachmentsChange?: (attachments: TradeAttachment[]) => void;
   onProfilePatch: (patch: Partial<TradeProfile>) => void;
   onItemsChange: (items: ShipperItem[]) => void;
   onSupplementalChange: (state: ShipperSupplementalState) => void;
@@ -52,9 +55,6 @@ interface Props {
   /** [입력 수정]으로 진입한 이슈 — 해당 섹션 상단에 인라인 안내 카드 표시 */
   fixNotice?: ShipperFixNotice | null;
   onDismissFixNotice?: () => void;
-  /** 보유 서류 첨부(선택) — 생성 후 '내 서류 대조'에서 입력값과 비교한다 */
-  attachments?: TradeAttachment[];
-  onAttachmentsChange?: (attachments: TradeAttachment[]) => void;
 }
 
 const INCOTERMS_OPTIONS: Exclude<Incoterms, ''>[] = ['FOB', 'CFR', 'CIF', 'FAS', 'FCA'];
@@ -125,6 +125,8 @@ export default function ShipperWorkspaceForm({
   profileSignerDefault = '',
   tradeId,
   userId,
+  attachments = [],
+  onAttachmentsChange,
   onProfilePatch,
   onItemsChange,
   onSupplementalChange,
@@ -134,8 +136,6 @@ export default function ShipperWorkspaceForm({
   onOriginOverrideRequest,
   fixNotice = null,
   onDismissFixNotice,
-  attachments,
-  onAttachmentsChange,
 }: Props) {
   // 인라인 수정 안내 카드 — fixNotice가 가리키는 섹션에만 렌더.
   // 카드를 닫아도 섹션이 접히지 않도록 details의 open은 이펙트로만 켠다(제어 안 함).
@@ -846,15 +846,20 @@ export default function ShipperWorkspaceForm({
         </div>
       </details>
 
-      {attachments && onAttachmentsChange && userId && (
-        <details className="form-section">
-          <summary className="form-section-summary"><span>8. 보유 서류 첨부 (선택)</span></summary>
-          <p className="form-hint">이미 가지고 있는 서류를 올려두면, 생성 후 결과 화면에서 입력값과 자동으로 대조해 드립니다.</p>
+      {onAttachmentsChange && userId && (
+        <details className="form-section" data-form-section={8}>
+          <summary className="form-section-summary"><span>8. 이미 가진 서류 첨부 (선택)</span></summary>
+          <p className="form-section-note">
+            상업송장·포장명세서처럼 이미 발행받은 서류가 있으면 여기에 올려 주세요.
+            서류 생성은 입력값 기준으로 그대로 진행되며, 올린 서류는 생성 후 결과 화면의
+            &lsquo;내 서류 대조&rsquo;에서 입력값과 어긋나는 항목만 따로 알려 드립니다.
+          </p>
           <TradeAttachmentUploader
             userId={userId}
-            scopeId={tradeId ?? 'draft-export-shipper'}
+            scopeId={tradeId || 'draft'}
             attachments={attachments}
             onChange={onAttachmentsChange}
+            pdfOnly
           />
         </details>
       )}
