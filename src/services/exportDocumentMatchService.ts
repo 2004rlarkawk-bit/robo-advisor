@@ -10,6 +10,7 @@ import { loadTradeAttachmentFile } from './tradeAttachmentStorageService';
 import type { ImportDocumentMeta, ImportExtractedFields } from '../types/importTrade';
 import type { TradeAttachment, TradeAttachmentDocumentType } from '../types/tradeFormData';
 import type { ShipperItem, TradeProfile } from '../types';
+import { parseTradeNumber } from '../utils/number';
 
 export type ExportMatchStatus = 'match' | 'mismatch' | 'unknown';
 
@@ -65,19 +66,24 @@ function normalize(value: string): string {
     .trim();
 }
 
-function numeric(value: string): number | null {
-  const cleaned = value.replace(/[^0-9.-]/g, '');
-  if (!cleaned) return null;
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : null;
-}
+const NUMERIC_FIELDS = new Set([
+  'quantity', 'unitPrice', 'totalAmount', 'invoiceAmount',
+  'packageCount', 'netWeight', 'grossWeight', 'weight', 'eaPerBox',
+]);
 
-function compare(uploadedValue: string, formValue: string): ExportMatchStatus {
+/**
+ * 숫자로 비교할 필드. 날짜·문서번호처럼 숫자가 섞인 문자열은 여기서 빼야 한다 —
+ * 첫 숫자만 읽으면 "2026-09-01"과 "2026-09-15"가 모두 2026이 되어 일치로 오판한다.
+ */
+const NUMERIC_COMPARE_FIELDS = new Set([...NUMERIC_FIELDS, 'measurement']);
+
+function compare(field: string, uploadedValue: string, formValue: string): ExportMatchStatus {
   if (!uploadedValue || !formValue) return 'unknown';
   if (normalize(uploadedValue) === normalize(formValue)) return 'match';
-  // 숫자는 표기(1,800 / 1800.00)가 달라도 값이 같으면 일치로 본다.
-  const left = numeric(uploadedValue);
-  const right = numeric(formValue);
+  if (!NUMERIC_COMPARE_FIELDS.has(field)) return 'mismatch';
+  // 숫자는 표기(1,800 / 1800.00 / 1.25 M3)가 달라도 값이 같으면 일치로 본다.
+  const left = parseTradeNumber(uploadedValue);
+  const right = parseTradeNumber(formValue);
   if (left !== null && right !== null) return left === right ? 'match' : 'mismatch';
   return 'mismatch';
 }
@@ -168,7 +174,7 @@ function buildRows(
   return candidates
     // 양쪽 다 비어 있으면 보여줄 게 없다.
     .filter((row) => row.uploadedValue || row.formValue)
-    .map((row) => ({ ...row, status: compare(row.uploadedValue, row.formValue) }));
+    .map((row) => ({ ...row, status: compare(row.field, row.uploadedValue, row.formValue) }));
 }
 
 function toDocumentMeta(attachment: TradeAttachment): ImportDocumentMeta {
@@ -281,14 +287,9 @@ export async function matchUploadedExportDocuments(input: {
 /** 품목 단위로 관리되는 필드 — profile.shipperItems[0]에 반영해야 서류에 실제로 반영된다. */
 const ITEM_FIELDS = new Set(['itemName', 'hsCode', 'quantity', 'unitPrice']);
 /** 숫자로 저장되는 필드 — 문자열로 넣으면 계산·검증이 깨진다. */
-const NUMERIC_FIELDS = new Set([
-  'quantity', 'unitPrice', 'totalAmount', 'invoiceAmount',
-  'packageCount', 'netWeight', 'grossWeight', 'weight', 'eaPerBox',
-]);
-
+// 숫자를 읽지 못한 값(빈 값·N/A)은 0이 아니라 공란으로 반영한다.
 function toNumeric(value: string): number | '' {
-  const parsed = Number(value.replace(/[^0-9.-]/g, ''));
-  return Number.isFinite(parsed) ? parsed : '';
+  return parseTradeNumber(value) ?? '';
 }
 
 /**

@@ -8,6 +8,7 @@ import type {
   UserTradeRole,
 } from '../types/importTrade';
 import { reconcileFromAnalysis, runImportReconciliation } from './importReconciliationEngine';
+import { parseTradeNumber } from '../utils/number';
 
 const DOC_LABEL: Record<ImportDocumentType, string> = {
   commercial_invoice: 'Commercial Invoice',
@@ -19,7 +20,7 @@ const DOC_LABEL: Record<ImportDocumentType, string> = {
   other: '기타서류',
   unknown: '기타서류',
 };
-const numberValue = (value: string): number => Number(value.replace(/,/g, '')) || 0;
+const numberValue = (value: string): number => parseTradeNumber(value) ?? 0;
 
 /**
  * LLM 검증이 넘겨주는 영문 필드 키 → 사용자용 한글 제목.

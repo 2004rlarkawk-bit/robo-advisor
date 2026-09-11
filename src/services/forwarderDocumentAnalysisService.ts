@@ -19,6 +19,7 @@ import {
   normalizeIncotermsCode,
   normalizePackageTypeValue,
 } from '../utils/tradeValueNormalization';
+import { parseTradeNumber } from '../utils/number';
 
 export interface ForwarderAnalysisFailure {
   attachmentId: string;
@@ -87,10 +88,7 @@ function text(value: string | undefined): string {
 }
 
 function numberValue(value: string): number | '' {
-  const normalized = value.replace(/,/g, '').trim().match(/-?\d+(?:\.\d+)?/)?.[0] ?? '';
-  if (!normalized) return '';
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : '';
+  return parseTradeNumber(value) ?? '';
 }
 
 function decimalText(value: string): string {

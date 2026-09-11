@@ -105,6 +105,27 @@ describe('matchUploadedExportDocuments', () => {
     expect(result.rows.find((row) => row.label === '총액')?.status).toBe('match');
   });
 
+  it('날짜·문서번호는 앞자리 숫자가 같아도 다르면 불일치로 본다', async () => {
+    const [result] = await matchUploadedExportDocuments({
+      attachments: [attachment()],
+      profile: { ...profile, invoiceNo: 'INV-2026-001', invoiceDate: '2026-09-01' } as TradeProfile,
+      items,
+      dependencies: deps(extracted({ invoiceNo: 'INV-2026-002', invoiceDate: '2026-09-15' })),
+    });
+    expect(result.rows.find((row) => row.label === 'Invoice No.')?.status).toBe('mismatch');
+    expect(result.rows.find((row) => row.label === 'Invoice 일자')?.status).toBe('mismatch');
+  });
+
+  it('용적 단위 표기(M3)는 숫자에 섞이지 않는다', async () => {
+    const [result] = await matchUploadedExportDocuments({
+      attachments: [attachment({ documentType: 'packing_list' })],
+      profile: { ...profile, measurement: '1.25' } as TradeProfile,
+      items,
+      dependencies: deps(extracted({ measurement: '1.25 M3' })),
+    });
+    expect(result.rows.find((row) => row.label === '용적(CBM)')?.status).toBe('match');
+  });
+
   it('한쪽 값이 없으면 확인 불가로 둔다', async () => {
     const [result] = await matchUploadedExportDocuments({
       attachments: [attachment()],

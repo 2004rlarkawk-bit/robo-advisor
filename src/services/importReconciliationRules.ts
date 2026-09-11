@@ -5,6 +5,7 @@ import type {
   ImportReconciliationInput,
   ReconciliationStatus,
 } from '../types/importTrade';
+import { parseTradeNumber } from '../utils/number';
 
 export const WEIGHT_TOLERANCE = { pct: 0.005, abs: 1 } as const;
 export const AMOUNT_TOLERANCE = { pct: 0.01, abs: 1 } as const;
@@ -12,14 +13,6 @@ export const DESC_MIN_OVERLAP = 0.5;
 export const STANDARD_INCOTERMS = new Set([
   'EXW', 'FCA', 'FAS', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP',
 ]);
-
-export function parseNumeric(value?: string): number | null {
-  if (value == null) return null;
-  const cleaned = String(value).replace(/[^0-9.-]/g, '');
-  if (cleaned === '' || cleaned === '-' || cleaned === '.') return null;
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : null;
-}
 
 export function descTokens(value?: string): string[] {
   if (!value) return [];
@@ -85,8 +78,8 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
   {
     id: 'IR2', label: '수량 일치', severity: 'error', documents: [CI, PL],
     evaluate: (input) => {
-      const ci = parseNumeric(get(input, CI)?.quantity);
-      const pl = parseNumeric(get(input, PL)?.quantity);
+      const ci = parseTradeNumber(get(input, CI)?.quantity);
+      const pl = parseTradeNumber(get(input, PL)?.quantity);
       if (ci == null || pl == null) return { status: 'skip', evidence: 'C/I 또는 P/L 수량 값이 없어 대조할 수 없습니다.' };
       return ci === pl
         ? { status: 'pass', evidence: `수량 일치: C/I·P/L 모두 ${formatNumber(ci)}.` }
@@ -96,8 +89,8 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
   {
     id: 'IR3', label: '총중량 일치', severity: 'error', documents: [PL, BL],
     evaluate: (input) => {
-      const pl = parseNumeric(get(input, PL)?.grossWeight);
-      const bl = parseNumeric(get(input, BL)?.grossWeight);
+      const pl = parseTradeNumber(get(input, PL)?.grossWeight);
+      const bl = parseTradeNumber(get(input, BL)?.grossWeight);
       if (pl == null || bl == null) return { status: 'skip', evidence: 'P/L 또는 B/L 총중량 값이 없어 대조할 수 없습니다.' };
       const difference = Math.abs(pl - bl);
       const allowed = Math.max(WEIGHT_TOLERANCE.abs, WEIGHT_TOLERANCE.pct * Math.max(pl, bl));
@@ -109,8 +102,8 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
   {
     id: 'IR4', label: '순중량 ≤ 총중량', severity: 'error', documents: [PL],
     evaluate: (input) => {
-      const net = parseNumeric(get(input, PL)?.netWeight);
-      const gross = parseNumeric(get(input, PL)?.grossWeight);
+      const net = parseTradeNumber(get(input, PL)?.netWeight);
+      const gross = parseTradeNumber(get(input, PL)?.grossWeight);
       if (net == null || gross == null) return { status: 'skip', evidence: 'P/L 순중량 또는 총중량 값이 없어 대조할 수 없습니다.' };
       return net <= gross
         ? { status: 'pass', evidence: `순중량(${formatNumber(net)}kg) ≤ 총중량(${formatNumber(gross)}kg).` }
@@ -120,8 +113,8 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
   {
     id: 'IR5', label: '포장 수량 일치', severity: 'error', documents: [PL, BL],
     evaluate: (input) => {
-      const pl = parseNumeric(get(input, PL)?.packageCount);
-      const bl = parseNumeric(get(input, BL)?.packageCount);
+      const pl = parseTradeNumber(get(input, PL)?.packageCount);
+      const bl = parseTradeNumber(get(input, BL)?.packageCount);
       if (pl == null || bl == null) return { status: 'skip', evidence: 'P/L 또는 B/L 포장 수량 값이 없어 대조할 수 없습니다.' };
       return pl === bl
         ? { status: 'pass', evidence: `포장 수량 일치: ${formatNumber(pl)}.` }
@@ -132,9 +125,9 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
     id: 'IR6', label: '금액 정합 (단가×수량)', severity: 'error', documents: [CI],
     evaluate: (input) => {
       const ci = get(input, CI);
-      const unitPrice = parseNumeric(ci?.unitPrice);
-      const quantity = parseNumeric(ci?.quantity);
-      const total = parseNumeric(ci?.totalAmount);
+      const unitPrice = parseTradeNumber(ci?.unitPrice);
+      const quantity = parseTradeNumber(ci?.quantity);
+      const total = parseTradeNumber(ci?.totalAmount);
       if (unitPrice == null || quantity == null || total == null) return { status: 'skip', evidence: 'C/I 단가·수량·총액 중 값이 없어 대조할 수 없습니다.' };
       const expected = unitPrice * quantity;
       const allowed = Math.max(AMOUNT_TOLERANCE.abs, AMOUNT_TOLERANCE.pct * expected);
