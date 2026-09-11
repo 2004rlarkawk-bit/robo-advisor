@@ -25,7 +25,8 @@ export default function AppHeader({
   onNavigate,
   onLogout,
 }: AppHeaderProps) {
-  const userLabel = profile.company_name || profile.contact_name || user.email;
+  // 헤더 인사는 사람 이름(담당자명) 우선. 담당자명이 비어 있을 때만 회사명·이메일로 폴백.
+  const userLabel = profile.contact_name?.trim() || profile.company_name?.trim() || user.email;
   const avatarLabel = userLabel.trim().charAt(0) || (user.type === 'member' ? '회' : '비');
 
   return (

@@ -3471,89 +3471,118 @@ body {
 .field-fix-banner .ffb-close:hover { color: #fff; }
 
 /* ============================================================
-   사용 안내 — "시작하기" 스타일 (매뉴얼 톤 제거)
+   사용 안내 — 흰 바탕 · 얇은 선 · 넉넉한 여백의 차분한 톤
    ============================================================ */
-.gs-hero {
-  display: flex; align-items: center; justify-content: space-between; gap: 20px;
-  background: linear-gradient(135deg, #eef4fd 0%, #f6f9fe 100%);
-  border: 1px solid #d5e3f5; border-radius: 18px;
-  padding: 30px 32px; margin-bottom: 28px;
-}
-.gs-hero-text { min-width: 0; }
-.gs-hero-eyebrow {
-  display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: 0.02em;
-  color: var(--primary-color); background: var(--primary-light);
-  padding: 4px 11px; border-radius: 999px; margin-bottom: 12px;
-}
-.gs-hero-title { font-size: 23px; font-weight: 800; color: var(--text-dark); line-height: 1.35; margin: 0; }
-.gs-hero-sub { margin: 10px 0 20px; font-size: 14.5px; color: var(--text-light); line-height: 1.55; }
+.gs-page { max-width: 960px; margin: 0 auto; padding: 12px 8px 64px; }
+
+/* 머리말 */
+.gs-hero { padding: 24px 0 44px; border-bottom: 1px solid #edf0f4; margin-bottom: 48px; }
+.gs-hero-eyebrow { display: block; font-size: 13px; font-weight: 700; color: var(--primary-color); margin-bottom: 14px; }
+.gs-hero-title { font-size: 28px; font-weight: 800; color: var(--text-dark); line-height: 1.4; margin: 0; letter-spacing: -0.01em; }
+.gs-hero-sub { margin: 14px 0 28px; font-size: 15px; color: #64748b; line-height: 1.7; }
+.gs-cta-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .gs-cta {
   display: inline-flex; align-items: center; gap: 8px;
   background: var(--primary-color); color: #fff; border: none;
-  border-radius: 11px; padding: 12px 20px; font-size: 15px; font-weight: 700;
+  border-radius: 10px; padding: 12px 20px; font-size: 14.5px; font-weight: 700;
   font-family: inherit; cursor: pointer; transition: filter 0.15s, transform 0.05s;
 }
 .gs-cta:hover { filter: brightness(1.06); }
 .gs-cta:active { transform: translateY(1px); }
-.gs-hero-badge {
-  flex-shrink: 0; width: 92px; height: 92px; border-radius: 22px;
+.gs-cta-secondary {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: #fff; color: #334155; border: 1px solid #e2e8f0;
+  border-radius: 10px; padding: 11px 18px; font-size: 14.5px; font-weight: 600;
+  font-family: inherit; cursor: pointer; transition: border-color 0.15s, color 0.15s;
+}
+.gs-cta-secondary:hover { border-color: #cbd5e1; color: var(--text-dark); }
+
+/* 섹션 */
+.gs-section { margin-bottom: 56px; }
+.gs-section-title { font-size: 18px; font-weight: 800; color: var(--text-dark); margin: 0 0 8px; letter-spacing: -0.01em; }
+.gs-section-sub { font-size: 14px; color: #64748b; margin: 0 0 22px; line-height: 1.6; }
+
+/* 수출 / 수입 탭 — 밑줄형 */
+.gs-tabs { display: flex; gap: 28px; border-bottom: 1px solid #edf0f4; margin-bottom: 18px; }
+.gs-tab {
+  border: none; background: none; font-family: inherit; cursor: pointer;
+  font-size: 17px; font-weight: 700; color: #94a3b8;
+  padding: 0 2px 13px; margin-bottom: -1px; border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.gs-tab:hover { color: #475569; }
+.gs-tab.active { color: var(--text-dark); border-bottom-color: var(--text-dark); }
+.gs-tab-intro { margin: 0 0 26px; font-size: 14px; color: #64748b; line-height: 1.6; }
+
+/* 역할별 진행 흐름 */
+.gs-flows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.gs-flow { background: #fff; border: 1px solid #edf0f4; border-radius: 16px; padding: 28px 28px 30px; }
+.gs-flow-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 26px; }
+.gs-flow-role { font-size: 16px; font-weight: 800; color: var(--text-dark); }
+.gs-flow-who { font-size: 13px; color: #94a3b8; }
+.gs-flow-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 24px; }
+.gs-flow-step { position: relative; display: flex; gap: 14px; }
+/* 번호 사이 가는 연결선 */
+.gs-flow-step:not(:last-child)::before {
+  content: ''; position: absolute; left: 12px; top: 30px; bottom: -20px;
+  width: 1px; background: #e8ecf1;
+}
+.gs-flow-num {
+  flex-shrink: 0; width: 25px; height: 25px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: #fff; color: var(--primary-color); border: 1px solid #d5e3f5;
+  font-size: 12px; font-weight: 700; color: #64748b;
+  background: #fff; border: 1px solid #dbe1e8; position: relative;
 }
+.gs-flow-title { font-size: 15px; font-weight: 700; color: var(--text-dark); margin: 2px 0 5px; }
+.gs-flow-desc { font-size: 13.5px; color: #64748b; line-height: 1.7; margin: 0; }
 
-.gs-section-title { font-size: 15px; font-weight: 800; color: var(--text-dark); margin: 0 0 14px; }
+/* 수출 서류 6종 */
+.gs-docs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.gs-docs-col { background: #fff; border: 1px solid #edf0f4; border-radius: 16px; padding: 22px 26px 10px; }
+.gs-docs-label { font-size: 13px; font-weight: 700; color: #94a3b8; margin-bottom: 6px; }
+.gs-doc { display: flex; align-items: baseline; gap: 14px; padding: 13px 0; border-top: 1px solid #f1f4f7; }
+.gs-docs-label + .gs-doc { border-top: none; }
+.gs-doc-abbr { flex-shrink: 0; width: 34px; font-size: 13px; font-weight: 800; }
+.gs-doc-abbr.made { color: var(--primary-color); }
+.gs-doc-abbr.external { color: #94a3b8; }
+.gs-doc-name { font-size: 14.5px; font-weight: 600; color: var(--text-dark); }
+.gs-doc-note { margin-left: auto; font-size: 13px; color: #94a3b8; text-align: right; }
 
-/* 진행 스텝 카드 */
-.gs-steps {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 14px; margin-bottom: 28px;
-}
-.gs-step {
-  background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px;
-}
-.gs-step-ic {
-  width: 40px; height: 40px; border-radius: 11px; margin-bottom: 12px;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--primary-light); color: var(--primary-color);
-}
-.gs-step-no { font-size: 11px; font-weight: 800; color: var(--primary-color); letter-spacing: 0.04em; margin-bottom: 5px; }
-.gs-step-title { font-size: 14.5px; font-weight: 700; color: var(--text-dark); margin-bottom: 6px; }
-.gs-step-desc { font-size: 12.5px; color: var(--text-light); line-height: 1.55; margin: 0; }
+/* 수입 대조 항목 */
+.gs-checks { display: flex; flex-wrap: wrap; gap: 10px; }
+.gs-check { font-size: 14px; font-weight: 600; color: #334155; background: #f4f6f9; border-radius: 999px; padding: 8px 16px; }
 
-/* 바로가기 (클릭 가능한 메뉴 카드) */
-.gs-shortcuts {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px; margin-bottom: 28px;
+/* 결과 화면 읽는 법 — 2×2 */
+.gs-legend {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 32px;
+  background: #fff; border: 1px solid #edf0f4; border-radius: 16px; padding: 26px 28px;
 }
-.gs-shortcut {
-  display: flex; align-items: center; gap: 13px; text-align: left; width: 100%;
-  background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px;
-  padding: 15px 16px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, background 0.15s;
-}
-.gs-shortcut:hover { border-color: var(--primary-color); background: #fbfdff; }
-.gs-shortcut-ic {
-  width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--primary-light); color: var(--primary-color);
-}
-.gs-shortcut-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.gs-shortcut-label { font-size: 14px; font-weight: 700; color: var(--text-dark); }
-.gs-shortcut-desc { font-size: 12px; color: var(--text-light); }
-.gs-shortcut-arrow { color: var(--text-light); flex-shrink: 0; }
-.gs-shortcut:hover .gs-shortcut-arrow { color: var(--primary-color); }
+.gs-legend-item { display: flex; align-items: flex-start; gap: 12px; }
+.gs-legend-dot { flex-shrink: 0; width: 9px; height: 9px; border-radius: 50%; margin-top: 7px; }
+.gs-legend-dot.red { background: #ef4444; }
+.gs-legend-dot.amber { background: #f59e0b; }
+.gs-legend-dot.green { background: #22c55e; }
+.gs-legend-dot.gray { background: #cbd5e1; }
+.gs-legend-label { font-size: 14.5px; font-weight: 700; color: var(--text-dark); margin-bottom: 3px; }
+.gs-legend-desc { font-size: 13.5px; color: #64748b; line-height: 1.6; }
 
-/* 팁 */
-.gs-tips { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 9px; }
-.gs-tips li {
-  position: relative; padding-left: 24px; font-size: 13px; color: var(--text-light); line-height: 1.55;
+/* 자주 묻는 질문 — 구분선 목록 */
+.gs-faq { border-top: 1px solid #edf0f4; }
+.gs-faq-item { border-bottom: 1px solid #edf0f4; }
+.gs-faq-item summary {
+  cursor: pointer; list-style: none; padding: 20px 4px; font-size: 15px; font-weight: 600; color: var(--text-dark);
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
 }
-.gs-tips li::before { content: '💡'; position: absolute; left: 0; top: 0; font-size: 13px; }
+.gs-faq-item summary::-webkit-details-marker { display: none; }
+.gs-faq-item summary::after { content: '+'; font-size: 20px; font-weight: 400; color: #94a3b8; }
+.gs-faq-item[open] summary::after { content: '−'; }
+.gs-faq-item summary:hover { color: var(--primary-color); }
+.gs-faq-item p { margin: 0; padding: 0 4px 22px; font-size: 14px; color: #64748b; line-height: 1.7; }
 
-@media (max-width: 620px) {
-  .gs-hero { flex-direction: column; align-items: flex-start; padding: 24px; }
-  .gs-hero-badge { display: none; }
-  .gs-hero-title { font-size: 20px; }
-
+@media (max-width: 760px) {
+  .gs-hero-title { font-size: 23px; }
+  .gs-flows, .gs-docs, .gs-legend { grid-template-columns: 1fr; }
+  .gs-flow { padding: 22px; }
 }
 
 /* ============================================================
