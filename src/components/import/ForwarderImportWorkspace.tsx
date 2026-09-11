@@ -500,9 +500,13 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
                 </div>
               )}
             </section>
-            <section className="form-card import-card">
-              <div className="import-card-heading fwd-an-heading">
-                <div><h2>도착통지서(A/N) 발행</h2><p>이 건의 B/L·선박·화물 정보로 화주에게 보낼 도착통지서를 생성합니다.</p></div>
+            <ArrivalNoticeUploader
+              value={selected.arrivalNotice}
+              onChange={(arrivalNotice) => void persist(selected, { arrivalNotice })}
+              userId={userId}
+              tradeId={selected.tradeId}
+              readOnly={saving}
+              headerAction={(
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -517,17 +521,10 @@ export default function ForwarderImportWorkspace({ userId, onDirectUpload }: Pro
                       .finally(() => setAnBusy(false));
                   }}
                 >
-                  {anBusy ? '생성 중…' : 'A/N 생성·다운로드 (DOCX)'}
+                  {anBusy ? '생성 중…' : 'A/N 생성·다운로드'}
                 </button>
-              </div>
-              <p className="import-notice">청구 금액란은 비워서 발행되므로 정산 금액을 기재한 뒤 화주에게 전달하세요. 전달본은 아래에 첨부해 이력으로 보관할 수 있습니다.</p>
-            </section>
-            <ArrivalNoticeUploader
-              value={selected.arrivalNotice}
-              onChange={(arrivalNotice) => void persist(selected, { arrivalNotice })}
-              userId={userId}
-              tradeId={selected.tradeId}
-              readOnly={saving}
+              )}
+              notice="이 건의 B/L·선박·화물 정보로 도착통지서를 생성해 화주에게 전달하세요. 청구 금액란은 비워서 발행되며, 전달본은 아래에 첨부해 이력으로 보관할 수 있습니다."
             />
           </>
         )}
