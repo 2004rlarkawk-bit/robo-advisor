@@ -126,6 +126,11 @@ const DocumentManagerPanel = lazy(() => import('./components/DocumentManagerPane
 const ForwarderWorkspaceForm = lazy(() => import('./components/ForwarderWorkspaceForm'));
 const GuidePanel = lazy(() => import('./components/GuidePanel'));
 const ImportForwarderFlow = lazy(() => import('./components/import/ImportForwarderFlow'));
+const ForwarderImportWorkspace = lazy(() => import('./components/import/ForwarderImportWorkspace'));
+
+// 포워더 수입을 단건 위저드 대신 업무 큐 워크스페이스로 보여준다.
+// 문제가 생기면 false로 되돌려 기존 3단계 플로우로 즉시 복귀할 수 있다.
+const USE_FORWARDER_IMPORT_WORKSPACE = true;
 const ImportShipperFlow = lazy(() => import('./components/import/ImportShipperFlow'));
 const ProfileSettingsPage = lazy(() => import('./components/ProfileSettingsPage'));
 const SettingsPanel = lazy(() => import('./components/SettingsPanel'));
@@ -387,6 +392,11 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   // Trade profile state
   const [profile, setProfile] = useState<TradeProfile>(EMPTY_TRADE_PROFILE);
   const [forwarderForm, setForwarderForm] = useState<ForwarderFormState>(() => createEmptyForwarderFormState());
+  // 포워더 수입 워크스페이스에서 [직접 등록]을 누르면 기존 업로드 플로우로 전환한다.
+  const [forwarderDirectUpload, setForwarderDirectUpload] = useState(false);
+  useEffect(() => {
+    setForwarderDirectUpload(false);
+  }, [tradeDirection, workspaceRole]);
   const [forwarderAttachments, setForwarderAttachments] = useState<TradeAttachment[]>([]);
   const [isForwarderSaving, setIsForwarderSaving] = useState(false);
 
@@ -2226,19 +2236,28 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
 
             {tradeDirection === 'import' ? (
               workspaceRole === 'forwarder'
-                ? <ImportForwarderFlow
-                  key={`import-forwarder-${user.id}-${importWorkspaceVersion}`}
-                  userId={user.id}
-                  onGenerate={handleImportGenerate}
-                  onComplete={handleImportComplete}
-                  onSaved={handleImportSaved}
-                  readOnly={isDocumentManagerReadOnlyView}
-                  onClose={handleCloseDocumentPreview}
-                  onWorkspaceStateChange={({ currentStep, tradeId }) => {
-                    setWorkspaceCurrentStep(currentStep);
-                    setCurrentTradeId(tradeId);
-                  }}
-                />
+                ? (USE_FORWARDER_IMPORT_WORKSPACE && !isDocumentManagerReadOnlyView && !forwarderDirectUpload
+                  ? <ForwarderImportWorkspace
+                    key={`import-forwarder-ws-${user.id}-${importWorkspaceVersion}`}
+                    userId={user.id}
+                    onDirectUpload={() => setForwarderDirectUpload(true)}
+                  />
+                  : <ImportForwarderFlow
+                    key={`import-forwarder-${user.id}-${importWorkspaceVersion}`}
+                    userId={user.id}
+                    onGenerate={handleImportGenerate}
+                    onComplete={handleImportComplete}
+                    onSaved={(trade) => {
+                      setForwarderDirectUpload(false);
+                      handleImportSaved(trade);
+                    }}
+                    readOnly={isDocumentManagerReadOnlyView}
+                    onClose={handleCloseDocumentPreview}
+                    onWorkspaceStateChange={({ currentStep, tradeId }) => {
+                      setWorkspaceCurrentStep(currentStep);
+                      setCurrentTradeId(tradeId);
+                    }}
+                  />)
                 : <ImportShipperFlow
                   key={`import-shipper-${user.id}-${importWorkspaceVersion}`}
                   userId={user.id}

@@ -88,6 +88,7 @@ function mapTradeRow(row: TradeRow): SavedTrade {
     analysisResult: importSnapshot?.analysis ?? {},
     riskSummary: importSnapshot?.risks ?? [],
     customsProgress: importSnapshot?.cargo ?? {},
+    forwarderCase: row.workflow_data?.forwarderCase ?? null,
     status: row.status,
     generatedAt: row.generated_at ?? null,
     submittedAt: row.submitted_at ?? null,
@@ -171,10 +172,29 @@ export function getCompletedImportStatus(
     : 'submitted';
 }
 
+// 수입 플로우가 workflow_data를 통째로 다시 쓸 때, 포워더 워크스페이스가 저장한
+// 운영 상태(forwarderCase)까지 지워지지 않도록 기존 값을 이월한다.
+async function carryForwarderCase(
+  tradeId: string | undefined,
+  userId: string,
+  payload: ReturnType<typeof importTradePayload>,
+): Promise<void> {
+  if (!tradeId) return;
+  const { data } = await supabase
+    .from('trades')
+    .select('workflow_data')
+    .eq('id', tradeId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const existing = (data?.workflow_data as TradeWorkflowData | null)?.forwarderCase;
+  if (existing) payload.workflow_data = { ...payload.workflow_data, forwarderCase: existing };
+}
+
 /** 수입 확인 단계 성공 시 DB에 generated 상태를 기록합니다. */
 export async function createGeneratedImportTrade(snapshot: ImportTradeSnapshot): Promise<SavedTrade> {
   const userId = await getRequiredUserId();
   const payload = importTradePayload(userId, snapshot, 'generated');
+  await carryForwarderCase(snapshot.tradeId, userId, payload);
   const query = snapshot.tradeId
     ? supabase
       .from('trades')
@@ -193,6 +213,7 @@ export async function createCompletedImportTrade(snapshot: ImportTradeSnapshot):
   const userId = await getRequiredUserId();
   const completedStatus = getCompletedImportStatus(snapshot.role, snapshot.arrivalNotice);
   const payload = importTradePayload(userId, snapshot, completedStatus);
+  await carryForwarderCase(snapshot.tradeId, userId, payload);
 
   if (snapshot.tradeId) {
     const { data, error } = await supabase
