@@ -375,6 +375,27 @@ export async function buildImportAnalysisRequestDocuments(
   })));
 }
 
+
+/** Supabase Edge Function 오류 본문에서 사람이 읽을 수 있는 사유를 뽑아낸다. */
+async function readEdgeErrorDetail(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown })?.context;
+  if (!context || typeof (context as Response).text !== 'function') return '';
+  try {
+    const body = await (context as Response).clone().text();
+    if (!body) return '';
+    try {
+      const parsed = JSON.parse(body) as { error?: unknown; message?: unknown };
+      const value = parsed.error ?? parsed.message;
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    } catch {
+      // JSON이 아니면 본문 앞부분을 그대로 쓴다.
+    }
+    return body.slice(0, 300).trim();
+  } catch {
+    return '';
+  }
+}
+
 export async function analyzeImportDocuments(
   documents: ImportDocumentMeta[],
   filesById: Record<string, File>,
@@ -402,14 +423,18 @@ export async function analyzeImportDocuments(
   const edgeMs = performance.now() - edgeStartedAt;
 
   if (error) {
+    // FunctionsHttpError의 message는 "non-2xx status code"로만 나와 원인을 알 수 없다.
+    // 함수가 돌려준 본문을 읽어 실제 사유(키 미설정·모델 오류 등)를 그대로 전달한다.
+    const detail = await readEdgeErrorDetail(error);
     if (import.meta.env.DEV) {
       console.error('[Export Forwarder Analysis] Edge request failed', {
         stage: 'edge_request',
         message: error.message,
+        detail,
         documentTypes: payload.map(({ documentType }) => documentType),
       });
     }
-    throw new Error(`AI 문서 분석 요청에 실패했습니다: ${error.message}`);
+    throw new Error(`AI 문서 분석 요청에 실패했습니다: ${detail || error.message}`);
   }
   if (!data?.success || !data?.analysis) {
     if (import.meta.env.DEV) {
