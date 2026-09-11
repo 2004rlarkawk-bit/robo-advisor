@@ -2470,6 +2470,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   ? <ForwarderImportWorkspace
                     key={`import-forwarder-ws-${user.id}-${importWorkspaceVersion}`}
                     userId={user.id}
+                    issuerName={userProfile.company_name ?? ''}
                     onDirectUpload={() => setForwarderDirectUpload(true)}
                   />
                   : <ImportForwarderFlow
