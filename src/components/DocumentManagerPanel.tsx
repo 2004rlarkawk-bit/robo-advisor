@@ -15,6 +15,8 @@ interface Props {
   onCopy: (trade: SavedTrade) => void;
   /** 포워더 보완 요청을 받은 수입 거래를 다시 열어 수정하러 이동 */
   onRevise?: (trade: SavedTrade) => void;
+  /** 현재 선택된 역할의 거래만 표시 — 화주·포워더 거래가 섞여 보이지 않게 한다 */
+  roleFilter?: 'shipper' | 'forwarder';
   onListReady?: () => void;
 }
 
@@ -78,6 +80,7 @@ export default function DocumentManagerPanel({
   onLoad,
   onCopy,
   onRevise,
+  roleFilter,
   onListReady,
 }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
@@ -91,7 +94,10 @@ export default function DocumentManagerPanel({
     setError('');
 
     try {
-      const loaded = filterDocumentManagerTrades(await fetchSubmittedTrades());
+      const fetched = filterDocumentManagerTrades(await fetchSubmittedTrades());
+      const loaded = roleFilter
+        ? fetched.filter((trade) => (trade.tradeRole ?? 'shipper') === roleFilter)
+        : fetched;
       setTrades(loaded);
       // 포워더 보완 요청이 걸린 거래가 있으면 화주가 바로 볼 수 있게 패널을 자동으로 펼친다.
       if (loaded.some((trade) => hasActiveShipperReturnRequest(trade))) setOpen(true);
@@ -108,7 +114,7 @@ export default function DocumentManagerPanel({
       setIsLoading(false);
       onListReady?.();
     }
-  }, [onListReady]);
+  }, [onListReady, roleFilter]);
 
   useEffect(() => {
     void loadTrades();

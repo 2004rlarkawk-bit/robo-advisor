@@ -2387,7 +2387,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         activeMenu={activeMenu}
         collapsed={sidebarCollapsed}
         onNavigate={handleAppNavigate}
-        badges={{ docs: returnRequestCount }}
+        badges={{ docs: workspaceRole === 'forwarder' ? 0 : returnRequestCount }}
       />
 
       {/* 2. Main Portal Contents */}
@@ -2404,11 +2404,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         <main className="content-body">
           {/* 서비스 소개는 히어로가 화면을 꽉 채우는 디자인이라 폭 제한(1000px) 예외 */}
           <div className={`workspace-area${activeMenu === 'about' ? ' workspace-area--full' : ''}`}>
-            {/* 포워더 보완 요청 도착 알림(화주용) — 문서 관리 밖 어디서든 보이되,
-                포워더 수입 큐에서 작업 중일 때는 큐의 배지와 중복이므로 숨긴다. */}
+            {/* 포워더 보완 요청 도착 알림(화주용) — 화주 역할일 때만, 문서 관리 밖에서 보인다. */}
             {returnRequestCount > 0
               && activeMenu !== 'docs'
-              && !(activeMenu === 'dashboard' && tradeDirection === 'import' && workspaceRole === 'forwarder')
+              && workspaceRole !== 'forwarder'
               && (
                 <button type="button" className="return-alert-bar" onClick={() => setActiveMenu('docs')}>
                   <Mail size={15} />
@@ -2429,11 +2428,16 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             : activeMenu === 'docs' ? (
               <>
                 {/* 임시보관함(작성 중 미제출 거래) — 문서 관리 탭 상단. 제출 완료 문서함과 한 곳에서 관리 */}
-                <TradeManagerPanel embedded onLoad={(trade) => void handleResumeSavedTradeFromDocumentManager(trade)} />
+                <TradeManagerPanel
+                  embedded
+                  roleFilter={workspaceRole}
+                  onLoad={(trade) => void handleResumeSavedTradeFromDocumentManager(trade)}
+                />
                 <DocumentManagerPanel
                   onLoad={handleLoadSavedTradeFromDocumentManager}
                   onCopy={handleCopySavedTrade}
                   onRevise={(trade) => void handleReviseReturnedImportTrade(trade)}
+                  roleFilter={workspaceRole}
                   onListReady={handleDocumentManagerListReady}
                 />
               </>
