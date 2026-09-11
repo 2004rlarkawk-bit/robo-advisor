@@ -416,6 +416,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [isMatchingExportDocs, setIsMatchingExportDocs] = useState(false);
   // 개별 [이 값으로 수정]으로 입력값만 바꾼 상태 — 재생성 전까지 안내를 띄운다.
   const [hasPendingMatchEdits, setHasPendingMatchEdits] = useState(false);
+  // 개별 반영한 항목 — 체크 표시로 어떤 값을 이미 가져왔는지 보여주고 되돌릴 수 있게 한다.
+  const [appliedMatchKeys, setAppliedMatchKeys] = useState<Record<string, boolean>>({});
   const [isForwarderSaving, setIsForwarderSaving] = useState(false);
 
   const tradeDraftDefaultProfile: TradeProfile = {
@@ -1110,7 +1112,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
         if (updatedTrade.id !== currentTradeId) throw new Error('재생성된 거래 ID가 현재 거래와 일치하지 않습니다.');
         setSaveNotice(overrideRecords.length > 0
           ? `필요 서류가 다시 생성되었습니다. (경고 ${overrideRecords.length}건이 사유 기록 후 무시 처리됨)`
-          : '수정된 내용으로 필요 서류가 다시 생성되었으며 기존 거래가 업데이트되었습니다.');
+          : '수정된 내용으로 필요 서류가 다시 생성되었습니다.\n기존 거래가 업데이트되었습니다.');
       }
       setCurrentTradeStatus('generated');
       setWorkspaceCurrentStep(2);
@@ -1739,14 +1741,26 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
    * 여러 항목을 골라 누를 수 있으므로 여기서 바로 재생성하지 않는다
    * (반영 후 패널의 [수정 반영해 재생성]으로 한 번에 다시 만든다).
    */
-  const applyUploadedValue = (field: string, value: string) => {
+  const applyUploadedValue = (key: string, field: string, value: string) => {
     setProfile((current) => applyMatchPatchToProfile(current, { [field]: value }));
+    setAppliedMatchKeys((current) => ({ ...current, [key]: true }));
     setHasPendingMatchEdits(true);
+  };
+
+  /** 반영을 취소하고 대조 시점의 입력값으로 되돌린다. */
+  const undoUploadedValue = (key: string, field: string, previousValue: string) => {
+    setProfile((current) => applyMatchPatchToProfile(current, { [field]: previousValue }));
+    setAppliedMatchKeys((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
   };
 
   /** 대조 결과를 바탕으로 서류를 다시 생성한다 — 파이프라인 콘솔을 그대로 띄운다. */
   const regenerateAfterMatchEdits = (overrideProfile?: TradeProfile) => {
     setHasPendingMatchEdits(false);
+    setAppliedMatchKeys({});
     void handleGenerateDocuments(overrideProfile);
   };
 
@@ -3510,16 +3524,36 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   <td>
                                     {row.status === 'match' && <span className="rv-match-badge ok">일치</span>}
                                     {row.status === 'unknown' && <span className="rv-match-badge na">확인 불가</span>}
-                                    {row.status === 'mismatch' && (
-                                      <div className="rv-match-fix">
-                                        <span className="rv-match-badge bad">불일치</span>
-                                        {row.uploadedValue && (
-                                          <button onClick={() => applyUploadedValue(row.field, row.uploadedValue)}>
-                                            이 값으로 수정
-                                          </button>
-                                        )}
-                                      </div>
-                                    )}
+                                    {row.status === 'mismatch' && (() => {
+                                      const key = `${match.attachmentId}::${row.field}`;
+                                      const applied = !!appliedMatchKeys[key];
+                                      return (
+                                        <div className="rv-match-fix">
+                                          <span className="rv-match-badge bad">불일치</span>
+                                          {row.uploadedValue && (
+                                            <>
+                                              <button
+                                                className={applied ? 'is-applied' : undefined}
+                                                onClick={() => applyUploadedValue(key, row.field, row.uploadedValue)}
+                                              >
+                                                이 값으로 수정
+                                              </button>
+                                              {applied && (
+                                                <button
+                                                  type="button"
+                                                  className="rv-match-check"
+                                                  title="반영 취소"
+                                                  aria-label="반영 취소"
+                                                  onClick={() => undoUploadedValue(key, row.field, row.formValue)}
+                                                >
+                                                  <CheckCircle2 size={17} />
+                                                </button>
+                                              )}
+                                            </>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </td>
                                 </tr>
                               ))}
@@ -3557,7 +3591,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           disabled={isProcessing}
                           onClick={() => regenerateAfterMatchEdits()}
                         >
-                          {isProcessing ? '생성 중...' : '수정 반영해 재생성'}
+                          {isProcessing ? '생성 중...' : '수정본 생성'}
                         </button>
                         {hasPendingMatchEdits && (
                           <span className="rv-match-hint">반영한 값으로 서류를 다시 만들어 주세요.</span>
@@ -4360,7 +4394,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             </div>
             <h3 style={{ margin: '0 0 18px', fontSize: 22, fontWeight: 800, color: 'var(--text-dark)' }}>AI 연산 결과 재검증</h3>
             <div style={{ borderTop: '1px solid var(--border-color-subtle)', paddingTop: 18, fontSize: 16, color: 'var(--text-dark)', lineHeight: 1.8 }}>
-              <p style={{ margin: 0 }}>{saveNotice}</p>
+              {saveNotice.split('\n').map((line, index) => (
+                <p key={line} style={{ margin: index === 0 ? 0 : '6px 0 0' }}>{line}</p>
+              ))}
             </div>
             <div style={{ borderTop: '1px solid var(--border-color-subtle)', marginTop: 22, paddingTop: 18, display: 'flex', justifyContent: 'center' }}>
               <button className="btn btn-primary" style={{ minWidth: 200, justifyContent: 'center' }} onClick={() => setSaveNotice(null)}>확인</button>
