@@ -1493,6 +1493,19 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     pendingDocumentManagerScrollRef.current = origin;
     setActiveMenu('docs');
   };
+  /**
+   * 로고 클릭 — 브라우저 새로고침 대신 현재 작업 중인 화면을 첫 화면(빈 입력 폼)으로 되돌린다.
+   * 새로고침은 작업 세션을 복원해 검증 결과 화면으로 되돌아가므로, 시연 중 빠른 초기화 용도로는
+   * 맞지 않는다.
+   */
+  const handleLogoClick = () => {
+    handleReset();
+    // handleReset은 화주 수출 상태만 비운다 — 수입/포워더 플로우는 자체 내부 상태를 갖고 있어
+    // 리마운트 키를 올려서 함께 첫 화면으로 되돌린다.
+    setImportWorkspaceVersion((version) => version + 1);
+    handleAppNavigate('dashboard');
+  };
+
   const handleAppNavigate = (menu: AppMenu) => {
     if (isDocumentManagerReadOnlyView) {
       const origin = documentManagerPreviewOriginRef.current;
@@ -2387,6 +2400,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         activeMenu={activeMenu}
         collapsed={sidebarCollapsed}
         onNavigate={handleAppNavigate}
+        onLogoClick={handleLogoClick}
         badges={{ docs: workspaceRole === 'forwarder' ? 0 : returnRequestCount }}
       />
 

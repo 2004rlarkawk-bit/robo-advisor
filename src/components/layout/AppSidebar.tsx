@@ -32,25 +32,28 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
 interface AppSidebarProps {
   activeMenu: AppMenu;
   collapsed: boolean;
+  /** 로고 클릭 시 실행 — 현재 작업 중인 화면을 첫 화면(빈 입력 폼)으로 되돌린다. */
+  onLogoClick: () => void;
   onNavigate: (menu: AppMenu) => void;
   /** 메뉴별 알림 수 — 0이면 표시하지 않는다 (예: 문서 관리의 포워더 보완 요청) */
   badges?: Partial<Record<AppMenu, number>>;
 }
 
-export default function AppSidebar({ activeMenu, collapsed, onNavigate, badges }: AppSidebarProps) {
+export default function AppSidebar({ activeMenu, collapsed, onNavigate, onLogoClick, badges }: AppSidebarProps) {
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-      {/* 로고 클릭 = 앱 새로고침. 시연 중 상태가 꼬였을 때 빠르게 초기화하는 용도. */}
+      {/* 로고 클릭 = 작업실 첫 화면으로 이동. 새로고침(F5)은 진행 중 작업을 이어보여주지만
+          로고는 시연 중 상태가 꼬였을 때 빈 입력 폼으로 빠르게 되돌리는 용도라 별개로 둔다. */}
       <div
         className="logo-section"
         role="button"
         tabIndex={0}
-        title="PortAI 새로고침"
-        onClick={() => window.location.reload()}
+        title="PortAI 첫 화면으로"
+        onClick={onLogoClick}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            window.location.reload();
+            onLogoClick();
           }
         }}
       >
