@@ -2088,6 +2088,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   const ownReadyCount = ownDocs.filter(d => hasDoc(d.id)).length;
   const externalPendingCount = documents.filter(d => d.status === 'external_pending').length;
   const totalMatchMismatches = exportDocMatches.reduce((sum, match) => sum + match.mismatchCount, 0);
+  // 분석에 실패한 서류는 대조된 적이 없다 — '모두 일치'로 표시하면 안 된다.
+  const failedMatchCount = exportDocMatches.filter((match) => match.error).length;
   const isGenerationBlocked = blockingIssuesCount > 0;
   const isSubmitReady = !isGenerationBlocked && ownDocs.length > 0 && ownReadyCount === ownDocs.length;
 
@@ -3496,8 +3498,12 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     <div className="rv-panel-head">
                       내 서류 대조
                       {!isMatchingExportDocs && (
-                        <span className={`rv-match-total${totalMatchMismatches > 0 ? ' bad' : ' ok'}`}>
-                          {totalMatchMismatches > 0 ? `불일치 ${totalMatchMismatches}건` : '모두 일치'}
+                        <span className={`rv-match-total${totalMatchMismatches > 0 || failedMatchCount > 0 ? ' bad' : ' ok'}`}>
+                          {totalMatchMismatches > 0
+                            ? `불일치 ${totalMatchMismatches}건`
+                            : failedMatchCount > 0
+                              ? `대조 실패 ${failedMatchCount}건`
+                              : '모두 일치'}
                         </span>
                       )}
                       {!isMatchingExportDocs && totalMatchMismatches > 0 && (

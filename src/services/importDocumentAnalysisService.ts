@@ -347,22 +347,6 @@ export interface ImportAnalysisRequestDocument {
   dataUrl: string;
 }
 
-// supabase-js는 Edge Function이 non-2xx를 돌려주면 본문을 버리고
-// "Edge Function returned a non-2xx status code"만 남긴다.
-// 함수가 JSON 본문에 담아 보낸 실제 원인(error 필드)을 꺼내 사용자에게 보여준다.
-async function extractFunctionErrorMessage(error: { message: string; context?: unknown }): Promise<string> {
-  const context = error.context;
-  if (typeof Response !== 'undefined' && context instanceof Response) {
-    try {
-      const body = await context.clone().json() as { error?: unknown };
-      if (typeof body.error === 'string' && body.error.trim() !== '') return body.error;
-    } catch {
-      // 본문이 JSON이 아니면 기본 메시지를 사용한다
-    }
-  }
-  return error.message;
-}
-
 export async function buildImportAnalysisRequestDocuments(
   documents: ImportDocumentMeta[],
   filesById: Record<string, File>,
@@ -389,6 +373,27 @@ export async function buildImportAnalysisRequestDocuments(
     documentType: document.type,
     dataUrl: await readFileAsDataUrl(file, mimeType),
   })));
+}
+
+
+/** Supabase Edge Function 오류 본문에서 사람이 읽을 수 있는 사유를 뽑아낸다. */
+async function readEdgeErrorDetail(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown })?.context;
+  if (!context || typeof (context as Response).text !== 'function') return '';
+  try {
+    const body = await (context as Response).clone().text();
+    if (!body) return '';
+    try {
+      const parsed = JSON.parse(body) as { error?: unknown; message?: unknown };
+      const value = parsed.error ?? parsed.message;
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    } catch {
+      // JSON이 아니면 본문 앞부분을 그대로 쓴다.
+    }
+    return body.slice(0, 300).trim();
+  } catch {
+    return '';
+  }
 }
 
 export async function analyzeImportDocuments(
@@ -418,15 +423,18 @@ export async function analyzeImportDocuments(
   const edgeMs = performance.now() - edgeStartedAt;
 
   if (error) {
-    const detail = await extractFunctionErrorMessage(error);
+    // FunctionsHttpError의 message는 "non-2xx status code"로만 나와 원인을 알 수 없다.
+    // 함수가 돌려준 본문을 읽어 실제 사유(키 미설정·모델 오류 등)를 그대로 전달한다.
+    const detail = await readEdgeErrorDetail(error);
     if (import.meta.env.DEV) {
       console.error('[Export Forwarder Analysis] Edge request failed', {
         stage: 'edge_request',
-        message: detail,
+        message: error.message,
+        detail,
         documentTypes: payload.map(({ documentType }) => documentType),
       });
     }
-    throw new Error(`AI 문서 분석 요청에 실패했습니다: ${detail}`);
+    throw new Error(`AI 문서 분석 요청에 실패했습니다: ${detail || error.message}`);
   }
   if (!data?.success || !data?.analysis) {
     if (import.meta.env.DEV) {
