@@ -62,6 +62,11 @@ export async function buildArrivalNoticeDocx(caseItem: ForwarderImportCase): Pro
     .filter(Boolean).join(' ');
   const measurement = extracted.cargoTotals.measurement || extracted.measurement;
   const issuedDate = new Date().toISOString().slice(0, 10);
+  // 운임 조건은 인코텀즈로 추정한다 — C·D 조건은 수출자 부담(Prepaid), E·F 조건은 수입자 부담(Collect).
+  const incoterms = s(extracted.incoterms).toUpperCase().slice(0, 3);
+  const freightTerm = ['CIF', 'CFR', 'CIP', 'CPT', 'DAP', 'DPU', 'DDP'].includes(incoterms)
+    ? 'FREIGHT PREPAID'
+    : ['FOB', 'FCA', 'FAS', 'EXW'].includes(incoterms) ? 'FREIGHT COLLECT' : '';
 
   const doc = new Document({
     sections: [{
@@ -109,6 +114,18 @@ export async function buildArrivalNoticeDocx(caseItem: ForwarderImportCase): Pro
                 labeledCell('PACKAGES / G.W. / CBM', [[packages, grossWeight, measurement].filter(Boolean).join(' / ')], 45),
               ],
             }),
+            new TableRow({
+              children: [
+                labeledCell('NOTIFY PARTY (통지처)', [s(extracted.notifyParty) || 'SAME AS CONSIGNEE'], 55),
+                labeledCell('FREIGHT (운임 조건)', [freightTerm], 45),
+              ],
+            }),
+            new TableRow({
+              children: [
+                labeledCell('DISCHARGING TERMINAL / BONDED AREA (도착 터미널·장치장)', [], 55),
+                labeledCell('FORWARDER CONTACT (담당자 연락처)', [], 45),
+              ],
+            }),
           ],
         }),
         new Paragraph({
@@ -133,6 +150,7 @@ export async function buildArrivalNoticeDocx(caseItem: ForwarderImportCase): Pro
           '1. 위 화물이 상기 일정으로 도착할 예정임을 통지드립니다.',
           '2. 원본 B/L(또는 Surrender 확인)과 함께 상기 비용 정산 후 D/O가 발급됩니다.',
           '3. 통관 완료 후 지정 보세구역에서 화물 인수가 가능합니다.',
+          '4. 무료장치기간(Free Time) 경과 시 보관료가 발생할 수 있습니다. 비용 정산 계좌는 별도 안내드립니다.',
         ].map((line) => new Paragraph({
           spacing: { after: 60 },
           children: [new TextRun({ text: line, size: 18 })],
