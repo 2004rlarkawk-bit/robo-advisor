@@ -4080,12 +4080,14 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .fwd-queue-heading h2 { display: flex; align-items: center; gap: 8px; }
 .fwd-queue-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-.fwd-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 14px 0; }
-.fwd-tile { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; text-align: center; }
-.fwd-tile strong { display: block; font-size: 22px; font-weight: 800; color: #0b57d0; }
-.fwd-tile span { font-size: 12px; color: #64748b; }
-.fwd-tile.is-alert strong { color: #b91c1c; }
-.fwd-tile.is-alert { background: #fef2f2; border-color: #fecaca; }
+.fwd-queue-status { margin: 5px 0 0; font-size: 13px; color: #64748b; }
+.fwd-queue-status strong { color: #334155; }
+.fwd-queue-status span { color: #b91c1c; font-weight: 700; }
+.fwd-more-menu { position: relative; }
+.fwd-more-menu summary { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1px solid #d7dee9; border-radius: 8px; color: #475569; cursor: pointer; list-style: none; }
+.fwd-more-menu summary::-webkit-details-marker { display: none; }
+.fwd-more-menu[open] summary { background: #f8fafc; }
+.fwd-more-menu > button { position: absolute; z-index: 2; top: 40px; right: 0; min-width: 94px; padding: 9px 11px; border: 1px solid #d7dee9; border-radius: 8px; background: #fff; box-shadow: 0 8px 20px rgb(15 23 42 / 12%); color: #334155; font-size: 13px; white-space: nowrap; cursor: pointer; }
 
 .fwd-empty { text-align: center; color: #64748b; padding: 28px 12px; line-height: 1.7; }
 .fwd-empty svg { color: #94a3b8; margin-bottom: 6px; }
@@ -4093,7 +4095,11 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .fwd-queue-table tbody tr.fwd-row { cursor: pointer; }
 .fwd-queue-table tbody tr.fwd-row:hover { background: #f1f5f9; }
 .fwd-next-cell { color: #334155; font-weight: 600; }
-.fwd-blocker-count { display: inline-flex; min-width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 999px; background: #fee2e2; color: #b91c1c; font-weight: 800; font-size: 12px; padding: 0 6px; }
+.fwd-case-cell strong, .fwd-case-cell > span:not(.fwd-origin) { display: block; }
+.fwd-case-cell strong { color: #16233b; }
+.fwd-case-cell > span:not(.fwd-origin) { margin-top: 3px; color: #64748b; font-size: 12px; }
+.fwd-case-cell .fwd-origin { margin: 5px 0 0; }
+.fwd-blocker-inline { display: inline-flex; margin-left: 7px; padding: 2px 6px; border-radius: 999px; background: #fee2e2; color: #b91c1c; font-size: 11px; font-weight: 800; white-space: nowrap; }
 
 .fwd-stage-badge { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
 .fwd-stage-received { background: #eef4ff; color: #0b57d0; }
@@ -4111,17 +4117,25 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .fwd-head-grid dt { font-size: 11.5px; color: #94a3b8; }
 .fwd-head-grid dd { margin: 2px 0 0; font-size: 13.5px; font-weight: 600; color: #16233b; }
 
-.fwd-stepper { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
-.fwd-step { font-size: 12px; font-weight: 700; color: #94a3b8; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 999px; padding: 4px 12px; }
-.fwd-step.is-current { color: #fff; background: #0b57d0; border-color: #0b57d0; }
-.fwd-step.is-done { color: #15803d; background: #f0fdf4; border-color: #bbf7d0; }
+.fwd-progress { display: flex; gap: 0; margin-top: 14px; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 7px; }
+.fwd-progress-step { flex: 1; padding: 7px 8px; color: #94a3b8; background: #fff; font-size: 11.5px; font-weight: 700; text-align: center; white-space: nowrap; }
+.fwd-progress-step + .fwd-progress-step { border-left: 1px solid #e2e8f0; }
+.fwd-progress-step.is-current { color: #0b57d0; background: #eef4ff; }
+.fwd-progress-step.is-done { color: #15803d; background: #f0fdf4; }
 
 .fwd-next-banner { display: flex; align-items: center; gap: 7px; margin: 12px 0 0; padding: 9px 12px; border-radius: 9px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 13px; }
 .fwd-next-banner strong { font-weight: 800; }
 
-.fwd-issue-group { margin-top: 12px; }
-.fwd-issue-group h3 { font-size: 13px; margin: 0 0 6px; color: #334155; }
-.fwd-issue-group h3 span { color: #94a3b8; font-weight: 600; margin-left: 4px; }
+.fwd-tabs { display: flex; gap: 2px; border-bottom: 1px solid #e2e8f0; }
+.fwd-tabs button { padding: 9px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #64748b; font-size: 13px; font-weight: 700; cursor: pointer; }
+.fwd-tabs button:hover:not(:disabled) { color: #334155; }
+.fwd-tabs button.is-active { border-bottom-color: #0b57d0; color: #0b57d0; }
+.fwd-tabs button:disabled { color: #cbd5e1; cursor: not-allowed; }
+
+.fwd-issue-group { margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 9px; }
+.fwd-issue-group summary { display: flex; justify-content: space-between; padding: 10px 12px; color: #334155; font-size: 13px; font-weight: 700; cursor: pointer; }
+.fwd-issue-group summary span { color: #94a3b8; font-weight: 600; }
+.fwd-issue-list { padding: 0 8px 8px; }
 .fwd-issue { display: flex; gap: 10px; align-items: flex-start; padding: 9px 11px; border: 1px solid #e2e8f0; border-radius: 9px; margin-bottom: 6px; cursor: pointer; background: #fff; }
 .fwd-issue input { margin-top: 3px; }
 .fwd-issue.is-blocker { border-left: 3px solid #dc2626; }
@@ -4135,10 +4149,15 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 
 .fwd-actions { flex-wrap: wrap; align-items: center; }
 .fwd-action-hint { flex-basis: 100%; margin: 4px 0 0; font-size: 12px; color: #b45309; }
+.fwd-clear-overview { display: flex; gap: 10px; align-items: center; color: #15803d; }
+.fwd-clear-overview div { display: flex; flex-direction: column; gap: 2px; }
+.fwd-clear-overview span { color: #64748b; font-size: 13px; }
 
 @media (max-width: 640px) {
   .fwd-queue-heading, .fwd-detail-top { flex-direction: column; align-items: stretch; }
-  .fwd-summary { grid-template-columns: repeat(2, 1fr); }
+  .fwd-queue-actions { justify-content: space-between; }
+  .fwd-progress-step { padding-inline: 5px; font-size: 10.5px; }
+  .fwd-tabs button { flex: 1; padding-inline: 6px; }
 }
 
 /* ===== 포워더 보완 요청(반송) + 화주 진행 타임라인 ===== */
