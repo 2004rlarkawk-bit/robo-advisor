@@ -288,3 +288,18 @@ export function applyMatchPatchToProfile(
   }
   return next as unknown as TradeProfile;
 }
+
+/** 첨부 문서 종류 → 수출 문서함의 서류 ID. 생성본 미리보기를 열 때 쓴다. */
+const ATTACHMENT_TO_DOCUMENT: Partial<Record<TradeAttachmentDocumentType, string>> = {
+  commercial_invoice: 'invoice',
+  packing_list: 'packing_list',
+  transport_request: 'transport_request',
+  export_declaration: 'customs_dec',
+  certificate_of_origin: 'co',
+};
+
+export function documentIdForAttachmentType(
+  documentType: TradeAttachmentDocumentType,
+): string | undefined {
+  return ATTACHMENT_TO_DOCUMENT[documentType];
+}

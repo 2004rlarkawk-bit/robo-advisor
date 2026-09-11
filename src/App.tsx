@@ -99,6 +99,7 @@ import { decideGeneratedTradeWrite } from './services/tradePersistencePolicy';
 import { resolveWorkspaceRole, type WorkspaceRole } from './utils/workspaceRole';
 import {
   applyMatchPatchToProfile,
+  documentIdForAttachmentType,
   matchUploadedExportDocuments,
   type ExportDocMatchResult,
 } from './services/exportDocumentMatchService';
@@ -3472,16 +3473,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           {totalMatchMismatches > 0 ? `불일치 ${totalMatchMismatches}건` : '모두 일치'}
                         </span>
                       )}
-                      {!isMatchingExportDocs && hasPendingMatchEdits && (
-                        <button
-                          className="rv-match-apply-all"
-                          disabled={isProcessing}
-                          onClick={() => regenerateAfterMatchEdits()}
-                        >
-                          수정 반영해 재생성
-                        </button>
-                      )}
-                      {!isMatchingExportDocs && !hasPendingMatchEdits && totalMatchMismatches > 0 && (
+                      {!isMatchingExportDocs && totalMatchMismatches > 0 && (
                         <button
                           className="rv-match-apply-all"
                           disabled={isProcessing}
@@ -3499,14 +3491,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           <span className="rv-match-doc-name">
                             <Paperclip size={13} /> {match.documentLabel} · {match.fileName}
                           </span>
-                          <button
-                            className="rv-match-open"
-                            onClick={() => void handleDownloadUploadedDoc(
-                              shipperAttachments.find((a) => a.id === match.attachmentId)!,
-                            )}
-                          >
-                            원본 열기
-                          </button>
                         </div>
                         {match.error ? (
                           <p className="rv-match-error">{match.error}</p>
@@ -3542,11 +3526,44 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                             </tbody>
                           </table>
                         )}
+                        <div className="rv-match-doc-actions">
+                          <button
+                            className="rv-match-open"
+                            onClick={() => void handleDownloadUploadedDoc(
+                              shipperAttachments.find((a) => a.id === match.attachmentId)!,
+                            )}
+                          >
+                            원본 열기
+                          </button>
+                          {(() => {
+                            const docId = documentIdForAttachmentType(match.documentType);
+                            if (!docId || !hasDoc(docId)) return null;
+                            return (
+                              <button className="rv-match-open" onClick={() => setPreviewDocId(docId)}>
+                                재생성 문서 열기
+                              </button>
+                            );
+                          })()}
+                        </div>
                       </div>
                     ))}
                     <p className="rv-match-note">
                       추출값 기반 대조라 100% 정확하지 않을 수 있습니다. 불일치 항목은 원본과 함께 확인해 주세요.
                     </p>
+                    {!isMatchingExportDocs && (
+                      <div className="rv-match-footer">
+                        <button
+                          className="btn btn-primary btn-sm"
+                          disabled={isProcessing}
+                          onClick={() => regenerateAfterMatchEdits()}
+                        >
+                          {isProcessing ? '생성 중...' : '수정 반영해 재생성'}
+                        </button>
+                        {hasPendingMatchEdits && (
+                          <span className="rv-match-hint">반영한 값으로 서류를 다시 만들어 주세요.</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
