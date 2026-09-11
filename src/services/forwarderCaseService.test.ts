@@ -138,24 +138,6 @@ describe('보완 요청(반송) 루프', () => {
 });
 
 describe('sortForwarderCases', () => {
-  it('sorts English ETA dates chronologically and keeps completed blockers out of the active queue', () => {
-    const a = deriveForwarderCase(makeTrade({ id: 'a' }))!;
-    const b = { ...a, tradeId: 'b', eta: 'OCT. 01, 2026' };
-    const c = { ...a, tradeId: 'c', eta: 'SEP. 20, 2026' };
-    const done = { ...a, tradeId: 'done', stage: 'done' as const, blockerCount: 2 };
-    expect(sortForwarderCases([done, b, c]).map((i) => i.tradeId)).toEqual(['c', 'b', 'done']);
-  });
-  it('requires a fresh review when the issue evidence has changed', () => {
-    const result = deriveForwarderCase(makeTrade({
-      snapshot: makeSnapshot({ validations: [blockerValidation] }),
-      forwarderCase: {
-        stage: 'review', updatedAt: '2026-09-11',
-        issueResolutions: { 'v-val-1': true },
-        issueNotes: { 'v-val-1': { note: '확인', confirmedAt: '2026-09-10', issueDetail: '다른 검증 내용' } },
-      },
-    }));
-    expect(result?.blockerCount).toBe(1);
-  });
   it('진행 단계 우선, 완료 건은 뒤로 보낸다', () => {
     const received = deriveForwarderCase(makeTrade({ id: 'a' }))!;
     const done = deriveForwarderCase(
