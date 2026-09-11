@@ -45,6 +45,7 @@ import {
   type BillOfLadingData,
 } from './types';
 import './styles/feedbackReport.css';
+import './styles/forwarderWorkspace.css';
 import AuthPage from './components/AuthPage';
 import OnboardingPage from './components/OnboardingPage';
 import ShipperWorkspaceForm, { SHIPPER_FIELD_SECTION } from './components/ShipperWorkspaceForm';
@@ -2380,7 +2381,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   })();
 
   return (
-    <div className="app-container">
+    <div className={`app-container${activeMenu === 'dashboard' && tradeDirection === 'import' && workspaceRole === 'forwarder' ? ' is-forwarder-import' : ''}`}>
       <OnboardingTour />
       {/* 1. Left Navigation Sidebar */}
       <AppSidebar
@@ -2444,7 +2445,15 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             )
             : <>
             {/* Page Title & Subtitle — 결과 화면(수출: 생성 후 / 수입: 2단계 이후)에서는 결과에 집중하도록 제목을 숨긴다 */}
+            {tradeDirection === 'import' && workspaceRole === 'forwarder' && !forwarderDirectUpload && !isDocumentManagerReadOnlyView && <div className="fwd-page-heading">
+              <div><p className="fwd-eyebrow">OPERATIONS / IMPORT</p><h1>수입 업무 관리</h1><p className="fwd-page-description">의뢰 접수부터 서류 검토, 통관 협업까지.</p></div>
+              <div className="fwd-context-controls">
+                <label>거래 유형<select value={tradeDirection} onChange={(e) => handleTradeDirectionChange(e.target.value as TradeDirection)}><option value="import">수입</option><option value="export">수출</option></select></label>
+                <label>사용자 역할<select value={workspaceRole} disabled={userProfile.service_role !== 'integrated'} onChange={(e) => handleWorkspaceRoleChange(e.target.value === 'forwarder' ? 'forwarder' : 'shipper')}><option value="forwarder">포워더</option>{userProfile.service_role === 'integrated' && <option value="shipper">화주</option>}</select></label>
+              </div>
+            </div>}
             {!(tradeDirection === 'export' && hasGenerated)
+              && !(tradeDirection === 'import' && workspaceRole === 'forwarder' && !forwarderDirectUpload)
               && !(tradeDirection === 'import' && workspaceCurrentStep > 1)
               && <div className="page-heading">
               <h1 className="page-title">항만 수출입 문서 자동화 서비스</h1>
@@ -2453,6 +2462,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
 
             {/* 결과·후속 단계에서는 거래 유형/역할 선택 패널을 숨긴다 (수출 결과 화면과 동일 정책) */}
             {!isDocumentManagerReadOnlyView
+              && !(tradeDirection === 'import' && workspaceRole === 'forwarder' && !forwarderDirectUpload)
               && !(tradeDirection === 'export' && hasGenerated)
               && !(tradeDirection === 'import' && workspaceCurrentStep > 1)
               && <div className="trade-selector-panel">

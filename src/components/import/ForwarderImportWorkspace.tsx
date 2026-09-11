@@ -6,12 +6,14 @@
  *  - 상세: 이슈(차단/확인/참고) → 문서 대사 → 통관·도착 관리 → 완료
  * 운영 상태는 forwarderCaseService를 통해 workflow_data.forwarderCase에 저장한다.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  ChevronRight,
   CornerUpLeft,
+  FileText,
   Inbox,
   MoreHorizontal,
   RefreshCw,
@@ -30,12 +32,16 @@ import {
   deriveForwarderCase,
   listForwarderCases,
   saveForwarderCaseState,
+  sortForwarderCases,
 } from '../../services/forwarderCaseService';
 import { lookupImportCargo } from '../../services/cargoProgressService';
 import { IMPORT_DOCUMENT_TYPE_LABELS } from '../../services/importDocumentAnalysisService';
 import { loadTradeAttachmentFile } from '../../services/tradeAttachmentStorageService';
 import { downloadArrivalNoticeDocx } from '../../services/arrivalNoticeDocxService';
-import ImportDocumentComparison from './ImportDocumentComparison';
+import ForwarderDocumentReview from './ForwarderDocumentReview';
+import ForwarderIssueList from './ForwarderIssueList';
+import ForwarderCompletionForm from './ForwarderCompletionForm';
+import { firstDocumentValue, formatForwarderDate, forwarderDateKey } from '../../utils/forwarderPresentation';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 
 interface Props {
@@ -57,13 +63,14 @@ type DetailTab = 'overview' | 'review' | 'clearance';
 type QueueFilter = 'active' | 'received' | 'blockers' | 'done';
 
 function formatEta(eta: string): string {
-  return eta ? eta.slice(0, 10) : '미정';
+  return formatForwarderDate(eta);
 }
 
 /** ETA까지 남은 날짜 배지 — 임박(D-3 이내)·지남을 색으로 구분해 우선순위를 보여준다 */
 function etaDday(eta: string): { label: string; tone: 'overdue' | 'imminent' | 'normal' } | null {
-  const date = new Date(eta.slice(0, 10));
-  if (Number.isNaN(date.getTime())) return null;
+  const key = forwarderDateKey(eta);
+  if (!key) return null;
+  const date = new Date(`${key}T00:00:00`);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const days = Math.round((date.getTime() - today.getTime()) / 86400000);
@@ -89,15 +96,22 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
   const [docBusyId, setDocBusyId] = useState<string | null>(null);
   const [anBusy, setAnBusy] = useState(false);
   const [queueFilter, setQueueFilter] = useState<QueueFilter>('active');
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [completionOpen, setCompletionOpen] = useState(false);
+  const [cargoQueriedBl, setCargoQueriedBl] = useState('');
+  const cargoRequest = useRef(0);
 
   const load = useCallback(async () => {
+    setLoading(true);
     setError('');
     try {
       setCases(await listForwarderCases());
     } catch (err) {
       console.error('포워더 업무 큐 조회 실패:', err);
-      setCases([]);
       setError('업무 목록을 불러오지 못했습니다. 새로고침을 눌러 다시 시도해 주세요.');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -114,10 +128,10 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
   const applyState = useCallback((tradeId: string, state: ForwarderCaseState) => {
     setCases((current) => {
       if (!current) return current;
-      return current.map((item) => {
+      return sortForwarderCases(current.map((item) => {
         if (item.tradeId !== tradeId) return item;
         return deriveForwarderCase({ ...item.trade, forwarderCase: state }) ?? item;
-      });
+      }));
     });
   }, []);
 
@@ -174,16 +188,26 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
   }, [userId]);
 
   const lookupCargo = useCallback(async (blNo: string) => {
+    const request = ++cargoRequest.current;
     setCargoBusy(true);
+    setCargo(null);
+    setError('');
     try {
-      setCargo(await lookupImportCargo(blNo));
+      const result = await lookupImportCargo(blNo);
+      if (request === cargoRequest.current) { setCargo(result); setCargoQueriedBl(blNo); }
+    } catch {
+      if (request === cargoRequest.current) setError('화물 진행 정보를 조회하지 못했습니다. B/L 번호를 확인하고 다시 시도해 주세요.');
     } finally {
-      setCargoBusy(false);
+      if (request === cargoRequest.current) setCargoBusy(false);
     }
   }, []);
 
   const openCase = (tradeId: string) => {
+    ++cargoRequest.current;
+    setCargoBusy(false);
     setSelectedId(tradeId);
+    setError('');
+    setCompletionOpen(false);
     setCargo(null);
     const opened = cases?.find((item) => item.tradeId === tradeId);
     setCargoBlNo(opened && opened.blNo !== '-' ? opened.blNo : '');
@@ -194,12 +218,9 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
   };
 
   const finishClearance = (caseItem: ForwarderImportCase) => {
-    const arrivalNoticeNote = caseItem.arrivalNotice?.storagePath
-      ? ''
-      : '\n\n도착통지서(A/N)가 첨부되지 않았습니다.';
-    if (window.confirm(`실제 통관·반출 확인이 끝난 건인가요?${arrivalNoticeNote}\n\n완료 처리 후에는 업무 큐의 완료 건으로 이동합니다.`)) {
-      void moveToStage(caseItem, 'done', 'overview');
-    }
+    if (caseItem.blockerCount > 0 || (caseItem.returnRequest && !caseItem.returnRequest.resolvedAt)) return;
+    setDetailTab('clearance');
+    setCompletionOpen(true);
   };
 
   // ---------- 상세 화면 ----------
@@ -211,6 +232,8 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
     const infos = selected.issues.filter((issue) => issue.severity === 'info');
     const canFinishReview = selected.blockerCount === 0;
     const returnPending = Boolean(selected.returnRequest && !selected.returnRequest.resolvedAt);
+    const completion = selected.trade.forwarderCase?.completion;
+    const consignee = firstDocumentValue(selected.snapshot.analysis.extracted.consignee, selected.snapshot.analysis.extracted.consigneeDetails?.name);
 
     return (
       <div className="fwd-workspace">
@@ -225,12 +248,14 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
 
         <section className="form-card import-card fwd-head-card">
           <div className="fwd-head-main">
-            <h2>{selected.importer} · {selected.blNo}</h2>
+            <div><span className="fwd-eyebrow">BILL OF LADING</span><h2>{selected.blNo === '-' ? 'B/L 번호 미등록' : selected.blNo}</h2></div>
             <span className={`fwd-origin ${selected.origin === 'shipper_request' ? 'is-request' : ''}`}>
               {selected.origin === 'shipper_request' ? '화주 의뢰' : '직접 등록'}
             </span>
           </div>
           <dl className="fwd-head-grid">
+            <div><dt>수입자</dt><dd>{selected.importer}</dd></div>
+            {consignee && <div><dt>수하인</dt><dd>{consignee}</dd></div>}
             <div><dt>송하인</dt><dd>{selected.shipperName}</dd></div>
             <div><dt>선박</dt><dd>{selected.vesselName || '-'}</dd></div>
             <div><dt>ETA</dt><dd>
@@ -242,7 +267,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                   : null;
               })()}
             </dd></div>
-            <div><dt>접수일</dt><dd>{selected.requestedAt.slice(0, 10)}</dd></div>
+            <div><dt>접수일</dt><dd>{formatForwarderDate(selected.requestedAt)}</dd></div>
           </dl>
           <div className="fwd-progress" aria-label="업무 진행 단계">
             {FORWARDER_STAGE_ORDER.map((stage, index) => (
@@ -250,7 +275,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                 key={stage}
                 className={`fwd-progress-step${index === stageIndex ? ' is-current' : ''}${index < stageIndex ? ' is-done' : ''}`}
               >
-                {FORWARDER_STAGE_LABEL[stage]}
+                {stage === 'clearance' ? '통관 협업' : FORWARDER_STAGE_LABEL[stage]}
               </span>
             ))}
           </div>
@@ -302,18 +327,26 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
         )}
 
         <nav className="fwd-tabs" aria-label="수입 업무 상세 탭">
-          <button type="button" className={detailTab === 'overview' ? 'is-active' : ''} onClick={() => setDetailTab('overview')}>개요</button>
-          <button type="button" className={detailTab === 'review' ? 'is-active' : ''} onClick={() => setDetailTab('review')}>서류 검토</button>
+          <button type="button" aria-pressed={detailTab === 'overview'} className={detailTab === 'overview' ? 'is-active' : ''} onClick={() => setDetailTab('overview')}>{selected.stage === 'done' ? '완료 내역' : '업무 개요'}</button>
+          <button type="button" aria-pressed={detailTab === 'review'} className={detailTab === 'review' ? 'is-active' : ''} onClick={() => setDetailTab('review')}>서류 검토</button>
           <button
             type="button"
             className={detailTab === 'clearance' ? 'is-active' : ''}
+            aria-pressed={detailTab === 'clearance'}
             disabled={stageIndex < FORWARDER_STAGE_ORDER.indexOf('clearance')}
             title={stageIndex < FORWARDER_STAGE_ORDER.indexOf('clearance') ? '서류 검토를 완료하면 열립니다.' : undefined}
             onClick={() => setDetailTab('clearance')}
           >
-            통관 처리
+            통관 협업
           </button>
         </nav>
+
+        {detailTab === 'overview' && selected.stage === 'done' && <section className="form-card import-card fwd-completion-summary">
+          <div className="import-card-heading"><div><span className="fwd-eyebrow">COMPLETED</span><h2>수입 업무 완료 내역</h2></div><CheckCircle2 size={22} /></div>
+          <p className="fwd-caption">담당자의 업무 처리 기록입니다. 외부 화물 진행 상태는 통관 협업 탭에서 별도로 조회합니다.</p>
+          <dl className="fwd-head-grid"><div><dt>완료 기록일</dt><dd>{formatForwarderDate(completion?.confirmedAt)}</dd></div><div><dt>반출 확인일</dt><dd>{formatForwarderDate(completion?.releasedOn)}</dd></div><div><dt>도착통지서</dt><dd>{selected.arrivalNotice?.fileName ?? '첨부 없음'}</dd></div></dl>
+          <p className="fwd-resolution-note">{completion ? `신고수리 확인 근거: ${completion.customsReference}` : '이전 완료 기록에는 신고수리·반출 확인 근거가 등록되어 있지 않습니다.'}</p>
+        </section>}
 
         {detailTab === 'overview' && (blockers.length > 0 || checks.length > 0 || infos.length > 0) && (
           <section className="form-card import-card">
@@ -330,36 +363,12 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                 </div>
               </div>
             )}
-            {[
-              { label: '업무 차단', items: blockers, className: 'is-blocker' },
-              { label: '확인 필요', items: checks, className: 'is-check' },
-              { label: '참고', items: infos, className: 'is-info' },
-            ].filter((group) => group.items.length > 0).map((group) => (
-              <details key={group.label} className="fwd-issue-group" open={group.label === '업무 차단'}>
-                <summary>{group.label} <span>{group.items.length}</span></summary>
-                <div className="fwd-issue-list">
-                  {group.items.map((issue) => (
-                    <div key={issue.id} className={`fwd-issue ${group.className}${issue.resolved ? ' is-resolved' : ''}`}>
-                      <span className="fwd-issue-body">
-                        <span className="fwd-issue-title">{issue.title}</span>
-                        <span className="fwd-issue-detail">{issue.detail}</span>
-                      </span>
-                      {/* 확인 처리 = 포워더가 직접 확인해 종결. 화주에게 보낼 항목은 아래 [보완 요청] 폼에서 고른다. */}
-                      <button
-                        type="button"
-                        className={`fwd-issue-check${issue.resolved ? ' on' : ''}`}
-                        disabled={saving}
-                        onClick={() => void persist(selected, {
-                          issueResolutions: { [issue.id]: !issue.resolved },
-                        })}
-                      >
-                        <CheckCircle2 size={13} /> {issue.resolved ? '확인 완료' : '확인 처리'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </details>
-            ))}
+            <ForwarderIssueList issues={selected.issues} notes={selected.trade.forwarderCase?.issueNotes}
+              busy={saving} readOnly={selected.stage === 'done' || returnPending}
+              onResolve={(issue, note, resolved) => persist(selected, {
+                issueResolutions: { [issue.id]: resolved },
+                ...(resolved ? { issueNotes: { [issue.id]: { note, confirmedAt: new Date().toISOString(), issueDetail: issue.detail } } } : {}),
+              })} />
 
             {!selected.returnRequest && (selected.stage === 'received' || selected.stage === 'review') && (() => {
               // 같은 제목의 중복 이슈(검증·규칙·리스크가 겹치는 경우)는 하나만 고르게 한다.
@@ -424,7 +433,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                                 issueTitles: picked.map((issue) => issue.title),
                                 requestedAt: new Date().toISOString(),
                               },
-                            }).then(() => setReturnFormOpen(false));
+                            }).then((saved) => { if (saved) setReturnFormOpen(false); });
                           }}
                         >
                           <CornerUpLeft size={15} /> 보완 요청 보내기{picked.length > 0 ? ` (${picked.length}건)` : ''}
@@ -447,14 +456,14 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                       <CornerUpLeft size={15} /> 화주에게 보완 요청
                     </button>
                   )}
-                  <p className="fwd-action-hint">직접 확인해 끝낼 수 있는 항목은 [확인 처리]로 종결하고, 화주가 고쳐야 하는 항목만 골라서 보내세요.</p>
+                  <p className="fwd-action-hint">직접 확인한 항목은 검토 근거를 기록하고, 서류 수정이 필요한 항목은 화주에게 보완을 요청하세요.</p>
                 </div>
               );
             })()}
           </section>
         )}
 
-        {detailTab === 'overview' && blockers.length === 0 && checks.length === 0 && infos.length === 0 && (
+        {detailTab === 'overview' && selected.stage !== 'done' && blockers.length === 0 && checks.length === 0 && infos.length === 0 && (
           <section className="form-card import-card fwd-clear-overview">
             <CheckCircle2 size={20} /> <div><strong>지금 확인할 이슈가 없습니다.</strong><span>다음 조치를 진행해 주세요.</span></div>
           </section>
@@ -462,10 +471,9 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
 
         {detailTab === 'review' && (
           <>
-            <section className="form-card import-card">
-              <div className="import-card-heading">
-                <div><h2>원본 서류</h2><p>화주가 제출한 원본을 열어 대사 결과의 근거를 직접 확인합니다.</p></div>
-              </div>
+            <ForwarderDocumentReview rows={selected.snapshot.analysis.comparison} />
+            <details className="form-card import-card fwd-source-documents">
+              <summary><FileText size={17} />원본 서류<span>{selected.snapshot.documents.filter((doc) => doc.storagePath).length}개 첨부</span></summary>
               {selected.snapshot.documents.filter((doc) => doc.storagePath).length === 0 ? (
                 <p className="fwd-doc-empty">보관된 원본 파일이 없습니다.</p>
               ) : (
@@ -486,22 +494,22 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                   ))}
                 </ul>
               )}
-            </section>
-            <ImportDocumentComparison rows={selected.snapshot.analysis.comparison} />
+            </details>
           </>
         )}
 
         {detailTab === 'clearance' && stageIndex >= FORWARDER_STAGE_ORDER.indexOf('clearance') && (
           <>
             <section className="form-card import-card">
-              <div className="import-card-heading"><div><h2>통관 진행 현황</h2></div></div>
+              <div className="import-card-heading"><div><h2>화물 진행 조회</h2><p>외부 조회 결과와 내부 업무 상태를 구분해 확인합니다.</p></div></div>
               <div className="cargo-query">
                 <label className="form-group">
                   <span className="form-label">M/H B/L 번호</span>
                   <input
                     className="form-input"
                     value={cargoBlNo}
-                    onChange={(event) => setCargoBlNo(event.target.value)}
+                    disabled={cargoBusy}
+                    onChange={(event) => { setCargoBlNo(event.target.value); setCargo(null); }}
                     placeholder="B/L 번호 입력"
                   />
                 </label>
@@ -516,9 +524,10 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
               </div>
               {cargo && (
                 <div className="cargo-result">
+                  {(cargo.source === 'simulation' || cargo.lookupStatus === 'simulation') && <div className="fwd-simulation-notice"><strong>시연용 조회 결과</strong><p>이 B/L은 예시 데이터입니다. 실제 신고수리·반출 여부를 증명하지 않습니다.</p></div>}
+                  <p className="fwd-caption">조회 B/L · {cargoQueriedBl}{cargo.source !== 'simulation' && cargo.lookupStatus === 'success' ? ' · 외부 조회 결과' : ''}</p>
                   <p className="cargo-status-text">
                     <strong>{cargo.status}</strong> · {cargo.detail}
-                    {cargo.source === 'simulation' && <span className="da-sim-badge">시뮬레이션</span>}
                   </p>
                   {cargo.lookupStatus !== 'empty' && (
                     <ol className="cargo-steps">
@@ -538,11 +547,12 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
               onChange={(arrivalNotice) => void persist(selected, { arrivalNotice })}
               userId={userId}
               tradeId={selected.tradeId}
-              readOnly={saving}
+              readOnly={saving || selected.stage === 'done'}
+              description="도착 안내 문서를 작성하고 전달본을 보관합니다. 첨부 여부는 신고수리·반출의 증빙이 아닙니다."
               headerAction={(
                 <button
                   type="button"
-                  className="btn btn-primary"
+                  className="btn btn-secondary"
                   disabled={anBusy}
                   onClick={() => {
                     setAnBusy(true);
@@ -554,11 +564,17 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                       .finally(() => setAnBusy(false));
                   }}
                 >
-                  {anBusy ? '생성 중…' : 'A/N 생성·다운로드'}
+                  {anBusy ? '생성 중…' : 'A/N 다운로드'}
                 </button>
               )}
-              notice="이 건의 B/L·선박·화물 정보로 도착통지서를 생성해 화주에게 전달하세요. 청구 금액란은 비워서 발행되며, 전달본은 아래에 첨부해 이력으로 보관할 수 있습니다."
+              notice="다운로드한 A/N의 청구 금액을 확인·작성한 뒤 화주에게 전달하세요. 다운로드만으로 발송되지는 않습니다."
             />
+            {completionOpen && selected.stage === 'clearance' && <ForwarderCompletionForm busy={saving} onCancel={() => setCompletionOpen(false)} onConfirm={async (customsReference, releasedOn) => {
+              if (selected.blockerCount > 0 || returnPending) return;
+              if (await persist(selected, { stage: 'done', completion: { confirmedAt: new Date().toISOString(), confirmedBy: userId, customsReference, releasedOn } })) {
+                setCompletionOpen(false); setDetailTab('overview');
+              }
+            }} />}
           </>
         )}
 
@@ -574,22 +590,22 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
           {!returnPending && selected.stage === 'review' && (
             <>
               <button type="button" className="btn btn-primary" disabled={saving || !canFinishReview} onClick={() => void moveToStage(selected, 'clearance', 'clearance')}>
-                검토 완료 — 통관 진행
+                검토 완료 · 통관 협업으로
               </button>
               {!canFinishReview && <p className="fwd-action-hint">차단 이슈를 모두 확인 처리해야 통관 진행으로 넘어갈 수 있습니다.</p>}
             </>
           )}
-          {!returnPending && selected.stage === 'clearance' && (
+          {!returnPending && selected.stage === 'clearance' && !completionOpen && (
             <>
-              <button type="button" className="btn btn-primary" disabled={saving} onClick={() => finishClearance(selected)}>
-                <CheckCircle2 size={15} /> 통관 완료 처리
+              <button type="button" className="btn btn-primary" disabled={saving || selected.blockerCount > 0 || returnPending} onClick={() => finishClearance(selected)}>
+                <CheckCircle2 size={15} /> 수입 업무 완료
               </button>
-              {!selected.arrivalNotice?.storagePath && <p className="fwd-action-hint">도착통지서(A/N)를 첨부해 두면 완료 이력에 함께 보관됩니다.</p>}
+              <p className="fwd-action-hint">{selected.blockerCount > 0 ? '미해결 차단 이슈를 먼저 검토해 주세요.' : '실제 신고수리·반출을 확인한 뒤 완료 근거를 남깁니다.'}</p>
             </>
           )}
           {!returnPending && selected.stage === 'done' && (
             <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => void moveToStage(selected, 'clearance', 'clearance')}>
-              통관 진행으로 되돌리기
+              업무 다시 열기
             </button>
           )}
         </div>
@@ -600,18 +616,19 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
   // ---------- 업무 큐(목록) 화면 ----------
   const summary = {
     active: cases?.filter((item) => item.stage !== 'done').length ?? 0,
-    blockers: cases?.reduce((total, item) => total + item.blockerCount, 0) ?? 0,
+    blockers: cases?.filter((item) => item.stage !== 'done' && item.blockerCount > 0).length ?? 0,
   };
   const visibleCases = (cases ?? []).filter((item) => {
+    if (search.trim() && ![item.importer, item.blNo, item.vesselName].join(' ').toLowerCase().includes(search.trim().toLowerCase())) return false;
     if (queueFilter === 'active') return item.stage !== 'done';
     if (queueFilter === 'received') return item.stage === 'received';
-    if (queueFilter === 'blockers') return item.blockerCount > 0;
+    if (queueFilter === 'blockers') return item.stage !== 'done' && item.blockerCount > 0;
     return item.stage === 'done';
   });
   const filterOptions: { value: QueueFilter; label: string; count: number }[] = [
     { value: 'active', label: '진행 중', count: summary.active },
     { value: 'received', label: '신규 접수', count: cases?.filter((item) => item.stage === 'received').length ?? 0 },
-    { value: 'blockers', label: '차단', count: cases?.filter((item) => item.blockerCount > 0).length ?? 0 },
+    { value: 'blockers', label: '우선 확인', count: summary.blockers },
     { value: 'done', label: '완료', count: cases?.filter((item) => item.stage === 'done').length ?? 0 },
   ];
 
@@ -620,11 +637,11 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
       <section className="form-card import-card">
         <div className="import-card-heading fwd-queue-heading">
           <div>
-            <h2><Ship size={18} /> 수입 업무 큐</h2>
-            <p className="fwd-queue-status"><strong>처리 필요 {summary.active}건</strong>{summary.blockers > 0 && <> · <span>{summary.blockers}건 차단</span></>}</p>
+            <h2><Ship size={18} /> 의뢰 목록</h2>
+            <p className="fwd-queue-status"><strong>진행 중 {summary.active}건</strong>{summary.blockers > 0 && <> · <span>우선 확인 {summary.blockers}건</span></>}</p>
           </div>
           <div className="fwd-queue-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => void load()}><RefreshCw size={15} /> 새로고침</button>
+            <button type="button" className="btn btn-secondary" disabled={loading} onClick={() => void load()}><RefreshCw size={15} />{loading ? '조회 중' : '새로고침'}</button>
             <details className="fwd-more-menu">
               <summary aria-label="추가 작업"><MoreHorizontal size={19} /></summary>
               <button type="button" onClick={onDirectUpload}>직접 등록</button>
@@ -641,16 +658,17 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                 key={option.value}
                 type="button"
                 className={queueFilter === option.value ? 'is-active' : ''}
+                aria-pressed={queueFilter === option.value}
                 onClick={() => setQueueFilter(option.value)}
               >
                 {option.label} <span>{option.count}</span>
               </button>
             ))}
-            <span className="fwd-sort-note">차단 건 · 업무 단계 · ETA 순</span>
           </div>
         )}
 
-        {cases === null && <p className="fwd-empty">업무 목록을 불러오는 중…</p>}
+        {cases !== null && cases.length > 0 && <div className="fwd-search-row"><label className="fwd-search"><Search size={16} /><input aria-label="수입 의뢰 검색" placeholder="B/L 번호, 수입자, 선박 검색" value={search} onChange={(e) => setSearch(e.target.value)} /></label><span className="fwd-sort-note">우선 확인 · 업무 단계 · ETA 순</span></div>}
+        {cases === null && loading && <p className="fwd-empty" role="status">업무 목록을 불러오는 중…</p>}
 
         {cases !== null && cases.length === 0 && (
           <div className="fwd-empty">
@@ -660,8 +678,10 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
           </div>
         )}
 
-        {cases !== null && visibleCases.length === 0 && (
-          <p className="fwd-filter-empty">이 조건에 해당하는 업무가 없습니다.</p>
+        {cases !== null && cases.length > 0 && visibleCases.length === 0 && (
+          <div className="fwd-empty"><Inbox size={30} /><p><strong>{search ? '검색 결과가 없습니다.' : queueFilter === 'active' ? '진행 중인 수입 의뢰가 없습니다.' : '이 조건에 해당하는 의뢰가 없습니다.'}</strong></p>
+            {!search && queueFilter === 'active' && filterOptions[3].count > 0 && <button type="button" className="fwd-text-button" onClick={() => setQueueFilter('done')}>완료된 의뢰 {filterOptions[3].count}건 보기 <ChevronRight size={14} /></button>}
+          </div>
         )}
 
         {cases !== null && visibleCases.length > 0 && (
@@ -680,9 +700,10 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                         {dday && item.stage !== 'done' && <span className={`fwd-dday is-${dday.tone}`}>{dday.label}</span>}
                       </td>
                       <td className="fwd-case-cell">
-                        <strong>{item.importer}</strong>
-                        <span>{item.blNo} · {item.vesselName || '선박 미정'}</span>
+                      <button type="button" className="fwd-case-link" onClick={(e) => { e.stopPropagation(); openCase(item.tradeId); }}>{item.blNo === '-' ? 'B/L 미등록' : item.blNo}<ChevronRight size={14} /></button>
+                      <span>{item.importer} · {item.vesselName || '선박 미등록'}</span>
                         {item.origin === 'shipper_request' && <span className="fwd-origin is-request">화주 의뢰</span>}
+                        <small className="fwd-mobile-next">{item.nextAction}</small>
                       </td>
                       <td>
                         <span className={`fwd-stage-badge ${STAGE_BADGE_CLASS[item.stage]}`}>{FORWARDER_STAGE_LABEL[item.stage]}</span>

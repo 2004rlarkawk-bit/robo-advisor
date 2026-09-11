@@ -1,5 +1,4 @@
 import {
-  Bell,
   HelpCircle,
   PanelLeftClose,
   PanelLeftOpen,
@@ -42,10 +41,6 @@ export default function AppHeader({
       </div>
 
       <div className="header-actions">
-        <button className="icon-btn" type="button" aria-label="알림">
-          <Bell size={20} />
-          <span className="badge-dot" />
-        </button>
         <button
           className="icon-btn"
           type="button"

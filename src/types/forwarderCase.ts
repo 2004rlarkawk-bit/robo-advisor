@@ -51,6 +51,13 @@ export interface ForwarderCaseState {
   stage: ForwarderCaseStage;
   /** 이슈 id → 확인 완료 여부 (포워더가 건별로 체크) */
   issueResolutions?: Record<string, boolean>;
+  issueNotes?: Record<string, { note: string; confirmedAt: string; issueDetail: string }>;
+  completion?: {
+    confirmedAt: string;
+    confirmedBy: string;
+    customsReference: string;
+    releasedOn: string;
+  } | null;
   arrivalNotice?: ArrivalNoticeMeta | null;
   returnRequest?: ForwarderReturnRequest | null;
   updatedAt: string;
