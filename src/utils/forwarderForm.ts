@@ -1,6 +1,9 @@
 import type {
+  BillOfLadingKind,
+  BillOfLadingSignerCapacity,
   BookingStatus,
   ContainerSize,
+  FreightTerms,
   ForwarderCargoItem,
   ForwarderCargoTotals,
   ForwarderLoadingMode,
@@ -46,6 +49,25 @@ export interface ForwarderFormState extends ForwarderTradeFields {
   containerQuantity: NumericInput;
   cargoItems: ForwarderCargoItem[];
   cargoTotals: ForwarderCargoTotals;
+  // ── 선하증권 발행 정보 (법정 기재사항) ─────────────────────────
+  /** House / Master 구분 — 포워더가 화주에게 발행하는 건 house */
+  blKind: BillOfLadingKind;
+  /** 발행 B/L 번호 — 비어 있으면 초안 번호로 대체 표기 */
+  blNo: string;
+  /** 복합운송 인수지·인도지 — 비면 POL/POD와 동일한 것으로 본다 */
+  placeOfReceipt: string;
+  placeOfDelivery: string;
+  freightTerms: FreightTerms;
+  freightAndCharges: string;
+  /** 원본 발행 통수 — 기본 3통 */
+  numberOfOriginals: NumericInput;
+  placeOfIssue: string;
+  dateOfIssue: string;
+  /** 본선 적재일 — 값이 있으면 선적선하증권(On Board) */
+  shippedOnBoardDate: string;
+  /** 발행인(포워더) 상호 */
+  issuerName: string;
+  signerCapacity: BillOfLadingSignerCapacity;
 }
 
 export function createEmptyForwarderCargoItem(id = 'cargo-1'): ForwarderCargoItem {
@@ -108,6 +130,18 @@ export function createEmptyForwarderFormState(): ForwarderFormState {
     shippingMarks: '',
     cargoItems: [createEmptyForwarderCargoItem()],
     cargoTotals: { numberOfPackages: '', grossWeightKg: '', measurementCbm: '' },
+    blKind: 'house',
+    blNo: '',
+    placeOfReceipt: '',
+    placeOfDelivery: '',
+    freightTerms: '',
+    freightAndCharges: '',
+    numberOfOriginals: 3,
+    placeOfIssue: '',
+    dateOfIssue: '',
+    shippedOnBoardDate: '',
+    issuerName: '',
+    signerCapacity: 'AS_CARRIER',
   };
 }
 

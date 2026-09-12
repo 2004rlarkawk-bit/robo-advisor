@@ -7,7 +7,8 @@ import {
   OTHER_FOREIGN_PORT_VALUE,
   normalizeExportPortValue,
 } from '../constants/ports';
-import type { Incoterms, NumericInput, ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
+import type { FreightTerms, Incoterms, NumericInput, ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
+import { deriveFreightTerms, isFreightTermsUnusual, FREIGHT_TERMS_LABEL } from '../utils/freightTerms';
 import type { TradeAttachment } from '../types/tradeFormData';
 import CountrySelect from './CountrySelect';
 import TradeAttachmentUploader from './TradeAttachmentUploader';
@@ -203,6 +204,10 @@ export default function ShipperWorkspaceForm({
     return renderFixNoticeCard(true);
   };
   const invoiceSummary = summarizeShipperItems(items);
+  // 운임 지급조건 — 미선택이면 Incoterms 원칙값을 제안값으로 보여주고, 원칙과 어긋나면 경고만 띄운다(차단 아님).
+  const suggestedFreightTerms = deriveFreightTerms(profile.incoterms ?? '');
+  const freightTermsValue = (profile.freightTerms as FreightTerms) ?? '';
+  const freightTermsUnusual = isFreightTermsUnusual(profile.incoterms ?? '', freightTermsValue);
   const hasInvalidWeight = isGrossWeightBelowNet(profile.grossWeight, profile.netWeight);
   const hsCodeSuggestions = useShipperHSCodeSuggestions(items);
   // 품목별 자연어 설명 → 영문 품명 정리 (AI). 입력값은 서류에 저장하지 않는 보조 입력이다.
@@ -910,6 +915,26 @@ export default function ShipperWorkspaceForm({
           <div className="form-group" data-field="dischargePort"><label className="form-label">도착항 POD {(profile.incoterms === 'CIF' || profile.incoterms === 'CFR') && <Req />}</label><select className="form-input" value={dischargePortSelection} onChange={(e) => { if (e.target.value === OTHER_FOREIGN_PORT_VALUE) setForceCustomDischargePort(true); else { setForceCustomDischargePort(false); onProfilePatch({ dischargePort: e.target.value }); } }}><option value="">도착항을 선택하세요</option>{EXPORT_POD_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_FOREIGN_PORT_VALUE}>기타 해외항</option></select>{dischargePortSelection === OTHER_FOREIGN_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 해외항 직접 입력" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })} placeholder="기타 해외항 직접 입력" />}</div>
           <div className="form-group" data-field="departureDate"><label className="form-label">희망 출항일</label><input type="date" className="form-input" value={profile.departureDate} onChange={(e) => onProfilePatch({ departureDate: e.target.value })} /></div>
           <div className="form-group"><label className="form-label">운송방식</label><select className="form-input" value={profile.loadingMode ?? ''} onChange={(e) => onProfilePatch({ loadingMode: e.target.value === '' ? undefined : e.target.value as TradeProfile['loadingMode'] })}><option value="">미정</option><option value="FCL">FCL</option><option value="LCL">LCL</option></select></div>
+          {/* 복합운송 구간 — 내륙 집하지·최종 인도지가 항구와 다를 때 기재(House B/L 필수 기재사항) */}
+          <div className="form-group"><label className="form-label">화물 인수지 (Place of Receipt)</label><input className="form-input" value={profile.placeOfReceipt ?? ''} onChange={(e) => onProfilePatch({ placeOfReceipt: e.target.value })} placeholder="비우면 선적항과 동일하게 처리" /></div>
+          <div className="form-group"><label className="form-label">화물 인도지 (Place of Delivery)</label><input className="form-input" value={profile.placeOfDelivery ?? ''} onChange={(e) => onProfilePatch({ placeOfDelivery: e.target.value })} placeholder="비우면 도착항과 동일하게 처리" /></div>
+          <div className="form-group">
+            <label className="form-label">운임 지급조건 (Freight Terms)</label>
+            <select
+              className="form-input"
+              value={freightTermsValue}
+              onChange={(e) => onProfilePatch({ freightTerms: e.target.value })}
+            >
+              <option value="">선택하세요</option>
+              <option value="PREPAID">{FREIGHT_TERMS_LABEL.PREPAID}</option>
+              <option value="COLLECT">{FREIGHT_TERMS_LABEL.COLLECT}</option>
+            </select>
+            {freightTermsUnusual && (
+              <small className="form-help form-help-error" role="alert">
+                {profile.incoterms} 조건은 통상 {suggestedFreightTerms}입니다. 당사자 합의로 다르게 정한 경우에만 그대로 두세요.
+              </small>
+            )}
+          </div>
         </div>
       </details>
 

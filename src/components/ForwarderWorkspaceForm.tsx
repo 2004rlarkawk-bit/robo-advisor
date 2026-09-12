@@ -7,7 +7,8 @@ import {
   OTHER_FOREIGN_PORT_VALUE,
   normalizeExportPortValue,
 } from '../constants/ports';
-import type { ContainerSize, NumericInput, PersistedTradeStatus } from '../types';
+import type { BillOfLadingKind, BillOfLadingSignerCapacity, ContainerSize, FreightTerms, NumericInput, PersistedTradeStatus } from '../types';
+import { deriveFreightTerms, isFreightTermsUnusual, FREIGHT_TERMS_LABEL } from '../utils/freightTerms';
 import {
   isEtaBeforeEtd,
   type ForwarderFormState,
@@ -15,6 +16,8 @@ import {
 import type { TradeAttachment } from '../types/tradeFormData';
 import TradeAttachmentUploader from './TradeAttachmentUploader';
 import DocumentManagerReadOnlyAction from './DocumentManagerReadOnlyAction';
+import ForwarderExportRequestInbox from './ForwarderExportRequestInbox';
+import type { ForwarderExportRequest } from '../services/forwarderExportRequestService';
 import { mergeForwarderAutoFill } from '../services/forwarderDocumentAnalysisService';
 
 interface Props {
@@ -39,6 +42,12 @@ interface Props {
   onViewBillOfLading?: () => void;
   onDownloadBillOfLading?: () => void;
   onRegenerateBillOfLading?: () => Promise<void>;
+  /** 화주 운송의뢰 수신함 노출 여부 — 읽기전용 조회 화면에서는 숨긴다 */
+  showRequestInbox?: boolean;
+  /** 수신함에서 불러온 의뢰의 거래 id — 목록에 '불러옴' 표시 */
+  appliedRequestTradeId?: string | null;
+  /** 화주 의뢰를 폼에 반영 */
+  onApplyExportRequest?: (request: ForwarderExportRequest) => void;
 }
 
 const CONTAINER_SIZE_OPTIONS: ContainerSize[] = ['20GP', '40GP', '40HC'];
@@ -69,6 +78,9 @@ export default function ForwarderWorkspaceForm({
   onViewBillOfLading,
   onDownloadBillOfLading,
   onRegenerateBillOfLading,
+  showRequestInbox = false,
+  appliedRequestTradeId = null,
+  onApplyExportRequest,
 }: Props) {
   const manuallyEditedFieldsRef = useRef(new Set<keyof ForwarderFormState>());
   const [forceCustomLoadPort, setForceCustomLoadPort] = useState(false);
@@ -96,6 +108,10 @@ export default function ForwarderWorkspaceForm({
     if (isKnownDischargePort) setForceCustomDischargePort(false);
     else if (state.dischargePort) setForceCustomDischargePort(true);
   }, [isKnownDischargePort, state.dischargePort]);
+  // 운임 지급조건 — Incoterms 원칙과 어긋나면 경고만(발행 차단은 아님)
+  const suggestedFreightTerms = deriveFreightTerms(state.incoterms ?? '');
+  const freightTermsUnusual = isFreightTermsUnusual(state.incoterms ?? '', state.freightTerms);
+
   const patch = (values: Partial<ForwarderFormState>) => {
     (Object.keys(values) as Array<keyof ForwarderFormState>).forEach((field) => {
       manuallyEditedFieldsRef.current.add(field);
@@ -178,6 +194,13 @@ export default function ForwarderWorkspaceForm({
 
   return (
     <div className="form-card forwarder-workspace-form">
+      {showRequestInbox && onApplyExportRequest && !readOnly && (
+        <ForwarderExportRequestInbox
+          onApply={onApplyExportRequest}
+          appliedTradeId={appliedRequestTradeId}
+        />
+      )}
+
       <div className="trade-section-header">
         <div className="trade-section-title">
           <FileSignature size={20} className="text-primary" />
@@ -272,6 +295,48 @@ export default function ForwarderWorkspaceForm({
               </div>
             </details>
           ))}
+        </div>
+      </details>
+
+      <details className="form-section" data-form-section="5">
+        <summary className="form-section-summary">5. 선하증권 발행 정보 <span className="form-section-hint">B/L 법정 기재사항</span></summary>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label" htmlFor="bl-kind">증권 종류</label>
+            <select id="bl-kind" className="form-input" value={state.blKind} onChange={(e) => patch({ blKind: e.target.value as BillOfLadingKind })}>
+              <option value="house">House B/L (포워더 → 화주 발행)</option>
+              <option value="master">Master B/L (선사 → 포워더 발행)</option>
+            </select>
+          </div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-no">B/L 번호 (선택)</label><input id="bl-no" className="form-input" value={state.blNo} onChange={(e) => patch({ blNo: e.target.value })} placeholder="비우면 초안 번호로 표기" /></div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-receipt">화물 인수지 (Place of Receipt)</label><input id="bl-receipt" className="form-input" value={state.placeOfReceipt} onChange={(e) => patch({ placeOfReceipt: e.target.value })} placeholder="비우면 선적항과 동일" /></div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-delivery">화물 인도지 (Place of Delivery)</label><input id="bl-delivery" className="form-input" value={state.placeOfDelivery} onChange={(e) => patch({ placeOfDelivery: e.target.value })} placeholder="비우면 도착항과 동일" /></div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="bl-freight">운임 지급조건 (Freight)</label>
+            <select id="bl-freight" className="form-input" value={state.freightTerms} onChange={(e) => patch({ freightTerms: e.target.value as FreightTerms })}>
+              <option value="">선택하세요</option>
+              <option value="PREPAID">{FREIGHT_TERMS_LABEL.PREPAID}</option>
+              <option value="COLLECT">{FREIGHT_TERMS_LABEL.COLLECT}</option>
+            </select>
+            {freightTermsUnusual && (
+              <small className="form-help form-help-error" role="alert">
+                {state.incoterms} 조건은 통상 {suggestedFreightTerms}입니다. 화주와 합의된 값인지 확인하세요.
+              </small>
+            )}
+          </div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-charges">운임·부대비용 명세 (선택)</label><input id="bl-charges" className="form-input" value={state.freightAndCharges} onChange={(e) => patch({ freightAndCharges: e.target.value })} placeholder="비우면 AS ARRANGED로 표기" /></div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-originals">원본 발행 통수</label><input id="bl-originals" type="number" min="1" max="5" className="form-input" value={state.numberOfOriginals} onChange={(e) => patch({ numberOfOriginals: numericValue(e.target.value) })} /></div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-onboard">본선 적재일 (Shipped on Board)</label><input id="bl-onboard" type="date" className="form-input" value={state.shippedOnBoardDate} onChange={(e) => patch({ shippedOnBoardDate: e.target.value })} /><small className="form-help">비우면 수취선하증권(Received B/L)으로 발행됩니다.</small></div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-issuer">발행자 상호</label><input id="bl-issuer" className="form-input" value={state.issuerName} onChange={(e) => patch({ issuerName: e.target.value })} placeholder="포워더 상호" /></div>
+          <div className="form-group">
+            <label className="form-label" htmlFor="bl-capacity">발행 자격</label>
+            <select id="bl-capacity" className="form-input" value={state.signerCapacity} onChange={(e) => patch({ signerCapacity: e.target.value as BillOfLadingSignerCapacity })}>
+              <option value="AS_CARRIER">as Carrier (운송인 자격 — House B/L 통상)</option>
+              <option value="AS_AGENT_FOR_CARRIER">as Agent for the Carrier (선사 대리인 자격)</option>
+            </select>
+          </div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-place">발행지 (Place of Issue)</label><input id="bl-place" className="form-input" value={state.placeOfIssue} onChange={(e) => patch({ placeOfIssue: e.target.value })} placeholder="Seoul, Korea" /></div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-date">발행일자 (Date of Issue)</label><input id="bl-date" type="date" className="form-input" value={state.dateOfIssue} onChange={(e) => patch({ dateOfIssue: e.target.value })} /></div>
         </div>
       </details>
       </fieldset>

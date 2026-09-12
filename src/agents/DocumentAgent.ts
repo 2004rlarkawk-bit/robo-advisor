@@ -1,5 +1,6 @@
 import { Agent, DocumentResult, HSCodeResult, AgentLog, createLog } from './types';
-import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, CustomsDeclarationData, Shipment, TransportRequestData } from '../types';
+import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, CustomsDeclarationData, Shipment, TransportRequestData, FreightTerms } from '../types';
+import { deriveFreightTerms } from '../utils/freightTerms';
 import { composeDetailedDescription, tradeItemAmount } from '../utils/shipment';
 import { determineRequiredDocuments } from '../harness/rulesEngine';
 import { autoFillDocumentFields } from '../services/claudeService';
@@ -306,6 +307,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
           netWeight: item.netWeight,
           grossWeight: item.grossWeight,
           measurement: item.measurement || '',
+          marksAndNumbers: item.shippingMarks || profile.shippingMarks || '',
         })),
         incoterms: profile.incoterms || '',
         incotermsPlace: profile.shipperSupplemental?.incotermsPlace || '',
@@ -313,6 +315,11 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         invoiceNo: generatedDocs.invoice?.invoiceNo || profile.invoiceNo || '',
         loadPort: profile.loadPort || '',
         dischargePort: profile.dischargePort || '',
+        placeOfReceipt: profile.placeOfReceipt || '',
+        placeOfDelivery: profile.placeOfDelivery || profile.finalDestination || '',
+        // 화주가 명시하지 않았으면 Incoterms 원칙값을 제안값으로 채운다.
+        freightTerms: (profile.freightTerms as FreightTerms) || deriveFreightTerms(profile.incoterms || ''),
+        shippingMarks: profile.shippingMarks || '',
         requestedDepartureDate: profile.departureDate || '',
         loadingMode: profile.loadingMode || '',
       };

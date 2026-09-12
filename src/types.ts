@@ -443,6 +443,12 @@ export interface InsuranceData {
   [key: string]: any;
 }
 
+/**
+ * 운임 지급 조건 — 선사·포워더 공통 표기.
+ * PREPAID: 선불(수출자 부담, CFR·CIF 등) / COLLECT: 후불(수입자 부담, FOB·FCA 등)
+ */
+export type FreightTerms = 'PREPAID' | 'COLLECT' | '';
+
 export interface TransportRequestItem {
   description: string;
   hsCode: string;
@@ -453,6 +459,8 @@ export interface TransportRequestItem {
   netWeight: number;
   grossWeight: number;
   measurement: string;
+  /** 화인(Shipping Marks) — 품목별 override, 비면 문서레벨 값을 상속 */
+  marksAndNumbers: string;
 }
 
 /** 수출 화주가 포워더에게 전달하는 업무용 운송 의뢰 초안. Booking/B/L 확정 정보는 포함하지 않는다. */
@@ -471,6 +479,14 @@ export interface TransportRequestData {
   invoiceNo: string;
   loadPort: string;
   dischargePort: string;
+  /** 복합운송 화물 인수지 — POL과 다를 수 있다(내륙 집하지) */
+  placeOfReceipt: string;
+  /** 복합운송 화물 인도지 — POD와 다를 수 있다(내륙 최종 인도지) */
+  placeOfDelivery: string;
+  /** 운임 지급 조건 — Incoterms에서 유도하되 화주가 확정한다 */
+  freightTerms: FreightTerms;
+  /** 문서레벨 화인 — 품목별 override가 없을 때 사용 */
+  shippingMarks: string;
   requestedDepartureDate: string;
   loadingMode: 'FCL' | 'LCL' | '';
 }
@@ -484,10 +500,27 @@ export interface BillOfLadingCargoItem {
   marksAndNumbers: string;
 }
 
+/**
+ * 증권 종류.
+ * house: 포워더가 화주에게 발행(House B/L) — 포워더가 이 구간의 운송인 지위를 가진다.
+ * master: 선사가 포워더에게 발행(Master B/L).
+ */
+export type BillOfLadingKind = 'house' | 'master';
+
+/**
+ * 증권 발행인의 자격 표시 — 선하증권 법정 기재사항 '발행자'에 해당한다.
+ * 서명란에 반드시 자격을 병기해야 운송인 책임 주체가 특정된다.
+ */
+export type BillOfLadingSignerCapacity = 'AS_CARRIER' | 'AS_AGENT_FOR_CARRIER';
+
 /** 수출 포워더가 1단계 입력값으로 생성하는 B/L 초안. */
 export interface BillOfLadingData {
   draftNo: string;
   generatedAt: string;
+  /** House / Master 구분 — 화면·문서 제목과 서명 자격 표기에 쓰인다. */
+  kind: BillOfLadingKind;
+  /** 발행 B/L 번호. 초안 단계에서 비어 있을 수 있다(그때는 draftNo로 대체 표기). */
+  blNo: string;
   shipper: PartyInfo;
   consignee: PartyInfo;
   notifyParty?: PartyInfo;
@@ -495,13 +528,36 @@ export interface BillOfLadingData {
   bookingNo: string;
   vessel: string;
   voyageNo: string;
+  /** 복합운송 화물 인수지 — 법정 기재사항(운송 구간의 시점) */
+  placeOfReceipt: string;
   loadPort: string;
   dischargePort: string;
+  /** 복합운송 화물 인도지 — 법정 기재사항(운송 구간의 종점) */
+  placeOfDelivery: string;
   etd: string;
   eta: string;
   loadingMode: ForwarderLoadingMode | '';
   containerNo: string;
   sealNo: string;
+  /** 법정 기재사항 '운임' — 선불/후불 구분 */
+  freightTerms: FreightTerms;
+  /** 운임·부대비용 명세(선택). 비우면 문서에 'AS ARRANGED'로 표기한다. */
+  freightAndCharges: string;
+  /** 발행 원본 통수 — 통상 3통(Three/3). 유통증권이라 통수 기재가 필수다. */
+  numberOfOriginals: number;
+  /** 법정 기재사항 '발행지' */
+  placeOfIssue: string;
+  /** 법정 기재사항 '발행일자' */
+  dateOfIssue: string;
+  /**
+   * 본선 적재일(Shipped on Board). 값이 있으면 선적선하증권(On Board B/L),
+   * 없으면 수취선하증권(Received B/L)으로 취급한다. L/C 결제 시 통상 필수.
+   */
+  shippedOnBoardDate: string;
+  /** 발행인 상호 — House B/L이면 포워더 */
+  issuerName: string;
+  /** 발행인 자격 — 서명란에 병기 */
+  signerCapacity: BillOfLadingSignerCapacity;
   items: BillOfLadingCargoItem[];
   cargoTotals: ForwarderCargoTotals;
 }
