@@ -68,6 +68,17 @@ export interface ForwarderFormState extends ForwarderTradeFields {
   /** 발행인(포워더) 상호 */
   issuerName: string;
   signerCapacity: BillOfLadingSignerCapacity;
+  /** 무역협회 서식 추가 기재란 */
+  preCarriageBy: string;
+  finalDestination: string;
+  flag: string;
+  revenueTons: string;
+  freightRate: string;
+  freightPer: string;
+  freightPrepaidAt: string;
+  freightPayableAt: string;
+  totalPrepaid: string;
+  collectAmount: string;
 }
 
 export function createEmptyForwarderCargoItem(id = 'cargo-1'): ForwarderCargoItem {
@@ -142,6 +153,16 @@ export function createEmptyForwarderFormState(): ForwarderFormState {
     shippedOnBoardDate: '',
     issuerName: '',
     signerCapacity: 'AS_CARRIER',
+    preCarriageBy: '',
+    finalDestination: '',
+    flag: '',
+    revenueTons: '',
+    freightRate: '',
+    freightPer: '',
+    freightPrepaidAt: '',
+    freightPayableAt: '',
+    totalPrepaid: '',
+    collectAmount: '',
   };
 }
 

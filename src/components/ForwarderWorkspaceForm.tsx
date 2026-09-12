@@ -339,6 +339,30 @@ export default function ForwarderWorkspaceForm({
           <div className="form-group"><label className="form-label" htmlFor="bl-date">발행일자 (Date of Issue)</label><input id="bl-date" type="date" className="form-input" value={state.dateOfIssue} onChange={(e) => patch({ dateOfIssue: e.target.value })} /></div>
         </div>
       </details>
+
+      <details className="form-section" data-form-section="6">
+        <summary className="form-section-summary">6. 운임·기타 기재란 <span className="form-section-hint">무역협회 서식 ⑩⑫⑲⑳㉑㉔㉕ · 선택</span></summary>
+        <div className="form-grid">
+          <div className="form-group"><label className="form-label" htmlFor="bl-precarriage">Pre-Carriage by</label><input id="bl-precarriage" className="form-input" value={state.preCarriageBy} onChange={(e) => patch({ preCarriageBy: e.target.value })} placeholder="TRUCK, RAIL 등" /></div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-final">최종 목적지 (Final Destination)</label><input id="bl-final" className="form-input" value={state.finalDestination} onChange={(e) => patch({ finalDestination: e.target.value })} placeholder="비우면 인도지와 동일" /></div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-flag">선박 국적 (Flag)</label><input id="bl-flag" className="form-input" value={state.flag} onChange={(e) => patch({ flag: e.target.value })} placeholder="PANAMA 등" /></div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-revenue">Revenue tons</label><input id="bl-revenue" className="form-input" value={state.revenueTons} onChange={(e) => patch({ revenueTons: e.target.value })} placeholder="운임 산정 톤수" /></div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-rate">Rate (운임 요율)</label><input id="bl-rate" className="form-input" value={state.freightRate} onChange={(e) => patch({ freightRate: e.target.value })} placeholder="USD 85.00" /></div>
+          <div className="form-group"><label className="form-label" htmlFor="bl-per">Per (요율 단위)</label><input id="bl-per" className="form-input" value={state.freightPer} onChange={(e) => patch({ freightPer: e.target.value })} placeholder="CBM, R/T 등" /></div>
+          {state.freightTerms === 'PREPAID' && (
+            <>
+              <div className="form-group"><label className="form-label" htmlFor="bl-prepaid-at">Freight prepaid at (선불 지급지)</label><input id="bl-prepaid-at" className="form-input" value={state.freightPrepaidAt} onChange={(e) => patch({ freightPrepaidAt: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label" htmlFor="bl-total-prepaid">Total prepaid in (선불 총액)</label><input id="bl-total-prepaid" className="form-input" value={state.totalPrepaid} onChange={(e) => patch({ totalPrepaid: e.target.value })} /></div>
+            </>
+          )}
+          {state.freightTerms === 'COLLECT' && (
+            <>
+              <div className="form-group"><label className="form-label" htmlFor="bl-payable-at">Freight payable at (후불 지급지)</label><input id="bl-payable-at" className="form-input" value={state.freightPayableAt} onChange={(e) => patch({ freightPayableAt: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label" htmlFor="bl-collect">Collect 금액</label><input id="bl-collect" className="form-input" value={state.collectAmount} onChange={(e) => patch({ collectAmount: e.target.value })} /></div>
+            </>
+          )}
+        </div>
+      </details>
       </fieldset>
 
       {readOnly && onClose ? <DocumentManagerReadOnlyAction onClose={onClose} /> : (

@@ -131,7 +131,6 @@ import {
   applyExportRequestToForwarderForm,
   type ForwarderExportRequest,
 } from './services/forwarderExportRequestService';
-import { renderBillOfLadingHTML } from './agents/templates/billOfLading';
 import {
   issueKey,
   issueToFieldKey,
@@ -571,6 +570,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [packingListData, setPackingListData] = useState<PackingListData | null>(null);
   const packingXlsxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
   const packingDocxPreviewRef = useRef<HTMLDivElement | null>(null);
+  const blDocxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
+  const blDocxPreviewRef = useRef<HTMLDivElement | null>(null);
 
   // 수출신고서(초안)도 고정 docx 템플릿에서 생성 — 미리보기/다운로드 동일 바이너리.
   const [customsDeclarationData, setCustomsDeclarationData] = useState<CustomsDeclarationData | null>(null);
@@ -588,6 +589,17 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     const { buildInvoiceDocx } = await import('./services/invoiceDocxService');
     const blob = await buildInvoiceDocx(invoiceData);
     invoiceDocxCacheRef.current = { sig, blob };
+    return blob;
+  };
+
+  // 같은 BillOfLadingData면 같은 docx Blob 반환(캐시) → 미리보기와 다운로드가 동일 바이너리.
+  const getBillOfLadingBlob = async (): Promise<Blob | null> => {
+    if (!billOfLadingData) return null;
+    const sig = JSON.stringify(billOfLadingData);
+    if (blDocxCacheRef.current?.sig === sig) return blDocxCacheRef.current.blob;
+    const { buildBillOfLadingDocx } = await import('./services/billOfLadingDocxService');
+    const blob = await buildBillOfLadingDocx(billOfLadingData);
+    blDocxCacheRef.current = { sig, blob };
     return blob;
   };
 
@@ -652,6 +664,25 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     })();
     return () => { cancelled = true; };
   }, [previewDocId, invoiceData]);
+
+  // 선하증권도 생성된 docx(무역협회 표준 서식)를 그대로 렌더 — 다운로드와 동일 소스
+  useEffect(() => {
+    if (previewDocId !== 'bl' || !billOfLadingData) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = await getBillOfLadingBlob();
+        const host = blDocxPreviewRef.current;
+        if (!blob || cancelled || !host) return;
+        const { renderBillOfLadingDocxPreview } = await import('./services/billOfLadingDocxService');
+        await renderBillOfLadingDocxPreview(blob, host);
+      } catch {
+        const host = blDocxPreviewRef.current;
+        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">선하증권 미리보기 생성에 실패했습니다.</p>';
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [previewDocId, billOfLadingData]);
 
   // 패킹리스트도 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
   useEffect(() => {
@@ -874,12 +905,13 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
 
       try {
         const generatedBill = createForwarderBillOfLadingDraft(forwarderForm, saved.id);
-        const generatedHtml = renderBillOfLadingHTML(generatedBill);
         const generatedDocuments = [
           ...documents.filter((document) => document.id !== 'bl'),
           { id: 'bl' as const, name: '선하증권(B/L)', status: 'completed' as const, statusText: '초안' },
         ];
-        const generatedTemplates = { ...htmlTemplates, bl: generatedHtml };
+        // 선하증권은 무역협회 표준 서식 docx에서 생성·미리보기하므로 HTML을 만들지 않는다.
+        const generatedTemplates = { ...htmlTemplates };
+        delete generatedTemplates.bl;
         await updateGeneratedTrade(saved.id, {
           profile: savedProfile,
           tradeDirection: 'export',
@@ -1990,6 +2022,30 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       const a = document.createElement('a');
       a.href = url;
       a.download = getDocFileName('packing_list').replace(/\.pdf$/i, '.docx');
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    }
+
+    // 선하증권: 무역협회 표준 서식 docx Blob을 그대로 다운로드(미리보기와 동일 바이너리).
+    if (docId === 'bl') {
+      let blob: Blob | null = null;
+      try {
+        blob = await getBillOfLadingBlob();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : '선하증권 생성에 실패했습니다.');
+        return;
+      }
+      if (!blob) {
+        alert('선하증권 데이터가 없습니다. 먼저 B/L을 생성해 주세요.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = getDocFileName('bl').replace(/\.pdf$/i, '.docx');
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -4495,6 +4551,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               ) : previewDocId === 'packing_list' ? (
                 // 패킹리스트: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
                 <div ref={packingDocxPreviewRef} style={{ width: '100%' }} />
+              ) : previewDocId === 'bl' ? (
+                // 선하증권: 무역협회 표준 서식 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
+                <div ref={blDocxPreviewRef} style={{ width: '100%' }} />
               ) : previewDocId === 'customs_dec' ? (
                 // 수출신고서(초안): 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
                 <div style={{ width: '100%' }}>
@@ -4536,7 +4595,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 onClick={() => handleDownloadDoc(previewDocId)}
               >
                 <Download size={16} />
-                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : (previewDocId === 'packing_list' || previewDocId === 'customs_dec' || previewDocId === 'transport_request') ? 'DOCX 다운로드' : previewDocId === 'bl' ? 'PDF 다운로드' : 'PDF 저장 (텍스트)'}
+                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : (previewDocId === 'packing_list' || previewDocId === 'customs_dec' || previewDocId === 'transport_request' || previewDocId === 'bl') ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
               </button>
             </div>
           </div>

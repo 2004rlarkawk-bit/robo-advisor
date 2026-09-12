@@ -103,6 +103,17 @@ export function createForwarderBillOfLadingDraft(
     shippedOnBoardDate: state.shippedOnBoardDate,
     issuerName: state.issuerName.trim(),
     signerCapacity: state.signerCapacity,
+    preCarriageBy: state.preCarriageBy.trim(),
+    // 최종 목적지를 따로 적지 않았으면 인도지와 같은 것으로 본다.
+    finalDestination: state.finalDestination.trim() || state.placeOfDelivery.trim() || state.dischargePort.trim(),
+    flag: state.flag.trim(),
+    revenueTons: state.revenueTons.trim(),
+    freightRate: state.freightRate.trim(),
+    freightPer: state.freightPer.trim(),
+    freightPrepaidAt: state.freightPrepaidAt.trim(),
+    freightPayableAt: state.freightPayableAt.trim(),
+    totalPrepaid: state.totalPrepaid.trim(),
+    collectAmount: state.collectAmount.trim(),
     items: state.cargoItems.map((item) => ({
       descriptionOfGoods: item.descriptionOfGoods.trim(),
       numberOfPackages: item.numberOfPackages,

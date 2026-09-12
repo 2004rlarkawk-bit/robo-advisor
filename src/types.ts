@@ -558,6 +558,27 @@ export interface BillOfLadingData {
   issuerName: string;
   /** 발행인 자격 — 서명란에 병기 */
   signerCapacity: BillOfLadingSignerCapacity;
+  // ── 무역협회 서식 추가 기재란 ───────────────────────────────
+  /** Pre-Carriage by — 선적항까지의 사전운송 수단 */
+  preCarriageBy: string;
+  /** ⑩ Final Destination — 상대방 참고용 최종 목적지(인도지와 별개) */
+  finalDestination: string;
+  /** ⑫ Flag — 선박 국적 */
+  flag: string;
+  /** ⑲ Revenue tons — 운임 산정 톤수 */
+  revenueTons: string;
+  /** ⑳ Rate — 운임 요율 */
+  freightRate: string;
+  /** ㉑ Per — 운임 요율 단위 */
+  freightPer: string;
+  /** ㉔ Freight prepaid at — 운임 선불 지급지 */
+  freightPrepaidAt: string;
+  /** ㉕ Freight payable at — 운임 후불 지급지 */
+  freightPayableAt: string;
+  /** Total prepaid in — 선불 총액 */
+  totalPrepaid: string;
+  /** ㉓ Collect 금액 — 후불 운임액 */
+  collectAmount: string;
   items: BillOfLadingCargoItem[];
   cargoTotals: ForwarderCargoTotals;
 }

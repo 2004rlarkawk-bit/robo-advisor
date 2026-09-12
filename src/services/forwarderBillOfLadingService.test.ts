@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderBillOfLadingHTML } from '../agents/templates/billOfLading';
+import { mapBillOfLadingToSchema } from './billOfLadingDocxService';
 import { createEmptyForwarderFormState } from '../utils/forwarderForm';
 import {
   createForwarderBillOfLadingDraft,
@@ -87,18 +87,15 @@ describe('수출 포워더 B/L 초안', () => {
     expect(draft.items.map((item) => item.descriptionOfGoods)).toEqual(['Serum', 'Cream', 'Foam']);
     expect(draft.cargoTotals).toEqual({ numberOfPackages: 60, grossWeightKg: 600, measurementCbm: '3.00' });
 
-    const html = renderBillOfLadingHTML(draft);
-    expect(html).toContain('Serum');
-    expect(html).toContain('Cream');
-    expect(html).toContain('Foam');
-    expect(html).toContain('3.00');
+    const schema = mapBillOfLadingToSchema(draft);
+    expect(schema.goods_description).toContain('Serum');
+    expect(schema.goods_description).toContain('Cream');
+    expect(schema.goods_description).toContain('Foam');
+    expect(schema.measurement).toBe('3.00 CBM');
   });
 
-  it('사용자 입력을 HTML에 안전하게 이스케이프한다', () => {
-    const state = validState();
-    state.cargoItems[0].descriptionOfGoods = '<script>alert(1)</script>';
-    const html = renderBillOfLadingHTML(createForwarderBillOfLadingDraft(state, 'trade-1'));
-    expect(html).not.toContain('<script>');
-    expect(html).toContain('&lt;script&gt;');
+  it('총 포장수를 문자로 병기한다 — 유통증권 위변조 방지 관행', () => {
+    const schema = mapBillOfLadingToSchema(createForwarderBillOfLadingDraft(validState(), 'trade-1'));
+    expect(schema.total_packages_in_words).toBe('SIXTY (60) CARTONS ONLY');
   });
 });
