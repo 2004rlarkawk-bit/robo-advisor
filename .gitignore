@@ -43,6 +43,7 @@ supabase/backups/
 !templates/packing_list_template.docx
 !templates/export_declaration_template.docx
 !templates/bill_of_lading_template.docx
+!templates/shipping_instruction_template.docx
 
 # 샘플 생성 스크립트 산출물(generate-packing-sample.ts) — 커밋 대상 아님
 packing_sample_*.xlsx

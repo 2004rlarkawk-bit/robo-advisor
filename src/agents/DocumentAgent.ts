@@ -7,7 +7,6 @@ import { autoFillDocumentFields } from '../services/claudeService';
 import { getCustomsExchangeRate } from '../services/customsApiService';
 import { isLcPayment } from './paymentTerms';
 import { renderCertificateOfOriginHTML } from './templates/co';
-import { renderTransportRequestHTML } from './templates/transportRequest';
 export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCodeResult; useLLM?: boolean; logs: AgentLog[] }, DocumentResult> {
   readonly name = 'Document Agent';
 
@@ -457,9 +456,8 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
     if (generatedDocs.certificateOfOrigin) {
       htmlTemplates.co = renderCertificateOfOriginHTML(generatedDocs.certificateOfOrigin);
     }
-    if (generatedDocs.transportRequest) {
-      htmlTemplates.transport_request = renderTransportRequestHTML(generatedDocs.transportRequest);
-    }
+    // 수출 운송의뢰서도 고정 docx 템플릿(transportRequestDocxService)에서 생성·미리보기하므로
+    // HTML을 만들지 않는다 — 미리보기와 다운로드가 같은 Blob을 쓴다.
     // 수출신고서(초안)는 고정 docx 템플릿(exportDeclarationDocxService)에서 생성·미리보기한다.
     // (미리보기 = 다운로드 docx 단일 소스. HTML은 만들지 않는다. customsDeclaration.ts는 @deprecated.)
     logs.push(createLog(this.name, '문서 생성 에이전트 작업 완료.', 'success'));

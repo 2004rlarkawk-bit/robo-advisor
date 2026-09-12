@@ -1,206 +1,184 @@
-import {
-  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-  WidthType, BorderStyle, AlignmentType, HeadingLevel, VerticalAlign, ShadingType,
-} from 'docx';
+import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
 import { renderAsync } from 'docx-preview';
-import type { TransportRequestData, PartyInfo } from '../types';
+import type { TransportRequestData } from '../types';
+// 고정 템플릿(Shipping Instruction 표준 양식) — XML/서식 무수정, {{placeholder}} 값만 주입.
+import templateUrl from '../../templates/shipping_instruction_template.docx?url';
 
-// 운송의뢰서는 무역협회 표준서식 같은 고정 템플릿이 없는 자체 양식이라(renderTransportRequestHTML과 동일 내용),
-// docxtemplater(템플릿 주입) 대신 docx 라이브러리로 문서를 직접 조립한다.
+/**
+ * 수출 운송의뢰서(Shipping Instruction) 템플릿 스키마.
+ * 참고 양식의 칸과 1:1 대응하며, 빈 값은 빈 문자열('')로 둔다 — "N/A" 치환 금지.
+ */
+export interface ShippingInstructionSchema {
+  exporter: string;
+  reference: string;
+  buyer_reference: string;
+  export_declaration_no: string;
+  consignee: string;
+  carrier: string;
+  notify_party: string;
+  method_of_dispatch: string;
+  type_of_shipment: string;
+  country_of_origin: string;
+  country_of_final_destination: string;
+  vessel: string;
+  voyage_no: string;
+  place_of_receipt: string;
+  port_of_loading: string;
+  date_of_departure: string;
+  freight_charges: string;
+  document_instructions: string;
+  port_of_discharge: string;
+  final_destination: string;
+  incoterms: string;
+  declared_value: string;
+  marks: string;
+  packages: string;
+  description_of_goods: string;
+  gross_weight: string;
+  measurement: string;
+  total_this_page: string;
+  consignment_total: string;
+  hazardous: string;
+  letter_of_credit: string;
+  special_instructions: string;
+  place_and_date_of_issue: string;
+  signatory_company: string;
+  authorized_signatory: string;
+}
 
-const s = (v: unknown): string => (v === null || v === undefined ? '' : String(v)).trim();
-const numFmt = (n: unknown) => (Number(n) > 0 ? Number(n).toLocaleString('en-US') : '');
-const cellText = (v: unknown) => s(v) || ' ';
+const text = (value: unknown): string => String(value ?? '').trim();
+const joinLines = (values: (string | undefined)[]): string => values.map(text).filter(Boolean).join('\n');
+const numberText = (value: number): string =>
+  Number.isFinite(value) && value > 0 ? value.toLocaleString('en-US') : '';
 
-const BORDER = { style: BorderStyle.SINGLE, size: 4, color: '64748B' };
-const CELL_BORDERS = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+/** 마지막 쉼표 뒤를 국가로 본다 — 주소만 있을 때 원산지/목적국을 채우는 보조값. */
+function countryFromAddress(address: string): string {
+  const parts = address.split(',').map((part) => part.trim()).filter(Boolean);
+  return parts.length > 1 ? parts[parts.length - 1] : '';
+}
 
-function labeledCell(label: string, lines: string[], widthPct: number): TableCell {
-  return new TableCell({
-    width: { size: widthPct, type: WidthType.PERCENTAGE },
-    borders: CELL_BORDERS,
-    margins: { top: 100, bottom: 100, left: 120, right: 120 },
-    children: [
-      new Paragraph({
-        children: [new TextRun({ text: label, bold: true, size: 14, color: '475569' })],
-      }),
-      ...lines.filter(Boolean).map((line) => new Paragraph({
-        children: [new TextRun({ text: line, size: 18 })],
-      })),
-    ],
+export function mapTransportRequestToSchema(sr: TransportRequestData): ShippingInstructionSchema {
+  const totalPackages = sr.items.reduce((sum, item) => sum + (Number(item.packageCount) || 0), 0);
+  const totalGross = sr.items.reduce((sum, item) => sum + (Number(item.grossWeight) || 0), 0);
+  const totalCbm = sr.items.reduce((sum, item) => sum + (Number(item.measurement) || 0), 0);
+
+  const packageLines = sr.items.map((item) => {
+    const count = numberText(item.packageCount);
+    return [count, item.packageType].map(text).filter(Boolean).join(' ');
+  });
+  // 품명 아래에 HS Code·수량을 덧붙여 한 칸에 담는다(참고 양식의 Description 칸 관행).
+  const descriptionLines = sr.items.map((item) => {
+    const detail = [
+      item.hsCode ? `HS ${item.hsCode}` : '',
+      numberText(item.quantity) ? `${numberText(item.quantity)} ${text(item.unit)}`.trim() : '',
+    ].filter(Boolean).join(' / ');
+    return detail ? `${text(item.description)} (${detail})` : text(item.description);
+  });
+
+  const summary = [
+    totalPackages > 0 ? `${totalPackages.toLocaleString('en-US')} PKGS` : '',
+    totalGross > 0 ? `${totalGross.toLocaleString('en-US')} KGS` : '',
+    totalCbm > 0 ? `${totalCbm.toLocaleString('en-US')} M3` : '',
+  ].filter(Boolean).join(' / ');
+
+  const incoterms = [sr.incoterms, sr.incotermsPlace].map(text).filter(Boolean).join(' ');
+
+  return {
+    exporter: joinLines([
+      sr.exporter.name,
+      sr.exporter.address,
+      sr.exporter.contact ? `Tel: ${text(sr.exporter.contact)}` : '',
+      sr.businessRegistrationNo ? `Business No.: ${text(sr.businessRegistrationNo)}` : '',
+    ]),
+    reference: text(sr.requestNo),
+    buyer_reference: text(sr.invoiceNo),
+    export_declaration_no: '',
+    consignee: joinLines([sr.consignee.name, sr.consignee.address, sr.consignee.contact]),
+    // 운송인은 포워더가 부킹 후 확정하므로 화주 단계에서는 비워 둔다.
+    carrier: '',
+    notify_party: joinLines([sr.notifyParty?.name, sr.notifyParty?.address, sr.notifyParty?.contact]),
+    method_of_dispatch: 'SEA',
+    type_of_shipment: text(sr.loadingMode),
+    country_of_origin: countryFromAddress(text(sr.exporter.address)),
+    country_of_final_destination: countryFromAddress(
+      text(sr.placeOfDelivery) || text(sr.consignee.address),
+    ),
+    vessel: '',
+    voyage_no: '',
+    place_of_receipt: text(sr.placeOfReceipt),
+    port_of_loading: text(sr.loadPort),
+    date_of_departure: text(sr.requestedDepartureDate),
+    freight_charges: text(sr.freightTerms),
+    document_instructions: '',
+    port_of_discharge: text(sr.dischargePort),
+    final_destination: text(sr.placeOfDelivery),
+    incoterms,
+    declared_value: '',
+    marks: joinLines([...new Set(sr.items.map((item) => text(item.marksAndNumbers)))]) || text(sr.shippingMarks),
+    packages: joinLines(packageLines),
+    description_of_goods: joinLines(descriptionLines),
+    gross_weight: totalGross > 0 ? totalGross.toLocaleString('en-US') : '',
+    measurement: totalCbm > 0 ? totalCbm.toLocaleString('en-US') : '',
+    total_this_page: summary,
+    consignment_total: summary,
+    hazardous: 'NO',
+    letter_of_credit: /l\/?c/i.test(text(sr.paymentTerms)) ? 'YES' : 'NO',
+    special_instructions: text(sr.paymentTerms) ? `Payment Terms: ${text(sr.paymentTerms)}` : '',
+    place_and_date_of_issue: text(sr.requestDate),
+    signatory_company: text(sr.exporter.name),
+    authorized_signatory: text(sr.requesterName),
+  };
+}
+
+let templateCache: ArrayBuffer | null = null;
+
+async function loadTemplate(): Promise<ArrayBuffer> {
+  if (templateCache) return templateCache;
+
+  const response = await fetch(templateUrl);
+  if (!response.ok) {
+    throw new Error(`수출 운송의뢰서 템플릿 로드 실패 (${response.status})`);
+  }
+  templateCache = await response.arrayBuffer();
+  return templateCache;
+}
+
+/** 운송의뢰서 스키마를 고정 템플릿에 주입해 DOCX Blob을 반환한다. */
+export async function exportTransportRequest(data: ShippingInstructionSchema): Promise<Blob> {
+  const content = await loadTemplate();
+  const zip = new PizZip(content);
+
+  const doc = new Docxtemplater(zip, {
+    delimiters: { start: '{{', end: '}}' },
+    paragraphLoop: true,
+    linebreaks: true,
+    nullGetter: () => '',
+  });
+
+  doc.render(data as unknown as Record<string, unknown>);
+
+  const output = doc.getZip().generate({ type: 'arraybuffer' }) as ArrayBuffer;
+  return new Blob([output], {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   });
 }
 
-function partyLines(p: PartyInfo | undefined, extra: string[] = []): string[] {
-  if (!p) return [];
-  return [s(p.name), s(p.address), s(p.contact), ...extra].filter(Boolean);
+/** TransportRequestData → DOCX Blob */
+export async function buildTransportRequestDocx(sr: TransportRequestData): Promise<Blob> {
+  return exportTransportRequest(mapTransportRequestToSchema(sr));
 }
 
-function headerCell(text: string): TableCell {
-  return new TableCell({
-    borders: CELL_BORDERS,
-    shading: { type: ShadingType.CLEAR, fill: 'EAF1F8' },
-    verticalAlign: VerticalAlign.CENTER,
-    margins: { top: 60, bottom: 60, left: 60, right: 60 },
-    children: [new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [new TextRun({ text, bold: true, size: 15 })],
-    })],
-  });
-}
-
-function bodyCell(text: string, alignLeft = false): TableCell {
-  return new TableCell({
-    borders: CELL_BORDERS,
-    verticalAlign: VerticalAlign.CENTER,
-    margins: { top: 60, bottom: 60, left: 60, right: 60 },
-    children: [new Paragraph({
-      alignment: alignLeft ? AlignmentType.LEFT : AlignmentType.CENTER,
-      children: [new TextRun({ text: cellText(text), size: 15 })],
-    })],
-  });
-}
-
-/** TransportRequestData → docx Blob. HTML 미리보기(renderTransportRequestHTML)와 동일한 내용을 담는다. */
-export async function buildTransportRequestDocx(data: TransportRequestData): Promise<Blob> {
-  const notify = data.notifyParty;
-  const loadingMode = data.loadingMode || 'TBD';
-
-  const itemHeader = new TableRow({
-    tableHeader: true,
-    children: ['No.', 'Goods Description', 'HS Code', 'Qty', 'Unit', 'Pkg Qty', 'Package Type', 'N/W (kg)', 'G/W (kg)', 'CBM']
-      .map(headerCell),
-  });
-  const itemRows = data.items.length
-    ? data.items.map((item, index) => new TableRow({
-      children: [
-        bodyCell(String(index + 1)),
-        bodyCell(item.description, true),
-        bodyCell(item.hsCode),
-        bodyCell(numFmt(item.quantity)),
-        bodyCell(item.unit),
-        bodyCell(numFmt(item.packageCount)),
-        bodyCell(item.packageType),
-        bodyCell(numFmt(item.netWeight)),
-        bodyCell(numFmt(item.grossWeight)),
-        bodyCell(item.measurement),
-      ],
-    }))
-    : [new TableRow({
-      children: [new TableCell({
-        columnSpan: 10,
-        borders: CELL_BORDERS,
-        children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'No cargo item entered', size: 15 })] })],
-      })],
-    })];
-
-  const doc = new Document({
-    sections: [{
-      properties: { page: { margin: { top: 720, bottom: 720, left: 720, right: 720 } } },
-      children: [
-        new Paragraph({
-          heading: HeadingLevel.TITLE,
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 40 },
-          children: [new TextRun({ text: 'EXPORT TRANSPORT REQUEST', bold: true, size: 32 })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 200 },
-          children: [new TextRun({ text: '수출 운송의뢰서', bold: true, size: 20, color: '475569' })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          spacing: { after: 160 },
-          children: [
-            new TextRun({ text: 'Request No. ', bold: true, size: 16 }),
-            new TextRun({ text: `${cellText(data.requestNo)}    `, size: 16 }),
-            new TextRun({ text: 'Date ', bold: true, size: 16 }),
-            new TextRun({ text: cellText(data.requestDate), size: 16 }),
-          ],
-        }),
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [
-            new TableRow({
-              children: [
-                labeledCell('EXPORTER / REQUESTER', [
-                  s(data.exporter.name),
-                  s(data.exporter.address),
-                  `Contact: ${s(data.requesterName || data.exporter.contact)}`,
-                  `Tel/E-mail: ${s(data.exporter.contact)}`,
-                  `Business No.: ${s(data.businessRegistrationNo)}`,
-                ], 50),
-                labeledCell('CONSIGNEE', partyLines(data.consignee), 50),
-              ],
-            }),
-            ...(notify ? [new TableRow({
-              children: [new TableCell({
-                columnSpan: 2,
-                borders: CELL_BORDERS,
-                margins: { top: 100, bottom: 100, left: 120, right: 120 },
-                children: [
-                  new Paragraph({ children: [new TextRun({ text: 'NOTIFY PARTY', bold: true, size: 14, color: '475569' })] }),
-                  ...partyLines(notify).map((line) => new Paragraph({ children: [new TextRun({ text: line, size: 18 })] })),
-                ],
-              })],
-            })] : []),
-          ],
-        }),
-        new Paragraph({ text: '', spacing: { after: 160 } }),
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [itemHeader, ...itemRows],
-        }),
-        new Paragraph({ text: '', spacing: { after: 160 } }),
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [new TableRow({
-            children: [
-              labeledCell('TRADE TERMS', [
-                `Incoterms: ${s(data.incoterms)}`,
-                `Named Place: ${s(data.incotermsPlace)}`,
-                `Payment Terms: ${s(data.paymentTerms)}`,
-                `Invoice No.: ${s(data.invoiceNo)}`,
-              ], 50),
-              labeledCell('TRANSPORT REQUEST', [
-                `POL: ${s(data.loadPort)}`,
-                `POD: ${s(data.dischargePort)}`,
-                `Requested Departure: ${s(data.requestedDepartureDate)}`,
-                `Loading Mode: ${s(loadingMode)}`,
-              ], 50),
-            ],
-          })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { before: 320 },
-          children: [new TextRun({ text: 'We request ocean transportation and shipment arrangements for the cargo described above.', size: 16 })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 200 },
-          children: [new TextRun({ text: '상기 화물에 대한 해상운송 및 선적 업무를 의뢰합니다.', size: 16, color: '64748B' })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.CENTER,
-          children: [new TextRun({
-            text: 'Business transport request draft — booking and B/L particulars are to be confirmed by the forwarder.',
-            size: 13, italics: true, color: '94A3B8',
-          })],
-        }),
-      ],
-    }],
-  });
-
-  const buf = await Packer.toBlob(doc);
-  return buf;
-}
-
-/** 생성된 docx Blob을 브라우저에 렌더(미리보기) — 미리보기=다운로드 동일 바이너리. */
-export async function renderTransportRequestDocxPreview(blob: Blob, container: HTMLElement): Promise<void> {
+/** 생성된 DOCX Blob을 브라우저에서 미리보기로 렌더한다. */
+export async function renderTransportRequestDocxPreview(
+  blob: Blob,
+  container: HTMLElement,
+): Promise<void> {
   container.innerHTML = '';
   await renderAsync(blob, container, undefined, {
-    className: 'docx-preview', inWrapper: true, ignoreWidth: false, ignoreHeight: false,
+    className: 'docx-preview',
+    inWrapper: true,
+    ignoreWidth: false,
+    ignoreHeight: false,
   });
 }

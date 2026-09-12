@@ -572,6 +572,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const packingDocxPreviewRef = useRef<HTMLDivElement | null>(null);
   const blDocxCacheRef = useRef<{ sig: string; blob: Blob } | null>(null);
   const blDocxPreviewRef = useRef<HTMLDivElement | null>(null);
+  const trDocxPreviewRef = useRef<HTMLDivElement | null>(null);
 
   // 수출신고서(초안)도 고정 docx 템플릿에서 생성 — 미리보기/다운로드 동일 바이너리.
   const [customsDeclarationData, setCustomsDeclarationData] = useState<CustomsDeclarationData | null>(null);
@@ -643,7 +644,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     id === 'invoice' ? !!invoiceData
       : id === 'packing_list' ? !!packingListData
       : id === 'customs_dec' ? !!customsDeclarationData
-      : id === 'transport_request' ? !!transportRequestData && !!htmlTemplates[id]
+      : id === 'transport_request' ? !!transportRequestData
       : !!htmlTemplates[id];
 
   // 미리보기 모달에서 상업송장은 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
@@ -683,6 +684,25 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     })();
     return () => { cancelled = true; };
   }, [previewDocId, billOfLadingData]);
+
+  // 운송의뢰서도 고정 서식(Shipping Instruction) docx를 그대로 렌더 — 다운로드와 동일 소스
+  useEffect(() => {
+    if (previewDocId !== 'transport_request' || !transportRequestData) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = await getTransportRequestBlob();
+        const host = trDocxPreviewRef.current;
+        if (!blob || cancelled || !host) return;
+        const { renderTransportRequestDocxPreview } = await import('./services/transportRequestDocxService');
+        await renderTransportRequestDocxPreview(blob, host);
+      } catch {
+        const host = trDocxPreviewRef.current;
+        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">수출 운송의뢰서 미리보기 생성에 실패했습니다.</p>';
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [previewDocId, transportRequestData]);
 
   // 패킹리스트도 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
   useEffect(() => {
@@ -4551,6 +4571,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               ) : previewDocId === 'packing_list' ? (
                 // 패킹리스트: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
                 <div ref={packingDocxPreviewRef} style={{ width: '100%' }} />
+              ) : previewDocId === 'transport_request' ? (
+                // 운송의뢰서: 고정 서식 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
+                <div ref={trDocxPreviewRef} style={{ width: '100%' }} />
               ) : previewDocId === 'bl' ? (
                 // 선하증권: 무역협회 표준 서식 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
                 <div ref={blDocxPreviewRef} style={{ width: '100%' }} />
