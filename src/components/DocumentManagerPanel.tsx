@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown, Copy, CornerUpLeft, Mail } from 'lucide-react';
+import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown, Copy, CornerUpLeft, Mail, Send } from 'lucide-react';
 import type { SavedTrade } from '../types';
 import {
   FORWARDER_STAGE_LABEL,
@@ -9,6 +9,8 @@ import {
 import { deleteSavedTrade, fetchSubmittedTrades } from '../services/storageService';
 import { filterDocumentManagerTrades } from '../services/tradeListPolicy';
 import { hasActiveShipperReturnRequest } from '../services/forwarderCaseService';
+import ForwarderRequestModal from './forwarder/ForwarderRequestModal';
+import TradeRequestStatusList from './forwarder/TradeRequestStatusList';
 
 interface Props {
   onLoad: (trade: SavedTrade) => void;
@@ -148,6 +150,8 @@ export default function DocumentManagerPanel({
   // 문서 관리 탭 진입 시 임시보관함이 먼저 보이도록 기본 접힘
   const [open, setOpen] = useState(false);
   const [sortKey, setSortKey] = useState<'latest' | 'oldest'>('latest');
+  const [requestModalTrade, setRequestModalTrade] = useState<SavedTrade | null>(null);
+  const [statusRefreshKey, setStatusRefreshKey] = useState(0);
 
   const loadTrades = useCallback(async () => {
     setIsLoading(true);
@@ -323,6 +327,11 @@ export default function DocumentManagerPanel({
                     <button type="button" className="draft-tray-resume" onClick={() => onCopy(trade)}>
                       <Copy size={15} /> 새 거래로 복사
                     </button>
+                    {(trade.tradeRole ?? 'shipper') === 'shipper' && !trade.forwarderUserId && (
+                      <button type="button" className="draft-tray-resume" onClick={() => setRequestModalTrade(trade)}>
+                        <Send size={15} /> 포워더에게 의뢰하기
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="draft-tray-delete"
@@ -334,11 +343,22 @@ export default function DocumentManagerPanel({
                   </div>
                   {/* 포워더 진행·보완 요청은 행 전체 폭을 쓰도록 정보 칼럼 밖에 둔다 */}
                   <ForwarderProgress trade={trade} onRevise={onRevise} />
+                  {(trade.tradeRole ?? 'shipper') === 'shipper' && (
+                    <TradeRequestStatusList tradeId={trade.id} refreshKey={statusRefreshKey} />
+                  )}
                 </div>
               );
             })
           )}
         </div>
+      )}
+
+      {requestModalTrade && (
+        <ForwarderRequestModal
+          trade={requestModalTrade}
+          onClose={() => setRequestModalTrade(null)}
+          onSent={() => setStatusRefreshKey((key) => key + 1)}
+        />
       )}
     </section>
   );

@@ -1,5 +1,4 @@
 import {
-  Bell,
   HelpCircle,
   PanelLeftClose,
   PanelLeftOpen,
@@ -7,11 +6,14 @@ import {
 import type { AuthSessionUser } from '../../services/authService';
 import type { UserProfile } from '../../services/profileService';
 import type { AppMenu } from '../../services/workspaceSessionService';
+import NotificationBell from '../NotificationBell';
 
 interface AppHeaderProps {
   collapsed: boolean;
   user: AuthSessionUser;
   profile: UserProfile;
+  /** 알림 벨 폴링을 다시 트리거하는 값 (예: activeMenu 변경 시) */
+  notificationPollKey?: unknown;
   onToggleSidebar: () => void;
   onNavigate: (menu: AppMenu) => void;
   onLogout: () => void;
@@ -21,6 +23,7 @@ export default function AppHeader({
   collapsed,
   user,
   profile,
+  notificationPollKey,
   onToggleSidebar,
   onNavigate,
   onLogout,
@@ -43,10 +46,7 @@ export default function AppHeader({
       </div>
 
       <div className="header-actions">
-        <button className="icon-btn" type="button" aria-label="알림">
-          <Bell size={20} />
-          <span className="badge-dot" />
-        </button>
+        <NotificationBell userId={user.id} pollKey={notificationPollKey} onNavigate={onNavigate} />
         <button
           className="icon-btn"
           type="button"

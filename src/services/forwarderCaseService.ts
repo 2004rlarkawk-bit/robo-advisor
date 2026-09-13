@@ -209,14 +209,14 @@ export async function saveForwarderCaseState(
 ): Promise<ForwarderCaseState> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
-  const userId = userData.user?.id;
-  if (!userId) throw new Error('로그인이 필요합니다.');
+  if (!userData.user?.id) throw new Error('로그인이 필요합니다.');
 
+  // user_id가 아니라 RLS(소유자 또는 배정된 포워더)에 조회 범위를 맡긴다 —
+  // 배정된 포워더 계정도 자신의 작업 상태를 저장할 수 있어야 하기 때문이다.
   const { data: row, error: readError } = await supabase
     .from('trades')
     .select('workflow_data')
     .eq('id', tradeId)
-    .eq('user_id', userId)
     .maybeSingle();
   if (readError) throw readError;
   if (!row) throw new Error('수정할 수입 건을 찾지 못했습니다.');
@@ -234,8 +234,7 @@ export async function saveForwarderCaseState(
   const { error: writeError } = await supabase
     .from('trades')
     .update({ workflow_data: { ...workflowData, forwarderCase: next } })
-    .eq('id', tradeId)
-    .eq('user_id', userId);
+    .eq('id', tradeId);
   if (writeError) throw writeError;
   return next;
 }

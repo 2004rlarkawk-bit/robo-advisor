@@ -29,6 +29,7 @@ interface TradeRow {
   id: string;
   direction: TradeType;
   role: TradeRole;
+  forwarder_user_id?: string | null;
   schema_version: number;
   form_data: TradeFormDataV3;
   workflow_data: TradeWorkflowData | null;
@@ -74,6 +75,7 @@ function mapTradeRow(row: TradeRow): SavedTrade {
     id: row.id,
     tradeDirection: row.direction,
     tradeRole: row.role,
+    forwarderUserId: row.forwarder_user_id ?? null,
     attachments: Array.isArray(formData.attachments) ? formData.attachments : [],
     arrivalNotice: findArrivalNotice(formData),
     profile: tradeFormDataToProfile(formData),

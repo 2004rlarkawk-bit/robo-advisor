@@ -670,6 +670,8 @@ export interface SavedTrade {
   profile: TradeProfile;
   tradeDirection?: TradeType;
   tradeRole?: TradeRole;
+  /** 의뢰 요청이 수락되어 이 거래를 넘겨받은 포워더 계정의 사용자 id (없으면 미배정). */
+  forwarderUserId?: string | null;
   attachments?: import('./types/tradeFormData').TradeAttachment[];
   arrivalNotice?: object | null;
   analysisResult?: object;

@@ -142,6 +142,7 @@ const AboutPanel = lazy(() => import('./components/AboutPanel'));
 const CustomsHistoryPanel = lazy(() => import('./components/CustomsHistoryPanel'));
 const DataAnalysisPanel = lazy(() => import('./components/DataAnalysisPanel'));
 const DocumentManagerPanel = lazy(() => import('./components/DocumentManagerPanel'));
+const IncomingTradeRequestsPanel = lazy(() => import('./components/forwarder/IncomingTradeRequestsPanel'));
 const ForwarderWorkspaceForm = lazy(() => import('./components/ForwarderWorkspaceForm'));
 const GuidePanel = lazy(() => import('./components/GuidePanel'));
 const ImportForwarderFlow = lazy(() => import('./components/import/ImportForwarderFlow'));
@@ -2563,6 +2564,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
           collapsed={sidebarCollapsed}
           user={user}
           profile={userProfile}
+          notificationPollKey={activeMenu}
           onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
           onNavigate={handleAppNavigate}
           onLogout={() => void handleLogout()}
@@ -2591,6 +2593,15 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   onOpenDocument={handleOpenSavedTradeDocument}
 />
             : activeMenu === 'analysis' ? <DataAnalysisPanel currentItem={{ hsCode: profile.hsCode, itemName: profile.itemName }} />
+            : activeMenu === 'requests' ? (
+              workspaceRole === 'forwarder' ? (
+                <IncomingTradeRequestsPanel />
+              ) : (
+                <div className="doc-empty">
+                  <span>보낸 의뢰 요청 상태는 문서 관리 탭의 각 거래에서 확인할 수 있어요.</span>
+                </div>
+              )
+            )
             : activeMenu === 'docs' ? (
               <>
                 {/* 임시보관함(작성 중 미제출 거래) — 문서 관리 탭 상단. 제출 완료 문서함과 한 곳에서 관리 */}

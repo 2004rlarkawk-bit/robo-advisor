@@ -7,6 +7,7 @@ export type AppMenu =
   | 'dashboard'
   | 'docs'
   | 'trades'
+  | 'requests'
   | 'customs_history'
   | 'analysis'
   | 'profile'
@@ -27,6 +28,7 @@ const MENUS = new Set<AppMenu>([
   'dashboard',
   'docs',
   'trades',
+  'requests',
   'customs_history',
   'analysis',
   'profile',
