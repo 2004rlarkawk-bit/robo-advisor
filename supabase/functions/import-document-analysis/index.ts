@@ -259,8 +259,8 @@ async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
   for (const document of documents) {
     content.push({ type: "input_text", text: `파일 ID: ${document.id}\n파일명: ${document.fileName}\n사용자 지정 분류: ${document.documentType}` });
     content.push(document.mimeType === "application/pdf"
-      ? { type: "input_file", filename: document.fileName, file_data: document.dataUrl, detail: "high" }
-      : { type: "input_image", image_url: document.dataUrl, detail: "high" });
+      ? { type: "input_file", filename: document.fileName, file_data: document.dataUrl, detail: "low" }
+      : { type: "input_image", image_url: document.dataUrl, detail: "low" });
   }
   const response = await fetch(OPENAI_RESPONSES_URL, {
     method: "POST",
@@ -270,7 +270,7 @@ async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
       instructions: "당신은 해상 수입 문서를 정확히 판독하는 전문가입니다. 첨부 원문에 근거한 정보만 구조화하세요.",
       input: [{ role: "user", content }],
       text: { format: { type: "json_schema", name: "import_document_analysis", strict: true, schema: analysisSchema } },
-      max_output_tokens: 12000,
+      max_output_tokens: 8000,
       store: false,
     }),
   });

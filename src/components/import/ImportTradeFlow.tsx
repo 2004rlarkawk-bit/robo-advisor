@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Eye, RefreshCw, Search } from 'lucide-react';
+import { CheckCircle2, Download, Eye, RefreshCw, RotateCcw, Search } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
 import ImportAnalysisSummary from './ImportAnalysisSummary';
@@ -946,20 +946,36 @@ function RiskSummary({ risks, onToggle }: { risks: ImportRisk[]; onToggle?: (id:
     <section className="form-card import-card">
       <div className="import-card-heading"><div><h2>종합 리스크</h2></div></div>
       <div className="risk-list">
-        {risks.map((risk) => (
-          <article key={risk.id} className={`risk-item ${risk.level}`}>
-            <span>{risk.level.toUpperCase()}</span>
-            <div>
-              <strong>{risk.item}</strong>
-              <p>{risk.cause}</p>
-              {!!risk.relatedDocuments.length && <small>출처: {risk.relatedDocuments.join(', ')}</small>}
-              {!!risk.differentValues?.length && <small>서로 다른 값: {risk.differentValues.join(' / ')}</small>}
-              <small>해결 방법: {risk.recommendation}</small>
-              <small>해결 여부: {risk.status === 'resolved' ? '확인 완료' : '미확인'}</small>
-            </div>
-            {onToggle && <button type="button" className="btn btn-secondary" onClick={() => onToggle(risk.id)}>{risk.status === 'resolved' ? '미확인으로 변경' : '확인 완료'}</button>}
-          </article>
-        ))}
+        {risks.map((risk) => {
+          const isResolved = risk.status === 'resolved';
+          return (
+            <article key={risk.id} className={`risk-item ${risk.level} ${isResolved ? 'resolved' : ''}`}>
+              <span className="risk-level-badge">{risk.level.toUpperCase()}</span>
+              <div className="risk-item-body">
+                <div className="risk-item-title-row">
+                  <strong>{risk.item}</strong>
+                  <span className={`risk-status-badge ${isResolved ? 'resolved' : 'pending'}`}>
+                    {isResolved ? '확인됨' : '검토 필요'}
+                  </span>
+                </div>
+                <p>{risk.cause}</p>
+                {!!risk.relatedDocuments.length && <small>출처: {risk.relatedDocuments.join(', ')}</small>}
+                {!!risk.differentValues?.length && <small>서로 다른 값: {risk.differentValues.join(' / ')}</small>}
+                <small>해결 방법: {risk.recommendation}</small>
+              </div>
+              {onToggle && (
+                <button
+                  type="button"
+                  className={`risk-action-btn ${isResolved ? 'resolved' : ''}`}
+                  onClick={() => onToggle(risk.id)}
+                >
+                  {isResolved ? <RotateCcw size={14} /> : <CheckCircle2 size={14} />}
+                  {isResolved ? '다시 미확인' : '검토 완료'}
+                </button>
+              )}
+            </article>
+          );
+        })}
       </div>
       <p className="import-notice">자동 분석 결과는 참고정보이며 최종 법률·통관 판단이 아닙니다.</p>
     </section>
