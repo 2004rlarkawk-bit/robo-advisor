@@ -1445,7 +1445,7 @@ function RiskSummary({ risks, onToggle, description }: {
               className={`risk-check-btn${resolved ? ' on' : ''}`}
               onClick={() => onToggle(risk.id)}
             >
-              {resolved ? <><RotateCcw size={14} /> 다시 미확인</> : <><CheckCircle2 size={14} /> 검토 완료</>}
+              {resolved ? <><RotateCcw size={14} /> 검토 취소</> : <><CheckCircle2 size={14} /> 검토 완료</>}
             </button>
           ) : resolved ? (
             <span className="risk-check-btn on" aria-hidden><CheckCircle2 size={14} /> 확인됨</span>
