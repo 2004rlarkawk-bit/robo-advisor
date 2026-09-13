@@ -1,18 +1,14 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import { FileUp, Trash2 } from 'lucide-react';
-import { classifyImportDocument } from '../../services/importDocumentAnalysisService';
+import { FileText, FileUp, Trash2 } from 'lucide-react';
+import {
+  classifyImportDocument,
+  IMPORT_DOCUMENT_TYPE_LABELS,
+} from '../../services/importDocumentAnalysisService';
 import type { ImportDocumentMeta, ImportDocumentType } from '../../types/importTrade';
 
 const ACCEPT = '.pdf,.png,.jpg,.jpeg';
 const MIME_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
-const TYPE_LABELS: Record<ImportDocumentType, string> = {
-  commercial_invoice: 'Commercial Invoice (C/I)',
-  packing_list: 'Packing List (P/L)',
-  bill_of_lading: 'Bill of Lading (B/L)',
-  certificate_of_origin: 'Certificate of Origin (C/O)',
-  other: '기타서류',
-  unknown: '기타서류',
-};
+const TYPE_LABELS: Record<ImportDocumentType, string> = IMPORT_DOCUMENT_TYPE_LABELS;
 
 interface Props {
   documents: ImportDocumentMeta[];
@@ -87,10 +83,12 @@ export default function ImportDocumentUploader({
     if (!filtered.length) return <p className="import-empty">첨부된 파일이 없습니다.</p>;
     return filtered.map((document) => (
       <div className="import-document-row" key={document.id}>
-        <div className="import-document-name" title={document.name}>
-          <strong>{document.name}</strong>
-          <span>
-            {(document.size / 1024).toFixed(1)} KB · {TYPE_LABELS[document.type]}
+        <FileText className="import-document-icon" size={18} aria-hidden="true" />
+        <div className="import-document-content">
+          <strong className="import-document-type">{TYPE_LABELS[document.type]}</strong>
+          <span className="import-document-file-name" title={document.name}>{document.name}</span>
+          <span className="import-document-meta">
+            {(document.size / 1024).toFixed(1)} KB
             {' · '}
             {document.uploadStatus === 'uploaded' && document.analysisStatus === 'pending'
               ? '업로드 완료'
@@ -101,20 +99,22 @@ export default function ImportDocumentUploader({
                 : document.analysisStatus === 'analyzing' ? '분석 중' : '분석 대기'}
           </span>
         </div>
-        <select
-          aria-label={`${document.name} 문서 종류`}
-          value={document.type === 'unknown' ? 'other' : document.type}
-          onChange={(event) => onChange(documents.map((item) => item.id === document.id
-            ? { ...item, type: event.target.value as ImportDocumentType }
-            : item))}
-        >
-          {Object.entries(TYPE_LABELS).filter(([value]) => value !== 'unknown').map(([value, label]) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
-        </select>
-        <button type="button" className="icon-btn import-delete" title="파일 삭제" aria-label={`${document.name} 삭제`} onClick={() => void remove(document)}>
-          <Trash2 size={16} />
-        </button>
+        <div className="import-document-actions">
+          <select
+            aria-label={`${document.name} 문서 종류`}
+            value={document.type === 'unknown' ? 'other' : document.type}
+            onChange={(event) => onChange(documents.map((item) => item.id === document.id
+              ? { ...item, type: event.target.value as ImportDocumentType }
+              : item))}
+          >
+            {Object.entries(TYPE_LABELS).filter(([value]) => value !== 'unknown').map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <button type="button" className="icon-btn import-delete" title="파일 삭제" aria-label={`${document.name} 삭제`} onClick={() => void remove(document)}>
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
     ));
   };

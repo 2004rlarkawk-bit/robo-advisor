@@ -7,6 +7,8 @@ export type ImportDocumentType =
   | 'packing_list'
   | 'bill_of_lading'
   | 'certificate_of_origin'
+  | 'transport_request'
+  | 'export_declaration'
   | 'other'
   | 'unknown';
 export type ImportAnalysisStatus =
@@ -57,6 +59,8 @@ export interface ImportParty {
 
 export interface ImportItem {
   id: string;
+  itemNo?: string;
+  sku?: string;
   description: string;
   koreanDescription: string;
   documentHSCode: string;
@@ -65,6 +69,10 @@ export interface ImportItem {
   specification: string;
   material: string;
   composition: string;
+  fabricConstruction: string;
+  productForm: string;
+  processingState: string;
+  gender: string;
   intendedUse: string;
   originCountry: string;
   quantity: string;
@@ -72,7 +80,19 @@ export interface ImportItem {
   unitPrice: string;
   currency: string;
   amount: string;
+  packageCount?: string;
+  packageUnit?: string;
+  netWeight?: string;
+  grossWeight?: string;
+  measurement?: string;
+  shippingMarks?: string;
   sourceDocumentIds: string[];
+}
+
+export interface ImportCargoTotals {
+  numberOfPackages: string;
+  grossWeight: string;
+  measurement: string;
 }
 
 export interface ImportExtractedFields {
@@ -97,6 +117,10 @@ export interface ImportExtractedFields {
   sealNo: string;
   vesselName: string;
   voyageNo: string;
+  exportDeclarationNo: string;
+  loadingMode: string;
+  measurement: string;
+  shippingMarks: string;
 
   exporterDetails: ImportParty;
   importerDetails: ImportParty;
@@ -110,6 +134,7 @@ export interface ImportExtractedFields {
   containerNumbers: string[];
   sealNumbers: string[];
   items: ImportItem[];
+  cargoTotals: ImportCargoTotals;
   certificateOfOriginAvailable: boolean;
   totalPackageCount: string;
   packageUnit: string;
@@ -145,6 +170,33 @@ export interface ImportAnalysisResult {
   comparison: ImportComparisonRow[];
 }
 
+export interface ImportDocFields {
+  productDescription?: string;
+  quantity?: string;
+  packageCount?: string;
+  grossWeight?: string;
+  netWeight?: string;
+  unitPrice?: string;
+  totalAmount?: string;
+  currency?: string;
+  hsCode?: string;
+  incoterms?: string;
+}
+
+export type ImportReconciliationInput = Partial<Record<ImportDocumentType, ImportDocFields>>;
+export type ReconciliationStatus = 'pass' | 'fail' | 'skip';
+
+export interface ReconciliationRuleResult {
+  ruleId: string;
+  label: string;
+  severity: ValidationSeverity;
+  status: ReconciliationStatus;
+  passed: boolean;
+  blocking: boolean;
+  evidence: string;
+  documents: ImportDocumentType[];
+}
+
 export interface ImportDocumentClassification {
   id: string;
   type: ImportDocumentType;
@@ -160,15 +212,24 @@ export interface ImportHSCodeSuggestion {
   reasoning: string;
   confidence: number;
   missingInformation?: string[];
-  source?: 'ai_recommendation';
+  source?: 'official_hsk_ai_ranked' | 'official_hsk_fallback';
 }
 
 export interface ImportDocumentAnalysisResponse {
   analysis: ImportAnalysisResult;
   classifications: ImportDocumentClassification[];
-  suggestions: ImportHSCodeSuggestion[];
   source: 'openai';
   model: string;
+  timing?: {
+    requestParseMs: number;
+    openAiMs: number;
+    responseParseMs: number;
+    totalMs: number;
+    inputBytes: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    reasoningTokens?: number;
+  };
 }
 
 export interface ImportDutyItemEstimate {
@@ -227,6 +288,52 @@ export interface CargoTrackingResult {
   timeline: CargoTimelineItem[];
 }
 
+/** 요청 차량 종류 — 배차 의뢰서 '요청 차량' 칸 */
+export type DispatchVehicleType = '트랙터' | '카고' | '윙바디' | '기타';
+
+/** 운임 정산 방식 — 배차 의뢰서 '운임 정산' 칸 */
+export type DispatchSettlement = '선불' | '착불' | '월마감';
+
+/**
+ * 화주가 포워더에게 알려주는 배송 요청.
+ * 배송지·희망 일시·수령 담당자는 서류에 없고 화주만 아는 값이라 직접 입력받는다.
+ */
+export interface ImportDeliveryRequest {
+  deliveryAddress: string;
+  /** 희망 배송일시 — datetime-local 문자열 */
+  deliveryAt: string;
+  contactName: string;
+  contactTel: string;
+  /** 화주가 운송사에 전달할 요청사항 */
+  remarks: string;
+  updatedAt: string;
+}
+
+/**
+ * 포워더가 D/O 수령 후 운송사에 보내는 배차 의뢰.
+ * 상차지·공컨 반납지·차량·정산은 포워더가 선사·터미널과 정하는 값이다.
+ */
+export interface ImportDispatchRequest {
+  /** 수신 운송사 */
+  carrierCompany: string;
+  attention: string;
+  doNo: string;
+  terminal: string;
+  pickupPlace: string;
+  /** 상차 요청일시 — datetime-local 문자열 */
+  pickupAt: string;
+  emptyReturnPlace: string;
+  emptyReturnDue: string;
+  vehicleType: DispatchVehicleType | '';
+  settlement: DispatchSettlement | '';
+  remarks: string;
+  /** 운송사 회신 — 배차 확정 후 기록 */
+  vehicleNo: string;
+  driverName: string;
+  driverTel: string;
+  issuedAt: string;
+}
+
 export interface ImportTradeSnapshot {
   tradeId?: string;
   direction: 'import';
@@ -238,6 +345,8 @@ export interface ImportTradeSnapshot {
   duty?: ImportDutyEstimate;
   risks: ImportRisk[];
   cargo?: CargoTrackingResult;
+  /** 화주가 입력한 배송 요청 — 포워더 배차 의뢰서의 배송지 칸으로 이어진다 */
+  deliveryRequest?: ImportDeliveryRequest;
   generatedAt: string;
   flowCompletedAt?: string;
 }

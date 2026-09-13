@@ -19,6 +19,7 @@ export const RULE_POLICY = {
   'r1-origin-missing':        { severity: 'error',   overridable: true },
   'r1-itemname-insufficient': { severity: 'error',   overridable: true },
   'r2-departure-missing':     { severity: 'warning', overridable: false },
+  'r2-departure-out-of-range':{ severity: 'warning', overridable: false },
   'r3-incoterm-port':         { severity: 'error',   overridable: true },
   'r3-incoterm-port-flex':    { severity: 'warning', overridable: false },
   'r4-transport-mode':        { severity: 'warning', overridable: false },
@@ -32,12 +33,23 @@ export const RULE_POLICY = {
   'r11-payment-lc-conflict':  { severity: 'error',   overridable: true },
   'r11-lc-missing':           { severity: 'warning', overridable: false },
   'r11-lc-date-missing':      { severity: 'warning', overridable: false },
+  'r12-buyer-address-missing':{ severity: 'warning', overridable: false },
+  'r12-buyer-name-missing':   { severity: 'warning', overridable: false },
+  'r13-identical-ports':      { severity: 'error',   overridable: true },
+  'r14-lc-after-shipment':    { severity: 'error',   overridable: true },
+  'r15-origin-not-korea':     { severity: 'error',   overridable: true },
+  'r16-generic-item-name':    { severity: 'error',   overridable: true },
+  'r17-hs-chapter-mismatch':  { severity: 'error',   overridable: true },
+  'r19-consignee-country-address': { severity: 'error', overridable: true },
 } as const satisfies Record<string, RulePolicy>;
 
 export type ComplianceRuleId = keyof typeof RULE_POLICY;
 
-/** 정책 레지스트리에서 severity/overridable을 읽어 이슈를 만든다(수기 지정 방지). */
-function mk(id: ComplianceRuleId, docType: DocumentType, field: string, message: string): ValidationIssue {
+/**
+ * 정책 레지스트리에서 severity/overridable을 읽어 이슈를 만든다(수기 지정 방지).
+ * extra: card/amounts처럼 UI가 구조화 값으로 소비하는 필드만 얹는 용도(severity/overridable은 여전히 정책이 결정).
+ */
+function mk(id: ComplianceRuleId, docType: DocumentType, field: string, message: string, extra?: Partial<ValidationIssue>): ValidationIssue {
   const p = RULE_POLICY[id];
   return {
     id,
@@ -46,6 +58,7 @@ function mk(id: ComplianceRuleId, docType: DocumentType, field: string, message:
     message,
     severity: p.severity,
     overridable: p.severity === 'error' ? p.overridable : undefined,
+    ...extra,
   };
 }
 
@@ -84,9 +97,6 @@ const HS4_UNIT: Record<string, string> = {
 };
 const isWeightUnit = (u?: string) => /^(kg|g|ton|mt|톤|킬로|중량)/i.test((u || '').trim());
 
-// 통화별 소수 자릿수
-const decimalsFor = (ccy?: string) => (['KRW', 'JPY'].includes(up(ccy)) ? 0 : 2);
-const roundTo = (n: number, d: number) => Math.round(n * 10 ** d) / 10 ** d;
 const num = (v: unknown): number | null => {
   if (v === '' || v === null || v === undefined) return null;
   const n = Number(v);
@@ -132,6 +142,21 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     issues.push(mk('r2-departure-missing', 'invoice', 'departureDate',
       '선적일(출발일)이 비어 있습니다. 선적 전 발행이면 무방하나, 확정 시 입력을 권장합니다.'));
   }
+  // 출항희망일 비현실적 범위(연도 오타 방지) — 오늘 기준 1년 전 ~ 2년 후를 벗어나면 경고.
+  // 입력은 <input type="date"> 네이티브 검증이라 "존재하지 않는 날짜"는 이미 막히므로,
+  // 여기서는 "존재는 하지만 연도를 잘못 찍은" 값(2016/2062 등)만 잡는다.
+  if ((profile.departureDate || '').trim()) {
+    const dep = new Date(profile.departureDate as string);
+    if (!Number.isNaN(dep.getTime())) {
+      const today = new Date();
+      const minDate = new Date(today); minDate.setFullYear(today.getFullYear() - 1);
+      const maxDate = new Date(today); maxDate.setFullYear(today.getFullYear() + 2);
+      if (dep < minDate || dep > maxDate) {
+        issues.push(mk('r2-departure-out-of-range', 'invoice', 'departureDate',
+          `출항희망일(${profile.departureDate})이 현재로부터 비현실적으로 먼 날짜입니다. 연도를 다시 확인하세요.`));
+      }
+    }
+  }
 
   // ── R3. Incoterms ↔ 항구 정합성 (error) ─────────────
   // 도착지 지칭 조건(CIF 등)은 도착항(⑥To) 명기 필수, 선적지 지칭(FOB 등)은 선적항(⑤From) 명기 필수.
@@ -162,7 +187,7 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     const v = profile.vesselOrFlight || '';
     const looksAir = /항공|air|flight|\b[A-Z]{2}\d{2,4}\b/i.test(v);
     if (looksAir) {
-      issues.push(mk('r4-transport-mode', 'bl', 'vesselOrFlight',
+      issues.push(mk('r4-transport-mode', 'transport_request', 'vesselOrFlight',
         `${inc}는 해상 운송 전용 조건인데 운송수단이 항공편으로 보입니다("${v}"). 조건 또는 운송수단을 확인하세요.`));
     }
   }
@@ -175,7 +200,7 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     const un = [!lc ? `선적항 "${load}"` : '', !dc ? `도착항 "${disch}"` : ''].filter(Boolean).join(', ');
     skipLog(`R5 동일국가 검사 건너뜀 — 항구 국가 추정 불가(${un}). 오탐 방지.`);
   } else if (lc && dc && lc === dc) {
-    issues.push(mk('r5-same-country-ports', 'bl', 'loadPort',
+    issues.push(mk('r5-same-country-ports', 'transport_request', 'loadPort',
       `선적항과 도착항이 같은 국가(${lc})로 보입니다(국내운송 의심). 보세운송·반송·FTZ 등 정상 사유이면 사유 입력 후 진행하세요.`));
   }
 
@@ -204,8 +229,8 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     }
   }
   const engFields: { field: keyof TradeProfile; label: string; docType: DocumentType }[] = [
-    { field: 'loadPort', label: '선적항(From)', docType: 'bl' },
-    { field: 'dischargePort', label: '도착항(To)', docType: 'bl' },
+    { field: 'loadPort', label: '선적항(From)', docType: 'transport_request' },
+    { field: 'dischargePort', label: '도착항(To)', docType: 'transport_request' },
     { field: 'companyAddress', label: '자사 주소', docType: 'invoice' },
     { field: 'partnerAddress', label: '거래처 주소', docType: 'invoice' },
     { field: 'buyerAddress', label: 'Buyer 주소', docType: 'invoice' },
@@ -241,15 +266,121 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
       '결제조건이 L/C인데 L/C Date가 비어 있습니다.'));
   }
 
+  // ── R12. Buyer 정보 일관성 (warning) ────────────────
+  // Buyer는 Consignee(거래처)와 별개로 입력 가능한 선택 항목이라 필수값으로 잡지 않는다.
+  // 다만 한쪽만 입력된 반쪽짜리 상태는 서류 대사에서 문제가 되므로 안내한다.
+  const buyerName = (profile.buyerName || '').trim();
+  const buyerAddress = (profile.buyerAddress || '').trim();
+  if (buyerName && !buyerAddress) {
+    issues.push(mk('r12-buyer-address-missing', 'invoice', 'buyerAddress',
+      `Buyer 회사명("${buyerName}")은 입력되었는데 Buyer 주소가 비어 있습니다. 상업송장 Buyer란은 명기 시 함께 채워야 합니다.`));
+  } else if (!buyerName && buyerAddress) {
+    issues.push(mk('r12-buyer-name-missing', 'invoice', 'buyerName',
+      'Buyer 주소는 입력되었는데 Buyer 회사명이 비어 있습니다. 회사명을 입력하세요.'));
+  }
+
+  // ── R13. 선적항·도착항 완전 동일 (error, override 가능) ─────
+  // R5(같은 국가)보다 강한 케이스 — 문자열 정규화 후 완전히 같으면 입력 실수가 거의 확실.
+  const portNorm = (s: string) => up(s).replace(/[\s,.]+/g, ' ').trim();
+  if (load && disch && portNorm(load) === portNorm(disch)) {
+    issues.push(mk('r13-identical-ports', 'bl', 'dischargePort',
+      `선적항과 도착항이 동일합니다("${load}"). 국제 운송이 성립하지 않으므로 입력 오류일 가능성이 높습니다. 반송·보세운송 등 특수 사유이면 사유 입력 후 진행하세요.`));
+  }
+
+  // ── R14. 신용장 개설일 > 선적일 (error, override 가능) ─────
+  // 신용장(L/C) 개설 전에 선적하면 은행 매입·대금 회수에서 하자 사유가 된다.
+  // 사전 계약된 사후 개설 등 예외가 있으므로 사유 입력 시 우회 허용.
+  const depDate = (profile.departureDate || '').trim();
+  const lcDateVal = (profile.lcDate || '').trim();
+  if (isLcPayment(profile.paymentTerms) && depDate && lcDateVal && lcDateVal > depDate) {
+    issues.push(mk('r14-lc-after-shipment', 'invoice', 'lcDate',
+      `신용장 개설일(${lcDateVal})이 선적일(${depDate})보다 늦습니다. 신용장 없이 선적한 셈이 되어 은행 매입 거절·대금 회수 위험이 있습니다. 날짜를 확인하세요.`));
+  }
+
+  // ── R15. 수출인데 원산지가 한국 아님 (error, override 가능) ─
+  // 국내 수출 신고에서 원산지가 외국이면 중계무역·반송 등 특수 거래 — 확인 없이 진행하면
+  // 원산지증명·FTA 적용에서 문제가 된다. 정상 사유이면 사유 입력 후 우회.
+  const originVal = (profile.countryOfOrigin || '').trim();
+  const isKoreaOrigin = /korea|한국|대한민국|\bkr\b/i.test(originVal);
+  if (profile.tradeType === 'export' && originVal && !isKoreaOrigin) {
+    issues.push(mk('r15-origin-not-korea', 'customs_dec', 'countryOfOrigin',
+      `원산지 정보 확인 필요. 수출물품의 원산지가 '${originVal}'으로 입력되어 있습니다. 실제 물품의 원산지와 일치하는지 확인해 주세요.`));
+  }
+
+  // ── R16. 포괄 품명 (error, override 가능) ───────────────
+  // "GOODS", "SAMPLE" 같은 포괄적 품명은 세관이 수리 거부하는 대표 사유 —
+  // 구체적 품명(재질·용도 포함)을 요구한다. 단어 완전 일치(복수형 포함)만 잡아 오탐 방지.
+  const GENERIC_NAMES = new Set([
+    'GOODS', 'GENERAL MERCHANDISE', 'MERCHANDISE', 'SAMPLE', 'SAMPLES', 'PRODUCT', 'PRODUCTS',
+    'ITEM', 'ITEMS', 'CARGO', 'COMMODITY', 'COMMODITIES', 'GIFT', 'GIFTS', 'PARTS', 'ACCESSORIES',
+    'FREIGHT', 'STUFF', '물품', '상품', '제품', '화물', '샘플',
+  ]);
+  const checkGeneric = (name: string, field: string) => {
+    const n = up(name).replace(/[.,!]+$/g, '').trim();
+    if (n && GENERIC_NAMES.has(n)) {
+      issues.push(mk('r16-generic-item-name', 'invoice', field,
+        `품명 "${name}"은(는) 포괄적 표현이라 세관 신고가 수리되지 않을 수 있습니다. 재질·용도를 포함한 구체적 품명으로 작성하세요. 예: "GOODS" → "STAINLESS STEEL KITCHEN KNIFE"`));
+      return true;
+    }
+    return false;
+  };
+  // 단일 품목 필드 + 다품목 각각 검사(같은 이슈 id는 첫 건만 발행해 중복 카드 방지)
+  if (!checkGeneric(itemName, 'itemName')) {
+    for (const it of profile.shipperItems ?? []) {
+      if (checkGeneric(it.itemName || '', 'itemName')) break;
+    }
+  }
+
+  // (R18 도착항↔거래처 국가 대조는 3국 인도 등 정상 거래에서 과검출된다는 피드백으로 제거 — 2026-08-20)
+  const countryCode = (name?: string): string | null => {
+    const v = (name || '').toLowerCase();
+    if (!v.trim()) return null;
+    if (/korea|한국|대한민국/.test(v)) return 'KR';
+    if (/japan|일본/.test(v)) return 'JP';
+    if (/china|중국/.test(v)) return 'CN';
+    if (/united states|usa|america|미국/.test(v)) return 'US';
+    if (/vietnam|베트남/.test(v)) return 'VN';
+    if (/thailand|태국/.test(v)) return 'TH';
+    if (/singapore|싱가포르/.test(v)) return 'SG';
+    if (/germany|독일/.test(v)) return 'DE';
+    if (/united kingdom|england|britain|영국/.test(v)) return 'GB';
+    return null;
+  };
+  const consigneeCountry = countryCode(profile.partnerCountry);
+
+  // ── R19. 거래처 주소 ↔ 거래처 국가 선택 불일치 (error, override 가능) ─
+  // 주소는 이전 거래에서 복붙하고 국가 셀렉트만 바꾸는(또는 그 반대) 실수 검출.
+  // 주소 문자열에서 국가명이 추정될 때만 판정한다.
+  const addrCountry = countryCode(profile.partnerAddress);
+  if (addrCountry && consigneeCountry && addrCountry !== consigneeCountry) {
+    issues.push(mk('r19-consignee-country-address', 'invoice', 'partnerCountry',
+      `거래처 주소("${(profile.partnerAddress || '').trim()}")에서 추정되는 국가(${addrCountry})와 선택한 거래처 국가 "${profile.partnerCountry}"(${consigneeCountry})가 다릅니다. `
+      + '이전 거래 주소를 복사한 뒤 국가만 바꾼 경우가 많으니 두 값을 확인하세요.'));
+  }
+
   // ── R8. 금액 산술 (error) ───────────────────────────
-  // quantity × unit_price = amount (통화별 소수 자릿수로 반올림 후 비교).
+  // quantity × unit_price = amount.
+  //
+  // 허용오차 정책(2026-08 통합 — validatorEngine의 amount-calc-mismatch를 여기로 흡수):
+  // 정확 일치가 아니라 1%(최소 0.01) 오차를 허용한다. 이유: 단가·환율 반올림 등 정상적인
+  // 소수점 오차까지 error로 차단하면 과검출이 되고, 두 엔진이 서로 다른 기준(정확일치 vs 1%)을
+  // 쓰던 과거 상태는 "0.5% 어긋난 금액이 한쪽만 통과", "1% 넘게 어긋나면 error 카드가 2장 뜸"
+  // 두 가지 버그를 냈다. 이제 이 R8이 금액산술의 유일한 판정처다.
+  //
+  // 다품목(shipperItems 2건 이상)이면 총액 = 품목 합계이므로 이 단건 qty×price 비교는 성립하지
+  // 않는다 — validatorEngine도 같은 이유로 스킵했던 가드를 그대로 이식한다.
+  const validItems = (profile.shipperItems ?? []).filter((it) => {
+    const q = Number(it.quantity), p = Number(it.unitPrice);
+    return it.quantity !== '' && it.unitPrice !== '' && !Number.isNaN(q) && !Number.isNaN(p) && q > 0 && p > 0;
+  });
   const qty = num(profile.quantity), price = num(profile.unitPrice), total = num(profile.totalAmount);
-  const dp = decimalsFor(profile.currency);
-  if (qty !== null && price !== null && total !== null && qty > 0 && price > 0) {
-    const expected = roundTo(qty * price, dp);
-    if (roundTo(total, dp) !== expected) {
+  if (validItems.length <= 1 && qty !== null && price !== null && total !== null && qty > 0 && price > 0) {
+    const expected = qty * price;
+    const tolerance = Math.max(0.01, expected * 0.01);
+    if (Math.abs(expected - total) > tolerance) {
       issues.push(mk('r8-amount-arithmetic', 'invoice', 'totalAmount',
-        `금액이 맞지 않습니다: 수량 ${qty} × 단가 ${price} = ${expected} 이어야 하는데 총액이 ${roundTo(total, dp)}입니다(통화 ${up(profile.currency) || 'USD'}, 소수 ${dp}자리).`));
+        `금액 계산 불일치: 수량(${qty.toLocaleString()}) × 단가(${price.toLocaleString()}) = ${expected.toLocaleString()} 이지만, 입력된 금액은 ${total.toLocaleString()} 입니다. 값을 확인해 주세요.`,
+        { amounts: { expected, actual: total, currency: up(profile.currency) || 'USD' } }));
     }
   }
 
@@ -275,6 +406,30 @@ function packingTotalEA(items: InvoiceItem[]): number | null {
   return counted > 0 ? sum : null;
 }
 
+/** 패킹 품목의 총 박스수 — 수량 불일치 시 "박스당 몇 개로 고치면 되는지" 역산용. */
+function packingTotalBoxes(items: InvoiceItem[]): number | null {
+  let sum = 0, counted = 0;
+  for (const it of items) {
+    const r = it as Record<string, any>;
+    const boxes = num(r.boxes ?? r.packageCount);
+    if (boxes !== null && boxes > 0) { sum += boxes; counted++; }
+  }
+  return counted > 0 ? sum : null;
+}
+
+/**
+ * 수량 불일치 해소 방법을 계산해 문장으로 돌려준다.
+ * 박스수로 인보이스 수량이 나누어떨어지면 "박스당 N개로 수정" 같은 구체적 수치를 제시하고,
+ * 안 떨어지면 어느 쪽 값을 맞출지 두 선택지를 제시한다.
+ */
+function quantityFixHint(plEA: number, invQty: number, boxes: number | null): string {
+  if (boxes !== null && boxes > 0 && invQty % boxes === 0) {
+    const suggestedEaPerBox = invQty / boxes;
+    return `박스 ${boxes.toLocaleString()}개 기준 박스당 수량을 ${suggestedEaPerBox.toLocaleString()}개로 고치면 상업송장 수량(${invQty.toLocaleString()})과 맞습니다.\n실제 포장이 맞다면 상업송장 수량을 ${plEA.toLocaleString()}으로 수정하세요.`;
+  }
+  return `상업송장 수량을 ${plEA.toLocaleString()}으로 맞추거나, 패킹리스트 박스 내역(박스수 × 박스당 수량)을 ${invQty.toLocaleString()}이 되도록 수정하세요.`;
+}
+
 export function checkPackingInvoiceConsistency(
   invoice: InvoiceData,
   packingList: PackingListData,
@@ -292,8 +447,16 @@ export function checkPackingInvoiceConsistency(
   if (plEA === null) {
     skipLog('R10 수량 대조 건너뜀 — 패킹리스트 박스 내역(박스수/박스당 수량) 미입력. 오탐 방지.');
   } else if (invQty > 0 && plEA !== invQty) {
+    const boxes = packingTotalBoxes(plItems);
+    // 박스 내역이 한 라인일 때의 현재 박스당 수량 — 카드의 "N개 → M개로 수정" 표기용
+    const eaLines = plItems
+      .map((it) => num((it as Record<string, any>).eaPerBox))
+      .filter((v): v is number => v !== null && v > 0);
+    const eaPerBox = eaLines.length === 1 ? eaLines[0] : null;
+    const suggestedEaPerBox = boxes !== null && boxes > 0 && invQty % boxes === 0 ? invQty / boxes : null;
     issues.push(mk('r10-packing-qty-mismatch', 'packing_list', 'quantity',
-      `패킹리스트 총 수량(박스 내역 합계 ${plEA.toLocaleString()})이 상업송장 수량(${invQty.toLocaleString()})과 다릅니다. 세관·은행 서류 대조 시 불일치로 걸릴 수 있으니 확인하세요.`));
+      `패킹리스트 총 수량(박스 내역 합계 ${plEA.toLocaleString()})이 상업송장 수량(${invQty.toLocaleString()})과 다릅니다. ${quantityFixHint(plEA, invQty, boxes)}`,
+      { qtyMismatch: { plTotal: plEA, invQty, boxes, eaPerBox, suggestedEaPerBox } }));
   }
 
   // 품명 대조: 같은 순번 품목의 품명이 다르면 경고(둘 다 값이 있을 때만).
@@ -307,5 +470,43 @@ export function checkPackingInvoiceConsistency(
     }
   }
 
+  return issues;
+}
+
+
+// ── R17. HS코드 ↔ 품명 분류 불일치 (error, override 가능) ─────────────────
+// 실무에서 가장 흔하고 사람이 봐도 알기 어려운 실수 — 다른 건의 코드를 복붙했거나
+// 앞자리를 착각한 경우. 품명 기반 추천 후보(HSCodeAgent가 항상 먼저 생성)의
+// 류(Chapter, 앞 2자리)와 사용자가 입력한 코드의 류를 대조한다.
+// 후보 중 하나라도 같은 류면 통과, 후보가 없으면 판정 보류(오탐 방지 — R5·R6과 동일 정책).
+export function checkHsChapterMismatch(
+  profile: TradeProfile,
+  hsResult: { status?: string; candidates: { code: string; description: string }[] },
+  logs?: AgentLog[],
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const skipLog = (msg: string) => { if (logs) logs.push(createLog('Compliance Agent', msg, 'info')); };
+
+  const cleaned = (profile.hsCode || '').replace(/[^0-9]/g, '');
+  // 형식이 틀린 코드는 hscode-invalid가 이미 잡는다 — 여기서는 유효 형식만 대조.
+  if (cleaned.length !== 6 && cleaned.length !== 10) return issues;
+  if (hsResult.status === 'invalid') return issues;
+
+  const inputChapter = cleaned.slice(0, 2);
+  const candChapters = (hsResult.candidates || [])
+    .map(c => (c.code || '').replace(/[^0-9]/g, '').slice(0, 2))
+    .filter(ch => ch.length === 2);
+
+  if (candChapters.length === 0) {
+    skipLog('R17 HS 분류 대조 건너뜀 — 품명 기반 추천 후보 없음. 오탐 방지.');
+    return issues;
+  }
+  if (candChapters.includes(inputChapter)) return issues;
+
+  const top = hsResult.candidates[0];
+  const topCode = (top.code || '').replace(/[^0-9]/g, '');
+  issues.push(mk('r17-hs-chapter-mismatch', 'customs_dec', 'hsCode',
+    `입력한 HS코드(${cleaned}, ${inputChapter}류)가 품명 기반 추천 분류(${topCode.slice(0, 2)}류 — ${top.description})와 크게 다릅니다. `
+    + '다른 거래의 코드를 복사했거나 앞자리를 착각한 경우가 많으니 분류를 확인하세요. 특수 분류가 맞다면 사유 입력 후 진행하세요.'));
   return issues;
 }

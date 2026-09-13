@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { FileText, Paperclip, Trash2 } from 'lucide-react';
 import {
   removeTradeAttachment,
@@ -11,9 +11,14 @@ interface Props {
   onChange: (value: ArrivalNoticeMeta | null) => void;
   userId: string;
   tradeId?: string;
+  readOnly?: boolean;
+  /** 카드 우측 상단 액션(예: 포워더 워크스페이스의 A/N 생성 버튼) */
+  headerAction?: ReactNode;
+  /** 카드 상단 안내 문구 */
+  notice?: string;
 }
 
-export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId }: Props) {
+export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId, readOnly = false, headerAction, notice }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -81,20 +86,28 @@ export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId
   return (
     <section className="form-card import-card arrival-notice-card">
       <div className="import-card-heading">
-        <div><span className="ai-badge">별도 첨부</span><h2>도착통지서 (Arrival Notice)</h2></div>
-        <p>도착통지서가 없으면 거래는 진행 중으로 저장됩니다.</p>
+        <div>
+          <span className="ai-badge">별도 첨부</span>
+          <h2>도착통지서 (Arrival Notice)</h2>
+          <p>도착통지서가 없으면 거래는 진행 중으로 저장됩니다.</p>
+        </div>
+        {headerAction}
       </div>
+      {notice && <p className="import-notice">{notice}</p>}
       {displayValue ? (
         <div className="arrival-notice-file">
           <FileText size={20} />
           <div><strong>{displayValue.fileName}</strong><span>{(displayValue.sizeBytes / 1024).toFixed(1)} KB · {displayValue.mimeType}</span></div>
-          <button type="button" disabled={busy} className="icon-btn import-delete" title="도착통지서 삭제" aria-label="도착통지서 삭제" onClick={() => void removeFile()}><Trash2 size={16} /></button>
+          {!readOnly && <button type="button" disabled={busy} className="icon-btn import-delete" title="도착통지서 삭제" aria-label="도착통지서 삭제" onClick={() => void removeFile()}><Trash2 size={16} /></button>}
         </div>
+      ) : readOnly ? (
+        <p className="import-empty">첨부된 도착통지서가 없습니다.</p>
       ) : (
         <label className="arrival-notice-picker">
           <Paperclip size={20} />
           <span><strong>{busy ? '업로드 중' : '도착통지서 첨부'}</strong><small>업로드가 완료된 Storage 경로만 거래에 저장합니다.</small></span>
-          <input disabled={busy} type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(event) => void selectFile(event.target.files?.[0])} />
+          {/* 포워더가 워크스페이스에서 발행한 A/N(DOCX)도 그대로 보관할 수 있게 허용 */}
+          <input disabled={busy} type="file" accept=".pdf,.png,.jpg,.jpeg,.docx" onChange={(event) => void selectFile(event.target.files?.[0])} />
         </label>
       )}
       {error && <div className="form-message error" role="alert">{error}</div>}

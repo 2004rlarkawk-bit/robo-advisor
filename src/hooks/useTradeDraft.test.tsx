@@ -8,17 +8,24 @@ const {
   loadDraftFromLocalMock,
   loadTradeDraftMock,
   saveDraftToLocalMock,
+  isSubmittedTradeDraftMock,
+  removeDraftFromLocalMock,
+  deleteTradeDraftMock,
 } = vi.hoisted(() => ({
   loadDraftFromLocalMock: vi.fn(),
   loadTradeDraftMock: vi.fn(),
   saveDraftToLocalMock: vi.fn(),
+  isSubmittedTradeDraftMock: vi.fn().mockResolvedValue(false),
+  removeDraftFromLocalMock: vi.fn(),
+  deleteTradeDraftMock: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../services/draftCacheService', () => ({
-  deleteTradeDraft: vi.fn(),
+  deleteTradeDraft: deleteTradeDraftMock,
   loadDraftFromLocal: loadDraftFromLocalMock,
   loadTradeDraft: loadTradeDraftMock,
-  removeDraftFromLocal: vi.fn(),
+  isSubmittedTradeDraft: isSubmittedTradeDraftMock,
+  removeDraftFromLocal: removeDraftFromLocalMock,
   saveDraftToLocal: saveDraftToLocalMock,
   saveTradeDraft: vi.fn(),
   selectNewestDraft: (
@@ -90,9 +97,35 @@ afterEach(() => {
   root = null;
   container = null;
   vi.clearAllMocks();
+  isSubmittedTradeDraftMock.mockResolvedValue(false);
 });
 
 describe('useTradeDraft 프로필 비동기 초기화', () => {
+  it('local draft가 submitted 거래를 가리키면 복원하지 않고 local/DB draft를 폐기한다', async () => {
+    loadDraftFromLocalMock.mockReturnValue({
+      profile: { ...profileDefaults, companyName: 'Submitted Company' },
+      tradeId: 'submitted-trade',
+      currentStep: 2,
+      updatedAt: '2026-08-15T00:00:00.000Z',
+      source: 'local',
+    });
+    loadTradeDraftMock.mockResolvedValue(null);
+    isSubmittedTradeDraftMock.mockResolvedValue(true);
+
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(<Harness enabled />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toBe('ABC Trading Co., Ltd.|Jimin Kim');
+    expect(removeDraftFromLocalMock).toHaveBeenCalledWith('user-1', 'export', 'shipper');
+    expect(deleteTradeDraftMock).toHaveBeenCalledWith('user-1', 'export', 'shipper');
+  });
+
   it('프로필 활성화 직후 DB 복원이 끝나기 전에 빈 profile을 저장하지 않는다', async () => {
     let resolveDatabase!: (value: {
       user_id: string;

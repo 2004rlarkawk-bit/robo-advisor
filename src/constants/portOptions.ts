@@ -198,16 +198,3 @@ export const DISCHARGE_PORT_OPTIONS: PortOption[] = [
     label: 'ULSAN, KOREA (울산)',
   },
 ];
-
-/**
- * 선적항과 도착항에서 공통으로 사용할 수 있는 전체 항구 목록입니다.
- *
- * 동일한 value의 항구는 한 번만 포함합니다.
- */
-export const ALL_PORT_OPTIONS: PortOption[] = [
-  ...LOAD_PORT_OPTIONS,
-  ...DISCHARGE_PORT_OPTIONS,
-].filter(
-  (port, index, ports) =>
-    ports.findIndex(candidate => candidate.value === port.value) === index,
-);

@@ -5,17 +5,56 @@ import type {
   ImportDocumentMeta,
   ImportDocumentType,
   ImportExtractedFields,
-  ImportHSCodeSuggestion,
   ImportItem,
   ImportParty,
 } from '../types/importTrade';
 
-const TYPE_HINTS: Array<[RegExp, ImportDocumentType]> = [
-  [/(commercial.?invoice|invoice|c[._ -]?i)/i, 'commercial_invoice'],
-  [/(packing.?list|packing|p[._ -]?l)/i, 'packing_list'],
-  [/(bill.?of.?lading|lading|b[._ -]?l)/i, 'bill_of_lading'],
-  [/(certificate.?of.?origin|origin.?certificate|c[._ -]?o)/i, 'certificate_of_origin'],
+export const IMPORT_DOCUMENT_TYPE_LABELS: Record<ImportDocumentType, string> = {
+  commercial_invoice: '상업송장',
+  packing_list: '포장명세서',
+  bill_of_lading: '선하증권',
+  certificate_of_origin: '원산지증명서',
+  transport_request: '수출 운송의뢰서',
+  export_declaration: '수출신고필증',
+  other: '기타서류',
+  unknown: '기타서류',
+};
+
+const STRONG_FILE_NAME_HINTS: Array<[RegExp, ImportDocumentType]> = [
+  [/(?:상업\s*송장(?:서)?|COMMERCIAL\s+INVOICE|(?:^|\s)C\s*(?:\/\s*)?I(?=\s|$))/, 'commercial_invoice'],
+  [/(?:포장\s*(?:명세서|내역서|목록)|[패팩]킹\s*(?:리스트|명세서?)|PACKING\s+LIST|(?:^|\s)P\s*(?:\/\s*)?L(?=\s|$))/, 'packing_list'],
+  [/(?:해상\s*)?선하\s*증권(?:서)?|BILL\s+OF\s+LADING|(?:^|\s)B\s*(?:\/\s*)?L(?=\s|$)/, 'bill_of_lading'],
+  [/(?:원산지\s*증명(?:서)?|CERTIFICATE\s+OF\s+ORIGIN|(?:^|\s)C\s*(?:\/\s*)?O(?=\s|$))/, 'certificate_of_origin'],
+  [/(?:수출\s*운송\s*의뢰서|운송\s*의뢰서|선적\s*의뢰서|선적\s*요청|SHIPPING\s+(?:REQUEST|INSTRUCTION|ORDER)|EXPORT\s+TRANSPORT\s+REQUEST|TRANSPORT\s+REQUEST|(?:^|\s)(?:T\s*(?:\/\s*)?R|S\s*(?:\/\s*)?I)(?=\s|$))/, 'transport_request'],
+  [/(?:수출\s*신고(?:필증|서)|EXPORT\s+DECLARATION|EXPORT\s+PERMIT)/, 'export_declaration'],
 ];
+
+const WEAK_FILE_NAME_HINTS: Array<[RegExp, ImportDocumentType]> = [
+  [/(?:^|\s)(?:송장|인보이스|INVOICE)(?=\s|$)/, 'commercial_invoice'],
+];
+
+function normalizedClassificationText(fileName: string): string {
+  return fileName
+    .normalize('NFKC')
+    .replace(/\.(pdf|png|jpe?g)$/i, '')
+    // '패킹리스트(P/L).pdf'처럼 약어가 괄호에 묶이면 토큰 경계가 사라지므로 괄호류도 구분자로 본다.
+    .replace(/[._\-()[\]{}<>]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+export function classifyImportDocumentName(fileName: string): ImportDocumentType {
+  const normalized = normalizedClassificationText(fileName);
+  const strong = STRONG_FILE_NAME_HINTS.find(([pattern]) => pattern.test(normalized));
+  if (strong) return strong[1];
+
+  // 세금계산서·견적송장은 Commercial Invoice와 용도가 다르므로 약한 invoice 힌트에서 제외한다.
+  if (/세금\s*계산서|TAX\s+INVOICE|PROFORMA\s+INVOICE|견적\s*송장/.test(normalized)) {
+    return 'other';
+  }
+  return WEAK_FILE_NAME_HINTS.find(([pattern]) => pattern.test(normalized))?.[1] ?? 'other';
+}
 
 const ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg']);
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -25,15 +64,6 @@ const text = (value: unknown): string =>
   typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
 const textArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.map(text).filter(Boolean) : text(value).split(/[,;\n]/).map((v) => v.trim()).filter(Boolean);
-
-export const EMPTY_IMPORT_PARTY: ImportParty = {
-  name: '',
-  address: '',
-  country: '',
-  contactName: '',
-  phone: '',
-  email: '',
-};
 
 function normalizeParty(value: unknown, legacyName = ''): ImportParty {
   const party = value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -51,6 +81,8 @@ function normalizeItem(value: unknown, index: number): ImportItem {
   const item = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   return {
     id: text(item.id) || `item-${index + 1}`,
+    itemNo: text(item.itemNo),
+    sku: text(item.sku),
     description: text(item.description),
     koreanDescription: text(item.koreanDescription),
     documentHSCode: text(item.documentHSCode ?? item.hsCode),
@@ -59,6 +91,10 @@ function normalizeItem(value: unknown, index: number): ImportItem {
     specification: text(item.specification),
     material: text(item.material),
     composition: text(item.composition),
+    fabricConstruction: text(item.fabricConstruction),
+    productForm: text(item.productForm),
+    processingState: text(item.processingState),
+    gender: text(item.gender),
     intendedUse: text(item.intendedUse ?? item.use),
     originCountry: text(item.originCountry),
     quantity: text(item.quantity),
@@ -66,13 +102,103 @@ function normalizeItem(value: unknown, index: number): ImportItem {
     unitPrice: text(item.unitPrice),
     currency: text(item.currency),
     amount: text(item.amount),
+    packageCount: text(item.packageCount),
+    packageUnit: text(item.packageUnit),
+    netWeight: text(item.netWeight),
+    grossWeight: text(item.grossWeight),
+    measurement: text(item.measurement),
+    shippingMarks: text(item.shippingMarks),
     sourceDocumentIds: textArray(item.sourceDocumentIds),
   };
+}
+
+const ITEM_MERGE_FIELDS: Array<keyof ImportItem> = [
+  'itemNo',
+  'sku',
+  'description',
+  'koreanDescription',
+  'documentHSCode',
+  'confirmedHSCode',
+  'modelName',
+  'specification',
+  'material',
+  'composition',
+  'fabricConstruction',
+  'productForm',
+  'processingState',
+  'gender',
+  'intendedUse',
+  'originCountry',
+  'quantity',
+  'quantityUnit',
+  'unitPrice',
+  'currency',
+  'amount',
+  'packageCount',
+  'packageUnit',
+  'netWeight',
+  'grossWeight',
+  'measurement',
+  'shippingMarks',
+];
+
+function normalizedItemIdentity(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/^\s*item\s*\d+\s*[:.)-]?\s*/i, '')
+    .replace(/[^a-z0-9가-힣]/g, '');
+}
+
+function normalizedHSCode(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+function canMergeCrossDocumentItems(existing: ImportItem, candidate: ImportItem): boolean {
+  const existingSources = new Set(existing.sourceDocumentIds);
+  const candidateSources = new Set(candidate.sourceDocumentIds);
+  if (!existingSources.size || !candidateSources.size) return false;
+  if (candidate.sourceDocumentIds.some((sourceId) => existingSources.has(sourceId))) return false;
+
+  const existingDescription = normalizedItemIdentity(existing.description);
+  const candidateDescription = normalizedItemIdentity(candidate.description);
+  if (!existingDescription || existingDescription !== candidateDescription) return false;
+
+  const conflicting = (left: string | undefined, right: string | undefined, normalize = normalizedItemIdentity) =>
+    Boolean(left && right && normalize(left) !== normalize(right));
+
+  if (conflicting(existing.itemNo, candidate.itemNo)) return false;
+  if (conflicting(existing.sku, candidate.sku)) return false;
+  if (conflicting(existing.modelName, candidate.modelName)) return false;
+  if (conflicting(existing.documentHSCode, candidate.documentHSCode, normalizedHSCode)) return false;
+  return true;
+}
+
+function mergeCrossDocumentItems(items: ImportItem[]): ImportItem[] {
+  return items.reduce<ImportItem[]>((merged, candidate) => {
+    const existing = merged.find((item) => canMergeCrossDocumentItems(item, candidate));
+    if (!existing) {
+      merged.push(candidate);
+      return merged;
+    }
+
+    ITEM_MERGE_FIELDS.forEach((field) => {
+      if (!existing[field] && candidate[field]) {
+        (existing as unknown as Record<string, unknown>)[field] = candidate[field];
+      }
+    });
+    existing.sourceDocumentIds = Array.from(new Set([
+      ...existing.sourceDocumentIds,
+      ...candidate.sourceDocumentIds,
+    ]));
+    return merged;
+  }, []);
 }
 
 export function normalizeImportExtractedFields(value: unknown): ImportExtractedFields {
   const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   let items = Array.isArray(raw.items) ? raw.items.map(normalizeItem) : [];
+  items = mergeCrossDocumentItems(items);
   if (
     items.length === 0
     && [raw.productDescription, raw.quantity, raw.originCountry].some((entry) => text(entry))
@@ -117,6 +243,10 @@ export function normalizeImportExtractedFields(value: unknown): ImportExtractedF
     sealNo: sealNumbers.join(', '),
     vesselName: text(raw.vesselName),
     voyageNo: text(raw.voyageNo),
+    exportDeclarationNo: text(raw.exportDeclarationNo),
+    loadingMode: text(raw.loadingMode).toUpperCase(),
+    measurement: text(raw.measurement),
+    shippingMarks: text(raw.shippingMarks),
     exporterDetails,
     importerDetails,
     consigneeDetails,
@@ -129,6 +259,14 @@ export function normalizeImportExtractedFields(value: unknown): ImportExtractedF
     containerNumbers,
     sealNumbers,
     items,
+    cargoTotals: {
+      numberOfPackages: text((raw.cargoTotals as Record<string, unknown> | undefined)?.numberOfPackages)
+        || text(raw.totalPackageCount),
+      grossWeight: text((raw.cargoTotals as Record<string, unknown> | undefined)?.grossWeight)
+        || text(raw.grossWeight),
+      measurement: text((raw.cargoTotals as Record<string, unknown> | undefined)?.measurement)
+        || text(raw.measurement),
+    },
     certificateOfOriginAvailable: raw.certificateOfOriginAvailable === true,
     totalPackageCount: text(raw.totalPackageCount),
     packageUnit: text(raw.packageUnit),
@@ -174,7 +312,7 @@ function resolveMimeType(file: File): string {
 }
 
 export async function classifyImportDocument(file: File): Promise<ImportDocumentType> {
-  return TYPE_HINTS.find(([pattern]) => pattern.test(file.name))?.[1] ?? 'other';
+  return classifyImportDocumentName(file.name);
 }
 
 function readFileAsDataUrl(file: File, mimeType: string): Promise<string> {
@@ -228,36 +366,106 @@ export async function buildImportAnalysisRequestDocuments(
   })));
 }
 
+
+/** Supabase Edge Function 오류 본문에서 사람이 읽을 수 있는 사유를 뽑아낸다. */
+async function readEdgeErrorDetail(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown })?.context;
+  if (!context || typeof (context as Response).text !== 'function') return '';
+  try {
+    const body = await (context as Response).clone().text();
+    if (!body) return '';
+    try {
+      const parsed = JSON.parse(body) as { error?: unknown; message?: unknown };
+      const value = parsed.error ?? parsed.message;
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    } catch {
+      // JSON이 아니면 본문 앞부분을 그대로 쓴다.
+    }
+    return body.slice(0, 300).trim();
+  } catch {
+    return '';
+  }
+}
+
 export async function analyzeImportDocuments(
   documents: ImportDocumentMeta[],
   filesById: Record<string, File>,
 ): Promise<ImportDocumentAnalysisResponse> {
+  const totalStartedAt = performance.now();
+  const preprocessingStartedAt = performance.now();
   const payload = await buildImportAnalysisRequestDocuments(documents, filesById);
+  const preprocessingMs = performance.now() - preprocessingStartedAt;
 
+  if (import.meta.env.DEV) {
+    console.debug('[Export Forwarder Analysis] AI request started', {
+      documents: payload.map(({ id, documentType, mimeType, dataUrl }) => ({
+        id,
+        documentType,
+        mimeType,
+        inputBytesApprox: Math.floor(dataUrl.length * 0.75),
+      })),
+    });
+  }
+
+  const edgeStartedAt = performance.now();
   const { data, error } = await supabase.functions.invoke('import-document-analysis', {
     body: { documents: payload },
   });
+  const edgeMs = performance.now() - edgeStartedAt;
 
-  if (error) throw new Error(`AI 문서 분석 요청에 실패했습니다: ${error.message}`);
+  if (error) {
+    // FunctionsHttpError의 message는 "non-2xx status code"로만 나와 원인을 알 수 없다.
+    // 함수가 돌려준 본문을 읽어 실제 사유(키 미설정·모델 오류 등)를 그대로 전달한다.
+    const detail = await readEdgeErrorDetail(error);
+    if (import.meta.env.DEV) {
+      console.error('[Export Forwarder Analysis] Edge request failed', {
+        stage: 'edge_request',
+        message: error.message,
+        detail,
+        documentTypes: payload.map(({ documentType }) => documentType),
+      });
+    }
+    throw new Error(`AI 문서 분석 요청에 실패했습니다: ${detail || error.message}`);
+  }
   if (!data?.success || !data?.analysis) {
+    if (import.meta.env.DEV) {
+      console.error('[Export Forwarder Analysis] invalid Edge response', {
+        stage: 'edge_response',
+        message: typeof data?.error === 'string' ? data.error : 'invalid response shape',
+        documentTypes: payload.map(({ documentType }) => documentType),
+      });
+    }
     throw new Error(typeof data?.error === 'string' ? data.error : 'AI 문서 분석 응답이 올바르지 않습니다.');
   }
 
-  const suggestions = (Array.isArray(data.suggestions) ? data.suggestions : []).map(
-    (suggestion: ImportHSCodeSuggestion) => ({
-      ...suggestion,
-      source: 'ai_recommendation' as const,
-      missingInformation: Array.isArray(suggestion.missingInformation)
-        ? suggestion.missingInformation
-        : [],
-    }),
-  );
-
-  return {
+  const responseParseStartedAt = performance.now();
+  const response: ImportDocumentAnalysisResponse = {
     analysis: normalizeImportAnalysisResult(data.analysis),
     classifications: Array.isArray(data.classifications) ? data.classifications : [],
-    suggestions,
     source: 'openai',
     model: typeof data.model === 'string' ? data.model : 'unknown',
+    timing: data.timing && typeof data.timing === 'object'
+      ? data.timing as ImportDocumentAnalysisResponse['timing']
+      : undefined,
   };
+  const responseParseMs = performance.now() - responseParseStartedAt;
+
+  if (import.meta.env.DEV) {
+    console.debug('[Export Forwarder Analysis] parsed and normalized result', {
+      classifications: response.classifications.map(({ id, type, confidence }) => ({ id, type, confidence })),
+      extractedFieldCount: Object.values(response.analysis.extracted)
+        .filter((value) => Array.isArray(value) ? value.length > 0 : Boolean(value)).length,
+    });
+    console.debug('[Import Document Analysis] timing', {
+      documentCount: documents.length,
+      inputBytes: payload.reduce((total, document) => total + filesById[document.id].size, 0),
+      preprocessingMs: Math.round(preprocessingMs),
+      edgeRequestMs: Math.round(edgeMs),
+      responseParseMs: Math.round(responseParseMs),
+      totalMs: Math.round(performance.now() - totalStartedAt),
+      edge: response.timing,
+    });
+  }
+
+  return response;
 }

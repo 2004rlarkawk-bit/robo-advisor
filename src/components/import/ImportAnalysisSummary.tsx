@@ -12,6 +12,8 @@ interface Props {
   onChange: (fields: ImportExtractedFields) => void;
   importerCompanyName?: string;
   hasCertificateOfOriginDocument?: boolean;
+  readOnly?: boolean;
+  /** 문서 id → 파일명 매핑 — 검증 메시지의 근거 값 표기에 사용 */
 }
 
 const PARTY_FIELDS: Array<[keyof ImportParty, string]> = [
@@ -29,6 +31,10 @@ const EMPTY_ITEM = (): ImportItem => ({
   specification: '',
   material: '',
   composition: '',
+  fabricConstruction: '',
+  productForm: '',
+  processingState: '',
+  gender: '',
   intendedUse: '',
   originCountry: '',
   quantity: '',
@@ -65,6 +71,7 @@ export default function ImportAnalysisSummary({
   onChange,
   importerCompanyName,
   hasCertificateOfOriginDocument = false,
+  readOnly = false,
 }: Props) {
   const fields = analysis.extracted;
   const commit = (next: ImportExtractedFields) => onChange(syncLegacyImportFields(next));
@@ -89,10 +96,12 @@ export default function ImportAnalysisSummary({
     <section className="form-card import-card">
       <div className="import-card-heading">
         <div><span className="ai-badge">AI 추출값</span><h2>분석 결과 확인 및 수정</h2></div>
-        <p>첨부문서에서 확인된 값만 자동 입력했습니다. 잘못되거나 누락된 값만 수정해 주세요.</p>
       </div>
 
-      <h3>A. 거래 당사자</h3>
+      <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
+
+      <details className="form-section">
+      <summary className="form-section-summary"><span>A. 거래 당사자</span></summary>
       {([
         ['exporterDetails', 'Exporter / Shipper'],
         ['importerDetails', 'Importer'],
@@ -135,8 +144,10 @@ export default function ImportAnalysisSummary({
           )}
         </fieldset>
       ))}
+      </details>
 
-      <h3>B. Invoice 정보</h3>
+      <details className="form-section">
+      <summary className="form-section-summary"><span>B. Invoice 정보</span></summary>
       <div className="import-field-grid">
         <TextField label="Invoice 번호" value={fields.invoiceNo} onChange={(value) => setField('invoiceNo', value)} />
         <TextField label="Invoice 발행일" type="date" value={fields.invoiceDate} onChange={(value) => setField('invoiceDate', value)} />
@@ -145,8 +156,10 @@ export default function ImportAnalysisSummary({
         <TextField label="Incoterms" value={fields.incoterms} onChange={(value) => setField('incoterms', value)} />
         <TextField label="결제조건" value={fields.paymentTerms} onChange={(value) => setField('paymentTerms', value)} />
       </div>
+      </details>
 
-      <h3>C. 해상운송 정보</h3>
+      <details className="form-section">
+      <summary className="form-section-summary"><span>C. 해상운송 정보</span></summary>
       <div className="import-field-grid">
         <TextField label="B/L 번호" value={fields.blNo} onChange={(value) => setField('blNo', value)} />
         <TextField label="선박명" value={fields.vesselName} onChange={(value) => setField('vesselName', value)} />
@@ -159,9 +172,11 @@ export default function ImportAnalysisSummary({
         <TextField label="컨테이너 번호 (쉼표 구분)" value={fields.containerNumbers.join(', ')} placeholder="선택" onChange={(value) => commit({ ...fields, containerNumbers: value.split(',').map((v) => v.trim()).filter(Boolean) })} />
         <TextField label="Seal 번호 (쉼표 구분)" value={fields.sealNumbers.join(', ')} placeholder="선택" onChange={(value) => commit({ ...fields, sealNumbers: value.split(',').map((v) => v.trim()).filter(Boolean) })} />
       </div>
+      </details>
 
+      <details className="form-section">
+      <summary className="form-section-summary"><span>D. 품목정보</span></summary>
       <div className="import-section-heading">
-        <h3>D. 품목정보</h3>
         <button type="button" className="btn btn-secondary" onClick={() => commit({ ...fields, items: [...fields.items, EMPTY_ITEM()] })}>
           <Plus size={15} /> 품목 추가
         </button>
@@ -193,8 +208,10 @@ export default function ImportAnalysisSummary({
           <small>추출 출처: {item.sourceDocumentIds.length ? item.sourceDocumentIds.join(', ') : '첨부문서에서 출처 식별값을 확인할 수 없음'}</small>
         </fieldset>
       ))}
+      </details>
 
-      <h3>E. 포장 및 중량</h3>
+      <details className="form-section">
+      <summary className="form-section-summary"><span>E. 포장 및 중량</span></summary>
       <div className="import-field-grid">
         <TextField label="포장수량" value={fields.totalPackageCount} onChange={(value) => setField('totalPackageCount', value)} />
         <TextField label="포장단위" value={fields.packageUnit} onChange={(value) => setField('packageUnit', value)} />
@@ -203,8 +220,10 @@ export default function ImportAnalysisSummary({
         <TextField label="총중량" value={fields.grossWeight} onChange={(value) => setField('grossWeight', value)} />
         <TextField label="총중량 단위" value={fields.grossWeightUnit} onChange={(value) => setField('grossWeightUnit', value)} />
       </div>
+      </details>
 
-      <h3>F. 원산지증명서</h3>
+      <details className="form-section">
+      <summary className="form-section-summary"><span>F. 원산지증명서</span></summary>
       <div className="form-group import-co-status">
         <span className="form-label">원산지증명서 (C/O)</span>
         <div className="import-choice-buttons" role="group" aria-label="원산지증명서 유무">
@@ -234,17 +253,9 @@ export default function ImportAnalysisSummary({
             : 'C/O가 첨부되어 있습니다. 원산지증명서 상태를 확인해 주세요.'}
         </small>
       </div>
+      </details>
 
-      <div className="import-validation-list">
-        {analysis.validations.length === 0
-          ? <div className="form-message success">현재 AI 분석에서 명시적인 문서 간 불일치는 발견되지 않았습니다.</div>
-          : analysis.validations.map((issue) => (
-            <div key={issue.id} className={`form-message ${issue.severity}`}>
-              {issue.message}
-              {issue.values?.length ? ` (${issue.values.map((entry) => `${entry.documentId}: ${entry.value}`).join(' / ')})` : ''}
-            </div>
-          ))}
-      </div>
+      </fieldset>
     </section>
   );
 }

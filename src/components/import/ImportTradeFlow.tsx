@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Download, Eye, RefreshCw, RotateCcw, Search } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Eye, FileText, OctagonAlert, RefreshCw, RotateCcw, Search, Terminal } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
 import ImportAnalysisSummary from './ImportAnalysisSummary';
@@ -7,11 +7,17 @@ import ImportDocumentComparison from './ImportDocumentComparison';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 import {
   analyzeImportDocuments,
+  IMPORT_DOCUMENT_TYPE_LABELS,
   normalizeImportAnalysisResult,
   syncLegacyImportFields,
 } from '../../services/importDocumentAnalysisService';
 import { calculateEstimatedImportDuty } from '../../services/importDutyService';
-import { assessImportRisks } from '../../services/importRiskService';
+import {
+  recommendImportHSKForItems,
+  validateOfficialImportHSK,
+} from '../../services/importHSCodeSuggestionService';
+import { resolveImportRisks } from '../../services/importRiskService';
+import { IMPORT_DEMO_SCENARIO } from '../../services/importReconciliationFixtures';
 import {
   downloadImportDeclarationRequest,
   generateImportDeclarationHtml,
@@ -41,6 +47,7 @@ import type {
   ImportDocumentMeta,
   ImportDocumentType,
   ImportDutyEstimate,
+  ImportDeliveryRequest,
   ImportHSCodeSuggestion,
   ImportRisk,
   ImportTradeSnapshot,
@@ -49,8 +56,11 @@ import type {
 import type { PersistedTradeStatus, SavedTrade, TradeProfile } from '../../types';
 import type { TradeFormDataV3 } from '../../types/tradeFormData';
 import type { TradeDraftRow } from '../../services/draftCacheService';
-import { saveTradeFormDraft } from '../../services/draftCacheService';
+import { deleteTradeDraft, isSubmittedTradeDraft, saveTradeFormDraft } from '../../services/draftCacheService';
 import { useFormDataDraft } from '../../hooks/useFormDataDraft';
+import DocumentManagerReadOnlyAction from '../DocumentManagerReadOnlyAction';
+
+const IMPORT_DEMO_ENABLED = import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_SUBMISSION === 'true';
 
 interface Props {
   role: UserTradeRole;
@@ -60,6 +70,8 @@ interface Props {
   onComplete: (snapshot: ImportTradeSnapshot) => Promise<SavedTrade>;
   onSaved?: (trade: SavedTrade) => void;
   onWorkspaceStateChange?: (state: { currentStep: number; tradeId: string | null }) => void;
+  readOnly?: boolean;
+  onClose?: () => void;
 }
 
 export interface ImportFileResolutionFailure {
@@ -92,9 +104,13 @@ export interface CachedState {
   risks: ImportRisk[];
   cargo: CargoTrackingResult | null;
   arrivalNotice: ArrivalNoticeMeta | null;
+  /** 화주가 입력한 배송 요청 — 제출 시 스냅샷에 실려 포워더에게 전달된다 */
+  deliveryRequest?: ImportDeliveryRequest;
   generatedAt: string | null;
   tradeId?: string;
   existingStatus?: PersistedTradeStatus;
+  /** 포워더 보완 요청으로 다시 연 거래 — 2단계 상단에 수정 안내 카드를 띄운다 */
+  reviseNotice?: { reason: string } | null;
 }
 const EMPTY: CachedState = {
   step: 1,
@@ -178,6 +194,7 @@ export function importDraftFormData(
       duty: state.duty ?? undefined,
       risks: state.risks,
       cargo: state.cargo ?? undefined,
+      deliveryRequest: state.deliveryRequest,
       generatedAt: state.generatedAt ?? '',
     }).formData;
   }
@@ -195,6 +212,9 @@ export function hydrateImportDraft(
   draft: TradeDraftRow | null,
 ): CachedState {
   if (!draft?.form_data) return current;
+  // 이어서 작업할 거래가 이미 로드된 상태에서 서버 초안이 다른(또는 무소속) 거래의
+  // 것이면 이전 세션의 잔재이므로 무시한다 — 보완 수정 재개가 1단계로 튕기던 원인.
+  if (current.tradeId && draft.trade_id !== current.tradeId) return current;
   const persistedDocuments = draft.form_data.attachments
     .map(tradeAttachmentToImportDocument)
     .filter((document): document is ImportDocumentMeta => document !== null);
@@ -258,44 +278,55 @@ export async function resolveImportAnalysisFiles(
   expectedUserId?: string,
 ): Promise<ImportFileResolutionResult> {
   const resolved = { ...sourceFiles };
-  const failures: ImportFileResolutionFailure[] = [];
-
-  for (const document of documents) {
-    if (resolved[document.id]) continue;
+  const outcomes = await Promise.all(documents.map(async (document) => {
+    if (resolved[document.id]) return null;
     if (!hasValidStoragePath(document)) {
-      failures.push({
-        documentId: document.id,
-        fileName: document.name,
-        message: '업로드 전 원본 파일을 찾을 수 없습니다.',
-        code: 'PENDING_FILE_MISSING',
-        bucket: document.storageBucket || 'trade-documents',
-        maskedStoragePath: '',
-        status: '',
-      });
-      continue;
+      return {
+        kind: 'failure' as const,
+        failure: {
+          documentId: document.id,
+          fileName: document.name,
+          message: '업로드 전 원본 파일을 찾을 수 없습니다.',
+          code: 'PENDING_FILE_MISSING',
+          bucket: document.storageBucket || 'trade-documents',
+          maskedStoragePath: '',
+          status: '',
+        },
+      };
     }
     try {
-      resolved[document.id] = await loader({
+      const file = await loader({
         storageBucket: document.storageBucket || 'trade-documents',
         storagePath: document.storagePath!,
         fileName: document.name,
         mimeType: document.mimeType,
         documentType: document.type === 'unknown' ? 'other' : document.type,
       }, expectedUserId);
+      return { kind: 'success' as const, documentId: document.id, file };
     } catch (error) {
       const downloadError = error instanceof TradeAttachmentDownloadError ? error : null;
-      failures.push({
-        documentId: document.id,
-        fileName: document.name,
-        message: downloadError?.message
-          || (error instanceof Error ? error.message : 'Storage download 실패'),
-        code: downloadError?.code || 'STORAGE_DOWNLOAD_FAILED',
-        bucket: downloadError?.bucket || document.storageBucket || 'trade-documents',
-        maskedStoragePath: downloadError?.maskedStoragePath || '<user>/…',
-        status: downloadError?.status || '',
-      });
+      return {
+        kind: 'failure' as const,
+        failure: {
+          documentId: document.id,
+          fileName: document.name,
+          message: downloadError?.message
+            || (error instanceof Error ? error.message : 'Storage download 실패'),
+          code: downloadError?.code || 'STORAGE_DOWNLOAD_FAILED',
+          bucket: downloadError?.bucket || document.storageBucket || 'trade-documents',
+          maskedStoragePath: downloadError?.maskedStoragePath || '<user>/…',
+          status: downloadError?.status || '',
+        },
+      };
     }
-  }
+  }));
+
+  const failures: ImportFileResolutionFailure[] = [];
+  outcomes.forEach((outcome) => {
+    if (!outcome) return;
+    if (outcome.kind === 'success') resolved[outcome.documentId] = outcome.file;
+    else failures.push(outcome.failure);
+  });
 
   return { files: resolved, failures };
 }
@@ -308,16 +339,61 @@ export default function ImportTradeFlow({
   onComplete,
   onSaved,
   onWorkspaceStateChange,
+  readOnly = false,
+  onClose,
 }: Props) {
   const cacheKey = `portai_import_draft:${userId}:${role}`;
   const [state, setState] = useState<CachedState>(() => loadCached(cacheKey));
   const [sourceFiles, setSourceFiles] = useState<Record<string, File>>({});
   const [busy, setBusy] = useState(false);
+  // 수출 흐름의 Pipeline Runner 콘솔과 같은 형태로 수입 AI 분석 진행을 보여준다.
+  const [analysisLogs, setAnalysisLogs] = useState<{ time: string; agent: string; message: string; level: 'info' | 'success' }[]>([]);
+  const [showAnalysisConsole, setShowAnalysisConsole] = useState(false);
+  const analysisTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const analysisLogEndRef = useRef<HTMLDivElement | null>(null);
+
+  const pushAnalysisLog = useCallback((agent: string, message: string, level: 'info' | 'success' = 'info') => {
+    const time = new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+    setAnalysisLogs((current) => [...current, { time, agent, message, level }]);
+  }, []);
+
+  useEffect(() => {
+    analysisLogEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [analysisLogs]);
+
+  useEffect(() => () => {
+    if (analysisTickerRef.current) clearInterval(analysisTickerRef.current);
+  }, []);
+
+  // 단계 전환 시 스크롤이 하단에 남지 않도록 항상 페이지 맨 위에서 시작
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [state.step]);
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState(false);
+  // 배송 요청 — 스냅샷에 저장되어 포워더 배차 의뢰서로 넘어간다.
+  const delivery: ImportDeliveryRequest = state.deliveryRequest ?? {
+    deliveryAddress: '', deliveryAt: '', contactName: '', contactTel: '', remarks: '', updatedAt: '',
+  };
+  const patchDelivery = (patch: Partial<ImportDeliveryRequest>) => {
+    setState((current) => ({
+      ...current,
+      deliveryRequest: { ...delivery, ...patch, updatedAt: new Date().toISOString() },
+    }));
+  };
   const [showInProgressConfirmation, setShowInProgressConfirmation] = useState(false);
+  const [manualHsInputs, setManualHsInputs] = useState<Record<string, string>>({});
+  const [manualHsErrors, setManualHsErrors] = useState<Record<string, string>>({});
+  const [validatingHsItemId, setValidatingHsItemId] = useState<string | null>(null);
   const skipNextLocalCacheWriteRef = useRef(false);
+  const onWorkspaceStateChangeRef = useRef(onWorkspaceStateChange);
+  onWorkspaceStateChangeRef.current = onWorkspaceStateChange;
   const [downloadFormat, setDownloadFormat] = useState<ImportDeclarationDownloadFormat>('pdf');
+  const canBrowseReadOnlyResultSteps = readOnly;
+  const moveToReadOnlyResultStep = (step: number) => {
+    if (!canBrowseReadOnlyResultSteps || (step !== 2 && step !== 3)) return;
+    setState((current) => ({ ...current, step }));
+  };
   const selectedHS = useMemo(() => {
     const firstCode = state.analysis?.extracted.items.find((item) => item.confirmedHSCode)?.confirmedHSCode;
     return state.suggestions.find((item) => item.code === firstCode || item.code === state.selectedCode);
@@ -332,7 +408,7 @@ export default function ImportTradeFlow({
     completeDraft,
   } = useFormDataDraft({
     userId,
-    enabled: Boolean(userId),
+    enabled: Boolean(userId) && !readOnly,
     direction: 'import',
     role,
     formData: draftFormData,
@@ -341,12 +417,37 @@ export default function ImportTradeFlow({
     onRestore: handleDraftRestore,
   });
 
+  // 브라우저가 거래 row 저장 직후 종료되는 등 local cache가 남아도 submitted 거래는 복원하지 않는다.
   useEffect(() => {
+    if (readOnly || !state.tradeId) return;
+    let cancelled = false;
+    void isSubmittedTradeDraft(userId, state.tradeId)
+      .then(async (submitted) => {
+        if (!submitted || cancelled) return;
+        try {
+          await deleteTradeDraft(userId, 'import', role);
+        } catch (error) {
+          console.warn('[Import Draft] 제출 완료 거래의 stale DB 초안 정리 실패:', error);
+        }
+        if (cancelled) return;
+        skipNextLocalCacheWriteRef.current = true;
+        localStorage.removeItem(cacheKey);
+        setState(EMPTY);
+        setSourceFiles({});
+        setMessage('');
+        onWorkspaceStateChangeRef.current?.({ currentStep: 1, tradeId: null });
+      })
+      .catch((error) => console.warn('[Import Draft] 제출 상태 확인 실패:', error));
+    return () => { cancelled = true; };
+  }, [cacheKey, readOnly, role, state.tradeId, userId]);
+
+  useEffect(() => {
+    if (readOnly) return;
     onWorkspaceStateChange?.({
       currentStep: state.step,
       tradeId: state.tradeId ?? null,
     });
-  }, [onWorkspaceStateChange, state.step, state.tradeId]);
+  }, [onWorkspaceStateChange, readOnly, state.step, state.tradeId]);
 
   const persistImportDocuments = async (): Promise<ImportDocumentMeta[]> => {
     const missingFiles = state.documents.filter((document) =>
@@ -380,6 +481,7 @@ export default function ImportTradeFlow({
   };
 
   useEffect(() => {
+    if (readOnly) return;
     if (skipNextLocalCacheWriteRef.current) {
       skipNextLocalCacheWriteRef.current = false;
       return;
@@ -389,7 +491,7 @@ export default function ImportTradeFlow({
     } catch (error) {
       console.warn('[Import Draft] localStorage 임시 저장 실패:', error);
     }
-  }, [cacheKey, state]);
+  }, [cacheKey, readOnly, state]);
 
   const analyze = async () => {
     setMessage('');
@@ -403,6 +505,12 @@ export default function ImportTradeFlow({
       }
     }
     setBusy(true);
+    setAnalysisLogs([]);
+    setShowAnalysisConsole(true);
+    pushAnalysisLog('Orchestrator Agent', `수입 문서 분석 파이프라인 가동 시작... (문서 ${state.documents.length}건)`);
+    state.documents.forEach((document) => {
+      pushAnalysisLog('Document Agent', `"${document.name}" (${IMPORT_DOCUMENT_TYPE_LABELS[document.type]}) 분석 대기열 등록`);
+    });
     if (import.meta.env.DEV) {
       console.debug('[Import Document Analysis] attachment resolution', state.documents.map((document) => ({
         id: `${document.id.slice(0, 6)}…`,
@@ -430,10 +538,26 @@ export default function ImportTradeFlow({
         throw new ImportFileResolutionError(failures);
       }
       setSourceFiles(resolvedFiles);
+      pushAnalysisLog('Document Agent', `파일 ${analyzableDocuments.length}건 로드 완료 — 텍스트 추출 시작`, 'success');
+      {
+        const stages = [
+          '문서 텍스트 추출 중...',
+          '핵심 필드 매핑 중 (Invoice · B/L · P/L)...',
+          '문서 간 값 대조·불일치 점검 중...',
+          '분석 결과 정규화 중...',
+        ];
+        let stageIndex = 0;
+        if (analysisTickerRef.current) clearInterval(analysisTickerRef.current);
+        analysisTickerRef.current = setInterval(() => {
+          if (stageIndex < stages.length) pushAnalysisLog('Analysis Agent', stages[stageIndex++]);
+        }, 1100);
+      }
       const result = await analyzeImportDocuments(analyzableDocuments, resolvedFiles);
+      if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
+      pushAnalysisLog('Orchestrator Agent', '분석 완료 — 추출값을 분석 결과 폼에 반영했습니다.', 'success');
+      setTimeout(() => setShowAnalysisConsole(false), 900);
       const failedIds = new Set(failures.map((failure) => failure.documentId));
-      setState((current) => {
-        const documents = current.documents.map((document) => {
+      const documents = state.documents.map((document) => {
           if (failedIds.has(document.id)) {
             return {
               ...document,
@@ -453,14 +577,19 @@ export default function ImportTradeFlow({
             sourceId: classification?.sourceId || document.sourceId || document.id,
           };
         });
-        const suggestions = role === 'shipper' ? result.suggestions : [];
-        const analysis: ImportAnalysisResult = {
-          ...result.analysis,
-          extracted: {
-            ...result.analysis.extracted,
-            certificateOfOriginAvailable: documents.some((document) => document.type === 'certificate_of_origin'),
-          },
-        };
+      const analysis: ImportAnalysisResult = {
+        ...result.analysis,
+        extracted: {
+          ...result.analysis.extracted,
+          certificateOfOriginAvailable: documents.some((document) => document.type === 'certificate_of_origin'),
+        },
+      };
+      const suggestions = role === 'shipper'
+        ? await recommendImportHSKForItems(analysis.extracted.items)
+        : [];
+      setManualHsInputs({});
+      setManualHsErrors({});
+      setState((current) => {
         return {
           ...current,
           step: 2,
@@ -470,7 +599,7 @@ export default function ImportTradeFlow({
           selectedCode: '',
           duty: null,
           dutyError: '',
-          risks: assessImportRisks(documents, analysis, suggestions, '', importerCompanyName),
+          risks: resolveImportRisks(documents, analysis, suggestions, '', importerCompanyName, undefined, role),
         };
       });
       if (failures.length > 0) {
@@ -522,9 +651,39 @@ export default function ImportTradeFlow({
         })),
       }));
       setMessage(errorMessage);
+      if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
+      pushAnalysisLog('Orchestrator Agent', '분석 실패 — 오류 내용을 확인해 주세요.');
+      setTimeout(() => setShowAnalysisConsole(false), 900);
     } finally {
       setBusy(false);
     }
+  };
+
+  const loadDemoScenario = () => {
+    const scenario = IMPORT_DEMO_SCENARIO;
+    setSourceFiles({});
+    setManualHsInputs({});
+    setManualHsErrors({});
+    setMessage('PDF 샘플의 추출값을 규칙 엔진으로 대조했습니다.');
+    setState((current) => ({
+      ...current,
+      step: 2,
+      documents: scenario.documents.map((document) => ({ ...document })),
+      analysis: scenario.analysis,
+      suggestions: [],
+      selectedCode: '',
+      duty: null,
+      dutyError: '',
+      risks: resolveImportRisks(
+        scenario.documents,
+        scenario.analysis,
+        [],
+        '',
+        importerCompanyName,
+        scenario.input,
+        role,
+      ),
+    }));
   };
 
   const confirmAndCalculate = async () => {
@@ -538,6 +697,33 @@ export default function ImportTradeFlow({
     if (!fields.items.length || missingDescriptions) {
       setBusy(false);
       return setMessage('품목정보의 품명은 분석 결과 확정에 필요합니다.');
+    }
+    if (role === 'shipper') {
+      const validations = await Promise.all(
+        fields.items.map((item) => validateOfficialImportHSK(item.confirmedHSCode)),
+      );
+      if (validations.some(({ valid }) => !valid)) {
+        setBusy(false);
+        return setMessage('모든 품목의 대한민국 HSK 10자리 코드를 공식 후보에서 선택하거나 직접 입력해 확정해 주세요.');
+      }
+    }
+    // 세액·의뢰서·리스크 산출도 Pipeline Runner 콘솔로 진행 상황을 보여준다.
+    setAnalysisLogs([]);
+    setShowAnalysisConsole(true);
+    pushAnalysisLog('Orchestrator Agent', '세액·의뢰서·리스크 산출 파이프라인 가동 시작...');
+    pushAnalysisLog('HSCode Agent', `품목 ${fields.items.length}건 HSK 코드 확정값 검증 완료`, 'success');
+    {
+      const stages = [
+        '관세율 조회 · 예상세액 계산 중...',
+        '운송의뢰서 초안 구성 중...',
+        '리스크 점검 중 (서류 누락 · 값 불일치)...',
+        '결과 저장 · 정리 중...',
+      ];
+      let stageIndex = 0;
+      if (analysisTickerRef.current) clearInterval(analysisTickerRef.current);
+      analysisTickerRef.current = setInterval(() => {
+        if (stageIndex < stages.length) pushAnalysisLog('Duty Agent', stages[stageIndex++]);
+      }, 1000);
     }
     try {
       duty = role === 'shipper'
@@ -554,7 +740,9 @@ export default function ImportTradeFlow({
       dutyError = error instanceof Error ? error.message : '예상세액을 계산할 수 없습니다.';
       console.error('[Import Duty] calculation failed', { error, message: dutyError });
     }
-    const risks = assessImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName);
+    const riskStatusById = new Map(state.risks.map((risk) => [risk.id, risk.status]));
+    const risks = resolveImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName, undefined, role)
+      .map((risk) => ({ ...risk, status: riskStatusById.get(risk.id) ?? risk.status }));
     const generatedAt = new Date().toISOString();
     try {
       let persistedDocuments = await persistImportDocuments();
@@ -569,6 +757,7 @@ export default function ImportTradeFlow({
         duty: duty ?? undefined,
         risks,
         cargo: state.cargo ?? undefined,
+        deliveryRequest: state.deliveryRequest,
         generatedAt,
       };
       const tradeId = await onGenerate(generatedSnapshot);
@@ -622,11 +811,17 @@ export default function ImportTradeFlow({
         tradeId,
       });
       setMessage(dutyError ? `${dutyError} 사유를 표시한 상태로 다음 단계로 이동했습니다.` : '');
+      if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
+      // 자동 닫힘 없음 — 사용자가 [콘솔 닫기]를 눌러야 결과 페이지가 보인다.
+      pushAnalysisLog('Orchestrator Agent', '산출 완료 — [콘솔 닫기]를 누르면 결과 페이지로 이동합니다.', 'success');
     } catch (error) {
       console.error('[Import Trade] generated 상태 저장 실패:', error);
       setMessage(error instanceof Error
         ? error.message
         : '확인 결과를 저장하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
+      if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
+      pushAnalysisLog('Orchestrator Agent', '산출 실패 — 오류 내용을 확인해 주세요.');
+      setTimeout(() => setShowAnalysisConsole(false), 800);
     } finally {
       setBusy(false);
     }
@@ -647,6 +842,25 @@ export default function ImportTradeFlow({
     };
   });
 
+  const selectRecommendedHS = (itemId: string, code: string) => {
+    setManualHsInputs((current) => ({ ...current, [itemId]: code }));
+    setManualHsErrors((current) => ({ ...current, [itemId]: '' }));
+    updateConfirmedHS(itemId, code);
+  };
+
+  const confirmManualHS = async (itemId: string, currentCode: string) => {
+    setValidatingHsItemId(itemId);
+    const result = await validateOfficialImportHSK(currentCode);
+    setValidatingHsItemId(null);
+    if (!result.valid) {
+      setManualHsErrors((current) => ({ ...current, [itemId]: result.error }));
+      return;
+    }
+    setManualHsInputs((current) => ({ ...current, [itemId]: result.normalizedCode }));
+    setManualHsErrors((current) => ({ ...current, [itemId]: '' }));
+    updateConfirmedHS(itemId, result.normalizedCode);
+  };
+
   const lookupCargo = async () => {
     if (!state.analysis?.extracted.blNo) return setMessage('B/L 번호를 입력해 주세요.');
     setBusy(true);
@@ -662,6 +876,7 @@ export default function ImportTradeFlow({
   };
 
   const complete = async () => {
+    if (readOnly) return;
     if (!state.analysis || busy) return;
     if (!state.generatedAt) return setMessage('수입신고 의뢰서를 먼저 생성해 주세요.');
     const unresolvedHigh = state.risks.filter((risk) => risk.level === 'high' && risk.status !== 'resolved');
@@ -676,10 +891,10 @@ export default function ImportTradeFlow({
   };
 
   const persistCompletedTrade = async () => {
+    if (readOnly) return;
     if (!state.analysis || busy || !state.generatedAt) return;
     setShowInProgressConfirmation(false);
     setBusy(true);
-    let tradeSaved = false;
     try {
       const completedTrade = await onComplete({
         tradeId: state.tradeId,
@@ -692,11 +907,17 @@ export default function ImportTradeFlow({
         duty: state.duty ?? undefined,
         risks: state.risks,
         cargo: state.cargo ?? undefined,
+        deliveryRequest: state.deliveryRequest,
         generatedAt: state.generatedAt,
         flowCompletedAt: new Date().toISOString(),
       });
-      tradeSaved = true;
-      await completeDraft();
+      // 거래 row 저장 성공 이후에만 작성 상태를 정리한다. DB draft 삭제 실패는 제출 거래 복원을
+      // 허용하는 이유가 될 수 없으므로 기록만 남기고 local/React/workspace 초기화는 계속한다.
+      try {
+        await completeDraft();
+      } catch (error) {
+        console.warn('[Import Draft] 제출 후 DB 초안 정리 실패:', error);
+      }
       skipNextLocalCacheWriteRef.current = true;
       localStorage.removeItem(cacheKey);
       setState(EMPTY);
@@ -706,9 +927,7 @@ export default function ImportTradeFlow({
       onSaved?.(completedTrade);
     } catch (error) {
       console.error(error);
-      setMessage(tradeSaved
-        ? '거래는 저장했지만 작업실 초안을 정리하지 못했습니다. 입력 상태를 유지합니다.'
-        : '거래 저장에 실패했습니다. 입력과 첨부는 유지됩니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
+      setMessage('거래 저장에 실패했습니다. 입력과 첨부는 유지됩니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
     } finally {
       setBusy(false);
     }
@@ -722,6 +941,23 @@ export default function ImportTradeFlow({
     setSourceFiles({});
     setMessage('');
   };
+  // 리스크는 수정 가능한 2단계(분석 결과)에서 바로 보여야 하므로,
+  // 사용자가 값을 고칠 때마다 현재 입력값 기준으로 다시 계산한다.
+  const liveRisks = useMemo(() => {
+    if (!state.analysis) return [];
+    const statusById = new Map(state.risks.map((risk) => [risk.id, risk.status]));
+    return resolveImportRisks(state.documents, state.analysis, state.suggestions, state.dutyError, importerCompanyName, undefined, role)
+      .map((risk) => ({ ...risk, status: statusById.get(risk.id) ?? risk.status }));
+  }, [state.analysis, state.documents, state.suggestions, state.dutyError, state.risks, importerCompanyName, role]);
+
+  // 재계산으로 목록이 바뀌어도 '확인 완료' 표시가 유실되지 않도록 파생 목록을 그대로 저장한다.
+  const toggleRisk = (id: string) => setState((current) => ({
+    ...current,
+    risks: liveRisks.map((risk) => (risk.id === id
+      ? { ...risk, status: risk.status === 'resolved' ? 'unresolved' : 'resolved' }
+      : risk)),
+  }));
+
   const declarationData = state.analysis ? {
     fields: state.analysis.extracted,
     duty: state.duty ?? undefined,
@@ -731,22 +967,73 @@ export default function ImportTradeFlow({
 
   return (
     <div className="import-flow">
-      <div className="import-flow-header">
-        <div>
-          <h2>수입 {role === 'shipper' ? '화주' : '포워더'} 업무</h2>
-          <p>{role === 'shipper' ? '해외 수출자가 보낸 해상 서류를 AI로 분석한 뒤 확인·수정합니다.' : '화주 또는 수출지 포워더에게 받은 서류를 저장하고 통관 진행을 추적합니다.'}</p>
+      {/* 소개 헤더(제목·설명·단계 초기화)는 1단계(입력)에서만 노출 — 결과 페이지(2·3단계)에서는 결과에 집중 */}
+      {state.step === 1 && (
+        <div className="import-flow-header">
+          <div>
+            <h2>수입 {role === 'shipper' ? '화주' : '포워더'} 업무</h2>
+            <p>{role === 'shipper' ? '해외 수출자가 보낸 해상 서류를 AI로 분석한 뒤 확인·수정합니다.' : '화주 또는 수출지 포워더에게 받은 서류를 저장하고 통관 진행을 추적합니다.'}</p>
+          </div>
+          {!readOnly && <button type="button" className="btn btn-secondary" onClick={reset}><RefreshCw size={15} /> 단계 초기화</button>}
         </div>
-        <button type="button" className="btn btn-secondary" onClick={reset}><RefreshCw size={15} /> 단계 초기화</button>
-      </div>
+      )}
       <ImportStepIndicator
         current={state.step}
-        labels={role === 'shipper' ? ['서류 업로드·AI 분석', '분석 결과·HS 확정', '세액·의뢰서·리스크'] : ['서류 업로드', '서류 확인', '통관 처리']}
-        onMove={(step) => setState((current) => ({ ...current, step }))}
+        labels={role === 'shipper' ? ['서류 업로드·AI 분석', '분석 결과·리스크·HS 확정', '세액·의뢰서'] : ['서류 업로드', '서류 확인', '통관 처리']}
+        onMove={canBrowseReadOnlyResultSteps
+          ? moveToReadOnlyResultStep
+          : readOnly ? undefined : (step) => setState((current) => ({ ...current, step }))}
+        canMoveTo={canBrowseReadOnlyResultSteps ? (step) => step === 2 || step === 3 : undefined}
       />
+      {showAnalysisConsole && (
+        <div className="console-overlay">
+          <div className="console-modal">
+            <div className="console-header">
+              <div className="console-title-group">
+                <Terminal size={16} />
+                <span>PortAI Agent Pipeline Runner</span>
+              </div>
+              <div className="console-dots">
+                <span className="console-dot red"></span>
+                <span className="console-dot yellow"></span>
+                <span className="console-dot green"></span>
+              </div>
+            </div>
+            <div className="console-body">
+              {analysisLogs.map((log, index) => (
+                <div className="log-row" key={index}>
+                  <span className="log-time">[{log.time}]</span>
+                  <span className="log-agent">{log.agent}:</span>
+                  <span className={`log-text-content ${log.level}`}>{log.message}</span>
+                </div>
+              ))}
+              {busy && (
+                <div className="log-row">
+                  <span className="log-time">⏳</span>
+                  <span className="log-agent" style={{ color: '#fb7185' }}>Pipeline:</span>
+                  <span className="log-text-content" style={{ color: '#fb7185', fontStyle: 'italic' }}>
+                    수입 문서 AI 분석 처리 중...
+                  </span>
+                </div>
+              )}
+              <div ref={analysisLogEndRef} />
+            </div>
+            <div className="console-footer">
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => { setShowAnalysisConsole(false); window.scrollTo({ top: 0 }); }}
+                disabled={busy}
+              >
+                콘솔 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {message && <div className={`form-message ${state.dutyError && state.step === 3 ? 'warning' : 'error'}`} role="alert">{message}</div>}
       {!isDraftHydrated && <div className="draft-save-status saving" role="status">초안 복원 중...</div>}
       {draftSaveStatus === 'error' && <div className="form-message error" role="alert">초안 자동 저장에 실패했습니다.</div>}
-      {showInProgressConfirmation && (
+      {!readOnly && showInProgressConfirmation && (
         <div className="confirmation-backdrop" role="presentation">
           <section className="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="in-progress-title">
             <h3 id="in-progress-title">진행 중 상태로 저장할까요?</h3>
@@ -787,16 +1074,46 @@ export default function ImportTradeFlow({
               ? '해외 수출업자에게 받은 C/I, P/L, B/L, C/O 및 기타서류를 한 번에 업로드해 주세요.'
               : 'B/L, C/I, P/L 사본을 업로드해 주세요.'}
           />
-          <div className="import-actions"><button className="btn btn-primary" disabled={busy} onClick={() => void analyze()}>{busy ? 'AI 분석 중…' : 'AI 분석 실행'}</button></div>
+          {readOnly && onClose
+            ? <DocumentManagerReadOnlyAction onClose={onClose} className="import-actions" />
+            : <div className="import-actions">
+              {IMPORT_DEMO_ENABLED && <button type="button" className="btn btn-secondary" disabled={busy} onClick={loadDemoScenario}>데모 데이터</button>}
+              <button className="btn btn-primary" disabled={busy} onClick={() => void analyze()}>{busy ? 'AI 분석 중…' : 'AI 분석 실행'}</button>
+            </div>}
         </>
       )}
 
       {state.step === 2 && state.analysis && (
         <>
+          {state.reviseNotice && (
+            <section className="form-card import-card revise-notice">
+              <div className="import-card-heading">
+                <div><h2>포워더 보완 요청</h2><p>아래 항목을 수정한 뒤 끝까지 진행해 다시 제출하면 포워더에게 회신됩니다.</p></div>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setState((current) => ({ ...current, reviseNotice: null }))}
+                  >
+                    확인
+                  </button>
+                )}
+              </div>
+              <p className="revise-notice-text">{state.reviseNotice.reason}</p>
+            </section>
+          )}
+          <RiskSummary
+            risks={liveRisks}
+            onToggle={readOnly ? undefined : toggleRisk}
+            description={role === 'shipper'
+              ? '아래 분석 결과에서 값을 고치면 이 목록도 즉시 다시 계산됩니다. 서류 간 불일치처럼 어느 값이 맞는지 여기서 판단하기 어려운 항목은, 제출하면 포워더가 원본 서류와 대조해 검토·판단합니다.'
+              : '아래 분석 결과와 HSK 확정에서 값을 고치면 이 목록도 즉시 다시 계산됩니다.'}
+          />
           <ImportAnalysisSummary
             analysis={state.analysis}
             importerCompanyName={role === 'shipper' ? importerCompanyName : undefined}
             hasCertificateOfOriginDocument={state.documents.some((document) => document.type === 'certificate_of_origin')}
+            readOnly={readOnly}
             onChange={(extracted) => setState((current) => ({
               ...current,
               analysis: current.analysis ? { ...current.analysis, extracted } : null,
@@ -805,44 +1122,93 @@ export default function ImportTradeFlow({
             }))}
           />
           {role === 'forwarder' ? <ImportDocumentComparison rows={state.analysis.comparison} /> : (
+            <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
             <section className="form-card import-card">
               <div className="import-card-heading">
-                <div><span className="ai-badge">수입국 기준 추천</span><h2>G. 품목별 HS Code 추천 및 확정</h2></div>
-                <p>문서 추출값과 AI 추천값은 구분됩니다. 사용자가 선택하거나 직접 입력한 값만 최종값입니다.</p>
+                <div><span className="ai-badge">대한민국 공식 HSK</span><h2>G. 품목별 HSK 자동추천 및 확정</h2></div>
+                <p>해외 문서 코드는 참고용이며, 관세청 공식 HSK 후보를 선택하거나 검증된 10자리 코드를 직접 입력해야 합니다.</p>
               </div>
               {state.analysis.extracted.items.map((item, index) => {
                 const candidates = state.suggestions.filter((suggestion) => !suggestion.itemId || suggestion.itemId === item.id);
+                const additionalInformation = Array.from(new Set(
+                  candidates.flatMap((suggestion) => suggestion.missingInformation ?? []),
+                ));
+                const manualValue = manualHsInputs[item.id] ?? item.confirmedHSCode;
                 return (
                   <div className="import-hs-item" key={item.id}>
                     <h3>품목 {index + 1}: {item.description || '품명 미확인'}</h3>
-                    <div className="import-field-grid">
-                      <label className="form-group"><span className="form-label">문서에서 추출한 HS Code</span><input className="form-input" readOnly value={item.documentHSCode} placeholder="첨부문서에서 확인되지 않음" /></label>
-                      <label className="form-group"><span className="form-label">사용자가 확정한 HS Code</span><input className="form-input user-editable" value={item.confirmedHSCode} onChange={(event) => updateConfirmedHS(item.id, event.target.value)} placeholder="후보 선택 또는 직접 입력" /></label>
+                    <div className="import-hs-reference">
+                      <span className="form-label">해외 문서 HS Code</span>
+                      <strong>{item.documentHSCode || '첨부문서에서 확인되지 않음'}</strong>
+                      <small>해외 수출자가 작성한 HS Code로 참고용입니다.</small>
                     </div>
-                    {item.documentHSCode && <button type="button" className="btn btn-secondary" onClick={() => updateConfirmedHS(item.id, item.documentHSCode)}>문서값을 최종 확정</button>}
+                    <h4 className="import-hs-subheading">대한민국 HSK 자동추천</h4>
                     <div className="hs-suggestion-list">
                       {candidates.length === 0 ? <p className="import-empty">추천 근거가 부족하거나 후보가 없습니다. 직접 확인해 주세요.</p> : candidates.map((suggestion) => (
                         <label key={`${item.id}-${suggestion.code}`} className={`hs-suggestion ${item.confirmedHSCode === suggestion.code ? 'selected' : ''}`}>
-                          <input type="radio" name={`import-hs-${item.id}`} checked={item.confirmedHSCode === suggestion.code} onChange={() => updateConfirmedHS(item.id, suggestion.code)} />
+                          <input type="radio" name={`import-hs-${item.id}`} checked={item.confirmedHSCode === suggestion.code} disabled={readOnly} onChange={() => selectRecommendedHS(item.id, suggestion.code)} />
                           <span>
                             <strong>{suggestion.code} · {suggestion.description}</strong>
-                            <small>{suggestion.reasoning} · 신뢰도 {Math.round(suggestion.confidence * 100)}%</small>
-                            {!!suggestion.missingInformation?.length && <small>추가 확인: {suggestion.missingInformation.join(', ')}</small>}
+                            <small>추천 신뢰도 {Math.round(suggestion.confidence * 100)}%</small>
+                            <small>{suggestion.reasoning}</small>
                           </span>
                         </label>
                       ))}
                     </div>
+                    {additionalInformation.length > 0 && (
+                      <div className="import-hs-additional">
+                        <strong>추가 확인 정보</strong>
+                        <ul>{additionalInformation.map((value) => <li key={value}>{value}</li>)}</ul>
+                      </div>
+                    )}
+                    <div className="import-hs-manual">
+                      <label className="form-group">
+                        <span className="form-label">대한민국 HSK 직접 입력</span>
+                        <input
+                          className={`form-input user-editable${manualHsErrors[item.id] ? ' input-error' : ''}`}
+                          value={manualValue}
+                          disabled={readOnly}
+                          onChange={(event) => {
+                            setManualHsInputs((current) => ({ ...current, [item.id]: event.target.value }));
+                            setManualHsErrors((current) => ({ ...current, [item.id]: '' }));
+                          }}
+                          placeholder="숫자 10자리"
+                          inputMode="numeric"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={readOnly || validatingHsItemId === item.id}
+                        onClick={() => void confirmManualHS(item.id, manualValue)}
+                      >
+                        {validatingHsItemId === item.id ? '확인 중...' : '직접 입력 확정'}
+                      </button>
+                    </div>
+                    {manualHsErrors[item.id] && <p className="import-hs-error" role="alert">{manualHsErrors[item.id]}</p>}
                   </div>
                 );
               })}
             </section>
+            </fieldset>
           )}
-          <div className="import-actions">
-            <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 1 }))}>이전</button>
-            <button className="btn btn-primary" disabled={busy} onClick={() => void confirmAndCalculate()}>
-              {role === 'shipper' ? '분석 결과 확인 및 예상세액 계산' : '확인 및 다음 단계'}
-            </button>
-          </div>
+          {readOnly && onClose ? (
+            <DocumentManagerReadOnlyAction
+              onClose={onClose}
+              className="import-actions"
+              navigationAction={{
+                label: role === 'forwarder' ? '3단계 통관처리 보기' : '3단계 세액·의뢰서 보기',
+                onClick: () => moveToReadOnlyResultStep(3),
+              }}
+            />
+          ) : (
+            <div className="import-actions">
+              <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 1 }))}>이전</button>
+              <button className="btn btn-primary" disabled={busy} onClick={() => void confirmAndCalculate()}>
+                {role === 'shipper' ? '분석 결과 확인 및 예상세액 계산' : '확인 및 다음 단계'}
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -870,17 +1236,94 @@ export default function ImportTradeFlow({
             </div>
             {preview && <div className="declaration-preview" dangerouslySetInnerHTML={{ __html: generateImportDeclarationHtml(declarationData) }} />}
           </section>
-          <RiskSummary
-            risks={state.risks}
-            onToggle={(id) => setState((current) => ({
-              ...current,
-              risks: current.risks.map((risk) => risk.id === id ? { ...risk, status: risk.status === 'resolved' ? 'unresolved' : 'resolved' } : risk),
-            }))}
-          />
-          <div className="import-actions">
-            <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button>
-            <button className="btn btn-primary" disabled={busy} onClick={() => void complete()}>{busy ? '완료 처리 중…' : '완료'}</button>
-          </div>
+
+          {/* 배송 요청 — 서류에 없고 화주만 아는 값이라 직접 입력받는다.
+              포워더가 배차 의뢰서를 만들 때 이 값이 배송지 칸으로 그대로 넘어간다. */}
+          <section className="form-card import-card">
+            <div className="import-card-heading">
+              <div><h2>배송 요청</h2></div>
+              <p>화물을 어디로 언제 받을지 알려주시면, 포워더가 배차할 때 그대로 전달됩니다.</p>
+            </div>
+            <div className="form-grid">
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label" htmlFor="dlv-address">배송지 주소</label>
+                <input
+                  id="dlv-address"
+                  className="form-input"
+                  value={delivery.deliveryAddress}
+                  readOnly={readOnly}
+                  onChange={(event) => patchDelivery({ deliveryAddress: event.target.value })}
+                  placeholder="예: 경기도 화성시 동탄산단로 123 A동 물류창고"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="dlv-at">희망 배송일시</label>
+                <input
+                  id="dlv-at"
+                  type="datetime-local"
+                  className="form-input"
+                  value={delivery.deliveryAt}
+                  readOnly={readOnly}
+                  onChange={(event) => patchDelivery({ deliveryAt: event.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="dlv-name">수령 담당자</label>
+                <input
+                  id="dlv-name"
+                  className="form-input"
+                  value={delivery.contactName}
+                  readOnly={readOnly}
+                  onChange={(event) => patchDelivery({ contactName: event.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="dlv-tel">담당자 연락처</label>
+                <input
+                  id="dlv-tel"
+                  className="form-input"
+                  value={delivery.contactTel}
+                  readOnly={readOnly}
+                  onChange={(event) => patchDelivery({ contactTel: event.target.value })}
+                  placeholder="010-0000-0000"
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label" htmlFor="dlv-remarks">요청사항 (선택)</label>
+                <input
+                  id="dlv-remarks"
+                  className="form-input"
+                  value={delivery.remarks}
+                  readOnly={readOnly}
+                  onChange={(event) => patchDelivery({ remarks: event.target.value })}
+                  placeholder="예: 지게차 없음 · 오전 배송 희망 · 차량 진입로 협소"
+                />
+              </div>
+            </div>
+            <p className="import-notice">비워 두고 제출해도 됩니다. 포워더가 배차 전에 따로 확인합니다.</p>
+          </section>
+          {readOnly && onClose ? <DocumentManagerReadOnlyAction
+            onClose={onClose}
+            className="import-actions"
+            navigationAction={{
+              label: '2단계 이전 단계 보기',
+              onClick: () => moveToReadOnlyResultStep(2),
+            }}
+          /> : (
+            <>
+              {liveRisks.some((risk) => risk.status !== 'resolved') && (
+                <p className="import-notice">
+                  남아 있는 확인 항목 {liveRisks.filter((risk) => risk.status !== 'resolved').length}건은
+                  제출과 함께 포워더에게 전달되어, 포워더가 원본 서류를 대조해 확인·판단합니다.
+                  여기서 직접 고칠 수 있는 값이 아니라면 그대로 제출해도 됩니다.
+                </p>
+              )}
+              <div className="import-actions">
+                <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button>
+                <button className="btn btn-primary" disabled={busy} onClick={() => void complete()}>{busy ? '완료 처리 중…' : '완료'}</button>
+              </div>
+            </>
+          )}
         </>
       )}
 
@@ -899,9 +1342,18 @@ export default function ImportTradeFlow({
             onChange={(arrivalNotice) => setState((current) => ({ ...current, arrivalNotice }))}
             userId={userId}
             tradeId={state.tradeId}
+            readOnly={readOnly}
           />
-          <RiskSummary risks={state.risks} />
-          <div className="import-actions"><button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button><button className="btn btn-primary" disabled={busy || state.existingStatus === 'submitted'} onClick={() => void complete()}>{state.existingStatus === 'submitted' ? '제출 완료' : hasValidStoragePath(state.arrivalNotice) ? '완료 및 제출' : '진행 중으로 저장'}</button></div>
+          {readOnly && onClose
+            ? <DocumentManagerReadOnlyAction
+              onClose={onClose}
+              className="import-actions"
+              navigationAction={{
+                label: '2단계 이전 단계 보기',
+                onClick: () => moveToReadOnlyResultStep(2),
+              }}
+            />
+            : <div className="import-actions"><button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button><button className="btn btn-primary" disabled={busy || state.existingStatus === 'submitted'} onClick={() => void complete()}>{state.existingStatus === 'submitted' ? '제출 완료' : hasValidStoragePath(state.arrivalNotice) ? '완료 및 제출' : '진행 중으로 저장'}</button></div>}
         </>
       )}
     </div>
@@ -917,6 +1369,8 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
     </section>
   );
   const krw = (value: number | null) => value == null ? '확인 필요' : `${Math.round(value).toLocaleString('ko-KR')}원`;
+  // 환율 기준일 YYYYMMDD → YYYY.MM.DD (수출 과세가격 카드와 표기 통일)
+  const ymd = (d: string) => /^\d{8}$/.test(d) ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d;
   return (
     <section className="form-card import-card">
       <div className="import-card-heading"><div><h2>예상 관세액</h2></div><span className="source-badge">API</span></div>
@@ -924,7 +1378,7 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
         <div><dt>Invoice 통화</dt><dd>{duty.invoiceCurrency}</dd></div>
         <div><dt>Invoice 금액</dt><dd>{duty.invoiceAmount.toLocaleString()}</dd></div>
         <div><dt>적용 환율</dt><dd>{duty.exchangeRate.toLocaleString()}원</dd></div>
-        <div><dt>환율 기준일</dt><dd>{duty.exchangeRateDate}</dd></div>
+        <div><dt>환율 기준일</dt><dd>{ymd(duty.exchangeRateDate)}</dd></div>
         <div><dt>원화 환산금액</dt><dd>{krw(duty.convertedInvoiceKrw)}</dd></div>
         <div><dt>예상 과세가격</dt><dd>{krw(duty.customsValue)}</dd></div>
         <div><dt>기본 관세율</dt><dd>{duty.basicRate}%</dd></div>
@@ -941,42 +1395,97 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
   );
 }
 
-function RiskSummary({ risks, onToggle }: { risks: ImportRisk[]; onToggle?: (id: string) => void }) {
+function RiskSummary({ risks, onToggle, description }: {
+  risks: ImportRisk[];
+  onToggle?: (id: string) => void;
+  description?: string;
+}) {
+  // 수출 결과 페이지의 확인 항목과 같은 문법: 반드시 수정(high) / 보완 권장(그 외) 두 그룹.
+  const blockers = risks.filter((risk) => risk.level === 'high');
+  const advisories = risks.filter((risk) => risk.level === 'medium' || risk.level === 'low');
+  const nothingFound = blockers.length === 0 && advisories.length === 0;
+
+  let advisorySeq = 0;
+  const renderCard = (risk: ImportRisk) => {
+    const isBlocker = risk.level === 'high';
+    const resolved = risk.status === 'resolved';
+    const num = isBlocker ? 0 : ++advisorySeq;
+    const hasDetail = !!risk.differentValues?.length || !!risk.recommendation;
+    return (
+      <div key={risk.id} className={`mobile-fix-card fix-card ${isBlocker ? 'sev-error' : 'sev-warning'}${resolved ? ' risk-resolved' : ''}`}>
+        <div className="fix-card__head">
+          <span className={`fix-card__marker fix-card__marker--${isBlocker ? 'icon' : 'num'}`}>
+            {isBlocker ? <FileText size={17} /> : num}
+          </span>
+          <div className="fix-card__text">
+            <div className="fix-card__titlerow">
+              <span className="fix-card__title">{risk.item}</span>
+              {risk.relatedDocuments.slice(0, 3).map((doc) => (
+                <span key={doc} className="fix-card__doc">{doc}</span>
+              ))}
+            </div>
+            <p className="fix-card__desc">{risk.cause}</p>
+            {hasDetail && (
+              <details className="risk-detail">
+                <summary>값 비교·해결 방법</summary>
+                <div className="risk-detail-body">
+                  {!!risk.differentValues?.length && (
+                    <ul>
+                      {risk.differentValues.map((value, index) => <li key={index}>{value}</li>)}
+                    </ul>
+                  )}
+                  {risk.recommendation && <p>{risk.recommendation}</p>}
+                </div>
+              </details>
+            )}
+          </div>
+          {onToggle ? (
+            <button
+              type="button"
+              className={`risk-check-btn${resolved ? ' on' : ''}`}
+              onClick={() => onToggle(risk.id)}
+            >
+              {resolved ? <><RotateCcw size={14} /> 다시 미확인</> : <><CheckCircle2 size={14} /> 검토 완료</>}
+            </button>
+          ) : resolved ? (
+            <span className="risk-check-btn on" aria-hidden><CheckCircle2 size={14} /> 확인됨</span>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <section className="form-card import-card">
-      <div className="import-card-heading"><div><h2>종합 리스크</h2></div></div>
-      <div className="risk-list">
-        {risks.map((risk) => {
-          const isResolved = risk.status === 'resolved';
-          return (
-            <article key={risk.id} className={`risk-item ${risk.level} ${isResolved ? 'resolved' : ''}`}>
-              <span className="risk-level-badge">{risk.level.toUpperCase()}</span>
-              <div className="risk-item-body">
-                <div className="risk-item-title-row">
-                  <strong>{risk.item}</strong>
-                  <span className={`risk-status-badge ${isResolved ? 'resolved' : 'pending'}`}>
-                    {isResolved ? '확인됨' : '검토 필요'}
-                  </span>
-                </div>
-                <p>{risk.cause}</p>
-                {!!risk.relatedDocuments.length && <small>출처: {risk.relatedDocuments.join(', ')}</small>}
-                {!!risk.differentValues?.length && <small>서로 다른 값: {risk.differentValues.join(' / ')}</small>}
-                <small>해결 방법: {risk.recommendation}</small>
-              </div>
-              {onToggle && (
-                <button
-                  type="button"
-                  className={`risk-action-btn ${isResolved ? 'resolved' : ''}`}
-                  onClick={() => onToggle(risk.id)}
-                >
-                  {isResolved ? <RotateCcw size={14} /> : <CheckCircle2 size={14} />}
-                  {isResolved ? '다시 미확인' : '검토 완료'}
-                </button>
-              )}
-            </article>
-          );
-        })}
-      </div>
+      <div className="import-card-heading"><div><h2>AI 검증 결과</h2></div>{description && <p>{description}</p>}</div>
+      {nothingFound ? (
+        <div className="risk-pass">
+          <CheckCircle2 size={20} />
+          <div>
+            <strong>자동 탐지된 주요 위험이 없습니다</strong>
+            <p>최종 의뢰 전 원본 문서와 한 번 더 대조하세요.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="mobile-fix-list">
+          {blockers.length > 0 && (
+            <div className="sev-section-header sev-error">
+              <span className="sev-section-icon"><OctagonAlert size={17} strokeWidth={2.4} /></span>
+              <span className="sev-section-label">반드시 수정</span>
+              <span className="sev-section-count">{blockers.length}</span>
+            </div>
+          )}
+          {blockers.map(renderCard)}
+          {advisories.length > 0 && (
+            <div className="sev-section-header sev-warning">
+              <span className="sev-section-icon"><AlertTriangle size={17} strokeWidth={2.4} /></span>
+              <span className="sev-section-label">보완 권장</span>
+              <span className="sev-section-count">{advisories.length}</span>
+            </div>
+          )}
+          {advisories.map(renderCard)}
+        </div>
+      )}
       <p className="import-notice">자동 분석 결과는 참고정보이며 최종 법률·통관 판단이 아닙니다.</p>
     </section>
   );

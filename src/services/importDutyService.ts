@@ -1,11 +1,9 @@
 import { getCustomsExchangeRateStrict } from './customsApiService';
 import { getTariffRates, pickBasicRate } from './unipassService';
 import type { ImportDutyEstimate, ImportItem } from '../types/importTrade';
+import { parseTradeNumber } from '../utils/number';
 
-const numberValue = (value: string | number | undefined): number => {
-  const parsed = Number(String(value ?? '').replace(/,/g, '').trim());
-  return Number.isFinite(parsed) ? parsed : 0;
-};
+const numberValue = (value: string | number | undefined): number => parseTradeNumber(value) ?? 0;
 
 export interface ImportDutyInput {
   items: ImportItem[];

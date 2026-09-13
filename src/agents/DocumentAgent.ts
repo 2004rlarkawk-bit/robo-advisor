@@ -1,6 +1,7 @@
 import { Agent, DocumentResult, HSCodeResult, AgentLog, createLog } from './types';
-import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, CustomsDeclarationData, Shipment } from '../types';
-import { tradeItemAmount } from '../utils/shipment';
+import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, CustomsDeclarationData, Shipment, TransportRequestData, FreightTerms } from '../types';
+import { deriveFreightTerms } from '../utils/freightTerms';
+import { composeDetailedDescription, tradeItemAmount } from '../utils/shipment';
 import { determineRequiredDocuments } from '../harness/rulesEngine';
 import { autoFillDocumentFields } from '../services/claudeService';
 import { getCustomsExchangeRate } from '../services/customsApiService';
@@ -24,6 +25,8 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
       : profile.shipperItems?.length
         ? profile.shipperItems.map((item, index) => ({
             description: item.itemName || '',
+            detailedDescription: composeDetailedDescription(item.itemName, item.detail),
+            detail: (item.detail || '').trim() || undefined,
             hsCode: item.hsCode || '',
             quantity: Number(item.quantity) || 0,
             unit: item.unit || '',
@@ -36,6 +39,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
               : 0,
             measurement: index === 0 ? profile.measurement || '' : '',
             packageCount: index === 0 ? Number(profile.packageCount) || 0 : 0,
+            eaPerBox: index === 0 ? Number(profile.eaPerBox) || 0 : 0,
             packageUnit: index === 0 ? profile.packageType || '' : '',
             shippingMarks: index === 0 ? profile.shippingMarks || undefined : undefined,
           }))
@@ -53,6 +57,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
             grossWeight: Number(profile.grossWeight || profile.weight) || 0,
             measurement: profile.measurement || '',
             packageCount: Number(profile.packageCount) || 0,
+            eaPerBox: Number(profile.eaPerBox) || 0,
             packageUnit: profile.packageType || '',
             shippingMarks: profile.shippingMarks || undefined,
           }];
@@ -105,15 +110,29 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
     const lcDate = isLc ? (profile.lcDate || '').trim() : '';
     const lcBank = isLc ? (profile.lcBank || '').trim() : '';
 
+    const generatedAt = new Date();
+    const generatedDate = [
+      generatedAt.getFullYear(),
+      String(generatedAt.getMonth() + 1).padStart(2, '0'),
+      String(generatedAt.getDate()).padStart(2, '0'),
+    ].join('-');
+    // 수출 C/I는 폼 진입일이나 레거시 입력값이 아니라 실제 생성 시점의 날짜를 사용한다.
+    // 생성 결과 자체에 날짜가 저장되므로 이미 생성된 문서를 조회할 때는 다시 계산되지 않는다.
+    const invoiceDate = profile.tradeType === 'export'
+      ? generatedDate
+      : profile.invoiceDate || generatedDate;
+
     // 3. Invoice 데이터 조립
     const invoiceDoc = requiredDocs.find(d => d.id === 'invoice');
     if (invoiceDoc && invoiceDoc.status !== 'not_needed') {
       logs.push(createLog(this.name, '상업송장(Invoice) 데이터 조립 중...', 'info'));
       
       // 다품목: 각 품목 금액을 계산(extractedAmount ?? 수량×단가)해 합산한다. amount는 저장 않고 계산.
+      // 상업송장은 색상·재질까지 적는 실무 관행을 따라 상세 품명을 쓴다.
+      // 포장명세서·선하증권은 기본 품명만 쓴다(아래 packingItems 참고).
       const invoiceItems = items.map((it, i) => ({
         no: i + 1,
-        description: it.description,
+        description: it.detailedDescription || it.description,
         hsCode: it.hsCode || hsResult.topCode || '',
         countryOfOrigin: profile.countryOfOrigin || '',
         quantity: it.quantity,
@@ -126,7 +145,6 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
       }));
       const totalAmount = invoiceItems.reduce((s, it) => s + (Number(it.amount) || 0), 0);
 
-      const invoiceDate = profile.invoiceDate || new Date().toISOString().split('T')[0];
       // 당사자 정보는 프로필 실입력값만 사용한다 — 미입력이면 빈 문자열(양식에서 빈 칸으로 렌더).
       // 가짜 상호/주소("Overseas Supplier", "Seoul..." 등)를 지어내지 않는다. 누락은 validatorEngine이 막는다.
       const exporterParty = {
@@ -165,7 +183,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         otherReferences: profile.otherReferences || '',
         incotermsPlace: profile.shipperSupplemental?.incotermsPlace || '',
         // 서명란은 사용자가 지정한 서명자만 표기 — 상호를 서명으로 흉내내지 않는다(공란 허용).
-        signedBy: profile.signedBy || profile.signerName || '',
+        signedBy: '', // 서명란은 실제 서명자가 직접 기재 — 자동 채움 안 함
         // 무역협회 표준 서식 ①~⑱ 추가 필드
         sellerTaxNo: profile.tradeType === 'export' ? (profile.businessRegistrationNo || profile.taxNo || '') : '',
         buyer: profile.buyerName ? {
@@ -204,6 +222,8 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         grossWeight: it.grossWeight,
         dimensions: it.measurement || '',
         packageCount: it.packageCount,
+        // 0은 "미입력"과 같은 취급(R10이 boxes>0 && ea>0만 대조 대상으로 삼음) → 공란(undefined)으로 유지.
+        eaPerBox: it.eaPerBox ? it.eaPerBox : undefined,
         packageType: it.packageUnit || '',
         marks: it.shippingMarks,
       }));
@@ -236,7 +256,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         notifyPartyName: profile.notifyPartyName || '',
         // 화인(shipping marks) 미입력이면 빈 값 — 템플릿이 'N/M'(No Marks) 표기를 담당한다.
         shippingMarks: profile.shippingMarks || '',
-        signedBy: profile.signedBy || profile.signerName || '',
+        signedBy: '', // 서명란은 실제 서명자가 직접 기재 — 자동 채움 안 함
         packageCount: sumPackages,
         packageType: items[0]?.packageUnit || profile.packageType || '',
         netWeight: sumNet,
@@ -260,6 +280,50 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
 
       generatedDocs.packingList = packingList;
       logs.push(createLog(this.name, `패킹리스트 조립 완료 (품목 ${packingItems.length}건, 총중량: ${sumGross}kg)`, 'success'));
+    }
+
+    // 수출 화주 운송의뢰서: 화주 입력값만 재사용하며 Booking/B/L/선박·마감 확정 정보는 포함하지 않는다.
+    const transportRequestDoc = requiredDocs.find(d => d.id === 'transport_request');
+    if (transportRequestDoc && profile.tradeType === 'export') {
+      const notifyParty = profile.notifyPartyName || profile.notifyPartyAddress || profile.notifyPartyContact
+        ? { name: profile.notifyPartyName || '', address: profile.notifyPartyAddress || '', contact: profile.notifyPartyContact || '' }
+        : undefined;
+      const transportRequest: TransportRequestData = {
+        requestNo: docNo('TR'),
+        requestDate: generatedDate,
+        exporter: generatedDocs.invoice?.seller || { name: profile.companyName || '', address: profile.companyAddress || '', contact: profile.contact || '' },
+        requesterName: profile.contactName || profile.signerName || '',
+        businessRegistrationNo: profile.businessRegistrationNo || profile.taxNo || '',
+        consignee: generatedDocs.invoice?.consignee || { name: profile.partnerName || '', address: profile.partnerAddress || '', contact: profile.partnerContact || '' },
+        notifyParty,
+        items: items.map(item => ({
+          description: item.description,
+          hsCode: item.hsCode || hsResult.topCode || '',
+          quantity: item.quantity,
+          unit: item.unit || '',
+          packageCount: item.packageCount,
+          packageType: item.packageUnit || '',
+          netWeight: item.netWeight,
+          grossWeight: item.grossWeight,
+          measurement: item.measurement || '',
+          marksAndNumbers: item.shippingMarks || profile.shippingMarks || '',
+        })),
+        incoterms: profile.incoterms || '',
+        incotermsPlace: profile.shipperSupplemental?.incotermsPlace || '',
+        paymentTerms,
+        invoiceNo: generatedDocs.invoice?.invoiceNo || profile.invoiceNo || '',
+        loadPort: profile.loadPort || '',
+        dischargePort: profile.dischargePort || '',
+        placeOfReceipt: profile.placeOfReceipt || '',
+        placeOfDelivery: profile.placeOfDelivery || profile.finalDestination || '',
+        // 화주가 명시하지 않았으면 Incoterms 원칙값을 제안값으로 채운다.
+        freightTerms: (profile.freightTerms as FreightTerms) || deriveFreightTerms(profile.incoterms || ''),
+        shippingMarks: profile.shippingMarks || '',
+        requestedDepartureDate: profile.departureDate || '',
+        loadingMode: profile.loadingMode || '',
+      };
+      generatedDocs.transportRequest = transportRequest;
+      logs.push(createLog(this.name, `수출 운송의뢰서 초안 조립 완료 (품목 ${items.length}건)`, 'success'));
     }
 
     // 5. Certificate of Origin 데이터 조립
@@ -289,7 +353,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         originCountry: profile.countryOfOrigin || 'Republic of Korea', // 템플릿 호환용 별칭
         destinationCountry: profile.partnerCountry || profile.dischargePort || '',
         items: generatedDocs.invoice?.items || [],
-        signedBy: profile.signedBy || profile.signerName || '',
+        signedBy: '', // 서명란은 실제 서명자가 직접 기재 — 자동 채움 안 함
         invoiceNo: generatedDocs.invoice?.invoiceNo || '',
         invoiceRef: generatedDocs.invoice?.invoiceNo || '', // 템플릿 호환용 별칭
         // RCEP 표준 서식(FORM RCEP, Box 1~14) 추가 필드
@@ -356,7 +420,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         customsValue: invoiceAmount,
         dutyRate: '',
         dutyAmount: 0,
-        signedBy: profile.signedBy || profile.signerName || '',
+        signedBy: '', // 서명란은 실제 서명자가 직접 기재 — 자동 채움 안 함
         // ── 수출신고서(초안) docx 전환용 확장 ──
         items,                                   // 갑지=items[0], 을지=items.slice(1)
         fobRate,
@@ -369,14 +433,14 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         carrier: profile.carrier || '',
         vessel: profile.vesselOrFlight || '',
         departureDate: profile.departureDate || '',
-        transportType: '',                       // 운송형태 코드 소스 없음 — 공란
+        transportType: profile.loadingMode || '', // 수출 화주 운송방식(FCL/LCL), 미정은 공란
         lcNo,                                     // 비신용장이면 위에서 ''로 강제됨
         totalWeight,
         totalPackages,
         paymentAmount: invoiceAmount,
         containerNo: profile.containerNo || '',
         invoiceNo: generatedDocs.invoice?.invoiceNo || profile.invoiceNo || '',
-        invoiceDate: profile.invoiceDate || ''
+        invoiceDate
       };
 
       generatedDocs.customsDeclaration = customsDeclaration;
@@ -392,6 +456,8 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
     if (generatedDocs.certificateOfOrigin) {
       htmlTemplates.co = renderCertificateOfOriginHTML(generatedDocs.certificateOfOrigin);
     }
+    // 수출 운송의뢰서도 고정 docx 템플릿(transportRequestDocxService)에서 생성·미리보기하므로
+    // HTML을 만들지 않는다 — 미리보기와 다운로드가 같은 Blob을 쓴다.
     // 수출신고서(초안)는 고정 docx 템플릿(exportDeclarationDocxService)에서 생성·미리보기한다.
     // (미리보기 = 다운로드 docx 단일 소스. HTML은 만들지 않는다. customsDeclaration.ts는 @deprecated.)
     logs.push(createLog(this.name, '문서 생성 에이전트 작업 완료.', 'success'));

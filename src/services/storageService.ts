@@ -29,6 +29,7 @@ interface TradeRow {
   id: string;
   direction: TradeType;
   role: TradeRole;
+  forwarder_user_id?: string | null;
   schema_version: number;
   form_data: TradeFormDataV3;
   workflow_data: TradeWorkflowData | null;
@@ -74,6 +75,7 @@ function mapTradeRow(row: TradeRow): SavedTrade {
     id: row.id,
     tradeDirection: row.direction,
     tradeRole: row.role,
+    forwarderUserId: row.forwarder_user_id ?? null,
     attachments: Array.isArray(formData.attachments) ? formData.attachments : [],
     arrivalNotice: findArrivalNotice(formData),
     profile: tradeFormDataToProfile(formData),
@@ -88,6 +90,7 @@ function mapTradeRow(row: TradeRow): SavedTrade {
     analysisResult: importSnapshot?.analysis ?? {},
     riskSummary: importSnapshot?.risks ?? [],
     customsProgress: importSnapshot?.cargo ?? {},
+    forwarderCase: row.workflow_data?.forwarderCase ?? null,
     status: row.status,
     generatedAt: row.generated_at ?? null,
     submittedAt: row.submitted_at ?? null,
@@ -171,10 +174,35 @@ export function getCompletedImportStatus(
     : 'submitted';
 }
 
+// 수입 플로우가 workflow_data를 통째로 다시 쓸 때, 포워더 워크스페이스가 저장한
+// 운영 상태(forwarderCase)까지 지워지지 않도록 기존 값을 이월한다.
+async function carryForwarderCase(
+  tradeId: string | undefined,
+  userId: string,
+  payload: ReturnType<typeof importTradePayload>,
+  options: { markReturnResolved?: boolean } = {},
+): Promise<void> {
+  if (!tradeId) return;
+  const { data } = await supabase
+    .from('trades')
+    .select('workflow_data')
+    .eq('id', tradeId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const existing = (data?.workflow_data as TradeWorkflowData | null)?.forwarderCase;
+  if (!existing) return;
+  // 화주가 보완 요청을 받고 재제출하는 시점이면 요청을 '회신됨'으로 기록한다.
+  const carried = options.markReturnResolved && existing.returnRequest && !existing.returnRequest.resolvedAt
+    ? { ...existing, returnRequest: { ...existing.returnRequest, resolvedAt: new Date().toISOString() } }
+    : existing;
+  payload.workflow_data = { ...payload.workflow_data, forwarderCase: carried };
+}
+
 /** 수입 확인 단계 성공 시 DB에 generated 상태를 기록합니다. */
 export async function createGeneratedImportTrade(snapshot: ImportTradeSnapshot): Promise<SavedTrade> {
   const userId = await getRequiredUserId();
   const payload = importTradePayload(userId, snapshot, 'generated');
+  await carryForwarderCase(snapshot.tradeId, userId, payload);
   const query = snapshot.tradeId
     ? supabase
       .from('trades')
@@ -193,6 +221,9 @@ export async function createCompletedImportTrade(snapshot: ImportTradeSnapshot):
   const userId = await getRequiredUserId();
   const completedStatus = getCompletedImportStatus(snapshot.role, snapshot.arrivalNotice);
   const payload = importTradePayload(userId, snapshot, completedStatus);
+  await carryForwarderCase(snapshot.tradeId, userId, payload, {
+    markReturnResolved: snapshot.role === 'shipper' && completedStatus === 'submitted',
+  });
 
   if (snapshot.tradeId) {
     const { data, error } = await supabase
@@ -270,6 +301,26 @@ export async function updateGeneratedTrade(tradeId: string, data: GeneratedTrade
   }
   if (!row) throw new Error('이미 최종 제출되었거나 수정할 수 없는 거래입니다.');
   return mapTradeRow(row);
+}
+
+/**
+ * 포워더 보완 요청을 받은 화주가 제출된 수입 거래를 다시 열어 수정할 수 있도록
+ * 같은 row의 status만 generated로 되돌린다(거래관리·작업실에서 이어서 작업 가능).
+ */
+export async function reopenSubmittedImportTradeForRevision(tradeId: string): Promise<SavedTrade> {
+  const userId = await getRequiredUserId();
+  const { data, error } = await supabase
+    .from('trades')
+    .update({ status: 'generated' })
+    .eq('id', tradeId)
+    .eq('user_id', userId)
+    .eq('status', 'submitted')
+    .eq('direction', 'import')
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('다시 열 수입 거래를 찾지 못했습니다.');
+  return mapTradeRow(data as TradeRow);
 }
 
 // [EDIT: Trade Persistence] 캐시에 남은 currentTradeId가 실제 DB에 존재하는지 현재 사용자 범위에서 확인합니다.
@@ -401,26 +452,6 @@ export async function deleteSavedTrade(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// [EDIT: Supabase Auth] 로그인한 사용자에게 보이는 모든 trade를 삭제합니다.
-export async function clearSavedTrades(): Promise<void> {
-  // [EDIT: Document Management] 문서관리 화면에 보이는 최종 전송 거래만 전체 삭제 대상으로 삼습니다.
-  const trades = await fetchSubmittedTrades();
-  if (trades.length === 0) return;
-
-  for (const trade of trades) {
-    await deleteSavedTrade(trade.id);
-  }
-}
-
-export function deleteTrade(id: string): void {
-  const trades = getSavedTrades().filter(t => t.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
-}
-
-export function clearAllTrades(): void {
-  localStorage.removeItem(STORAGE_KEY);
-}
-
 // ===== 설정 저장 =====
 
 export interface AppSettings {
@@ -462,55 +493,4 @@ export function saveSettings(settings: Partial<AppSettings>): void {
 
   // 같은 탭의 다른 컴포넌트가 설정 변경을 즉시 반영할 수 있도록 알림
   window.dispatchEvent(new CustomEvent('portai-settings-changed'));
-}
-
-// ===== 통계 조회 (데이터 분석 탭용) =====
-
-export interface TradeAnalytics {
-  totalTrades: number;
-  exportCount: number;
-  importCount: number;
-  issuesByType: Record<string, number>;
-  tradesByMonth: { month: string; count: number }[];
-  completionRate: number;
-}
-
-export function getAnalytics(): TradeAnalytics {
-  const trades = getSavedTrades();
-  
-  const issuesByType: Record<string, number> = {};
-  let totalCompleted = 0;
-  let totalDocs = 0;
-  const monthMap: Record<string, number> = {};
-
-  for (const trade of trades) {
-    // 이슈 유형 카운트
-    for (const issue of trade.issues) {
-      const key = issue.field;
-      issuesByType[key] = (issuesByType[key] || 0) + 1;
-    }
-    
-    // 문서 완료율
-    for (const doc of trade.documents) {
-      totalDocs++;
-      if (doc.status === 'completed') totalCompleted++;
-    }
-
-    // 월별 거래 수
-    const month = trade.createdAt.substring(0, 7); // "2026-07"
-    monthMap[month] = (monthMap[month] || 0) + 1;
-  }
-
-  const tradesByMonth = Object.entries(monthMap)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, count]) => ({ month, count }));
-
-  return {
-    totalTrades: trades.length,
-    exportCount: trades.filter(t => t.profile.tradeType === 'export').length,
-    importCount: trades.filter(t => t.profile.tradeType === 'import').length,
-    issuesByType,
-    tradesByMonth,
-    completionRate: totalDocs > 0 ? Math.round((totalCompleted / totalDocs) * 100) : 0,
-  };
 }

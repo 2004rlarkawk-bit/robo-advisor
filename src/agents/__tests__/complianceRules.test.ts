@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { runComplianceRules, checkPackingInvoiceConsistency, RULE_POLICY } from '../complianceRules';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { runComplianceRules, checkPackingInvoiceConsistency, checkHsChapterMismatch, RULE_POLICY } from '../complianceRules';
 import { TradeProfile } from '../../types';
 
 const base: TradeProfile = {
@@ -224,5 +224,199 @@ describe('R11 — 결제조건 ↔ L/C 필드 정합성', () => {
     const list = ids({ paymentTerms: 'T/T', lcNo: '', lcBank: '', lcDate: '' });
     expect(list).not.toContain('r11-payment-lc-conflict');
     expect(list).not.toContain('r11-lc-missing');
+  });
+});
+
+describe('R2 출항희망일 비현실적 범위(연도 오타 방지)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 15)); // 2026-08-15로 고정
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('오늘 기준 1년 전 ~ 2년 후 범위 안이면 통과', () => {
+    expect(ids({ departureDate: '2026-09-01' })).not.toContain('r2-departure-out-of-range');
+    expect(ids({ departureDate: '2025-09-01' })).not.toContain('r2-departure-out-of-range');
+    expect(ids({ departureDate: '2028-06-01' })).not.toContain('r2-departure-out-of-range');
+  });
+
+  it('연도를 잘못 찍어 범위를 벗어나면(예: 2016) warning', () => {
+    const issue = find({ departureDate: '2016-07-20' }, 'r2-departure-out-of-range')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('warning');
+  });
+
+  it('너무 먼 미래(예: 2062)도 warning', () => {
+    expect(ids({ departureDate: '2062-01-01' })).toContain('r2-departure-out-of-range');
+  });
+
+  it('공란이면 발생하지 않음(R2 필수 체크와 중복 발행 안 함)', () => {
+    expect(ids({ departureDate: '' })).not.toContain('r2-departure-out-of-range');
+  });
+});
+
+describe('R13 선적항·도착항 완전 동일', () => {
+  it('정규화 후 동일하면 error(override 가능)', () => {
+    const issue = find({ loadPort: 'BUSAN, KOREA', dischargePort: 'busan  korea' }, 'r13-identical-ports')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('error');
+    expect(issue.overridable).toBe(true);
+  });
+  it('다른 항구면 미발행', () => {
+    expect(ids({ loadPort: 'BUSAN, KOREA', dischargePort: 'OSAKA, JAPAN' })).not.toContain('r13-identical-ports');
+  });
+  it('한쪽이 비어 있으면 미발행(누락은 R3 담당)', () => {
+    expect(ids({ loadPort: 'BUSAN, KOREA', dischargePort: '' })).not.toContain('r13-identical-ports');
+  });
+});
+
+describe('R14 신용장 개설일 > 선적일', () => {
+  it('L/C 결제 + 개설일이 선적일보다 늦으면 error', () => {
+    const issue = find(
+      { paymentTerms: 'L/C AT SIGHT', lcNo: 'LC-2026-0001', lcDate: '2026-08-01', departureDate: '2026-07-20' },
+      'r14-lc-after-shipment',
+    )!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('error');
+  });
+  it('개설일이 선적일 이전이면 미발행', () => {
+    expect(ids({ paymentTerms: 'L/C AT SIGHT', lcNo: 'LC-1', lcDate: '2026-07-01', departureDate: '2026-07-20' }))
+      .not.toContain('r14-lc-after-shipment');
+  });
+  it('T/T 결제면 L/C 날짜가 있어도 미발행(모순은 R11 담당)', () => {
+    expect(ids({ paymentTerms: 'T/T', lcDate: '2026-08-01', departureDate: '2026-07-20' }))
+      .not.toContain('r14-lc-after-shipment');
+  });
+});
+
+describe('R15 수출인데 원산지 한국 아님', () => {
+  it('수출 + 외국 원산지 → error(중계무역 사유 우회 가능)', () => {
+    const issue = find({ countryOfOrigin: 'Japan' }, 'r15-origin-not-korea')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('error');
+    expect(issue.overridable).toBe(true);
+  });
+  it('원산지가 한국(영문·국문 표기 모두)이면 미발행', () => {
+    expect(ids({ countryOfOrigin: 'REPUBLIC OF KOREA' })).not.toContain('r15-origin-not-korea');
+    expect(ids({ countryOfOrigin: '대한민국' })).not.toContain('r15-origin-not-korea');
+    expect(ids({ countryOfOrigin: 'South Korea' })).not.toContain('r15-origin-not-korea');
+  });
+  it('원산지 공란이면 미발행(누락은 R1 담당)', () => {
+    expect(ids({ countryOfOrigin: '' })).not.toContain('r15-origin-not-korea');
+  });
+});
+
+describe('R16 포괄 품명', () => {
+  it('"GOODS" 같은 포괄 품명은 error', () => {
+    const issue = find({ itemName: 'Goods', hsCode: '' }, 'r16-generic-item-name')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('error');
+  });
+  it('국문 포괄 품명("상품")도 잡는다', () => {
+    expect(ids({ itemName: '상품', hsCode: '' })).toContain('r16-generic-item-name');
+  });
+  it('구체적 품명은 미발행', () => {
+    expect(ids({ itemName: 'STAINLESS STEEL KITCHEN KNIFE', hsCode: '' })).not.toContain('r16-generic-item-name');
+  });
+  it('포괄 단어가 포함되기만 한 품명("AUTO PARTS FOR HYUNDAI ENGINE")은 오탐하지 않는다', () => {
+    expect(ids({ itemName: 'AUTO PARTS FOR HYUNDAI ENGINE', hsCode: '' })).not.toContain('r16-generic-item-name');
+  });
+  it('다품목 중 하나가 포괄 품명이면 잡는다', () => {
+    const items = [
+      { id: '1', itemName: 'FROZEN HAIRTAIL, WHOLE ROUND', hsCode: '0303892000', quantity: 10 as const, unit: 'EA' as const, unitPrice: 5 as const, currency: 'USD' as const },
+      { id: '2', itemName: 'SAMPLE', hsCode: '', quantity: 1 as const, unit: 'EA' as const, unitPrice: 1 as const, currency: 'USD' as const },
+    ];
+    expect(ids({ shipperItems: items })).toContain('r16-generic-item-name');
+  });
+});
+
+describe('R17 HS코드 ↔ 품명 분류 불일치', () => {
+  const coatCandidates = [
+    { code: '6202.11', description: '여성용 코트(모직물)', confidence: '높음', reasoning: '' },
+    { code: '6202.19', description: '여성용 코트(기타)', confidence: '중간', reasoning: '' },
+  ];
+  const mkProfile = (hsCode: string) => ({ ...base, itemName: "Women's Cashmere Coats", hsCode });
+
+  it('추천 후보(62류)와 입력 코드(96류)의 류가 전혀 다르면 error(override 가능)', () => {
+    const issues = checkHsChapterMismatch(mkProfile('9608100000'), { status: 'valid', candidates: coatCandidates });
+    const issue = issues.find(i => i.id === 'r17-hs-chapter-mismatch')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('error');
+    expect(issue.overridable).toBe(true);
+    expect(issue.message).toContain('96류');
+    expect(issue.message).toContain('62류');
+  });
+
+  it('후보 중 하나라도 같은 류면 미발행', () => {
+    expect(checkHsChapterMismatch(mkProfile('6202192000'), { status: 'valid', candidates: coatCandidates }))
+      .toHaveLength(0);
+  });
+
+  it('추천 후보가 없으면 판정 보류(오탐 방지)', () => {
+    expect(checkHsChapterMismatch(mkProfile('9608100000'), { status: 'valid', candidates: [] }))
+      .toHaveLength(0);
+  });
+
+  it('형식이 틀린 코드는 hscode-invalid 담당이므로 미발행', () => {
+    expect(checkHsChapterMismatch(mkProfile('12345'), { status: 'invalid', candidates: coatCandidates }))
+      .toHaveLength(0);
+  });
+
+  it('6자리 국제코드 입력도 대조한다', () => {
+    const issues = checkHsChapterMismatch(mkProfile('960810'), { status: 'valid', candidates: coatCandidates });
+    expect(issues.map(i => i.id)).toContain('r17-hs-chapter-mismatch');
+  });
+});
+
+describe('R18 제거됨 — 도착항 ↔ 거래처 국가 대조는 발행하지 않는다', () => {
+  it('도착항 일본 + 거래처 국가 미국이어도 미발행(3국 인도 과검출 방지)', () => {
+    expect(ids({ dischargePort: 'OSAKA, JAPAN', partnerCountry: 'United States' }))
+      .not.toContain('r18-port-consignee-country');
+  });
+});
+
+describe('R19 거래처 주소 ↔ 국가 선택 불일치', () => {
+  it('주소는 일본인데 국가 선택이 미국이면 error(복붙 실수)', () => {
+    const issue = find(
+      { partnerAddress: '1-2-3 Umeda, Kita-ku, Osaka, Japan', partnerCountry: 'United States' },
+      'r19-consignee-country-address',
+    )!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('error');
+    expect(issue.overridable).toBe(true);
+  });
+  it('주소와 국가 선택이 일치하면 미발행', () => {
+    expect(ids({ partnerAddress: '100 Test Street, Los Angeles, CA, United States', partnerCountry: 'United States' }))
+      .not.toContain('r19-consignee-country-address');
+  });
+  it('주소에서 국가를 추정할 수 없으면 판정 보류', () => {
+    expect(ids({ partnerAddress: '100 Test Street, Los Angeles, CA', partnerCountry: 'United States' }))
+      .not.toContain('r19-consignee-country-address');
+  });
+});
+
+describe('R12 Buyer 정보 일관성', () => {
+  it('Buyer 회사명만 있고 주소 없으면 warning', () => {
+    const issue = find({ buyerName: 'Global Import LLC', buyerAddress: '' }, 'r12-buyer-address-missing')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('warning');
+  });
+
+  it('Buyer 주소만 있고 회사명 없으면 warning', () => {
+    const issue = find({ buyerName: '', buyerAddress: '250 Market Street, LA' }, 'r12-buyer-name-missing')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('warning');
+  });
+
+  it('둘 다 있으면 통과', () => {
+    const list = ids({ buyerName: 'Global Import LLC', buyerAddress: '250 Market Street, LA' });
+    expect(list).not.toContain('r12-buyer-address-missing');
+    expect(list).not.toContain('r12-buyer-name-missing');
+  });
+
+  it('둘 다 비어 있으면 미발행(Buyer는 선택 항목)', () => {
+    const list = ids({ buyerName: '', buyerAddress: '' });
+    expect(list).not.toContain('r12-buyer-address-missing');
+    expect(list).not.toContain('r12-buyer-name-missing');
   });
 });

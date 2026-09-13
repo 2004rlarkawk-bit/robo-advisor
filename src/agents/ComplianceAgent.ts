@@ -2,7 +2,7 @@ import { Agent, ComplianceResult, AgentLog, createLog, HSCodeResult } from './ty
 import { TradeProfile, DocumentStatus, ValidationIssue, GeneratedDocuments } from '../types';
 import { validateTradeDocumentsAsync } from '../harness/validatorEngine';
 import { getRelatedLawForIssue } from '../services/lawService';
-import { runComplianceRules, checkPackingInvoiceConsistency } from './complianceRules';
+import { runComplianceRules, checkPackingInvoiceConsistency, checkHsChapterMismatch } from './complianceRules';
 
 export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents: DocumentStatus[]; hsResult?: HSCodeResult; generatedDocs?: GeneratedDocuments; logs: AgentLog[] }, ComplianceResult> {
   readonly name = 'Compliance Agent';
@@ -26,6 +26,9 @@ export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents
 
     // HSCodeAgent의 검증 결과를 통합
     if (hsResult) {
+      // R17. 품명 기반 추천 분류와 입력 코드의 류(Chapter) 대조 — 복붙·앞자리 착각 검출
+      issues.push(...checkHsChapterMismatch(profile, hsResult, logs));
+
       if (hsResult.status === 'invalid') {
         const isMissing = !profile.hsCode || profile.hsCode.trim() === '';
         issues.push({
@@ -60,11 +63,12 @@ export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents
     }
 
     // 각 문서 카테고리별 검증 리포트 작성 및 로그 생성
-    const docTypes = ['invoice', 'packing_list', 'bl', 'customs_dec', 'co'] as const;
+    const docTypes = ['invoice', 'packing_list', 'transport_request', 'customs_dec', 'co'] as const;
     const docNames: Record<string, string> = {
       invoice: '상업송장(Invoice)',
       packing_list: '패킹리스트(Packing List)',
       bl: '선하증권(B/L)',
+      transport_request: '수출 운송의뢰서(Transport Request)',
       customs_dec: '통관신고서',
       co: '원산지증명서(C/O)'
     };

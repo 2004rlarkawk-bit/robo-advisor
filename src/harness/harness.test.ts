@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { determineRequiredDocuments, calculateReadiness } from './rulesEngine';
-import { validateTradeDocuments, validateTradeDocumentsAsync, validateRequiredInputs } from './validatorEngine';
+import { validateTradeDocuments, validateTradeDocumentsAsync, validateRequiredInputs, DEMO_HIDE_EXTRA_EXPORT_ISSUES } from './validatorEngine';
+import { runComplianceRules } from '../agents/complianceRules';
 import { OrchestratorAgent } from '../agents/OrchestratorAgent';
 import { HSCodeAgent } from '../agents/HSCodeAgent';
 import { TradeProfile } from '../types';
@@ -110,27 +111,27 @@ describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테
     expect(resValid6.formattedCode).toBe('8517.62');
   });
 
-  it('필수 항목이 채워지면 송장·패킹리스트는 생성 완료, B/L은 포워더 발행 대기 상태다', () => {
+  it('필수 항목이 채워지면 송장·패킹리스트와 수출 운송의뢰서 초안이 생성된다', () => {
     const docs = determineRequiredDocuments(mockValidProfile);
 
     const invoice = docs.find(d => d.id === 'invoice');
     const packing = docs.find(d => d.id === 'packing_list');
-    const bl = docs.find(d => d.id === 'bl');
+    const transportRequest = docs.find(d => d.id === 'transport_request');
 
-    // 화주가 생성하는 건 C/I·P/L뿐 — B/L은 포워더/선사 발행이라 대기 상태.
     expect(invoice?.status).toBe('completed');
     expect(packing?.status).toBe('completed');
-    expect(bl?.status).toBe('external_pending');
-    expect(bl?.statusText).toBe('포워더 발행 대기');
+    expect(transportRequest?.status).toBe('completed');
+    expect(transportRequest?.statusText).toBe('초안');
+    expect(docs.find(d => d.id === 'bl')).toBeUndefined();
   });
 
   it('자동 생성 대상(C/I·P/L·E/D)만 채워지면 준비도 100% — 타 주체 발급 서류는 준비도 분모에서 제외된다', () => {
     const docs = determineRequiredDocuments(mockValidProfile);
     const readiness = calculateReadiness(docs);
 
-    // C/I·P/L·수출신고서(초안) 셋 다 완료 → 100%. B/L·C/O(external_pending)는 분모에 없음.
+    // C/I·P/L·수출신고서·운송의뢰서 초안이 모두 완료 → 100%. C/O는 분모에 없음.
     expect(readiness.percent).toBe(100);
-    expect(readiness.applicableCount).toBe(3);
+    expect(readiness.applicableCount).toBe(4);
     expect(readiness.nextStepDocId).toBeUndefined();
   });
 
@@ -261,7 +262,8 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(insuranceDoc?.status).toBe('completed');
   });
 
-  it('수출 거래의 co-required 이슈는 coNeeded 답변에 따라 노출·해소된다', async () => {
+  // 시연 플래그가 켜져 있으면 co-required 자체를 발행하지 않으므로 건너뛴다.
+  it.skipIf(DEMO_HIDE_EXTRA_EXPORT_ISSUES)('수출 거래의 co-required 이슈는 coNeeded 답변에 따라 노출·해소된다', async () => {
     const base: TradeProfile = {
       tradeType: 'export',
       itemName: '기계부품',
@@ -287,11 +289,9 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(beforeIssue?.message).toContain('필요 여부 확인');
     expect(before.documents?.documents.find(d => d.id === 'co')?.status).toBe('external_pending');
 
-    // 예 → 발급기관 안내 이슈로 전환(여전히 확인 목록에 남음), 문서는 external_pending 유지.
+    // 예 → 답변됐으므로 이슈는 해소(재발행 안 함), 문서는 external_pending 유지.
     const yes = await orchestrator.run({ profile: { ...base, coNeeded: 'yes', countryOfOrigin: '대한민국' }, useLLM: false });
-    const yesIssue = yes.issues?.issues.find(i => i.id === 'co-required');
-    expect(yesIssue).toBeDefined();
-    expect(yesIssue?.message).toContain('상공회의소 발급 대상');
+    expect(yes.issues?.issues.find(i => i.id === 'co-required')).toBeUndefined();
     expect(yes.documents?.documents.find(d => d.id === 'co')?.status).toBe('external_pending');
 
     // 아니오 → 이슈 미발행 + 문서 불필요 처리.
@@ -300,7 +300,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(no.documents?.documents.find(d => d.id === 'co')?.status).toBe('not_needed');
   });
 
-  it('EXW 조건의 경우 B/L이 비필수(not_needed) 처리되고 정보성 안내가 발생한다', async () => {
+  it('레거시 EXW 거래도 B/L 대신 운송의뢰서 초안을 만들고 책임 안내를 유지한다', async () => {
     const exwProfile: TradeProfile = {
       tradeType: 'export',
       itemName: '기계부품',
@@ -319,9 +319,9 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     const orchestrator = new OrchestratorAgent();
     const result = await orchestrator.run({ profile: exwProfile, useLLM: false });
 
-    // B/L 비필수 검증
-    const blDoc = result.documents?.documents.find(d => d.id === 'bl');
-    expect(blDoc?.status).toBe('not_needed');
+    const transportRequest = result.documents?.documents.find(d => d.id === 'transport_request');
+    expect(transportRequest?.status).toBe('completed');
+    expect(result.documents?.documents.find(d => d.id === 'bl')).toBeUndefined();
 
     // 정보성 알림 검증
     const exwIssue = result.issues?.issues.find(i => i.id === 'exw-responsibility-info');
@@ -375,7 +375,8 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(noAmtIssues.find(i => i.id === 'dutiable-value-info')).toBeUndefined();
   });
 
-  it('체크섬이 틀린 사업자등록번호는 error, 올바른 번호는 (키 미설정 시) 형식확인 info가 된다', async () => {
+  // 시연 플래그가 켜져 있으면 bizno-invalid 를 발행하지 않으므로 건너뛴다.
+  it.skipIf(DEMO_HIDE_EXTRA_EXPORT_ISSUES)('체크섬이 틀린 사업자등록번호는 error, 올바른 번호는 (키 미설정 시) 형식확인 info가 된다', async () => {
     const businessSpy = vi.spyOn(
       customsApiService,
       'verifyBusinessRegistration'
@@ -395,7 +396,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
         source: 'simulation',
       });
 
-    // 123-45-67890: 체크섬 불일치 → error
+    // 123-45-67890: 체크섬 불일치 → error(반드시 수정 — 사유 입력 시 우회 가능)
     const badBizProfile: TradeProfile = {
       ...baseAsyncProfile,
       businessRegistrationNo: '123-45-67890',
@@ -406,6 +407,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
 
     expect(badIssue).toBeDefined();
     expect(badIssue?.severity).toBe('error');
+    expect(badIssue?.overridable).toBe(true);
 
     // 124-81-00998: 체크섬 유효, 국세청 API 미사용 → 형식확인 info
     const okBizProfile: TradeProfile = {
@@ -428,7 +430,11 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
   it('필수 항목이 모두 입력된 경우 입력값 검증 오류가 없다 (Python 시나리오 B)', () => {
     const fullProfile: TradeProfile = {
       ...baseAsyncProfile,
-      partnerName: 'ABC Corp'
+      partnerName: 'ABC Corp',
+      unit: 'EA',
+      currency: 'USD',
+      companyAddress: '인천 남동구 1로',
+      partnerAddress: '100 Test St, LA'
     };
     const issues = validateRequiredInputs(fullProfile);
     expect(issues).toHaveLength(0);
@@ -506,7 +512,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(issues.find(i => i.id === 'estimated-duty-info')).toBeUndefined();
   });
 
-  it('도착예정일이 출발일보다 빠르면 error 이슈가 발생한다', () => {
+  it('수출 화주 입력에서 제거된 도착예정일은 생성 차단 검증에 사용하지 않는다', () => {
     const badDateProfile: TradeProfile = {
       ...baseAsyncProfile,
       partnerName: 'ABC Corp',
@@ -514,13 +520,10 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
       arrivalDate: '2026-07-10'
     };
     const issues = validateRequiredInputs(badDateProfile);
-    const dateIssue = issues.find(i => i.id === 'input-date-order');
-    expect(dateIssue).toBeDefined();
-    expect(dateIssue?.severity).toBe('error');
-    expect(dateIssue?.message).toContain('도착예정일이 출발일보다 빠를 수 없습니다');
+    expect(issues.find(i => i.id === 'input-date-order')).toBeUndefined();
   });
 
-  it('단가·금액·송장 작성일 누락 시 각각 필수 항목 error가 발생한다', () => {
+  it('단가·금액은 필수지만 자동 생성되는 송장 작성일은 입력 누락 오류가 아니다', () => {
     const missingAmountProfile: TradeProfile = {
       ...baseAsyncProfile,
       partnerName: 'ABC Corp',
@@ -531,10 +534,12 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     const issues = validateRequiredInputs(missingAmountProfile);
     expect(issues.find(i => i.id === 'input-missing-unitPrice')?.severity).toBe('error');
     expect(issues.find(i => i.id === 'input-missing-totalAmount')?.severity).toBe('error');
-    expect(issues.find(i => i.id === 'input-missing-invoiceDate')?.severity).toBe('error');
+    expect(issues.find(i => i.id === 'input-missing-invoiceDate')).toBeUndefined();
   });
 
-  it('수량 × 단가 ≠ 금액이면 계산 불일치 error가 발생한다', () => {
+  // 2026-08 통합: 단건 금액산술은 complianceRules.ts R8(r8-amount-arithmetic)로 이관됐다.
+  // validateRequiredInputs는 더 이상 이 이슈를 내지 않는다(아래 "이중 error 표시 제거" 참고).
+  it('수량 × 단가 ≠ 금액이 1% 허용오차를 넘으면 R8 계산 불일치 error가 발생한다', () => {
     const wrongTotalProfile: TradeProfile = {
       ...baseAsyncProfile,
       partnerName: 'ABC Corp',
@@ -542,15 +547,17 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
       unitPrice: 10,
       totalAmount: 12000 // 올바른 값은 15000
     };
-    const issues = validateRequiredInputs(wrongTotalProfile);
-    const calcIssue = issues.find(i => i.id === 'amount-calc-mismatch');
+    expect(validateRequiredInputs(wrongTotalProfile).find(i => i.id === 'amount-calc-mismatch'))
+      .toBeUndefined(); // validatorEngine은 더 이상 발행하지 않음
+    const calcIssue = runComplianceRules(wrongTotalProfile).find(i => i.id === 'r8-amount-arithmetic');
     expect(calcIssue).toBeDefined();
     expect(calcIssue?.severity).toBe('error');
     expect(calcIssue?.message).toContain('15,000');
     expect(calcIssue?.message).toContain('12,000');
+    expect(calcIssue?.amounts).toEqual({ expected: 15000, actual: 12000, currency: 'USD' });
   });
 
-  it('수량 × 단가 = 금액이 맞으면 계산 불일치 error가 없다', () => {
+  it('수량 × 단가 = 금액이 맞으면 R8 계산 불일치 error가 없다', () => {
     const okTotalProfile: TradeProfile = {
       ...baseAsyncProfile,
       partnerName: 'ABC Corp',
@@ -558,11 +565,40 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
       unitPrice: 12.5,
       totalAmount: 2500 // 200 × 12.5 = 2500
     };
-    const issues = validateRequiredInputs(okTotalProfile);
-    expect(issues.find(i => i.id === 'amount-calc-mismatch')).toBeUndefined();
+    expect(runComplianceRules(okTotalProfile).find(i => i.id === 'r8-amount-arithmetic')).toBeUndefined();
   });
 
-  it('송장 작성일이 출발일(선적일)보다 늦으면 error가 발생한다', () => {
+  it('1% 이내 오차(반올림 등)는 R8이 통과시킨다(허용오차 정책)', () => {
+    // 기대값 15000의 0.5% = 75 → 14930은 허용오차 안
+    const roundingProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp',
+      quantity: 1500,
+      unitPrice: 10,
+      totalAmount: 14930,
+    };
+    expect(runComplianceRules(roundingProfile).find(i => i.id === 'r8-amount-arithmetic')).toBeUndefined();
+  });
+
+  it('큰 불일치(허용오차 초과)는 R8·validatorEngine 합쳐도 금액 이슈가 정확히 1개다(이중 error 표시 제거 확인)', () => {
+    const wrongTotalProfile: TradeProfile = {
+      ...baseAsyncProfile,
+      partnerName: 'ABC Corp',
+      quantity: 1500,
+      unitPrice: 10,
+      totalAmount: 12000, // 15000 대비 20% 어긋남
+    };
+    // ComplianceAgent가 실제로 하는 것과 같이 두 엔진 결과를 합쳐서 센다.
+    const combined = [
+      ...validateTradeDocuments(wrongTotalProfile),
+      ...runComplianceRules(wrongTotalProfile),
+    ];
+    const amountIssues = combined.filter(i => i.field === 'totalAmount' && i.amounts);
+    expect(amountIssues).toHaveLength(1);
+    expect(amountIssues[0].id).toBe('r8-amount-arithmetic');
+  });
+
+  it('레거시 송장 작성일은 새 문서 생성 검증을 차단하지 않는다', () => {
     const lateInvoiceProfile: TradeProfile = {
       ...baseAsyncProfile,
       partnerName: 'ABC Corp',
@@ -571,9 +607,106 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
       arrivalDate: '2026-07-20'
     };
     const issues = validateRequiredInputs(lateInvoiceProfile);
-    const issue = issues.find(i => i.id === 'invoice-date-after-shipment');
-    expect(issue).toBeDefined();
+    expect(issues.find(i => i.id === 'invoice-date-after-shipment')).toBeUndefined();
+  });
+
+  // ===== 문서 내부 논리 검증 (Layer 1 추가 규칙) =====
+
+  const layer1Base: TradeProfile = {
+    ...baseAsyncProfile,
+    partnerName: 'ABC Corp',
+    unit: 'EA',
+    currency: 'USD',
+    companyAddress: '인천 남동구 1로',
+    partnerAddress: '100 Test St, LA'
+  };
+
+  it('순중량(Net)이 총중량(Gross)보다 크면 error가 발생한다', () => {
+    const issues = validateRequiredInputs({ ...layer1Base, netWeight: 500, grossWeight: 450 });
+    const issue = issues.find(i => i.id === 'weight-net-gross');
     expect(issue?.severity).toBe('error');
-    expect(issue?.message).toContain('출발일');
+    expect(validateRequiredInputs({ ...layer1Base, netWeight: 450, grossWeight: 500 })
+      .find(i => i.id === 'weight-net-gross')).toBeUndefined();
+  });
+
+  it('포장 수량이 0 이하이면 error가 발생한다', () => {
+    expect(validateRequiredInputs({ ...layer1Base, packageCount: 0 })
+      .find(i => i.id === 'package-count-nonpositive')?.severity).toBe('error');
+    expect(validateRequiredInputs({ ...layer1Base, packageCount: 10 })
+      .find(i => i.id === 'package-count-nonpositive')).toBeUndefined();
+  });
+
+  it('수량이 있는데 단위가 누락되면 error가 발생한다', () => {
+    expect(validateRequiredInputs({ ...layer1Base, unit: '' })
+      .find(i => i.id === 'unit-missing')?.severity).toBe('error');
+  });
+
+  it('금액이 있는데 통화가 누락되면 error가 발생한다', () => {
+    expect(validateRequiredInputs({ ...layer1Base, currency: '' })
+      .find(i => i.id === 'currency-missing')?.severity).toBe('error');
+  });
+
+  it('공급자·거래처 주소가 누락되면 각각 error가 발생한다', () => {
+    const issues = validateRequiredInputs({ ...layer1Base, companyAddress: '', partnerAddress: '' });
+    expect(issues.find(i => i.id === 'input-missing-companyAddress')?.severity).toBe('error');
+    expect(issues.find(i => i.id === 'input-missing-partnerAddress')?.severity).toBe('error');
+  });
+
+  it('다품목 금액 합계 ≠ Invoice 총액이면 error, 일치하면 없음', () => {
+    const items = [
+      { id: '1', itemName: 'A', hsCode: '620211', quantity: 100 as const, unit: 'EA' as const, unitPrice: 250 as const, currency: 'USD' as const },
+      { id: '2', itemName: 'B', hsCode: '620211', quantity: 10 as const, unit: 'EA' as const, unitPrice: 100 as const, currency: 'USD' as const },
+    ];
+    // 합계 = 100×250 + 10×100 = 26,000. 총액을 25,000으로 넣으면 불일치.
+    const bad = validateRequiredInputs({ ...layer1Base, shipperItems: items, quantity: 100, unitPrice: 250, totalAmount: 25000 });
+    const badIssue = bad.find(i => i.id === 'items-total-mismatch');
+    expect(badIssue?.severity).toBe('error');
+    expect(badIssue?.message).toContain('26,000');
+    // 총액을 합계와 맞추면 불일치 없음. 단건 계산 오류(amount-calc-mismatch)도 다품목이라 미발행.
+    const ok = validateRequiredInputs({ ...layer1Base, shipperItems: items, quantity: 100, unitPrice: 250, totalAmount: 26000 });
+    expect(ok.find(i => i.id === 'items-total-mismatch')).toBeUndefined();
+    // R8(단건 계산)도 다품목(2건 이상)이면 가드로 스킵 — profile.quantity×unitPrice(25000)가
+    // totalAmount(26000)와 달라도 다품목 총액 비교(items-total-mismatch)로 대체되므로 미발행.
+    expect(runComplianceRules({ ...layer1Base, shipperItems: items, quantity: 100, unitPrice: 250, totalAmount: 26000 })
+      .find(i => i.id === 'r8-amount-arithmetic')).toBeUndefined();
+  });
+});
+
+describe('항구 누락 검증 — R3(Incoterms별 정밀판정) 전담, ports-missing은 Incoterms 공란일 때만 폴백', () => {
+  const portBase: TradeProfile = {
+    tradeType: 'export',
+    itemName: 'FROZEN HAIRTAIL, WHOLE ROUND',
+    hsCode: '0303892000',
+    incoterms: 'FOB',
+    quantity: 500,
+    weight: 5400,
+    loadPort: '',
+    dischargePort: '',
+    departureDate: '',
+    arrivalDate: '',
+    companyName: 'DAEHAN',
+    contact: '02-1',
+    countryOfOrigin: 'REPUBLIC OF KOREA',
+  };
+  // ComplianceAgent가 실제로 하는 것과 같이 두 엔진의 이슈를 합쳐 loadPort 관련 항목만 본다.
+  const portIssues = (profile: TradeProfile) =>
+    [...validateTradeDocuments(profile), ...runComplianceRules(profile)]
+      .filter(i => i.id === 'ports-missing' || i.id.startsWith('r3-incoterm-port'));
+
+  it('FOB + 선적항 누락 → 이슈 1개(r3-incoterm-port만, ports-missing 중복 없음)', () => {
+    const issues = portIssues({ ...portBase, loadPort: '', dischargePort: 'OSAKA, JAPAN' });
+    expect(issues).toHaveLength(1);
+    expect(issues[0].id).toBe('r3-incoterm-port');
+  });
+
+  it('FOB + 도착항만 누락 → 이슈 0개(FOB는 도착항 불필요, ports-missing 오탐 제거 확인)', () => {
+    const issues = portIssues({ ...portBase, loadPort: 'BUSAN, KOREA', dischargePort: '' });
+    expect(issues).toHaveLength(0);
+  });
+
+  it('Incoterms 공란 + 항구 둘 다 누락 → ports-missing 발동(R3가 판단 못 하는 유일한 폴백)', () => {
+    const issues = portIssues({ ...portBase, incoterms: '', loadPort: '', dischargePort: '' });
+    expect(issues).toHaveLength(1);
+    expect(issues[0].id).toBe('ports-missing');
   });
 });

@@ -10,6 +10,7 @@ export interface ImportDeclarationData {
 export type ImportDeclarationDownloadFormat = 'pdf' | 'docx';
 
 const empty = '첨부문서에서 확인되지 않음';
+
 const show = (value: unknown): string => {
   const text = String(value ?? '').trim();
   return text || empty;

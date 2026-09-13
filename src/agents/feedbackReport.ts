@@ -11,6 +11,7 @@ const DOC_LABEL: Record<DocumentType, string> = {
   invoice: '상업송장',
   packing_list: '패킹리스트',
   bl: '선하증권(B/L)',
+  transport_request: '수출 운송의뢰서',
   customs_dec: '통관신고서',
   co: '원산지증명서',
   insurance: '적하보험증권',

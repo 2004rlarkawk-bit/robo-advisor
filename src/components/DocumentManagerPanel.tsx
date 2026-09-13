@@ -1,120 +1,365 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FolderKanban, Trash2, FolderOpen, AlertTriangle, CheckCircle2, Copy } from 'lucide-react';
+import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown, Copy, CornerUpLeft, Mail, Send } from 'lucide-react';
 import type { SavedTrade } from '../types';
-import { clearSavedTrades, deleteSavedTrade, fetchSubmittedTrades } from '../services/storageService';
+import {
+  FORWARDER_STAGE_LABEL,
+  FORWARDER_STAGE_ORDER,
+  type ForwarderCaseState,
+} from '../types/forwarderCase';
+import { deleteSavedTrade, fetchSubmittedTrades } from '../services/storageService';
 import { filterDocumentManagerTrades } from '../services/tradeListPolicy';
-import { getTestSubmissionMeta } from '../services/devTestDataService';
+import { hasActiveShipperReturnRequest } from '../services/forwarderCaseService';
+import ForwarderRequestModal from './forwarder/ForwarderRequestModal';
+import TradeRequestStatusList from './forwarder/TradeRequestStatusList';
 
 interface Props {
   onLoad: (trade: SavedTrade) => void;
   onCopy: (trade: SavedTrade) => void;
+  /** 포워더 보완 요청을 받은 수입 거래를 다시 열어 수정하러 이동 */
+  onRevise?: (trade: SavedTrade) => void;
+  /** 현재 선택된 역할의 거래만 표시 — 화주·포워더 거래가 섞여 보이지 않게 한다 */
+  roleFilter?: 'shipper' | 'forwarder';
+  onListReady?: () => void;
 }
 
-export default function DocumentManagerPanel({ onLoad, onCopy }: Props) {
+function formatMailDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return `${date.getMonth() + 1}월 ${date.getDate()}일 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+interface ReturnReasonSection {
+  title: string;
+  lines: string[];
+  /** '반드시 수정' 묶음은 빨간 강조로 구분한다 */
+  blocking: boolean;
+}
+
+/**
+ * 포워더 보완 요청 사유를 섹션 카드로 나눈다.
+ * 포워더 화면이 '[제목]' 줄 + '· 항목' 줄 묶음을 빈 줄로 구분해 저장하므로 그 형식을 읽는다.
+ * 형식이 다르면 빈 배열을 돌려 원문 그대로 보여주게 한다.
+ */
+// 사유 한 줄을 첫 연결어미(…의 / …아 / …어 / …서 / …며 / …고) 뒤에서 두 줄로 나눈다.
+export function splitReasonLine(line: string): [string, string] {
+  const match = /[A-Za-z0-9가-힣]*[가-힣A-Za-z0-9](?:의|아|어|서|며|고)\s/.exec(line);
+  if (!match) return [line, ''];
+  const cut = match.index + match[0].length;
+  const tail = line.slice(cut).trim();
+  return tail ? [line.slice(0, cut).trimEnd(), tail] : [line, ''];
+}
+
+export function parseReturnReason(reason: string): ReturnReasonSection[] {
+  const blocks = reason.split(/\n\s*\n/).map((block) => block.trim()).filter(Boolean);
+  const sections: ReturnReasonSection[] = [];
+  for (const block of blocks) {
+    const [head, ...rest] = block.split('\n');
+    const match = head.trim().match(/^\[(.+)\]$/);
+    if (!match) return [];
+    const lines = rest
+      .map((line) => line.trim().replace(/^[·•-]\s*/, ''))
+      .filter(Boolean);
+    sections.push({ title: match[1], lines, blocking: match[1].includes('반드시') });
+  }
+  return sections;
+}
+
+/** 화주가 제출한 수입 거래의 포워더 진행 상태 — 문서관리 행에 타임라인으로 보여준다. */
+function ForwarderProgress({ trade, onRevise }: { trade: SavedTrade; onRevise?: (trade: SavedTrade) => void }) {
+  if ((trade.tradeDirection ?? trade.profile.tradeType) !== 'import') return null;
+  if (trade.tradeRole === 'forwarder') return null;
+
+  const state = (trade.forwarderCase as ForwarderCaseState | null) ?? null;
+  const stage = state?.stage ?? 'received';
+  const stageIndex = FORWARDER_STAGE_ORDER.indexOf(stage);
+  const returnRequest = state?.returnRequest;
+  const returnPending = Boolean(returnRequest && !returnRequest.resolvedAt);
+
+  return (
+    <div className="dm-fwd">
+      <div className="dm-fwd-line">
+        <span className="dm-fwd-label">포워더 진행</span>
+        {FORWARDER_STAGE_ORDER.map((item, index) => (
+          <span
+            key={item}
+            className={`dm-fwd-step${index === stageIndex ? ' is-current' : ''}${index < stageIndex ? ' is-done' : ''}`}
+          >
+            {FORWARDER_STAGE_LABEL[item]}
+          </span>
+        ))}
+      </div>
+      {returnPending && returnRequest && (
+        <div className="dm-mail">
+          <div className="dm-mail-head">
+            <span className="dm-mail-title"><Mail size={17} /> 포워더 보완 요청</span>
+            <span className="dm-mail-date">{formatMailDate(returnRequest.requestedAt)}</span>
+          </div>
+          <div className="dm-mail-body">
+            <p className="dm-mail-greeting"><strong>{trade.profile.companyName || '담당자'}님</strong>, 안녕하세요.</p>
+            <p>전달해 주신 서류를 검토한 결과, 아래 항목의 보완이 필요합니다.</p>
+            {(() => {
+              const sections = parseReturnReason(returnRequest.reason);
+              if (sections.length === 0) {
+                return <blockquote className="dm-mail-quote">{returnRequest.reason}</blockquote>;
+              }
+              return (
+                <div className="dm-mail-sections">
+                  {sections.map((section) => (
+                    <div
+                      key={section.title}
+                      className={`dm-mail-section${section.blocking ? ' is-blocking' : ''}`}
+                    >
+                      <strong>[{section.title}]</strong>
+                      <ul>
+                        {section.lines.map((line) => {
+                          const [head, tail] = splitReasonLine(line);
+                          return <li key={line}>{head}{tail && <><br />{tail}</>}</li>;
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+            <p>수정 후 다시 제출해 주시면 통관 검토를 이어서 진행하겠습니다.</p>
+            <div className="dm-mail-foot">
+              <span className="dm-mail-sign">— 담당 포워더 드림</span>
+              {onRevise && (
+                <button type="button" className="btn btn-primary dm-mail-cta" onClick={() => onRevise(trade)}>
+                  <CornerUpLeft size={16} /> 지금 수정하러 가기
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function DocumentManagerPanel({
+  onLoad,
+  onCopy,
+  onRevise,
+  roleFilter,
+  onListReady,
+}: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  // 문서 관리 탭 진입 시 임시보관함이 먼저 보이도록 기본 접힘
+  const [open, setOpen] = useState(false);
+  const [sortKey, setSortKey] = useState<'latest' | 'oldest'>('latest');
+  const [requestModalTrade, setRequestModalTrade] = useState<SavedTrade | null>(null);
+  const [statusRefreshKey, setStatusRefreshKey] = useState(0);
 
   const loadTrades = useCallback(async () => {
     setIsLoading(true);
     setError('');
+
     try {
-      setTrades(filterDocumentManagerTrades(await fetchSubmittedTrades()));
+      const fetched = filterDocumentManagerTrades(await fetchSubmittedTrades());
+      const loaded = roleFilter
+        ? fetched.filter((trade) => (trade.tradeRole ?? 'shipper') === roleFilter)
+        : fetched;
+      setTrades(loaded);
+      // 포워더 보완 요청이 걸린 거래가 있으면 화주가 바로 볼 수 있게 패널을 자동으로 펼친다.
+      if (loaded.some((trade) => hasActiveShipperReturnRequest(trade))) setOpen(true);
     } catch (caught) {
-      console.error('[Document Manager] submitted trades query failed:', caught);
-      setError('제출된 문서를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      console.error(
+        '[Document Manager] submitted trades query failed:',
+        caught
+      );
+
+      setError(
+        '제출된 문서를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
+      );
     } finally {
       setIsLoading(false);
+      onListReady?.();
     }
-  }, []);
+  }, [onListReady, roleFilter]);
 
-  useEffect(() => { void loadTrades(); }, [loadTrades]);
+  useEffect(() => {
+    void loadTrades();
+  }, [loadTrades]);
 
   const handleDelete = async (id: string) => {
     try {
       await deleteSavedTrade(id);
-      setTrades((current) => current.filter((trade) => trade.id !== id));
+
+      setTrades((current) =>
+        current.filter((trade) => trade.id !== id)
+      );
     } catch (caught) {
-      console.error('[Document Manager] trade deletion failed:', caught);
-      setError('문서를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      console.error(
+        '[Document Manager] trade deletion failed:',
+        caught
+      );
+
+      setError(
+        '문서를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+      );
     }
   };
 
-  const handleClearAll = async () => {
-    if (!window.confirm('제출·완료된 거래를 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
-    try {
-      await clearSavedTrades();
-      setTrades([]);
-    } catch (caught) {
-      console.error('[Document Manager] submitted trades deletion failed:', caught);
-      setError('문서를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+  const tradeTime = (trade: SavedTrade) => {
+    const t = new Date(trade.submittedAt ?? trade.createdAt).getTime();
+    return Number.isNaN(t) ? 0 : t;
+  };
+
+  const sortedTrades = [...trades].sort((a, b) =>
+    sortKey === 'oldest' ? tradeTime(a) - tradeTime(b) : tradeTime(b) - tradeTime(a)
+  );
+
+  const formatDate = (trade: SavedTrade) => {
+    const created = new Date(
+      trade.submittedAt ?? trade.createdAt
+    );
+
+    if (Number.isNaN(created.getTime())) {
+      return trade.createdAt;
     }
+
+    return `${created.getFullYear()}.${String(
+      created.getMonth() + 1
+    ).padStart(2, '0')}.${String(
+      created.getDate()
+    ).padStart(2, '0')} ${String(
+      created.getHours()
+    ).padStart(2, '0')}:${String(
+      created.getMinutes()
+    ).padStart(2, '0')}`;
   };
 
   return (
-    <div>
-      <div className="page-heading">
-        <h1 className="page-title document-manager-title"><FolderKanban size={26} /> 문서 관리</h1>
-        <p className="page-subtitle">최종 전송이 완료된 거래의 문서를 조회하고 신규 거래로 복사할 수 있습니다.</p>
-      </div>
+    <section className="doc-panel">
+      <button
+        type="button"
+        className="doc-panel-head"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span className="doc-panel-icon"><FileText size={22} /></span>
+        <div className="doc-panel-head-main">
+          <span className="doc-panel-title">
+            최종 제출된 거래
+            <span className="doc-panel-count">
+              {trades.length}건
+            </span>
+            {trades.some(hasActiveShipperReturnRequest) && (
+              <span className="doc-panel-alert">보완 요청 {trades.filter(hasActiveShipperReturnRequest).length}건</span>
+            )}
+          </span>
 
-      {error && <div className="form-message error" role="alert">{error}</div>}
-      {isLoading ? (
-        <div className="form-card document-empty">제출된 문서를 불러오는 중입니다.</div>
-      ) : trades.length === 0 ? (
-        <div className="form-card document-empty">
-          <FolderOpen size={36} />
-          아직 제출된 문서가 없습니다.
+          <span className="doc-panel-sub">
+            최종 제출이 완료된 거래를 조회하고, 새로운 거래로 복사할 수 있어요.
+          </span>
         </div>
-      ) : (
-        <>
-          <div className="document-manager-actions">
-            <button className="btn-secondary document-delete-all" onClick={() => void handleClearAll()}><Trash2 size={14} /> 전체 삭제</button>
-          </div>
 
-          {trades.map((trade) => {
-            const errorCount = trade.issues.filter((issue) => issue.severity === 'error').length;
-            const doneCount = trade.documents.filter((document) => document.status === 'completed').length;
-            const testMeta = getTestSubmissionMeta(trade.generatedDocs);
-            const created = new Date(trade.submittedAt ?? trade.createdAt);
-            const dateLabel = Number.isNaN(created.getTime())
-              ? trade.createdAt
-              : `${created.getFullYear()}.${String(created.getMonth() + 1).padStart(2, '0')}.${String(created.getDate()).padStart(2, '0')} ${String(created.getHours()).padStart(2, '0')}:${String(created.getMinutes()).padStart(2, '0')}`;
+        <ChevronDown
+          size={21}
+          className={`doc-panel-chevron ${open ? 'open' : ''}`}
+        />
+      </button>
 
-            return (
-              <div key={trade.id} className="form-card document-trade-card">
-                <div className="document-trade-row">
-                  <div className="document-trade-summary">
-                    <div className="document-trade-heading">
-                      <span className={`trade-type-badge ${trade.tradeDirection ?? trade.profile.tradeType}`}>{(trade.tradeDirection ?? trade.profile.tradeType) === 'export' ? '수출' : '수입'}</span>
-                      {trade.tradeRole && <span className="trade-role-badge">{trade.tradeRole === 'shipper' ? '화주' : '포워더'}</span>}
-                      <span className={`trade-status-badge ${trade.status}`}>{trade.status === 'in_progress' ? '진행 중' : trade.status === 'submitted' ? '제출 완료' : trade.status}</span>
-                      {testMeta && <span className="test-trade-badge">테스트 문서</span>}
-                      {testMeta?.submissionMode === 'perfect' && <span className="perfect-test-badge">완벽 테스트</span>}
-                      {testMeta?.submissionMode === 'needs_revision' && <span className="needs-revision-badge">수정 필요</span>}
-                      {testMeta?.submittedWithValidationErrors && <span className="test-error-badge">오류 포함 제출</span>}
-                      <span className="document-trade-name">{trade.profile.itemName || '(품목명 없음)'}</span>
-                      {trade.profile.hsCode && <span className="document-hs-code">HS {trade.profile.hsCode}</span>}
+      {open && (
+        <div className="doc-panel-body">
+          {error && (
+            <div
+              className="form-message error"
+              role="alert"
+            >
+              {error}
+            </div>
+          )}
+
+          {!isLoading && trades.length > 0 && (
+            /* 정렬 — 통관 내역·임시보관함과 같은 조작 방식으로 맞춘다 */
+            <div className="list-sort-row">
+              <select
+                className="customs-sort-select"
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as 'latest' | 'oldest')}
+                aria-label="제출 거래 정렬 순서"
+              >
+                <option value="latest">최신순</option>
+                <option value="oldest">오래된순</option>
+              </select>
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="doc-empty">
+              제출된 문서를 불러오는 중입니다.
+            </div>
+          ) : trades.length === 0 ? (
+            <div className="doc-empty">
+              <FolderOpen size={34} />
+              <span>
+                아직 제출된 문서가 없습니다.
+              </span>
+            </div>
+          ) : (
+            /* 임시보관함과 같은 행 카드 형식 — 목록 스타일을 한 벌로 통일 */
+            sortedTrades.map((trade) => {
+              const p = trade.profile;
+              const country = p.partnerCountry || p.buyerCountry || '';
+              const ports = [p.loadPort, p.dischargePort].filter(Boolean).join(' → ');
+              const route = [country, ports, p.incoterms].filter(Boolean).join(' · ');
+              return (
+                <div key={trade.id} className="draft-tray-item dm-row">
+                  <div className="draft-tray-info">
+                    <div className="draft-tray-line1">
+                      <span className={`trade-type-badge ${p.tradeType}`}>{p.tradeType === 'export' ? '수출' : '수입'}</span>
+                      <span className="draft-tray-name">{p.itemName || '(품목명 없음)'}</span>
+                      <span className="draft-tray-status" style={{ color: '#15803d', background: '#f0fdf4' }}>
+                        <CheckCircle2 size={12} style={{ verticalAlign: -1.5, marginRight: 4 }} />제출 완료
+                      </span>
                     </div>
-                    <div className="document-trade-meta">{trade.profile.companyName || '-'} → {trade.profile.partnerName || '-'} · B/L {trade.profile.blNo || '-'} · {dateLabel}</div>
+                    {route && <span className="draft-tray-route">{route}</span>}
+                    <span className="draft-tray-time">{formatDate(trade)}</span>
                   </div>
-
-                  <div className="document-trade-counts">
-                    <span className="document-complete-count"><CheckCircle2 size={14} /> 문서 {doneCount}/{trade.documents.length}</span>
-                    <span className={errorCount > 0 ? 'document-error-count active' : 'document-error-count'}><AlertTriangle size={14} /> 오류 {errorCount}건</span>
+                  <div className="draft-tray-actions">
+                    <button type="button" className="draft-tray-resume" onClick={() => onLoad(trade)}>
+                      <FolderOpen size={15} /> 조회
+                    </button>
+                    <button type="button" className="draft-tray-resume" onClick={() => onCopy(trade)}>
+                      <Copy size={15} /> 새 거래로 복사
+                    </button>
+                    {(trade.tradeRole ?? 'shipper') === 'shipper' && !trade.forwarderUserId && (
+                      <button type="button" className="draft-tray-resume" onClick={() => setRequestModalTrade(trade)}>
+                        <Send size={15} /> 포워더에게 의뢰하기
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="draft-tray-delete"
+                      aria-label="문서 삭제"
+                      onClick={() => void handleDelete(trade.id)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-
-                  <div className="document-trade-buttons">
-                    <button className="btn-primary" onClick={() => onLoad(trade)}><FolderOpen size={14} /> 조회</button>
-                    <button className="btn-secondary" onClick={() => onCopy(trade)}><Copy size={14} /> 신규 거래로 복사</button>
-                    <button className="btn-secondary document-delete-button" aria-label="문서 삭제" onClick={() => void handleDelete(trade.id)}><Trash2 size={14} /></button>
-                  </div>
+                  {/* 포워더 진행·보완 요청은 행 전체 폭을 쓰도록 정보 칼럼 밖에 둔다 */}
+                  <ForwarderProgress trade={trade} onRevise={onRevise} />
+                  {(trade.tradeRole ?? 'shipper') === 'shipper' && (
+                    <TradeRequestStatusList tradeId={trade.id} refreshKey={statusRefreshKey} />
+                  )}
                 </div>
-              </div>
-            );
-          })}
-        </>
+              );
+            })
+          )}
+        </div>
       )}
-    </div>
+
+      {requestModalTrade && (
+        <ForwarderRequestModal
+          trade={requestModalTrade}
+          onClose={() => setRequestModalTrade(null)}
+          onSent={() => setStatusRefreshKey((key) => key + 1)}
+        />
+      )}
+    </section>
   );
 }

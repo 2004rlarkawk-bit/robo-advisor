@@ -2,7 +2,7 @@
  * 서비스 소개(About) — 다크 바다 히어로 + 스크롤 스토리텔링 랜딩.
  * 1) 히어로: 캔버스(화물선·항로 아크·수면·지도 점·입자) 애니메이션 — aboutHero.css(.portai-hero 스코프).
  *    작업실 진입 CTA는 히어로에 두지 않는다(페이지 하단 CTA로 단일화).
- * 2) 이하 섹션: 숫자 카운터·작동 방식·6종 서류·CTA — IntersectionObserver로 진입 시 fade-in.
+ * 2) 이하 섹션: 숫자 카운터·작동 방식·화주/포워더 협업·6종 서류·CTA — IntersectionObserver로 진입 시 fade-in.
  * 외부 이미지/라이브러리 없이 canvas 2D·CSS·lucide 아이콘만 사용.
  * prefers-reduced-motion 시 캔버스는 정지 프레임 1장만 렌더한다.
  */
@@ -138,19 +138,40 @@ const STEPS = [
     icon: <FileSignature size={28} />,
     title: '① 거래 정보 입력',
     desc:
-      '품목·항구·거래조건만 입력하세요. 서류 탭이 필요한 항목만 보여주고, 나머지는 AI가 채웁니다.'
+      '품목·항구·거래조건 등 필요한 정보를 입력하세요. 입력 정보와 기존 서류를 활용해 문서 작성을 준비합니다.'
   },
   {
     icon: <ShieldCheck size={28} />,
-    title: '② AI 검증 & HS코드 추천',
+    title: '② AI 검토 & HS코드 추천',
     desc:
-      '관세청 사전 기반으로 HS코드를 추천하고, 관세법 근거와 함께 오류·누락을 짚어냅니다.'
+      'HS코드 후보와 서류의 누락·불일치를 점검합니다. 예상세액은 기본세율 기준 참고값이며 FTA·기타 세금은 별도 확인합니다.'
   },
   {
     icon: <Sparkles size={28} />,
-    title: '③ 문서 자동 생성',
+    title: '③ 서류 작성·초안 생성',
     desc:
-      '통관·선적에 필요한 서류를 실무 표준 서식으로 한 번에 만들어 미리보기·다운로드합니다.'
+      '상업송장·패킹리스트 등을 작성하고 업무별 초안을 미리보기·다운로드합니다. 공식 발급·신고·제출은 별도 절차입니다.'
+  }
+];
+
+const COLLABORATION_STEPS = [
+  {
+    icon: <FileSignature size={28} />,
+    title: '① 화주 · 서류 준비와 의뢰',
+    desc:
+      '화주는 거래 정보를 입력하고 서류를 작성·정리합니다. 수입 업무에서는 받은 상업송장·패킹리스트·B/L을 의뢰와 함께 포워더에게 전달합니다.'
+  },
+  {
+    icon: <ShieldCheck size={28} />,
+    title: '② 포워더 · 검토와 보완 요청',
+    desc:
+      '포워더는 받은 의뢰에서 서류와 대사 결과를 확인합니다. 누락·불일치가 있으면 화주에게 보완을 요청하고, 화주가 제출한 수정본을 다시 검토합니다.'
+  },
+  {
+    icon: <Sparkles size={28} />,
+    title: '③ 포워더 · 도착통지서 작성',
+    desc:
+      '수입 포워더는 의뢰 정보를 활용해 도착통지서(A/N) 초안을 작성하고, 내용 확인 후 최종본을 보관합니다. 초안 생성은 자동 발송이나 통관 완료를 의미하지 않습니다.'
   }
 ];
 
@@ -169,27 +190,27 @@ const DOCS = [
   },
   {
     icon: 'B/L',
-    name: '선하증권',
+    name: '선하증권(B/L)',
     desc:
-      'Bill of Lading — 해상 운송 계약의 증거'
+      '수출 B/L 초안 작성·수입 B/L 검토 — 정식 발행본과 구분'
   },
   {
     icon: 'DEC',
-    name: '수출입신고서',
+    name: '수출신고서(초안)',
     desc:
-      '관세청 신고용 — 과세가격·관세 자동 계산'
+      '입력 정보 기반 초안 — 관세청 공식 신고·제출을 대신하지 않음'
   },
   {
     icon: 'C/O',
     name: '원산지증명서',
     desc:
-      'Certificate of Origin — FTA 특혜 관세의 근거'
+      '원산지 증빙 서류 — 별도 발급·작성 절차가 필요한 관리 대상'
   },
   {
     icon: 'INS',
     name: '적하보험증권',
     desc:
-      'Insurance Policy — CIF 조건 필수 서류'
+      '운송 중 화물 위험을 담보하는 보험 서류 — 보험사 발행본 관리'
   }
 ];
 
@@ -469,13 +490,13 @@ export default function AboutPanel({
             </svg>
             <span className="ah-wordmark">Port<b>AI</b></span>
           </div>
-          <h1 className="ah-rise ah-d2">복잡한 통관 문서,<br /><span className="ah-ai">AI</span>로 빠르고 정확하게.</h1>
-          <p className="ah-sub ah-rise ah-d3">스마트 물류 · 통관 자동화 플랫폼</p>
-          <p className="ah-micro ah-rise ah-d4">AI가 문서를 이해하고, 리스크를 예측하며, 통관 업무를 자동화합니다.</p>
+          <h1 className="ah-rise ah-d2">복잡한 통관 문서,<br /><span className="ah-ai">AI</span>로 빠르고 간편하게.</h1>
+          <p className="ah-sub ah-rise ah-d3">수출입 서류 작성 · 검토 지원 플랫폼</p>
+          <p className="ah-micro ah-rise ah-d4">거래 정보로 서류를 작성하고, AI 검토와 화주·포워더 협업을 연결합니다.</p>
           <div className="ah-chips ah-rise ah-d5">
             <span className="ah-chip"><i />상업송장·패킹리스트 자동 생성</span>
-            <span className="ah-chip"><i />관세·환율 실시간 환산</span>
-            <span className="ah-chip"><i />규정 리스크 사전 점검</span>
+            <span className="ah-chip"><i />관세환율 조회·예상세액 참고</span>
+            <span className="ah-chip"><i />화주·포워더 서류 협업</span>
           </div>
         </div>
       </div>
@@ -489,7 +510,7 @@ export default function AboutPanel({
           </div>
 
           <div className="about-counter-label">
-            실제 관세청 HS코드
+            수록 HSK 코드 · 2026.01 자료 기준
           </div>
         </div>
 
@@ -500,17 +521,17 @@ export default function AboutPanel({
           </div>
 
           <div className="about-counter-label">
-            자동 생성 문서
+            대표 무역 서류 안내
           </div>
         </div>
 
         <div className="about-counter">
           <div className="about-counter-value">
-            실시간
+            AI
           </div>
 
           <div className="about-counter-label">
-            오류 검증
+            서류 검토·추천 지원
           </div>
         </div>
       </section>
@@ -539,10 +560,34 @@ export default function AboutPanel({
         </div>
       </section>
 
-      {/* 4. 생성 문서 소개 */}
+      {/* 4. 화주·포워더 협업 — 기존 카드와 스크롤 애니메이션을 재사용 */}
       <section className="about-section">
         <h2 className="about-section-title about-reveal">
-          6종 무역 서류를 자동으로
+          화주의 서류 준비에서, 포워더의 검토·작성까지
+        </h2>
+
+        <div className="about-steps">
+          {COLLABORATION_STEPS.map(step => (
+            <div
+              className="about-step-card about-reveal"
+              key={step.title}
+            >
+              <div className="about-step-icon">
+                {step.icon}
+              </div>
+
+              <h3>{step.title}</h3>
+
+              <p>{step.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 5. 작성·검토·관리 대상 서류 소개 */}
+      <section className="about-section">
+        <h2 className="about-section-title about-reveal">
+          주요 무역 서류, 작성부터 관리까지
         </h2>
 
         <div className="about-docs">
@@ -563,13 +608,13 @@ export default function AboutPanel({
         </div>
       </section>
 
-      {/* 5. CTA */}
+      {/* 6. CTA */}
       <section className="about-cta about-reveal">
         <h2>지금 바로 시작하세요</h2>
 
         <p>
-          거래 정보만 입력하면, 나머지는
-          PortAI가 합니다.
+          거래 정보로 서류를 준비하고,
+          검토 후 업무에 활용하세요.
         </p>
 
         <button

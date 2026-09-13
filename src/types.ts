@@ -6,6 +6,7 @@ export type Incoterms =
   | 'FOB'
   | 'CFR'
   | 'CIF'
+  | 'FAS'
   | 'EXW'
   | 'DDP'
   | 'DAP'
@@ -13,16 +14,44 @@ export type Incoterms =
 
 export type NumericInput = number | '';
 
+/** 수출 포워더가 원천서류에서 확인하는 품목별 화물명세. */
+export interface ForwarderCargoItem {
+  id: string;
+  itemNo: string;
+  sku: string;
+  descriptionOfGoods: string;
+  numberOfPackages: NumericInput;
+  kindOfPackages: string;
+  grossWeightKg: NumericInput;
+  measurementCbm: string;
+  marksAndNumbers: string;
+  sourceDocumentIds: string[];
+}
+
+/** 문서 전체 TOTAL. 품목별 값으로 분배하거나 첫 품목에 복사하지 않는다. */
+export interface ForwarderCargoTotals {
+  numberOfPackages: NumericInput;
+  grossWeightKg: NumericInput;
+  measurementCbm: string;
+}
+
 // 2026-07-23 편의성 업그레이드: 화주용 통관 입력 폼 확장
-export type ShipperItemUnit = 'EA' | 'PCS' | 'SET' | 'CTN' | 'BOX' | 'KG' | 'TON' | 'M' | 'M2' | 'M3' | 'L';
+export type ShipperItemUnit = 'PCS' | 'EA' | 'SET' | 'PAIR' | 'BOX' | 'CTN' | 'KG' | 'G' | 'TON' | 'M' | 'M2' | 'M3' | 'L' | 'ROLL';
 export type ShipperCurrency = 'USD' | 'EUR' | 'JPY' | 'CNY' | 'KRW' | 'GBP';
 
 export interface ShipperItem {
   id: string;
   itemName: string;
+  /**
+   * 색상·재질·규격 등 상세 정보. 상업송장에만 품명 뒤에 덧붙인다.
+   * 포장명세서·선하증권은 기본 품명만 쓰는 실무 관행을 따른다.
+   * (예: itemName "Ballpoint Pen" + detail "Blue Ink" → C/I "Ballpoint Pen, Blue Ink")
+   */
+  detail?: string;
   hsCode: string;
   quantity: NumericInput;
-  unit: ShipperItemUnit;
+  /** 표준 영문 단위 코드 또는 사용자가 직접 입력한 영문 단위. */
+  unit: string;
   unitPrice: NumericInput;
   currency: ShipperCurrency;
 }
@@ -54,6 +83,8 @@ export interface TradeProfile {
   weight: NumericInput;
   departureDate: string;
   arrivalDate: string;
+  /** 수출 화주가 요청한 출항 희망일. 포워더가 확정하는 ETD(departureDate)와 구분한다. */
+  requestedDepartureDate?: string;
   companyName: string;
   contact: string;
   contactName?: string;
@@ -81,6 +112,9 @@ export interface TradeProfile {
 
   packageCount?: NumericInput;
   packageType?: string;
+  // 박스당 수량(EA/Box) — packageCount(박스 수)와 곱하면 패킹리스트 총 EA.
+  // R10(complianceRules.ts packingTotalEA)이 인보이스 수량과 대조하는 데 쓰인다.
+  eaPerBox?: NumericInput;
   netWeight?: NumericInput;
   grossWeight?: NumericInput;
   measurement?: string;
@@ -156,6 +190,9 @@ export interface TradeProfile {
   /** 수출 화주 폼 전용 JSON 상태. 기존 profile JSON 저장/복원 흐름을 그대로 사용한다. */
   shipperItems?: ShipperItem[];
   shipperSupplemental?: ShipperSupplementalState;
+  /** 수출 포워더 화물명세. form_data.items 배열과 왕복한다. */
+  forwarderCargoItems?: ForwarderCargoItem[];
+  forwarderCargoTotals?: ForwarderCargoTotals;
 }
 
 // 주의: '| string'을 붙이면 유니언이 사실상 string으로 붕괴되어 오타를 컴파일이 못 잡는다
@@ -165,6 +202,7 @@ export type DocumentType =
   | 'co'
   | 'customs_dec'
   | 'bl'
+  | 'transport_request'
   | 'insurance';
 
 export type DocumentStatusType =
@@ -220,6 +258,17 @@ export interface ValidationIssue {
    * message 문자열 파싱 대신 결정론적으로 채운다.
    */
   amounts?: { expected: number; actual: number; currency: string };
+  /**
+   * 패킹↔송장 수량 불일치(R10)의 구조화된 값 — 결과 카드에서 수량 칩과
+   * "어느 쪽을 어떻게 고칠지" 선택지 2줄로 렌더한다.
+   */
+  qtyMismatch?: {
+    plTotal: number;            // 패킹리스트 총수량 (박스 내역 합계)
+    invQty: number;             // 상업송장 수량
+    boxes: number | null;       // 총 박스 수
+    eaPerBox: number | null;    // 현재 박스당 수량 (단일 라인일 때)
+    suggestedEaPerBox: number | null; // invQty가 박스수로 나누어떨어질 때의 권장값
+  };
 }
 
 // ===== AI 검토 리포트 "틀" — 룰(지금)과 GPT(나중)가 같은 구조를 채운다 =====
@@ -276,7 +325,11 @@ export interface PartyInfo {
  * packages는 packageCount(number)+packageUnit(string)로 분해.
  */
 export interface TradeItem {
-  description: string;    // 품명 → C/I·P/L goods_description
+  description: string;    // 기본 품명 → P/L·B/L goods_description
+  /** 상세 품명(색상·재질 포함) → C/I goods_description. 없으면 description을 쓴다. */
+  detailedDescription?: string;
+  /** 색상·재질·규격 원문 → 수출신고서 규격(model_spec)란. 품명과 분리해서 싣는다. */
+  detail?: string;
   hsCode: string;         // → C/I goods_spec
   quantity: number;       // 수량(개수) → C/I quantity. net_weight와 다른 값이다.
   unit: string;
@@ -287,7 +340,8 @@ export interface TradeItem {
   netWeight: number;      // 순중량 → C/I net_weight, P/L quantity_or_net_weight
   grossWeight: number;    // → P/L gross_weight
   measurement: string;    // 용적(CBM) → P/L measurement
-  packageCount: number;   // → P/L packages(수)
+  packageCount: number;   // → P/L packages(수, boxes로 취급)
+  eaPerBox?: number;      // 박스당 수량 → P/L R10(패킹↔인보이스 수량 대조)의 boxes×eaPerBox 산출에 사용
   packageUnit: string;    // → P/L packages(단위: CTNS 등)
   shippingMarks?: string; // 품목별 화인 override — 비면 문서레벨 상속. C/I로 승격하지 않음.
 }
@@ -316,6 +370,8 @@ export interface InvoiceItem {
   grossWeight: number;
   dimensions: string;
   packageCount?: number;
+  // 박스당 수량(EA/Box) — packageCount(박스 수)를 boxes로 취급해 R10 대조에 쓴다.
+  eaPerBox?: number;
   packageType?: string;
 
   [key: string]: any;
@@ -385,6 +441,146 @@ export interface InsuranceData {
   signedBy: string;
 
   [key: string]: any;
+}
+
+/**
+ * 운임 지급 조건 — 선사·포워더 공통 표기.
+ * PREPAID: 선불(수출자 부담, CFR·CIF 등) / COLLECT: 후불(수입자 부담, FOB·FCA 등)
+ */
+export type FreightTerms = 'PREPAID' | 'COLLECT' | '';
+
+export interface TransportRequestItem {
+  description: string;
+  hsCode: string;
+  quantity: number;
+  unit: string;
+  packageCount: number;
+  packageType: string;
+  netWeight: number;
+  grossWeight: number;
+  measurement: string;
+  /** 화인(Shipping Marks) — 품목별 override, 비면 문서레벨 값을 상속 */
+  marksAndNumbers: string;
+}
+
+/** 수출 화주가 포워더에게 전달하는 업무용 운송 의뢰 초안. Booking/B/L 확정 정보는 포함하지 않는다. */
+export interface TransportRequestData {
+  requestNo: string;
+  requestDate: string;
+  exporter: PartyInfo;
+  requesterName: string;
+  businessRegistrationNo: string;
+  consignee: PartyInfo;
+  notifyParty?: PartyInfo;
+  items: TransportRequestItem[];
+  incoterms: string;
+  incotermsPlace: string;
+  paymentTerms: string;
+  invoiceNo: string;
+  loadPort: string;
+  dischargePort: string;
+  /** 복합운송 화물 인수지 — POL과 다를 수 있다(내륙 집하지) */
+  placeOfReceipt: string;
+  /** 복합운송 화물 인도지 — POD와 다를 수 있다(내륙 최종 인도지) */
+  placeOfDelivery: string;
+  /** 운임 지급 조건 — Incoterms에서 유도하되 화주가 확정한다 */
+  freightTerms: FreightTerms;
+  /** 문서레벨 화인 — 품목별 override가 없을 때 사용 */
+  shippingMarks: string;
+  requestedDepartureDate: string;
+  loadingMode: 'FCL' | 'LCL' | '';
+}
+
+export interface BillOfLadingCargoItem {
+  descriptionOfGoods: string;
+  numberOfPackages: NumericInput;
+  kindOfPackages: string;
+  grossWeightKg: NumericInput;
+  measurementCbm: string;
+  marksAndNumbers: string;
+}
+
+/**
+ * 증권 종류.
+ * house: 포워더가 화주에게 발행(House B/L) — 포워더가 이 구간의 운송인 지위를 가진다.
+ * master: 선사가 포워더에게 발행(Master B/L).
+ */
+export type BillOfLadingKind = 'house' | 'master';
+
+/**
+ * 증권 발행인의 자격 표시 — 선하증권 법정 기재사항 '발행자'에 해당한다.
+ * 서명란에 반드시 자격을 병기해야 운송인 책임 주체가 특정된다.
+ */
+export type BillOfLadingSignerCapacity = 'AS_CARRIER' | 'AS_AGENT_FOR_CARRIER';
+
+/** 수출 포워더가 1단계 입력값으로 생성하는 B/L 초안. */
+export interface BillOfLadingData {
+  draftNo: string;
+  generatedAt: string;
+  /** House / Master 구분 — 화면·문서 제목과 서명 자격 표기에 쓰인다. */
+  kind: BillOfLadingKind;
+  /** 발행 B/L 번호. 초안 단계에서 비어 있을 수 있다(그때는 draftNo로 대체 표기). */
+  blNo: string;
+  shipper: PartyInfo;
+  consignee: PartyInfo;
+  notifyParty?: PartyInfo;
+  carrier: string;
+  bookingNo: string;
+  vessel: string;
+  voyageNo: string;
+  /** 복합운송 화물 인수지 — 법정 기재사항(운송 구간의 시점) */
+  placeOfReceipt: string;
+  loadPort: string;
+  dischargePort: string;
+  /** 복합운송 화물 인도지 — 법정 기재사항(운송 구간의 종점) */
+  placeOfDelivery: string;
+  etd: string;
+  eta: string;
+  loadingMode: ForwarderLoadingMode | '';
+  containerNo: string;
+  sealNo: string;
+  /** 법정 기재사항 '운임' — 선불/후불 구분 */
+  freightTerms: FreightTerms;
+  /** 운임·부대비용 명세(선택). 비우면 문서에 'AS ARRANGED'로 표기한다. */
+  freightAndCharges: string;
+  /** 발행 원본 통수 — 통상 3통(Three/3). 유통증권이라 통수 기재가 필수다. */
+  numberOfOriginals: number;
+  /** 법정 기재사항 '발행지' */
+  placeOfIssue: string;
+  /** 법정 기재사항 '발행일자' */
+  dateOfIssue: string;
+  /**
+   * 본선 적재일(Shipped on Board). 값이 있으면 선적선하증권(On Board B/L),
+   * 없으면 수취선하증권(Received B/L)으로 취급한다. L/C 결제 시 통상 필수.
+   */
+  shippedOnBoardDate: string;
+  /** 발행인 상호 — House B/L이면 포워더 */
+  issuerName: string;
+  /** 발행인 자격 — 서명란에 병기 */
+  signerCapacity: BillOfLadingSignerCapacity;
+  // ── 무역협회 서식 추가 기재란 ───────────────────────────────
+  /** Pre-Carriage by — 선적항까지의 사전운송 수단 */
+  preCarriageBy: string;
+  /** ⑩ Final Destination — 상대방 참고용 최종 목적지(인도지와 별개) */
+  finalDestination: string;
+  /** ⑫ Flag — 선박 국적 */
+  flag: string;
+  /** ⑲ Revenue tons — 운임 산정 톤수 */
+  revenueTons: string;
+  /** ⑳ Rate — 운임 요율 */
+  freightRate: string;
+  /** ㉑ Per — 운임 요율 단위 */
+  freightPer: string;
+  /** ㉔ Freight prepaid at — 운임 선불 지급지 */
+  freightPrepaidAt: string;
+  /** ㉕ Freight payable at — 운임 후불 지급지 */
+  freightPayableAt: string;
+  /** Total prepaid in — 선불 총액 */
+  totalPrepaid: string;
+  /** ㉓ Collect 금액 — 후불 운임액 */
+  collectAmount: string;
+  items: BillOfLadingCargoItem[];
+  cargoTotals: ForwarderCargoTotals;
 }
 export interface CustomsDeclarationData {
   declarationNo: string;
@@ -462,6 +658,8 @@ export interface GeneratedDocuments {
   certificateOfOrigin?: CertificateOfOriginData;
   insurance?: InsuranceData;
   customsDeclaration?: CustomsDeclarationData;
+  transportRequest?: TransportRequestData;
+  billOfLading?: BillOfLadingData;
   htmlTemplates?: Record<string, string>;
 
   [key: string]: any;
@@ -472,6 +670,8 @@ export interface SavedTrade {
   profile: TradeProfile;
   tradeDirection?: TradeType;
   tradeRole?: TradeRole;
+  /** 의뢰 요청이 수락되어 이 거래를 넘겨받은 포워더 계정의 사용자 id (없으면 미배정). */
+  forwarderUserId?: string | null;
   attachments?: import('./types/tradeFormData').TradeAttachment[];
   arrivalNotice?: object | null;
   analysisResult?: object;

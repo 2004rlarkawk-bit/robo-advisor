@@ -2,7 +2,6 @@ import type {
   GeneratedDocuments,
   Incoterms,
   ShipperCurrency,
-  ShipperItemUnit,
   TradeProfile,
   TradeRole,
 } from '../types';
@@ -44,14 +43,14 @@ function numericInput(value: unknown): number | '' {
 }
 
 function supportedIncoterm(value: string): Incoterms {
-  return ['', 'FOB', 'CFR', 'CIF', 'EXW', 'DDP', 'DAP', 'FCA'].includes(value)
+  return ['', 'FOB', 'CFR', 'CIF', 'FAS', 'EXW', 'DDP', 'DAP', 'FCA'].includes(value)
     ? value as Incoterms
     : '';
 }
 
-function supportedItemUnit(value: string): ShipperItemUnit {
-  const units: ShipperItemUnit[] = ['EA', 'PCS', 'SET', 'CTN', 'BOX', 'KG', 'TON', 'M', 'M2', 'M3', 'L'];
-  return units.includes(value as ShipperItemUnit) ? value as ShipperItemUnit : 'EA';
+function supportedItemUnit(value: string): string {
+  // TradeFormData의 unit은 문자열 계약이므로 신규 표준 단위와 레거시/직접입력 단위를 그대로 보존한다.
+  return value.trim() || 'EA';
 }
 
 function supportedCurrency(value: string): ShipperCurrency {
@@ -59,7 +58,35 @@ function supportedCurrency(value: string): ShipperCurrency {
   return currencies.includes(value as ShipperCurrency) ? value as ShipperCurrency : 'USD';
 }
 
-function profileItems(profile: TradeProfile): TradeFormItem[] {
+function profileItems(profile: TradeProfile, role: TradeRole): TradeFormItem[] {
+  if (role === 'forwarder' && profile.forwarderCargoItems?.length) {
+    return profile.forwarderCargoItems.map((item) => ({
+      id: item.id,
+      itemNo: item.itemNo,
+      sku: item.sku,
+      description: item.descriptionOfGoods,
+      koreanDescription: '',
+      hsCode: '',
+      documentHSCode: '',
+      modelName: '',
+      specification: '',
+      material: '',
+      composition: '',
+      intendedUse: '',
+      originCountry: '',
+      quantity: '',
+      unit: '',
+      unitPrice: '',
+      currency: '',
+      netWeight: '',
+      grossWeight: item.grossWeightKg,
+      measurement: item.measurementCbm,
+      packageCount: item.numberOfPackages,
+      packageUnit: item.kindOfPackages,
+      shippingMarks: item.marksAndNumbers,
+      sourceDocumentIds: item.sourceDocumentIds,
+    }));
+  }
   if (profile.shipperItems?.length) {
     return profile.shipperItems.map((item) => ({
       id: item.id,
@@ -160,7 +187,7 @@ export function tradeProfileToFormData(
         signedBy: profile.signedBy ?? '',
       },
     },
-    items: profileItems(profile),
+    items: profileItems(profile, role),
     terms: {
       incoterms: profile.incoterms,
       incotermsPlace: supplemental?.incotermsPlace ?? '',
@@ -188,6 +215,7 @@ export function tradeProfileToFormData(
       finalDestination: profile.finalDestination ?? '',
       departureDate: profile.departureDate,
       arrivalDate: profile.arrivalDate,
+      requestedDepartureDate: profile.requestedDepartureDate ?? '',
       vesselOrFlight: profile.vesselOrFlight ?? '',
       carrier: profile.carrier ?? '',
       exportDeclarationNo: profile.exportDeclarationNo ?? '',
@@ -208,11 +236,17 @@ export function tradeProfileToFormData(
       issueDate: profile.issueDate ?? '',
     },
     packaging: {
-      packageCount: profile.packageCount ?? '',
+      packageCount: role === 'forwarder'
+        ? profile.forwarderCargoTotals?.numberOfPackages ?? profile.packageCount ?? ''
+        : profile.packageCount ?? '',
       packageType: profile.packageType ?? '',
       netWeight: profile.netWeight ?? '',
-      grossWeight: profile.grossWeight ?? profile.weight,
-      measurement: profile.measurement ?? '',
+      grossWeight: role === 'forwarder'
+        ? profile.forwarderCargoTotals?.grossWeightKg ?? profile.grossWeight ?? profile.weight
+        : profile.grossWeight ?? profile.weight,
+      measurement: role === 'forwarder'
+        ? profile.forwarderCargoTotals?.measurementCbm ?? profile.measurement ?? ''
+        : profile.measurement ?? '',
       shippingMarks: profile.shippingMarks ?? '',
       containerSize: profile.containerSize ?? '',
       containerQuantity: profile.containerQuantity ?? '',
@@ -242,6 +276,7 @@ export function tradeFormDataToProfile(formData: TradeFormDataV3): TradeProfile 
     weight: numericInput(packaging.grossWeight || primary?.grossWeight),
     departureDate: shipment.departureDate,
     arrivalDate: shipment.arrivalDate,
+    requestedDepartureDate: shipment.requestedDepartureDate || '',
     companyName: company.name,
     contact: company.contact,
     contactName: company.contactName,
@@ -286,7 +321,11 @@ export function tradeFormDataToProfile(formData: TradeFormDataV3): TradeProfile 
     bookingStatus: ['requested', 'confirmed', 'cancelled'].includes(shipment.bookingStatus)
       ? shipment.bookingStatus as 'requested' | 'confirmed' | 'cancelled'
       : 'requested',
-    loadingMode: shipment.loadingMode === 'LCL' ? 'LCL' : 'FCL',
+    loadingMode: shipment.loadingMode === 'LCL'
+      ? 'LCL'
+      : shipment.loadingMode === 'FCL'
+        ? 'FCL'
+        : undefined,
     containerSize: ['20GP', '40GP', '40HC', '45HC'].includes(packaging.containerSize)
       ? packaging.containerSize as '20GP' | '40GP' | '40HC' | '45HC'
       : '20GP',
@@ -312,7 +351,7 @@ export function tradeFormDataToProfile(formData: TradeFormDataV3): TradeProfile 
     signedBy: formData.parties.signer.signedBy,
     signerName: formData.parties.signer.name,
     signerPosition: formData.parties.signer.position,
-    shipperItems: formData.items.map((item) => ({
+    shipperItems: formData.role === 'shipper' ? formData.items.map((item) => ({
       id: item.id,
       itemName: item.description,
       hsCode: item.hsCode || item.documentHSCode,
@@ -320,7 +359,24 @@ export function tradeFormDataToProfile(formData: TradeFormDataV3): TradeProfile 
       unit: supportedItemUnit(item.unit),
       unitPrice: numericInput(item.unitPrice),
       currency: supportedCurrency(item.currency || terms.currency),
-    })),
+    })) : undefined,
+    forwarderCargoItems: formData.role === 'forwarder' ? formData.items.map((item) => ({
+      id: item.id,
+      itemNo: item.itemNo ?? '',
+      sku: item.sku ?? '',
+      descriptionOfGoods: item.description,
+      numberOfPackages: numericInput(item.packageCount),
+      kindOfPackages: item.packageUnit,
+      grossWeightKg: numericInput(item.grossWeight),
+      measurementCbm: item.measurement,
+      marksAndNumbers: item.shippingMarks,
+      sourceDocumentIds: item.sourceDocumentIds,
+    })) : undefined,
+    forwarderCargoTotals: formData.role === 'forwarder' ? {
+      numberOfPackages: numericInput(packaging.packageCount),
+      grossWeightKg: numericInput(packaging.grossWeight),
+      measurementCbm: packaging.measurement,
+    } : undefined,
     shipperSupplemental: {
       buyerMatchesConsignee: false,
       consigneeMatchesNotifyParty: false,

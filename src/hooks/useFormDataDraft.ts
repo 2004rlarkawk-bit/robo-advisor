@@ -3,6 +3,7 @@ import type { TradeRole, TradeType } from '../types';
 import type { TradeFormDataV3 } from '../types/tradeFormData';
 import {
   deleteTradeDraft,
+  isSubmittedTradeDraft,
   loadTradeDraft,
   saveTradeFormDraft,
   type TradeDraftRow,
@@ -114,7 +115,16 @@ export function useFormDataDraft({
     }
 
     void loadTradeDraft(userId, direction, role)
-      .then((draft) => {
+      .then(async (draft) => {
+        if (sequenceRef.current !== sequence) return;
+        if (draft?.trade_id && await isSubmittedTradeDraft(userId, draft.trade_id)) {
+          try {
+            await deleteTradeDraft(userId, direction, role);
+          } catch (error) {
+            console.warn('[Trade Draft] 제출 완료 거래의 stale DB 초안 정리 실패:', error);
+          }
+          draft = null;
+        }
         if (sequenceRef.current !== sequence) return;
         onRestoreRef.current(draft);
         if (draft) {

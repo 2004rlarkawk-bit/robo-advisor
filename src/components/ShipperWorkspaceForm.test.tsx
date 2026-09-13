@@ -5,13 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
 import { EMPTY_SHIPPER_SUPPLEMENTAL_STATE } from '../utils/shipperForm';
 
-const { recommendMock } = vi.hoisted(() => ({
+const { recommendMock, frequentPartnersMock } = vi.hoisted(() => ({
   recommendMock: vi.fn(),
+  frequentPartnersMock: vi.fn(),
 }));
 
 vi.mock('../services/shipperHSCodeSuggestionService', () => ({
   recommendShipperHSCode: recommendMock,
   normalizeHSKCode: (code: string) => code.replace(/[\s.-]/g, ''),
+}));
+
+vi.mock('../services/frequentTradePartnerService', () => ({
+  fetchFrequentTradePartners: frequentPartnersMock,
 }));
 
 import ShipperWorkspaceForm from './ShipperWorkspaceForm';
@@ -36,6 +41,8 @@ let container: HTMLDivElement | null = null;
 
 beforeEach(() => {
   recommendMock.mockReset();
+  frequentPartnersMock.mockReset();
+  frequentPartnersMock.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -52,6 +59,7 @@ function renderForm(
   profileOverride: Partial<TradeProfile> = {},
   supplementalOverride: Partial<ShipperSupplementalState> = {},
   profileSignerDefault = '',
+  userId?: string,
 ) {
   const onItemsChange = vi.fn();
   const onProfilePatch = vi.fn();
@@ -60,10 +68,12 @@ function renderForm(
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
-  const renderItems = (currentItems: ShipperItem[]) => act(() => {
+  let currentProfileOverride = profileOverride;
+  let currentItems = items;
+  const renderCurrent = () => act(() => {
     root?.render(
       <ShipperWorkspaceForm
-        profile={{ ...profile, ...profileOverride }}
+        profile={{ ...profile, ...currentProfileOverride }}
         items={currentItems}
         supplemental={{
           ...EMPTY_SHIPPER_SUPPLEMENTAL_STATE,
@@ -73,6 +83,7 @@ function renderForm(
         }}
         isProcessing={false}
         profileSignerDefault={profileSignerDefault}
+        userId={userId}
         onProfilePatch={onProfilePatch}
         onItemsChange={onItemsChange}
         onSupplementalChange={onSupplementalChange}
@@ -81,7 +92,11 @@ function renderForm(
       />,
     );
   });
-  renderItems(items);
+  const renderItems = (nextItems: ShipperItem[]) => {
+    currentItems = nextItems;
+    renderCurrent();
+  };
+  renderCurrent();
   return {
     container,
     onItemsChange,
@@ -89,10 +104,61 @@ function renderForm(
     onSupplementalChange,
     onGenerate,
     rerenderItems: renderItems,
+    rerenderProfile: (nextProfileOverride: Partial<TradeProfile>) => {
+      currentProfileOverride = nextProfileOverride;
+      renderCurrent();
+    },
   };
 }
 
 describe('화주용 통관 입력 폼', () => {
+  it('자주 거래한 거래처의 최신 Buyer·Consignee·Notify Party 전체와 동일 체크 상태를 불러온다', async () => {
+    const shared = { name: 'Global Import LLC', address: '250 Market Street', country: 'US', contactName: '', contact: '', businessNumber: '', taxNumber: '' };
+    frequentPartnersMock.mockResolvedValueOnce([{
+      key: 'global', transactionCount: 8, lastTransactionDate: '2026-08-12T00:00:00Z',
+      buyer: shared,
+      consignee: { ...shared },
+      notifyParty: { ...shared },
+    }]);
+    const rendered = renderForm([firstItem], false, {}, {}, '', 'user-a');
+
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(frequentPartnersMock).toHaveBeenCalledTimes(1);
+    expect(frequentPartnersMock).toHaveBeenCalledWith('user-a');
+    expect(rendered.container.textContent).toContain('8회 거래 · 최근 거래 2026.08.12');
+    rendered.rerenderProfile({ buyerName: '직접 수정한 Buyer' });
+    expect(frequentPartnersMock).toHaveBeenCalledTimes(1);
+
+    const loadButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent === '불러오기');
+    act(() => loadButton?.click());
+
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({
+      buyerName: shared.name,
+      buyerAddress: shared.address,
+      buyerCountry: shared.country,
+      partnerName: shared.name,
+      partnerAddress: shared.address,
+      partnerCountry: shared.country,
+      notifyPartyName: shared.name,
+      notifyPartyAddress: shared.address,
+    });
+    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({
+      buyerMatchesConsignee: true,
+      consigneeMatchesNotifyParty: true,
+    }));
+  });
+
+  it('추천 조회가 실패해도 빈 상태와 직접 입력 필드를 유지한다', async () => {
+    frequentPartnersMock.mockRejectedValueOnce(new Error('network'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const rendered = renderForm([firstItem], false, {}, {}, '', 'user-a');
+
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(rendered.container.textContent).toContain('저장된 거래처가 없습니다.');
+    expect(Array.from(rendered.container.querySelectorAll('label')).some((label) => label.textContent === 'Buyer 회사명')).toBe(true);
+    warn.mockRestore();
+  });
   it('영문 품명 입력란 하나만 표시하고 itemName을 직접 수정한다', () => {
     const item = { ...firstItem, itemName: "Women's Coats" };
     const rendered = renderForm([item]);
@@ -188,6 +254,7 @@ describe('화주용 통관 입력 폼', () => {
 
   it('동일 정보 체크를 해제해도 연결된 입력값을 삭제하지 않는다', () => {
     const rendered = renderForm([firstItem], true);
+    rendered.onProfilePatch.mockClear();
     const buyerMatchesConsignee = Array.from(rendered.container.querySelectorAll('label'))
       .find((label) => label.textContent?.includes('Buyer와 Consignee 동일'))
       ?.querySelector<HTMLInputElement>('input[type="checkbox"]');
@@ -205,7 +272,7 @@ describe('화주용 통관 입력 폼', () => {
   it('프로필에서 초기화된 화주 기본정보를 표시하고 거래별로 직접 수정할 수 있다', () => {
     const rendered = renderForm();
     const companyInput = Array.from(rendered.container.querySelectorAll('label'))
-      .find((label) => label.textContent === '회사명(상호명)')
+      .find((label) => label.textContent?.startsWith('회사명(상호명)'))
       ?.parentElement?.querySelector<HTMLInputElement>('input');
 
     expect(companyInput?.value).toBe('인천테크');
@@ -232,6 +299,165 @@ describe('화주용 통관 입력 폼', () => {
     expect(rendered.container.textContent).toContain('Open Account');
     expect(rendered.container.textContent).toContain('L/C No.');
     expect(rendered.container.textContent).toContain('L/C Date');
+  });
+
+  it('품목 단위는 한국어 설명을 병기하고 실제 영문 코드만 전달한다', () => {
+    const rendered = renderForm();
+    const unitSelect = Array.from(rendered.container.querySelectorAll('label'))
+      .find((label) => label.textContent?.startsWith('단위'))
+      ?.parentElement?.querySelector<HTMLSelectElement>('select');
+    const optionLabels = Array.from(unitSelect?.options ?? []).map((option) => option.textContent);
+
+    expect(optionLabels).toContain('PCS (개)');
+    expect(optionLabels).toContain('EA (개)');
+    expect(optionLabels).toContain('PAIR (켤레)');
+    expect(optionLabels).toContain('M² (제곱미터)');
+    expect(optionLabels).toContain('기타');
+
+    act(() => {
+      if (!unitSelect) return;
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(unitSelect, 'PAIR');
+      unitSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(rendered.onItemsChange).toHaveBeenLastCalledWith([{ ...firstItem, unit: 'PAIR' }]);
+  });
+
+  it('기타 단위는 직접 입력한 영문 값을 품목 데이터로 전달한다', () => {
+    const rendered = renderForm([{ ...firstItem, unit: '' }]);
+    const customUnitInput = rendered.container.querySelector<HTMLInputElement>('input[aria-label="기타 단위 직접 입력"]');
+
+    expect(customUnitInput).not.toBeNull();
+    act(() => {
+      if (!customUnitInput) return;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(customUnitInput, 'DOZ');
+      customUnitInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(rendered.onItemsChange).toHaveBeenLastCalledWith([{ ...firstItem, unit: 'DOZ' }]);
+  });
+
+  it('수출 화주용 거래조건 옵션과 한국어 결제 라벨만 표시한다', () => {
+    const rendered = renderForm();
+    const incotermsSelect = Array.from(rendered.container.querySelectorAll('label'))
+      .find((label) => label.textContent?.startsWith('Incoterms'))
+      ?.parentElement?.querySelector<HTMLSelectElement>('select');
+    const incotermsValues = Array.from(incotermsSelect?.options ?? []).map((option) => option.value);
+
+    expect(incotermsValues).toEqual(['', 'FOB', 'CFR', 'CIF', 'FAS', 'FCA']);
+    expect(rendered.container.textContent).toContain('T/T (전신송금)');
+    expect(rendered.container.textContent).toContain('Open Account (외상거래)');
+  });
+
+  it('Incoterms 장소 연결은 상호 배타적이며 연결된 항만 변경을 반영한다', () => {
+    const rendered = renderForm();
+    const sourceLabels = Array.from(rendered.container.querySelectorAll('label'))
+      .filter((label) => label.textContent?.includes('항과 동일'));
+    const loadCheckbox = sourceLabels.find((label) => label.textContent?.includes('선적항'))
+      ?.querySelector<HTMLInputElement>('input');
+    const dischargeCheckbox = sourceLabels.find((label) => label.textContent?.includes('도착항'))
+      ?.querySelector<HTMLInputElement>('input');
+
+    act(() => loadCheckbox?.click());
+    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({
+      incotermsPlace: 'Incheon Port',
+    }));
+
+    act(() => dischargeCheckbox?.click());
+    expect(loadCheckbox?.checked).toBe(false);
+    expect(dischargeCheckbox?.checked).toBe(true);
+
+    rendered.onSupplementalChange.mockClear();
+    rendered.rerenderProfile({ dischargePort: 'TOKYO' });
+    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({
+      incotermsPlace: 'Tokyo Port',
+    }));
+
+    act(() => dischargeCheckbox?.click());
+    expect(rendered.onSupplementalChange).not.toHaveBeenCalledWith(expect.objectContaining({
+      incotermsPlace: '',
+    }));
+  });
+
+  it('수출 전용 항만과 기타 직접입력을 제공하고 영문 실제값을 전달한다', () => {
+    const rendered = renderForm([firstItem], false, { loadPort: '', dischargePort: '' });
+    const polGroup = rendered.container.querySelector('[data-field="loadPort"]');
+    const podGroup = rendered.container.querySelector('[data-field="dischargePort"]');
+    const polSelect = polGroup?.querySelector<HTMLSelectElement>('select');
+    const podSelect = podGroup?.querySelector<HTMLSelectElement>('select');
+
+    expect(polSelect?.textContent).toContain('기타 국내항');
+    expect(polSelect?.textContent).not.toContain('Shanghai');
+    expect(podSelect?.textContent).toContain('Tokyo Port (도쿄항)');
+    expect(podSelect?.textContent).toContain('기타 해외항');
+    expect(podSelect?.textContent).not.toContain('Busan Port');
+
+    act(() => {
+      if (!podSelect) return;
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(podSelect, 'Tokyo Port');
+      podSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ dischargePort: 'Tokyo Port' });
+
+    act(() => {
+      if (!polSelect) return;
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(polSelect, '__OTHER_DOMESTIC_PORT__');
+      polSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const customPolInput = polGroup?.querySelector<HTMLInputElement>('input[aria-label="기타 국내항 직접 입력"]');
+    expect(customPolInput).not.toBeNull();
+    act(() => {
+      if (!customPolInput) return;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(customPolInput, 'Masan Port');
+      customPolInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ loadPort: 'Masan Port' });
+  });
+
+  it('항만 및 일정에는 ETD와 운송방식만 남고 미정이 기본값이다', () => {
+    const rendered = renderForm([firstItem], false, { loadingMode: undefined });
+    const transportSelect = Array.from(rendered.container.querySelectorAll('label'))
+      .find((label) => label.textContent === '운송방식')
+      ?.parentElement?.querySelector<HTMLSelectElement>('select');
+
+    expect(transportSelect?.value).toBe('');
+    expect(Array.from(transportSelect?.options ?? []).map((option) => option.textContent))
+      .toEqual(['미정', 'FCL', 'LCL']);
+    expect(rendered.container.textContent).not.toContain('도착 예정일 ETA');
+    expect(rendered.container.textContent).not.toContain('송장 작성일');
+    expect(rendered.container.textContent).not.toContain('선박명 Vessel');
+  });
+
+  it('포장종류는 한국어 설명을 병기하고 레거시 복수형 값을 호환 표시한다', () => {
+    const rendered = renderForm([firstItem], false, { packageType: 'CTNS' });
+    const packageSelect = Array.from(rendered.container.querySelectorAll('label'))
+      .find((label) => label.textContent === '포장 종류')
+      ?.parentElement?.querySelector<HTMLSelectElement>('select');
+    const optionLabels = Array.from(packageSelect?.options ?? []).map((option) => option.textContent);
+
+    expect(packageSelect?.value).toBe('CARTON');
+    expect(optionLabels).toContain('Carton (카톤/상자)');
+    expect(optionLabels).toContain('Crate (목상자)');
+    expect(optionLabels).toContain('Piece (개별포장)');
+    expect(optionLabels).toContain('기타');
+
+    act(() => {
+      if (!packageSelect) return;
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(packageSelect, 'PALLET');
+      packageSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ packageType: 'PALLET' });
+  });
+
+  it('기타 포장종류는 직접 입력한 영문 값을 저장 데이터로 전달한다', () => {
+    const rendered = renderForm([firstItem], false, { packageType: 'SACK' });
+    const customInput = rendered.container.querySelector<HTMLInputElement>('input[aria-label="기타 포장종류 직접 입력"]');
+
+    expect(customInput?.value).toBe('SACK');
+    act(() => {
+      if (!customInput) return;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(customInput, 'woven sack');
+      customInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ packageType: 'WOVEN SACK' });
   });
 
   it('회사명 동일 상태에서는 서명자가 읽기 전용이며 해제 시 체크 전 거래 서명자를 복원한다', () => {

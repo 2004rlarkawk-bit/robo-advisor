@@ -22,6 +22,8 @@ export type TradeAttachmentDocumentType =
   | 'packing_list'
   | 'bill_of_lading'
   | 'certificate_of_origin'
+  | 'transport_request'
+  | 'export_declaration'
   | 'arrival_notice'
   | 'other';
 
@@ -60,6 +62,8 @@ export interface TradeFormParties {
 
 export interface TradeFormItem {
   id: string;
+  itemNo?: string;
+  sku?: string;
   description: string;
   koreanDescription: string;
   hsCode: string;
@@ -111,6 +115,7 @@ export interface TradeFormShipment {
   finalDestination: string;
   departureDate: string;
   arrivalDate: string;
+  requestedDepartureDate: string;
   vesselOrFlight: string;
   carrier: string;
   exportDeclarationNo: string;
@@ -167,6 +172,8 @@ export interface ImportTradeWorkflowData {
 
 export interface TradeWorkflowData {
   importTrade?: ImportTradeWorkflowData;
+  /** 포워더 수입 워크스페이스의 운영 상태(단계·이슈 확인·A/N). 화주 측 데이터와 분리 저장. */
+  forwarderCase?: import('./forwarderCase').ForwarderCaseState;
 }
 
 export interface TradeDocumentData {

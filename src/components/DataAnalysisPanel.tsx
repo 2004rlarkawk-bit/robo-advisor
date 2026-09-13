@@ -1,10 +1,8 @@
 /**
  * 데이터 분석 페이지 — 관세청 무역통계 시각화
  *
- * 데이터 소스 (customsApiService, 키 없으면 시뮬레이션 폴백):
- *  - getTotalTradeStats   → 월별 수출입 총괄 (라인 차트 + 요약 타일)
- *  - getCountryTradeStats → 국가별 실적 (가로 막대)
- *  - getItemTradeStats    → HS코드별 트렌드 (라인 차트)
+ * 구성: 내 무역 대시보드(저장된 거래 집계 + 내 시장 리포트) → 내 품목 시장 트렌드(관세청).
+ * 국가별 관세청 통계는 화면에 그리지 않고 '내 시장 리포트' 조인 계산에만 쓴다.
  *
  * 차트는 외부 라이브러리 없이 SVG 직접 렌더.
  * 시리즈 색은 항상 수출=파랑, 수입=청록 고정 (차트 간 동일 엔티티 동일 색).
@@ -15,10 +13,8 @@ import { fetchSavedTrades } from '../services/storageService';
 import { isSupabaseConfigured } from '../lib/supabase';
 import type { SavedTrade } from '../types';
 import {
-  getTotalTradeStats,
   getCountryTradeStats,
   getItemTradeStats,
-  TotalTradeStat,
   CountryTradeStat,
   ItemTradeStat,
 } from '../services/customsApiService';
@@ -195,41 +191,6 @@ function DualLineChart({ points, height = 220 }: { points: LinePoint[]; height?:
   );
 }
 
-// ===== 국가별 가로 막대 =====
-
-function CountryBars({ rows }: { rows: { name: string; exp: number; imp: number }[] }) {
-  const W = 640;
-  const ROW_H = 42;
-  const PAD = { l: 96, r: 76, t: 4, b: 4 };
-  const iw = W - PAD.l - PAD.r;
-  const height = PAD.t + PAD.b + rows.length * ROW_H;
-  const max = Math.max(1, ...rows.flatMap((r) => [r.exp, r.imp]));
-  const w = (v: number) => Math.max(2, (v / max) * iw);
-
-  return (
-    <svg viewBox={`0 0 ${W} ${height}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-      {rows.map((r, i) => {
-        const top = PAD.t + i * ROW_H;
-        return (
-          <g key={r.name}>
-            <text x={PAD.l - 10} y={top + ROW_H / 2 + 4} textAnchor="end" fontSize={12} fontWeight={600} fill="#1e293b">
-              {r.name}
-            </text>
-            <rect x={PAD.l} y={top + 6} width={w(r.exp)} height={12} rx={3} fill={COLOR_EXPORT}>
-              <title>{`${r.name} 수출 ${fmtUsd(r.exp)}`}</title>
-            </rect>
-            <text x={PAD.l + w(r.exp) + 6} y={top + 16} fontSize={10.5} fill="#52514e">{fmtUsd(r.exp)}</text>
-            <rect x={PAD.l} y={top + 22} width={w(r.imp)} height={12} rx={3} fill={COLOR_IMPORT}>
-              <title>{`${r.name} 수입 ${fmtUsd(r.imp)}`}</title>
-            </rect>
-            <text x={PAD.l + w(r.imp) + 6} y={top + 32} fontSize={10.5} fill="#52514e">{fmtUsd(r.imp)}</text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
 // ===== 데이터 테이블 (접근성/검증용 폴백) =====
 
 function DataTable({ head, rows }: { head: string[]; rows: (string | number)[][] }) {
@@ -363,7 +324,6 @@ const isValidHsCode = (v: string) => /^\d{6,10}$/.test(v);
 
 export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProps = {}) {
   const range = useMemo(() => recentRange(6), []);
-  const [totalState, setTotalState] = useState<LoadState<TotalTradeStat>>(idleState);
   const [countryState, setCountryState] = useState<LoadState<CountryTradeStat>>(idleState);
   const [itemState, setItemState] = useState<LoadState<ItemTradeStat>>(idleState);
   // 작성 중인 거래에 유효한 HS코드가 있으면 그 품목부터 보여준다 (없으면 샘플 코드)
@@ -414,6 +374,7 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
     type ItemAgg = { name: string; hsCode: string; count: number; amounts: Map<string, number>; dests: Set<string> };
     const itemMap = new Map<string, ItemAgg>();
     const countryMap = new Map<string, { ko: string; ports: Set<string>; count: number }>();
+    const monthAmounts = new Map<string, Map<string, number>>();
     for (const t of myTrades) {
       const amount = Number(t.profile?.totalAmount) || 0;
       const cur = (t.profile?.currency || 'USD').toUpperCase();
@@ -439,8 +400,17 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
       itemMap.set(key, agg);
 
       const month = (t.createdAt || '').slice(0, 7);
-      if (month) byMonth.set(month, (byMonth.get(month) ?? 0) + 1);
+      if (month) {
+        byMonth.set(month, (byMonth.get(month) ?? 0) + 1);
+        if (amount > 0) {
+          const m = monthAmounts.get(month) ?? new Map<string, number>();
+          m.set(cur, (m.get(cur) ?? 0) + amount);
+          monthAmounts.set(month, m);
+        }
+      }
     }
+    // 월별 금액 차트는 누적액이 가장 큰 통화 기준으로 그린다 (혼합 통화 왜곡 방지)
+    const domCurrency = [...byCurrency.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'USD';
     return {
       total: myTrades.length,
       submitted,
@@ -448,7 +418,13 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
       amounts: [...byCurrency.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2),
       items: [...itemMap.values()].sort((a, b) => b.count - a.count),
       destCountries: [...countryMap.entries()].map(([code, v]) => ({ code, ...v })),
-      months: [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-6),
+      months: [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-6)
+        .map(([month, count]) => ({
+          month,
+          count,
+          amount: monthAmounts.get(month)?.get(domCurrency) ?? 0,
+        })),
+      domCurrency,
     };
   }, [myTrades]);
 
@@ -484,28 +460,6 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
       }];
     });
   }, [myStats, countryState]);
-
-  const loadTotal = useCallback(async () => {
-    setTotalState({ status: 'loading', records: [], source: null, latestPeriod: null, error: null });
-    try {
-      const result = await getTotalTradeStats(range.start, range.end);
-      setTotalState({
-        status: result.records.length === 0 ? 'empty' : 'success',
-        records: result.records,
-        source: result.source,
-        latestPeriod: result.latestPeriod,
-        error: null,
-      });
-    } catch {
-      setTotalState({
-        status: 'error',
-        records: [],
-        source: null,
-        latestPeriod: null,
-        error: 'CUSTOMS_API_ERROR',
-      });
-    }
-  }, [range]);
 
   const loadCountry = useCallback(async () => {
     setCountryState({ status: 'loading', records: [], source: null, latestPeriod: null, error: null });
@@ -552,27 +506,12 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
   }, [range]);
 
   useEffect(() => {
-    void loadTotal();
     void loadCountry();
-  }, [loadCountry, loadTotal]);
+  }, [loadCountry]);
 
   useEffect(() => {
     void loadItem(hsQuery);
   }, [hsQuery, loadItem]);
-
-  const totalPoints: LinePoint[] = totalState.records.map((t) => ({ label: t.period, exp: t.exportAmount, imp: t.importAmount }));
-  const latest = totalState.records.length > 0 ? totalState.records[totalState.records.length - 1] : null;
-
-  const countryRows = useMemo(() => {
-    const byCountry = new Map<string, { name: string; exp: number; imp: number }>();
-    for (const c of countryState.records) {
-      const cur = byCountry.get(c.countryCode) ?? { name: c.countryName || c.countryCode, exp: 0, imp: 0 };
-      cur.exp += c.exportAmount;
-      cur.imp += c.importAmount;
-      byCountry.set(c.countryCode, cur);
-    }
-    return [...byCountry.values()].sort((a, b) => b.exp - a.exp).slice(0, 8);
-  }, [countryState.records]);
 
   const itemPoints: LinePoint[] = itemState.records.map((t) => ({ label: t.period, exp: t.exportAmount, imp: t.importAmount }));
 
@@ -593,93 +532,64 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
         <p className="page-subtitle">관세청 수출입 무역통계 · 조회 기간 {rangeLabel} (통계는 약 1개월 지연 공표)</p>
       </div>
 
-      {/* 내 무역 현황 — 저장된 내 거래를 품목별로 묶고, 도착 국가는 관세청 통계와 조인 */}
+      {/* 내 무역 대시보드 — 내 서류(저장된 거래)에서 나온 데이터가 페이지의 주인공 */}
+      {myTrades !== null && myTrades.length === 0 && (
+        <div className="da-empty-my">
+          <div className="da-empty-my-title">아직 내 무역 데이터가 없어요</div>
+          <p>통관 작업실에서 거래를 만들면 품목·거래액·시장 리포트가 여기에 자동으로 쌓입니다.</p>
+        </div>
+      )}
       {myStats && (
         <ChartCard
-          title="내 무역 현황"
+          title="내 무역 대시보드"
           badge={<span className="da-my-badge">내 거래 데이터</span>}
           right={<span style={{ fontSize: 12, color: '#64748b' }}>저장된 거래 {myStats.total}건 기준</span>}
         >
-          {/* 거래가 적을 땐 타일 대신 한 줄 요약 (숫자 나열 최소화) */}
-          {myStats.total >= 5 ? (
-            <div className="da-my-tiles">
-              <div className="da-my-tile"><span className="da-my-tile-lab">전체 거래</span><span className="da-my-tile-val">{myStats.total}건</span></div>
-              <div className="da-my-tile"><span className="da-my-tile-lab">제출 완료</span><span className="da-my-tile-val">{myStats.submitted}건</span></div>
-              <div className="da-my-tile"><span className="da-my-tile-lab">진행 중</span><span className="da-my-tile-val">{myStats.inProgress}건</span></div>
-              <div className="da-my-tile"><span className="da-my-tile-lab">누적 거래금액</span><span className="da-my-tile-val da-my-tile-amount">{myStats.amounts.map(([cur, sum]) => `${cur} ${Math.round(sum).toLocaleString()}`).join(' · ') || '—'}</span></div>
-            </div>
-          ) : (
-            <p className="da-my-line">
-              거래 <b>{myStats.total}건</b> · 제출 완료 <b>{myStats.submitted}건</b>
-              {myStats.amounts.length > 0 && <> · 누적 <b>{myStats.amounts.map(([cur, sum]) => `${cur} ${Math.round(sum).toLocaleString()}`).join(' · ')}</b></>}
-            </p>
-          )}
-
-          {/* 품목별 현황 — 클릭하면 아래 품목 트렌드가 그 품목으로 조회된다 */}
-          <span className="da-my-col-title">품목별 현황</span>
-          <div className="da-items">
-            {myStats.items.map((it) => {
-              const hasHs = isValidHsCode(it.hsCode);
-              const amountText = [...it.amounts.entries()].map(([cur, sum]) => `${cur} ${Math.round(sum).toLocaleString()}`).join(' · ');
-              return (
-                <div className="da-item" key={`${it.name}::${it.hsCode}`}>
-                  <div className="da-item-main">
-                    <span className="da-item-name">{it.name}</span>
-                    {hasHs && <span className="da-item-hs">HS {it.hsCode}</span>}
-                    <span className="da-item-meta">
-                      거래 {it.count}건{amountText && <> · {amountText}</>}{it.dests.size > 0 && <> · {[...it.dests].join(', ')}</>}
-                    </span>
-                  </div>
-                  {hasHs && (
-                    <button
-                      type="button"
-                      className="da-item-view"
-                      onClick={() => { setHsInput(it.hsCode); setHsQuery(it.hsCode); }}
-                    >
-                      시장 트렌드 보기 ↓
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+          {/* 핵심 지표 — 큼지막하게 */}
+          <div className="da-my-tiles da-my-tiles-big">
+            <div className="da-my-tile"><span className="da-my-tile-lab">전체 거래</span><span className="da-my-tile-val">{myStats.total}건</span></div>
+            <div className="da-my-tile"><span className="da-my-tile-lab">제출 완료</span><span className="da-my-tile-val">{myStats.submitted}건</span></div>
+            <div className="da-my-tile"><span className="da-my-tile-lab">진행 중</span><span className="da-my-tile-val">{myStats.inProgress}건</span></div>
+            <div className="da-my-tile"><span className="da-my-tile-lab">누적 거래금액</span><span className="da-my-tile-val da-my-tile-amount">{myStats.amounts.map(([cur, sum]) => `${cur} ${Math.round(sum).toLocaleString()}`).join(' · ') || '—'}</span></div>
           </div>
 
-          {/* 내 시장 리포트 — 도착 국가 × 한국 전체 수출 실적 조인 */}
+          {/* 내 시장 리포트 — 내 도착 국가 × 한국 전체 수출 실적 조인 */}
           {marketReport.length > 0 && (
-            <>
-              <span className="da-my-col-title" style={{ marginTop: 4 }}>내 시장 리포트</span>
+            <div className="da-block da-block--divided">
+              <span className="da-my-col-title">내 시장 리포트</span>
               <div className="da-markets">
-                {marketReport.map((m) => (
-                  <div className="da-market" key={m.code}>
-                    <div className="da-market-head">
-                      <span className="da-market-route">{m.ports.join(' · ')} → <b>{m.ko}</b></span>
-                      {m.rank && <span className="da-market-rank">한국 수출 대상국 {m.rank}위</span>}
-                    </div>
-                    <p className="da-market-line">
-                      한국 전체 수출 최근월 <b>{fmtUsd(m.lastExport)}</b>
-                      {m.trendPct !== null && (
-                        <span className={`da-market-trend ${m.trendPct >= 0 ? 'up' : 'down'}`}>
-                          {' '}· 6개월 {m.trendPct >= 0 ? '+' : ''}{m.trendPct}% {m.trendPct >= 0 ? '↗' : '↘'}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* 월별 거래 추이는 3개월 이상 쌓였을 때만 (2개짜리 막대는 무의미) */}
-          {myStats.months.length >= 3 && (
-            <div style={{ marginTop: 4 }}>
-              <span className="da-my-col-title">월별 거래</span>
-              <div className="da-my-months">
-                {myStats.months.map(([month, count]) => {
-                  const max = Math.max(...myStats.months.map(([, c]) => c));
+                {marketReport.map((m) => {
+                  // 같은 항구가 표기만 다르게 중복 저장된 경우("Long Beach Port"/"LONG BEACH PORT, USA") 정리
+                  const seenPorts = new Set<string>();
+                  const ports = m.ports.filter((p) => {
+                    const key = p.toUpperCase().replace(/,.*$/, '').replace(/\s+PORT$/, '').trim();
+                    if (seenPorts.has(key)) return false;
+                    seenPorts.add(key);
+                    return true;
+                  });
                   return (
-                    <div className="da-my-month" key={month} title={`${month} · ${count}건`}>
-                      <span className="da-my-month-bar" style={{ height: `${Math.max(12, (count / max) * 100)}%` }} />
-                      <span className="da-my-month-lab">{Number(month.slice(5))}월</span>
+                    <div className="da-market" key={m.code}>
+                      <div className="da-market-head">
+                        <span className="da-market-route">{ports.join(' / ')} → <b>{m.ko}</b></span>
+                        {m.rank && <span className="da-market-rank">수출 대상국 {m.rank}위</span>}
+                      </div>
+                      <div className="da-market-stats">
+                        <div className="da-market-stat">
+                          <span className="da-market-stat-lab">최근월 수출액</span>
+                          <span className="da-market-stat-val">
+                            {(m.lastExport / 1e8).toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                            <small> 억 달러</small>
+                          </span>
+                        </div>
+                        {m.trendPct !== null && (
+                          <div className="da-market-stat">
+                            <span className="da-market-stat-lab">최근 6개월</span>
+                            <span className={`da-market-stat-val da-market-trend ${m.trendPct >= 0 ? 'up' : 'down'}`}>
+                              {m.trendPct >= 0 ? '+' : ''}{m.trendPct}% {m.trendPct >= 0 ? '↗' : '↘'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -689,62 +599,8 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
         </ChartCard>
       )}
 
-      {/* 최근월 요약 타일 */}
-      {latest && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 20 }}>
-          {[
-            { label: `${formatPeriod(latest.period)} 수출`, value: latest.exportAmount, color: COLOR_EXPORT },
-            { label: `${formatPeriod(latest.period)} 수입`, value: latest.importAmount, color: COLOR_IMPORT },
-            { label: `${formatPeriod(latest.period)} 무역수지`, value: latest.balance, color: latest.balance >= 0 ? '#006300' : '#d03b3b' },
-          ].map((t) => (
-            <div key={t.label} className="form-card" style={{ padding: '18px 22px' }}>
-              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>{t.label}</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: t.color }}>{fmtUsd(t.value)}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
       <ChartCard
-        title="월별 수출입 총괄"
-        badge={totalState.source ? <SourceBadge source={totalState.source} /> : undefined}
-        right={<><LatestPeriod period={totalState.latestPeriod} /><Legend /></>}
-      >
-        {totalState.status === 'idle' || totalState.status === 'loading' ? <LoadingState />
-          : totalState.status === 'error' ? <ErrorState onRetry={() => void loadTotal()} />
-          : totalState.status === 'empty' ? <EmptyState />
-          : (
-          <>
-            <DualLineChart points={totalPoints} />
-            <DataTable
-              head={['기간', '수출', '수입', '무역수지']}
-              rows={totalState.records.map((t) => [formatPeriod(t.period), t.exportAmount, t.importAmount, t.balance])}
-            />
-          </>
-        )}
-      </ChartCard>
-
-      <ChartCard
-        title="국가별 수출입 (수출액 상위)"
-        badge={countryState.source ? <SourceBadge source={countryState.source} /> : undefined}
-        right={<><LatestPeriod period={countryState.latestPeriod} /><Legend /></>}
-      >
-        {countryState.status === 'idle' || countryState.status === 'loading' ? <LoadingState />
-          : countryState.status === 'error' ? <ErrorState onRetry={() => void loadCountry()} />
-          : countryState.status === 'empty' ? <EmptyState />
-          : (
-          <>
-            <CountryBars rows={countryRows} />
-            <DataTable
-              head={['국가', '수출', '수입']}
-              rows={countryRows.map((r) => [r.name, r.exp, r.imp])}
-            />
-          </>
-        )}
-      </ChartCard>
-
-      <ChartCard
-        title="품목별 수출입 트렌드 (HS코드)"
+        title="내 품목 시장 트렌드 (관세청)"
         badge={itemState.source ? <SourceBadge source={itemState.source} /> : undefined}
         right={<><LatestPeriod period={itemState.latestPeriod} /><Legend /></>}
       >
@@ -796,6 +652,7 @@ export default function DataAnalysisPanel({ currentItem }: DataAnalysisPanelProp
           </>
         )}
       </ChartCard>
+
     </div>
   );
 }

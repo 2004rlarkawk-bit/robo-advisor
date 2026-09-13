@@ -1,6 +1,6 @@
 import { DocumentType } from '../types';
 
-export type RuledIncoterm = 'EXW' | 'FOB' | 'CIF' | 'DDP' | 'DAP' | 'FCA';
+export type RuledIncoterm = 'EXW' | 'FAS' | 'FOB' | 'CFR' | 'CIF' | 'DDP' | 'DAP' | 'FCA';
 
 export interface IncotermsRule {
   incoterm: RuledIncoterm;
@@ -30,6 +30,24 @@ export const INCOTERMS_RULES: Record<RuledIncoterm, IncotermsRule> = {
     insuranceRequirement: 'buyer',
     transportMode: 'sea',
     keyBranchingNote: '선하증권(B/L) 필수. 적하보험은 매수인 부담 및 수배 사항입니다.'
+  },
+  FAS: {
+    incoterm: 'FAS',
+    description: '선측 인도 조건 (Free Alongside Ship)',
+    exporterResponsibility: '지정 선적항의 본선 선측 인도 + 수출통관',
+    requiredDocuments: ['invoice', 'packing_list', 'bl'],
+    insuranceRequirement: 'buyer',
+    transportMode: 'sea',
+    keyBranchingNote: '지정 선적항의 본선 선측에서 위험이 이전되며, 이후 운송·보험은 매수인이 수배합니다.'
+  },
+  CFR: {
+    incoterm: 'CFR',
+    description: '운임 포함 인도 조건 (Cost and Freight)',
+    exporterResponsibility: '도착항까지 운임 부담, 본선 적재 시 위험 이전',
+    requiredDocuments: ['invoice', 'packing_list', 'bl'],
+    insuranceRequirement: 'buyer',
+    transportMode: 'sea',
+    keyBranchingNote: '도착항까지 운임은 매도인이 부담하지만 적하보험은 매수인이 수배합니다.'
   },
   CIF: {
     incoterm: 'CIF',

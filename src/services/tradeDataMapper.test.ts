@@ -104,6 +104,60 @@ describe('TradeFormData v3 mapper', () => {
     });
     expect(restored.shipperItems?.map((item) => item.itemName)).toEqual(['Item A', 'Item B']);
   });
+
+  it('FAS와 운송방식 미정 값을 기존 form_data 구조로 손실 없이 왕복한다', () => {
+    const formData = tradeProfileToFormData({ ...profile, incoterms: 'FAS', loadingMode: undefined }, 'shipper');
+    const restored = tradeFormDataToProfile(formData);
+
+    expect(formData.terms.incoterms).toBe('FAS');
+    expect(formData.shipment.loadingMode).toBe('');
+    expect(restored.incoterms).toBe('FAS');
+    expect(restored.loadingMode).toBeUndefined();
+  });
+
+  it('표준 신규 단위와 기타 직접입력 단위를 form_data에서 그대로 복원한다', () => {
+    const formData = tradeProfileToFormData({
+      ...profile,
+      shipperItems: [
+        { ...profile.shipperItems![0], unit: 'PAIR' },
+        { ...profile.shipperItems![1], unit: 'DOZ' },
+      ],
+    }, 'shipper');
+    const restored = tradeFormDataToProfile(formData);
+
+    expect(formData.items.map((item) => item.unit)).toEqual(['PAIR', 'DOZ']);
+    expect(restored.shipperItems?.map((item) => item.unit)).toEqual(['PAIR', 'DOZ']);
+  });
+
+  it('레거시 및 기타 포장종류 문자열을 기존 packaging 필드로 그대로 왕복한다', () => {
+    for (const packageType of ['CTNS', 'SACK']) {
+      const formData = tradeProfileToFormData({ ...profile, packageType }, 'shipper');
+      expect(formData.packaging.packageType).toBe(packageType);
+      expect(tradeFormDataToProfile(formData).packageType).toBe(packageType);
+    }
+  });
+
+  it('수출 포워더 다품목 화물명세를 form_data.items로 저장하고 그대로 복원한다', () => {
+    const forwarderProfile: TradeProfile = {
+      ...profile,
+      shipperItems: undefined,
+      forwarderCargoItems: [
+        { id: 'cargo-a', itemNo: '1', sku: 'TONER-1', descriptionOfGoods: 'Facial Toner', numberOfPackages: 10, kindOfPackages: 'CARTON', grossWeightKg: 100, measurementCbm: '0.5', marksAndNumbers: 'A', sourceDocumentIds: ['ci', 'pl'] },
+        { id: 'cargo-b', itemNo: '2', sku: 'CREAM-1', descriptionOfGoods: 'Moisturizing Cream', numberOfPackages: 20, kindOfPackages: 'CARTON', grossWeightKg: 200, measurementCbm: '1.0', marksAndNumbers: 'B', sourceDocumentIds: ['ci', 'pl'] },
+      ],
+      forwarderCargoTotals: { numberOfPackages: 30, grossWeightKg: 300, measurementCbm: '1.5' },
+    };
+    const formData = tradeProfileToFormData(forwarderProfile, 'forwarder');
+    const restored = tradeFormDataToProfile(formData);
+
+    expect(formData.items.map(({ description, packageCount, grossWeight }) => ({ description, packageCount, grossWeight }))).toEqual([
+      { description: 'Facial Toner', packageCount: 10, grossWeight: 100 },
+      { description: 'Moisturizing Cream', packageCount: 20, grossWeight: 200 },
+    ]);
+    expect(formData.packaging).toMatchObject({ packageCount: 30, grossWeight: 300, measurement: '1.5' });
+    expect(restored.forwarderCargoItems).toEqual(forwarderProfile.forwarderCargoItems);
+    expect(restored.forwarderCargoTotals).toEqual(forwarderProfile.forwarderCargoTotals);
+  });
 });
 describe('첨부파일 persistence 계약', () => {
   const validArrival: ArrivalNoticeMeta = {

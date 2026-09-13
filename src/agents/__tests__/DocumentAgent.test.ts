@@ -1,3 +1,4 @@
+import { mapTransportRequestToSchema } from '../../services/transportRequestDocxService';
 import { describe, it, expect, vi } from 'vitest';
 // 수출신고서 FOB용 관세청 환율 호출은 결정론적으로 mock (네트워크 미접촉).
 // importActual로 customsApiService의 다른 export(calcDutiableValue 등)는 real 유지.
@@ -8,10 +9,12 @@ vi.mock('../../services/customsApiService', async (importOriginal) => ({
   }),
 }));
 import { DocumentAgent } from '../DocumentAgent';
+import { checkPackingInvoiceConsistency } from '../complianceRules';
 import { escapeHtml } from '../templates/escapeHtml';
 import { HSCodeResult, AgentLog } from '../types';
 import { TradeProfile, TradeItem } from '../../types';
 import { mapPackingListToSchema, renderPackingListPreviewHtml } from '../../services/packingListXlsxService';
+import { mapPackingListToDocxSchema } from '../../services/packingListDocxService';
 import { mapInvoiceToSchema } from '../../services/invoiceDocxService';
 
 const hsResult: HSCodeResult = {
@@ -62,6 +65,16 @@ async function runMulti(items: TradeItem[], overrides: Partial<TradeProfile> = {
 }
 
 describe('DocumentAgent — 다품목(C2) 파이프라인', () => {
+  it('품목 단위는 한국어 라벨 없이 영문 저장값 그대로 문서에 전달한다', async () => {
+    const result = await runMulti([
+      mkItem({ unit: 'PAIR' }),
+      mkItem({ unit: 'DOZ' }),
+    ]);
+
+    expect(result.generatedDocs.invoice?.items.map((item) => item.unit)).toEqual(['PAIR', 'DOZ']);
+    expect(result.generatedDocs.packingList?.items.map((item) => item.unit)).toEqual(['PAIR', 'DOZ']);
+  });
+
   it('여러 품목이 인보이스·패킹리스트에 모두 반영된다(폼 입력 유실 없음)', async () => {
     const r = await runMulti([
       mkItem({ description: 'A', quantity: 10, unitPrice: 5 }),
@@ -94,6 +107,51 @@ describe('DocumentAgent — 다품목(C2) 파이프라인', () => {
 });
 
 describe('DocumentAgent — 인보이스·패킹리스트 중량 일관성', () => {
+  it('포장종류는 한국어 라벨 없이 영문 저장값 그대로 Packing List에 전달한다', async () => {
+    const result = await runAgent({ packageCount: 4, packageType: 'SACK' });
+
+    expect(result.generatedDocs.invoice?.packageType).toBe('SACK');
+    expect(result.generatedDocs.packingList?.packageType).toBe('SACK');
+    expect(mapPackingListToDocxSchema(result.generatedDocs.packingList!).items[0].packages).toBe('4 SACK');
+  });
+
+  it('박스당 수량(eaPerBox) 입력 시 boxes×eaPerBox가 인보이스 수량과 대조되어 R10이 실제로 발동한다', async () => {
+    // 포장 수량(packageCount=박스 수) 4 × 박스당 수량(eaPerBox) 20 = 80 ≠ 인보이스 수량 100
+    const result = await runAgent({ quantity: 100, packageCount: 4, eaPerBox: 20 });
+
+    // 화주 폼 입력이 패킹리스트 품목까지 흘러간다(죽은 필드였던 경로 활성화)
+    expect(result.generatedDocs.packingList?.items[0].packageCount).toBe(4);
+    expect(result.generatedDocs.packingList?.items[0].eaPerBox).toBe(20);
+
+    // 패킹리스트 XLSX G열(eaPerBox)·H열(boxes)도 실값으로 채워진다
+    const schema = mapPackingListToSchema(result.generatedDocs.packingList!);
+    expect(schema.items[0].eaPerBox).toBe(20);
+    expect(schema.items[0].boxes).toBe(4);
+
+    // R10: 80 ≠ 100 → 경고 발동
+    const issues = checkPackingInvoiceConsistency(result.generatedDocs.invoice!, result.generatedDocs.packingList!);
+    expect(issues.map((i) => i.id)).toContain('r10-packing-qty-mismatch');
+  });
+
+  it('eaPerBox 미입력이면 R10 대조는 여전히 건너뛴다(오탐 방지 유지)', async () => {
+    const result = await runAgent({ quantity: 100, packageCount: 4 }); // eaPerBox 없음
+
+    const issues = checkPackingInvoiceConsistency(result.generatedDocs.invoice!, result.generatedDocs.packingList!);
+    expect(issues.map((i) => i.id)).not.toContain('r10-packing-qty-mismatch');
+  });
+
+  it('수출 Invoice Date는 레거시 입력값이 아니라 실제 생성일을 사용한다', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 14, 9, 30, 0));
+
+    const result = await runAgent({ invoiceDate: '2020-01-01' });
+
+    expect(result.generatedDocs.invoice?.invoiceDate).toBe('2026-08-14');
+    expect(result.generatedDocs.packingList?.invoiceDate).toBe('2026-08-14');
+    expect(result.generatedDocs.customsDeclaration?.invoiceDate).toBe('2026-08-14');
+    vi.useRealTimers();
+  });
+
   it('grossWeight가 빈 문자열이면 weight로 폴백해 두 문서의 총중량이 일치한다', async () => {
     // 앱 초기 상태(App.tsx)에서 grossWeight 기본값은 '' — 과거에는 ??로 인해 PL 총중량이 0이 됐다
     const result = await runAgent({ grossWeight: '', netWeight: '' });
@@ -237,6 +295,39 @@ describe('DocumentAgent — Buyer 영문 국가 연결', () => {
 });
 
 describe('DocumentAgent — 수출 화주 신규 문서 필드', () => {
+  it('수출 운송의뢰서를 화주 입력값으로 만들고 포워더 확정 정보는 포함하지 않는다', async () => {
+    const result = await runMulti([
+      mkItem({ description: 'Cotton Shirts', hsCode: '6105100000', quantity: 20, unit: 'PCS', packageCount: 2, packageUnit: 'CARTON', netWeight: 18, grossWeight: 20, measurement: '0.25' }),
+    ], {
+      companyName: 'KOREA EXPORT CO.', companyAddress: 'Seoul, Korea', contactName: 'KIM', contact: 'export@example.com',
+      partnerName: 'GLOBAL BUYER', partnerAddress: 'Tokyo, Japan', notifyPartyName: 'NOTIFY LTD.',
+      businessRegistrationNo: '123-45-67890', paymentTerms: 'T/T', invoiceNo: 'INV-REF-1',
+      loadPort: 'BUSAN', dischargePort: 'TOKYO', departureDate: '2026-08-20', loadingMode: 'LCL',
+      bookingNo: 'SHOULD-NOT-APPEAR', vesselOrFlight: 'SHOULD-NOT-APPEAR', blNo: 'SHOULD-NOT-APPEAR',
+      containerNo: 'SHOULD-NOT-APPEAR', sealNo: 'SHOULD-NOT-APPEAR',
+      shipperSupplemental: { incotermsPlace: 'BUSAN' } as any,
+    });
+
+    const tr = result.generatedDocs.transportRequest!;
+    expect(tr.requestNo).toMatch(/^TR-/);
+    expect(tr.exporter.name).toBe('KOREA EXPORT CO.');
+    expect(tr.consignee.name).toBe('GLOBAL BUYER');
+    expect(tr.items[0]).toMatchObject({ description: 'Cotton Shirts', unit: 'PCS', packageType: 'CARTON' });
+    expect(tr.loadingMode).toBe('LCL');
+    expect(tr.incotermsPlace).toBe('BUSAN');
+    expect(tr).not.toHaveProperty('bookingNo');
+    expect(tr).not.toHaveProperty('vesselName');
+    expect(tr).not.toHaveProperty('blNo');
+    expect(tr).not.toHaveProperty('containerNo');
+    // 운송의뢰서는 고정 서식 docx에서 생성하므로 HTML 템플릿을 만들지 않는다.
+    expect(result.htmlTemplates?.transport_request).toBeUndefined();
+    const si = mapTransportRequestToSchema(tr);
+    expect(si.exporter).toContain('KOREA EXPORT CO.');
+    expect(si.port_of_loading).toBe(tr.loadPort);
+    expect(si.type_of_shipment).toBe('LCL');
+    expect(JSON.stringify(si)).not.toContain('SHOULD-NOT-APPEAR');
+  });
+
   it('영문 품명·기타 참조번호·Vessel·서명자를 C/I와 P/L에 함께 전달한다', async () => {
     const result = await runAgent({
       signedBy: 'KIM JIMIN',
@@ -274,8 +365,9 @@ describe('DocumentAgent — 수출 화주 신규 문서 필드', () => {
     expect((invoice as any).vessel).toBe('OCEAN STAR V.1001');
     expect((packingList as any).vessel).toBe('OCEAN STAR V.1001');
 
-    expect(invoice.signedBy).toBe('KIM JIMIN');
-    expect((packingList as any).signedBy).toBe('KIM JIMIN');
+    // 서명란은 자동 채움하지 않고 공란으로 둔다(실제 서명자가 직접 기재).
+    expect(invoice.signedBy).toBe('');
+    expect((packingList as any).signedBy).toBe('');
   });
 
   it('단일 itemName 값을 문서 품명으로 그대로 사용한다', async () => {

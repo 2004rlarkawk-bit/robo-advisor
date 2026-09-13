@@ -1,10 +1,17 @@
 import type {
+  BillOfLadingKind,
+  BillOfLadingSignerCapacity,
   BookingStatus,
   ContainerSize,
+  FreightTerms,
+  ForwarderCargoItem,
+  ForwarderCargoTotals,
   ForwarderLoadingMode,
   NumericInput,
   TradeProfile,
 } from '../types';
+import { normalizeExportPortValue } from '../constants/ports';
+import { normalizePackageTypeValue } from './tradeValueNormalization';
 
 type ForwarderTradeFields = Required<Pick<
   TradeProfile,
@@ -19,6 +26,7 @@ type ForwarderTradeFields = Required<Pick<
   | 'dischargePort'
   | 'departureDate'
   | 'arrivalDate'
+  | 'requestedDepartureDate'
   | 'notifyPartyName'
   | 'containerNo'
   | 'sealNo'
@@ -27,15 +35,77 @@ type ForwarderTradeFields = Required<Pick<
   | 'packageType'
   | 'grossWeight'
   | 'measurement'
+  | 'invoiceNo'
+  | 'incoterms'
+  | 'shippingMarks'
 >>;
 
 export interface ForwarderFormState extends ForwarderTradeFields {
   exportDeclarationNo: string;
   bookingNo: string;
   bookingStatus: BookingStatus;
-  loadingMode: ForwarderLoadingMode;
+  loadingMode: ForwarderLoadingMode | '';
   containerSize: ContainerSize;
   containerQuantity: NumericInput;
+  cargoItems: ForwarderCargoItem[];
+  cargoTotals: ForwarderCargoTotals;
+  // ── 선하증권 발행 정보 (법정 기재사항) ─────────────────────────
+  /** House / Master 구분 — 포워더가 화주에게 발행하는 건 house */
+  blKind: BillOfLadingKind;
+  /** 발행 B/L 번호 — 비어 있으면 초안 번호로 대체 표기 */
+  blNo: string;
+  /** 복합운송 인수지·인도지 — 비면 POL/POD와 동일한 것으로 본다 */
+  placeOfReceipt: string;
+  placeOfDelivery: string;
+  freightTerms: FreightTerms;
+  freightAndCharges: string;
+  /** 원본 발행 통수 — 기본 3통 */
+  numberOfOriginals: NumericInput;
+  placeOfIssue: string;
+  dateOfIssue: string;
+  /** 본선 적재일 — 값이 있으면 선적선하증권(On Board) */
+  shippedOnBoardDate: string;
+  /** 발행인(포워더) 상호 */
+  issuerName: string;
+  signerCapacity: BillOfLadingSignerCapacity;
+  /** 무역협회 서식 추가 기재란 */
+  preCarriageBy: string;
+  finalDestination: string;
+  flag: string;
+  revenueTons: string;
+  freightRate: string;
+  freightPer: string;
+  freightPrepaidAt: string;
+  freightPayableAt: string;
+  totalPrepaid: string;
+  collectAmount: string;
+}
+
+export function createEmptyForwarderCargoItem(id = 'cargo-1'): ForwarderCargoItem {
+  return {
+    id,
+    itemNo: '',
+    sku: '',
+    descriptionOfGoods: '',
+    numberOfPackages: '',
+    kindOfPackages: '',
+    grossWeightKg: '',
+    measurementCbm: '',
+    marksAndNumbers: '',
+    sourceDocumentIds: [],
+  };
+}
+
+function cargoItemFromLegacy(profile: TradeProfile): ForwarderCargoItem {
+  return {
+    ...createEmptyForwarderCargoItem(),
+    descriptionOfGoods: profile.itemName,
+    numberOfPackages: profile.packageCount ?? '',
+    kindOfPackages: normalizePackageTypeValue(profile.packageType),
+    grossWeightKg: profile.grossWeight ?? profile.weight,
+    measurementCbm: profile.measurement ?? '',
+    marksAndNumbers: profile.shippingMarks ?? '',
+  };
 }
 
 export function createEmptyForwarderFormState(): ForwarderFormState {
@@ -52,10 +122,11 @@ export function createEmptyForwarderFormState(): ForwarderFormState {
     dischargePort: '',
     departureDate: '',
     arrivalDate: '',
+    requestedDepartureDate: '',
     bookingNo: '',
     bookingStatus: 'requested',
     notifyPartyName: '',
-    loadingMode: 'FCL',
+    loadingMode: '',
     containerSize: '20GP',
     containerQuantity: '',
     containerNo: '',
@@ -65,11 +136,34 @@ export function createEmptyForwarderFormState(): ForwarderFormState {
     packageType: '',
     grossWeight: '',
     measurement: '',
+    invoiceNo: '',
+    incoterms: '',
+    shippingMarks: '',
+    cargoItems: [createEmptyForwarderCargoItem()],
+    cargoTotals: { numberOfPackages: '', grossWeightKg: '', measurementCbm: '' },
+    blKind: 'house',
+    blNo: '',
+    placeOfReceipt: '',
+    placeOfDelivery: '',
+    freightTerms: '',
+    freightAndCharges: '',
+    numberOfOriginals: 3,
+    placeOfIssue: '',
+    dateOfIssue: '',
+    shippedOnBoardDate: '',
+    issuerName: '',
+    signerCapacity: 'AS_CARRIER',
+    preCarriageBy: '',
+    finalDestination: '',
+    flag: '',
+    revenueTons: '',
+    freightRate: '',
+    freightPer: '',
+    freightPrepaidAt: '',
+    freightPayableAt: '',
+    totalPrepaid: '',
+    collectAmount: '',
   };
-}
-
-export function isBookingNumberRequired(state: ForwarderFormState): boolean {
-  return state.bookingStatus === 'confirmed' && state.bookingNo.trim().length === 0;
 }
 
 export function isEtaBeforeEtd(etd: string, eta: string): boolean {
@@ -77,17 +171,31 @@ export function isEtaBeforeEtd(etd: string, eta: string): boolean {
 }
 
 export function forwarderFormToTradeProfile(state: ForwarderFormState): TradeProfile {
+  const hasArrayCargo = state.cargoItems.some((item) =>
+    item.descriptionOfGoods || item.numberOfPackages !== '' || item.kindOfPackages
+    || item.grossWeightKg !== '' || item.measurementCbm || item.marksAndNumbers);
+  const cargoItems = hasArrayCargo ? state.cargoItems : [{
+    ...createEmptyForwarderCargoItem(),
+    descriptionOfGoods: state.itemName,
+    numberOfPackages: state.packageCount,
+    kindOfPackages: normalizePackageTypeValue(state.packageType),
+    grossWeightKg: state.grossWeight,
+    measurementCbm: state.measurement,
+    marksAndNumbers: state.shippingMarks,
+  }];
+  const firstCargo = cargoItems[0];
   return {
     tradeType: 'export',
-    itemName: state.itemName,
+    itemName: firstCargo.descriptionOfGoods || state.itemName,
     hsCode: '',
     loadPort: state.loadPort,
     dischargePort: state.dischargePort,
-    incoterms: '',
+    incoterms: state.incoterms as TradeProfile['incoterms'],
     quantity: '',
-    weight: state.grossWeight,
+    weight: firstCargo.grossWeightKg || state.grossWeight,
     departureDate: state.departureDate,
     arrivalDate: state.arrivalDate,
+    requestedDepartureDate: state.requestedDepartureDate,
     companyName: state.companyName,
     companyAddress: state.companyAddress,
     contact: '',
@@ -99,20 +207,36 @@ export function forwarderFormToTradeProfile(state: ForwarderFormState): TradePro
     notifyPartyName: state.notifyPartyName,
     containerNo: state.containerNo,
     sealNo: state.sealNo,
-    packageCount: state.packageCount,
-    packageType: state.packageType,
-    grossWeight: state.grossWeight,
-    measurement: state.measurement,
+    packageCount: firstCargo.numberOfPackages || state.packageCount,
+    packageType: firstCargo.kindOfPackages || state.packageType,
+    grossWeight: firstCargo.grossWeightKg || state.grossWeight,
+    measurement: firstCargo.measurementCbm || state.measurement,
+    invoiceNo: state.invoiceNo,
+    shippingMarks: firstCargo.marksAndNumbers || state.shippingMarks,
+    forwarderCargoItems: cargoItems.map((item) => ({
+      ...item,
+      kindOfPackages: normalizePackageTypeValue(item.kindOfPackages),
+    })),
+    forwarderCargoTotals: state.cargoTotals,
     exportDeclarationNo: state.exportDeclarationNo,
     bookingNo: state.bookingNo,
-    bookingStatus: state.bookingStatus,
-    loadingMode: state.loadingMode,
+    bookingStatus: state.bookingNo.trim() ? 'confirmed' : 'requested',
+    loadingMode: state.loadingMode || undefined,
     containerSize: state.containerSize,
     containerQuantity: state.containerQuantity,
   };
 }
 
 export function tradeProfileToForwarderFormState(profile: TradeProfile): ForwarderFormState {
+  const cargoItems = profile.forwarderCargoItems?.length
+    ? profile.forwarderCargoItems.map((item, index) => ({
+      ...createEmptyForwarderCargoItem(item.id || `cargo-${index + 1}`),
+      ...item,
+      kindOfPackages: normalizePackageTypeValue(item.kindOfPackages),
+      sourceDocumentIds: Array.isArray(item.sourceDocumentIds) ? item.sourceDocumentIds : [],
+    }))
+    : [cargoItemFromLegacy(profile)];
+  const firstCargo = cargoItems[0];
   return {
     ...createEmptyForwarderFormState(),
     companyName: profile.companyName,
@@ -122,23 +246,34 @@ export function tradeProfileToForwarderFormState(profile: TradeProfile): Forward
     carrier: profile.carrier ?? '',
     vesselOrFlight: profile.vesselOrFlight ?? '',
     voyageNo: profile.voyageNo ?? '',
-    loadPort: profile.loadPort,
-    dischargePort: profile.dischargePort,
+    loadPort: normalizeExportPortValue(profile.loadPort),
+    dischargePort: normalizeExportPortValue(profile.dischargePort),
     departureDate: profile.departureDate,
     arrivalDate: profile.arrivalDate,
+    requestedDepartureDate: profile.requestedDepartureDate ?? '',
     notifyPartyName: profile.notifyPartyName ?? '',
     containerNo: profile.containerNo ?? '',
     sealNo: profile.sealNo ?? '',
-    itemName: profile.itemName,
-    packageCount: profile.packageCount ?? '',
-    packageType: profile.packageType ?? '',
-    grossWeight: profile.grossWeight ?? profile.weight,
-    measurement: profile.measurement ?? '',
+    itemName: firstCargo.descriptionOfGoods,
+    packageCount: firstCargo.numberOfPackages,
+    packageType: firstCargo.kindOfPackages,
+    grossWeight: firstCargo.grossWeightKg,
+    measurement: firstCargo.measurementCbm,
+    invoiceNo: profile.invoiceNo ?? '',
+    incoterms: profile.incoterms ?? '',
+    shippingMarks: firstCargo.marksAndNumbers,
     exportDeclarationNo: profile.exportDeclarationNo ?? '',
     bookingNo: profile.bookingNo ?? '',
-    bookingStatus: profile.bookingStatus ?? 'requested',
-    loadingMode: profile.loadingMode ?? 'FCL',
+    bookingStatus: profile.bookingNo ? 'confirmed' : (profile.bookingStatus ?? 'requested'),
+    loadingMode: profile.loadingMode
+      ?? (profile.containerNo || profile.sealNo || profile.containerQuantity ? 'FCL' : ''),
     containerSize: profile.containerSize ?? '20GP',
     containerQuantity: profile.containerQuantity ?? '',
+    cargoItems,
+    cargoTotals: profile.forwarderCargoTotals ?? {
+      numberOfPackages: profile.forwarderCargoItems?.length ? '' : profile.packageCount ?? '',
+      grossWeightKg: profile.forwarderCargoItems?.length ? '' : profile.grossWeight ?? profile.weight,
+      measurementCbm: profile.forwarderCargoItems?.length ? '' : profile.measurement ?? '',
+    },
   };
 }

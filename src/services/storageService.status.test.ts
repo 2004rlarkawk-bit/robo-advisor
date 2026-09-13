@@ -102,12 +102,15 @@ describe('수입 포워더 동일 거래 상태 전이', () => {
       in: vi.fn(),
       select: vi.fn(),
       single: vi.fn(),
+      // 저장 전 forwarderCase 이월을 위한 workflow_data 사전 조회 체인
+      maybeSingle: vi.fn(),
     };
     query.update.mockReturnValue(query);
     query.insert.mockReturnValue(query);
     query.eq.mockReturnValue(query);
     query.in.mockReturnValue(query);
     query.select.mockReturnValue(query);
+    query.maybeSingle.mockResolvedValue({ data: null, error: null });
     query.single.mockImplementation(async () => {
       const payload = query.update.mock.calls[0]?.[0] as unknown as Record<string, unknown>;
       return {
