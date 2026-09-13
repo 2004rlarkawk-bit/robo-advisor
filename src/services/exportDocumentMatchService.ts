@@ -15,8 +15,15 @@ import { areEquivalentTradeFieldValues, isAbsentTradeValue } from '../utils/trad
 
 export type ExportMatchStatus = 'match' | 'mismatch' | 'unknown';
 
+/**
+ * 불일치 항목에서 화주가 고른 쪽.
+ *  - 'form'     현재 입력값이 맞다 — 입력값을 그대로 둔다.
+ *  - 'uploaded' 업로드한 서류 값이 맞다 — 입력값을 그 값으로 바꾼다.
+ */
+export type MatchChoice = 'form' | 'uploaded';
+
 export interface ExportDocMatchRow {
-  /** 폼 필드 키 — [이 값으로 수정]과 [입력 수정] 이동에 사용한다. */
+  /** 폼 필드 키 — 값 선택 반영과 [입력 수정] 이동에 사용한다. */
   field: string;
   label: string;
   /** 업로드한 서류에서 추출한 값 */
@@ -306,6 +313,31 @@ const ITEM_FIELDS = new Set(['itemName', 'hsCode', 'quantity', 'unitPrice']);
 // 숫자를 읽지 못한 값(빈 값·N/A)은 0이 아니라 공란으로 반영한다.
 function toNumeric(value: string): number | '' {
   return parseTradeNumber(value) ?? '';
+}
+
+/**
+ * 업로드 서류의 품명에서 영문 품명만 꺼낸다.
+ * 상업송장·포장명세서 품명은 영문이어야 하는데(getGoodsDescriptionValidationMessage),
+ * 국내 서류는 "냉동 갈치 (Frozen Hairtail)"처럼 한글을 함께 적는 경우가 많다.
+ *  - 한글이 없으면 그대로 사용
+ *  - 괄호 안에 영문이 있으면 그 영문 (→ "Frozen Hairtail")
+ *  - 그 밖에는 한글만 지우고 남은 영문 (→ "" 이면 null: 영문이 없어 직접 정리해야 한다)
+ */
+export function extractEnglishGoodsName(value: string): string | null {
+  const text = value.trim();
+  if (!text) return null;
+  if (!/[가-힣]/.test(text)) return text;
+
+  const parenthesized = text.match(/[(（]([^)）]*[A-Za-z][^)）]*)[)）]/);
+  const candidate = parenthesized
+    ? parenthesized[1]
+    : text.replace(/[(（][^)）]*[)）]/g, ' ').replace(/[가-힣]+/g, ' ');
+
+  const cleaned = candidate
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,./·-]+|[\s,./·-]+$/g, '')
+    .trim();
+  return /[A-Za-z]/.test(cleaned) ? cleaned : null;
 }
 
 /**

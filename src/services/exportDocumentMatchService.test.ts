@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { applyMatchPatchToProfile, matchUploadedExportDocuments } from './exportDocumentMatchService';
+import { applyMatchPatchToProfile, extractEnglishGoodsName, matchUploadedExportDocuments } from './exportDocumentMatchService';
 import type { ShipperItem, TradeProfile } from '../types';
 import type { TradeAttachment } from '../types/tradeFormData';
 import type { ImportExtractedFields } from '../types/importTrade';
@@ -228,5 +228,24 @@ describe('matchUploadedExportDocuments', () => {
     const next = applyMatchPatchToProfile(profile, { invoiceNo: 'INV-2026-123456' });
     expect(next.invoiceNo).toBe('INV-2026-123456');
     expect(next.itemName).toBe(profile.itemName);
+  });
+});
+
+describe('extractEnglishGoodsName', () => {
+  it('한글이 없으면 그대로 쓴다', () => {
+    expect(extractEnglishGoodsName("Men's Wool Jacket")).toBe("Men's Wool Jacket");
+  });
+
+  it('괄호 안 영문을 품명으로 쓴다', () => {
+    expect(extractEnglishGoodsName('냉동 갈치 (Frozen Hairtail)')).toBe('Frozen Hairtail');
+  });
+
+  it('괄호가 없으면 한글만 지운다', () => {
+    expect(extractEnglishGoodsName('냉동 Frozen Hairtail 갈치')).toBe('Frozen Hairtail');
+  });
+
+  it('영문이 전혀 없으면 null — AI 정리로 넘긴다', () => {
+    expect(extractEnglishGoodsName('냉동 갈치')).toBeNull();
+    expect(extractEnglishGoodsName('  ')).toBeNull();
   });
 });
