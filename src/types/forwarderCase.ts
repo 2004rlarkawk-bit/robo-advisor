@@ -1,3 +1,4 @@
+import type { ImportDispatchRequest } from './importTrade';
 /**
  * 포워더 수입 건(ForwarderImportCase) 데이터 계약.
  *
@@ -53,6 +54,8 @@ export interface ForwarderCaseState {
   issueResolutions?: Record<string, boolean>;
   arrivalNotice?: ArrivalNoticeMeta | null;
   returnRequest?: ForwarderReturnRequest | null;
+  /** 포워더가 작성한 배차 의뢰 — 통관·도착 단계에서 운송사에 전달한다 */
+  dispatchRequest?: ImportDispatchRequest | null;
   updatedAt: string;
 }
 

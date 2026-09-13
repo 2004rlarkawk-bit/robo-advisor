@@ -288,6 +288,52 @@ export interface CargoTrackingResult {
   timeline: CargoTimelineItem[];
 }
 
+/** 요청 차량 종류 — 배차 의뢰서 '요청 차량' 칸 */
+export type DispatchVehicleType = '트랙터' | '카고' | '윙바디' | '기타';
+
+/** 운임 정산 방식 — 배차 의뢰서 '운임 정산' 칸 */
+export type DispatchSettlement = '선불' | '착불' | '월마감';
+
+/**
+ * 화주가 포워더에게 알려주는 배송 요청.
+ * 배송지·희망 일시·수령 담당자는 서류에 없고 화주만 아는 값이라 직접 입력받는다.
+ */
+export interface ImportDeliveryRequest {
+  deliveryAddress: string;
+  /** 희망 배송일시 — datetime-local 문자열 */
+  deliveryAt: string;
+  contactName: string;
+  contactTel: string;
+  /** 화주가 운송사에 전달할 요청사항 */
+  remarks: string;
+  updatedAt: string;
+}
+
+/**
+ * 포워더가 D/O 수령 후 운송사에 보내는 배차 의뢰.
+ * 상차지·공컨 반납지·차량·정산은 포워더가 선사·터미널과 정하는 값이다.
+ */
+export interface ImportDispatchRequest {
+  /** 수신 운송사 */
+  carrierCompany: string;
+  attention: string;
+  doNo: string;
+  terminal: string;
+  pickupPlace: string;
+  /** 상차 요청일시 — datetime-local 문자열 */
+  pickupAt: string;
+  emptyReturnPlace: string;
+  emptyReturnDue: string;
+  vehicleType: DispatchVehicleType | '';
+  settlement: DispatchSettlement | '';
+  remarks: string;
+  /** 운송사 회신 — 배차 확정 후 기록 */
+  vehicleNo: string;
+  driverName: string;
+  driverTel: string;
+  issuedAt: string;
+}
+
 export interface ImportTradeSnapshot {
   tradeId?: string;
   direction: 'import';
@@ -299,6 +345,8 @@ export interface ImportTradeSnapshot {
   duty?: ImportDutyEstimate;
   risks: ImportRisk[];
   cargo?: CargoTrackingResult;
+  /** 화주가 입력한 배송 요청 — 포워더 배차 의뢰서의 배송지 칸으로 이어진다 */
+  deliveryRequest?: ImportDeliveryRequest;
   generatedAt: string;
   flowCompletedAt?: string;
 }

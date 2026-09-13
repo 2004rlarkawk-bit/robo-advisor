@@ -47,6 +47,7 @@ import type {
   ImportDocumentMeta,
   ImportDocumentType,
   ImportDutyEstimate,
+  ImportDeliveryRequest,
   ImportHSCodeSuggestion,
   ImportRisk,
   ImportTradeSnapshot,
@@ -103,6 +104,8 @@ export interface CachedState {
   risks: ImportRisk[];
   cargo: CargoTrackingResult | null;
   arrivalNotice: ArrivalNoticeMeta | null;
+  /** 화주가 입력한 배송 요청 — 제출 시 스냅샷에 실려 포워더에게 전달된다 */
+  deliveryRequest?: ImportDeliveryRequest;
   generatedAt: string | null;
   tradeId?: string;
   existingStatus?: PersistedTradeStatus;
@@ -191,6 +194,7 @@ export function importDraftFormData(
       duty: state.duty ?? undefined,
       risks: state.risks,
       cargo: state.cargo ?? undefined,
+      deliveryRequest: state.deliveryRequest,
       generatedAt: state.generatedAt ?? '',
     }).formData;
   }
@@ -367,6 +371,16 @@ export default function ImportTradeFlow({
   }, [state.step]);
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState(false);
+  // 배송 요청 — 스냅샷에 저장되어 포워더 배차 의뢰서로 넘어간다.
+  const delivery: ImportDeliveryRequest = state.deliveryRequest ?? {
+    deliveryAddress: '', deliveryAt: '', contactName: '', contactTel: '', remarks: '', updatedAt: '',
+  };
+  const patchDelivery = (patch: Partial<ImportDeliveryRequest>) => {
+    setState((current) => ({
+      ...current,
+      deliveryRequest: { ...delivery, ...patch, updatedAt: new Date().toISOString() },
+    }));
+  };
   const [showInProgressConfirmation, setShowInProgressConfirmation] = useState(false);
   const [manualHsInputs, setManualHsInputs] = useState<Record<string, string>>({});
   const [manualHsErrors, setManualHsErrors] = useState<Record<string, string>>({});
@@ -743,6 +757,7 @@ export default function ImportTradeFlow({
         duty: duty ?? undefined,
         risks,
         cargo: state.cargo ?? undefined,
+        deliveryRequest: state.deliveryRequest,
         generatedAt,
       };
       const tradeId = await onGenerate(generatedSnapshot);
@@ -892,6 +907,7 @@ export default function ImportTradeFlow({
         duty: state.duty ?? undefined,
         risks: state.risks,
         cargo: state.cargo ?? undefined,
+        deliveryRequest: state.deliveryRequest,
         generatedAt: state.generatedAt,
         flowCompletedAt: new Date().toISOString(),
       });
@@ -1219,6 +1235,72 @@ export default function ImportTradeFlow({
               </button>
             </div>
             {preview && <div className="declaration-preview" dangerouslySetInnerHTML={{ __html: generateImportDeclarationHtml(declarationData) }} />}
+          </section>
+
+          {/* 배송 요청 — 서류에 없고 화주만 아는 값이라 직접 입력받는다.
+              포워더가 배차 의뢰서를 만들 때 이 값이 배송지 칸으로 그대로 넘어간다. */}
+          <section className="form-card import-card">
+            <div className="import-card-heading">
+              <div><h2>배송 요청</h2></div>
+              <p>화물을 어디로 언제 받을지 알려주시면, 포워더가 배차할 때 그대로 전달됩니다.</p>
+            </div>
+            <div className="form-grid">
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label" htmlFor="dlv-address">배송지 주소</label>
+                <input
+                  id="dlv-address"
+                  className="form-input"
+                  value={delivery.deliveryAddress}
+                  readOnly={readOnly}
+                  onChange={(event) => patchDelivery({ deliveryAddress: event.target.value })}
+                  placeholder="예: 경기도 화성시 동탄산단로 123 A동 물류창고"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="dlv-at">희망 배송일시</label>
+                <input
+                  id="dlv-at"
+                  type="datetime-local"
+                  className="form-input"
+                  value={delivery.deliveryAt}
+                  readOnly={readOnly}
+                  onChange={(event) => patchDelivery({ deliveryAt: event.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="dlv-name">수령 담당자</label>
+                <input
+                  id="dlv-name"
+                  className="form-input"
+                  value={delivery.contactName}
+                  readOnly={readOnly}
+                  onChange={(event) => patchDelivery({ contactName: event.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="dlv-tel">담당자 연락처</label>
+                <input
+                  id="dlv-tel"
+                  className="form-input"
+                  value={delivery.contactTel}
+                  readOnly={readOnly}
+                  onChange={(event) => patchDelivery({ contactTel: event.target.value })}
+                  placeholder="010-0000-0000"
+                />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label" htmlFor="dlv-remarks">요청사항 (선택)</label>
+                <input
+                  id="dlv-remarks"
+                  className="form-input"
+                  value={delivery.remarks}
+                  readOnly={readOnly}
+                  onChange={(event) => patchDelivery({ remarks: event.target.value })}
+                  placeholder="예: 지게차 없음 · 오전 배송 희망 · 차량 진입로 협소"
+                />
+              </div>
+            </div>
+            <p className="import-notice">비워 두고 제출해도 됩니다. 포워더가 배차 전에 따로 확인합니다.</p>
           </section>
           {readOnly && onClose ? <DocumentManagerReadOnlyAction
             onClose={onClose}
