@@ -55,7 +55,7 @@ export function parseReturnReason(reason: string): ReturnReasonSection[] {
     const match = head.trim().match(/^\[(.+)\]$/);
     if (!match) return [];
     const lines = rest
-      .map((line) => line.trim().replace(/^[·•\-]\s*/, ''))
+      .map((line) => line.trim().replace(/^[·•-]\s*/, ''))
       .filter(Boolean);
     sections.push({ title: match[1], lines, blocking: match[1].includes('반드시') });
   }
