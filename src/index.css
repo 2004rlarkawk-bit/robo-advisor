@@ -3856,6 +3856,11 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
   transition: border-color .15s ease;
 }
 .draft-tray-item:hover { border-color: #94a3b8; }
+/* 문서관리 행 — 액션을 제목 줄에 붙이고, 포워더 진행·보완 요청은 아래 전체 폭으로 */
+.draft-tray-item.dm-row { flex-wrap: wrap; align-items: flex-start; padding: 22px 26px; }
+.draft-tray-item.dm-row > .dm-fwd { flex-basis: 100%; margin-top: 4px; gap: 16px; }
+.draft-tray-item.dm-row .dm-fwd-line { padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
+.draft-tray-item.dm-row .dm-fwd-line:last-child { padding-bottom: 0; border-bottom: none; }
 .draft-tray-info { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .draft-tray-line1 { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .draft-tray-name { font-size: 15.5px; font-weight: 700; color: #1e293b; }
@@ -4394,16 +4399,29 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .return-alert-bar strong { font-weight: 800; }
 .return-alert-cta { margin-left: auto; font-weight: 800; white-space: nowrap; }
 
-.dm-mail { border: 1.5px solid #fca5a5; border-radius: 10px; background: #fff; overflow: hidden; }
-.dm-mail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 13px; background: #fef2f2; border-bottom: 1px solid #fecaca; }
-.dm-mail-title { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: #b91c1c; }
-.dm-mail-date { font-size: 11.5px; color: #94a3b8; }
-.dm-mail-body { padding: 12px 14px 4px; font-size: 12.5px; color: #334155; line-height: 1.65; }
-.dm-mail-body p { margin: 0 0 7px; }
+/* 문서관리 — 포워더 보완 요청 메일 카드 */
+.dm-mail { border: 1.5px solid #fca5a5; border-radius: 14px; background: #fff; overflow: hidden; }
+.dm-mail-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 20px; background: #fef2f2; border-bottom: 1px solid #fecaca; }
+.dm-mail-title { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 800; color: #b91c1c; }
+.dm-mail-date { font-size: 13px; color: #94a3b8; }
+.dm-mail-body { padding: 18px 20px 18px; font-size: 14px; color: #334155; line-height: 1.7; }
+.dm-mail-body p { margin: 0 0 8px; }
 .dm-mail-greeting strong { color: #16233b; }
-.dm-mail-quote { margin: 8px 0; padding: 9px 12px; border-left: 3px solid #dc2626; background: #f8fafc; border-radius: 0 7px 7px 0; white-space: pre-line; color: #16233b; font-weight: 600; }
-.dm-mail-sign { color: #64748b; }
-.dm-mail-actions { display: flex; justify-content: flex-end; padding: 0 14px 12px; }
+.dm-mail-quote { margin: 10px 0 14px; padding: 12px 14px; border-left: 3px solid #dc2626; background: #f8fafc; border-radius: 0 8px 8px 0; white-space: pre-line; color: #16233b; font-weight: 600; }
+/* 사유 섹션 — 반드시 수정(빨강) / 함께 확인(회색)을 나란히 */
+.dm-mail-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 12px 0 16px; }
+.dm-mail-section { padding: 8px 14px 12px 12px; background: #f8fafc; border-left: 4px solid #64748b; border-radius: 0 9px 9px 0; }
+.dm-mail-section.is-blocking { border-left-color: #dc2626; }
+.dm-mail-section > strong { color: #475569; }
+.dm-mail-section.is-blocking { background: #fef5f5; }
+.dm-mail-section.is-blocking > strong { color: #b91c1c; }
+.dm-mail-section strong { display: block; font-size: 13.5px; margin-bottom: 4px; line-height: 1.4; }
+.dm-mail-section ul { margin: 0; padding: 0; list-style: none; }
+.dm-mail-section li { position: relative; padding-left: 0.75em; font-size: 13.5px; font-weight: 600; color: #16233b; line-height: 1.6; }
+.dm-mail-section li::before { content: '·'; position: absolute; left: 0; }
+.dm-mail-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+.dm-mail-sign { color: #64748b; font-size: 13.5px; }
+.dm-mail-cta { display: inline-flex; align-items: center; gap: 8px; padding: 11px 22px; font-size: 14.5px; font-weight: 700; border-radius: 9px; }
 
 /* 수입 2단계 — 포워더 보완 요청 수정 안내 카드 */
 .revise-notice { border-color: #fca5a5 !important; }
