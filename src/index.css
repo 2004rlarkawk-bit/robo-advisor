@@ -4511,6 +4511,7 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .header--forwarder .btn-logout { border-color: rgba(255, 255, 255, 0.28); color: #cbd5e1; }
 .header--forwarder .btn-logout:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 .header-role-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: #38bdf8; color: #082f49; white-space: nowrap; }
+
 .return-alert-cta { margin-left: auto; font-weight: 800; white-space: nowrap; }
 
 /* 문서관리 — 포워더 보완 요청 메일 카드 */
