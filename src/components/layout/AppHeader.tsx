@@ -1,5 +1,6 @@
 import {
   Briefcase,
+  Package,
   HelpCircle,
   PanelLeftClose,
   PanelLeftOpen,
@@ -38,7 +39,7 @@ export default function AppHeader({
   const avatarLabel = userLabel.trim().charAt(0) || (user.type === 'member' ? '회' : '비');
 
   return (
-    <header className={`header${forwarderMode ? ' header--forwarder' : ''}`}>
+    <header className={`header ${forwarderMode ? 'header--forwarder' : 'header--shipper'}`}>
       <div className="header-title-sec">
         <button
           className="icon-btn sidebar-toggle"
@@ -47,12 +48,11 @@ export default function AppHeader({
         >
           {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
         </button>
-        <span className={forwarderMode ? 'header-product-name' : 'platform-badge'}>{forwarderMode ? 'PortAI' : 'Mentoring Project 2026'}</span>
-        {forwarderMode && (
-          <span className="header-role-chip">
-            <Briefcase size={14} aria-hidden="true" /> 포워더 업무
-          </span>
-        )}
+        <span className="header-product-name">PortAI</span>
+        <span className="header-role-chip">
+          {forwarderMode ? <Briefcase size={14} aria-hidden="true" /> : <Package size={14} aria-hidden="true" />}
+          {forwarderMode ? '포워더 업무' : '화주 업무'}
+        </span>
       </div>
 
       <div className="header-actions">

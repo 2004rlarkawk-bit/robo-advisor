@@ -1,4 +1,9 @@
-/* Scoped refinement: no shipper styles, workflow rules or role-switch controls. */
+/* Role headers and scoped forwarder workspace refinement; no workflow changes. */
+.header.header--shipper { gap: 16px; height: auto; min-height: 64px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
+.header--shipper .header-title-sec { min-width: 0; flex-shrink: 0; gap: 12px; }
+.header--shipper .header-product-name { color: #1e293b; font-size: 20px; font-weight: 750; letter-spacing: -.5px; white-space: nowrap; }
+.header.header--shipper .header-role-chip { border: 1px solid #cbdcf3; background: #edf4ff; color: #365d91; border-radius: 7px; padding: 6px 9px; gap: 7px; font-size: 12px; font-weight: 600; }
+.header--shipper .header-actions { min-width: 0; margin-left: auto; }
 .header.header--forwarder { gap: 16px; height: auto; min-height: 64px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
 .header--forwarder .header-title-sec { min-width: 0; flex-shrink: 0; gap: 12px; }
 .header--forwarder .header-product-name { color: #f8fafc; font-size: 20px; font-weight: 750; letter-spacing: -.5px; white-space: nowrap; }
