@@ -4344,3 +4344,26 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .fwd-pick-sev.is-check { background: #fef9ec; color: #b45309; }
 .fwd-pick-text { font-size: 12px; color: #334155; line-height: 1.55; }
 .fwd-pick-text strong { color: #16233b; }
+
+/* ===== 포워더 판단 기록·처리 이력·화주 회신 ===== */
+.fwd-issue { flex-direction: column; align-items: stretch; }
+.fwd-issue-main { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.fwd-issue-note { display: block; margin-top: 5px; font-size: 11.5px; color: #15803d; font-weight: 700; }
+.fwd-note-form { display: flex; gap: 8px; margin-top: 9px; padding-top: 9px; border-top: 1px dashed #e2e8f0; }
+.fwd-note-form .form-input { flex: 1; font-size: 12.5px; }
+.fwd-note-form .btn { white-space: nowrap; }
+
+.fwd-activity { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.fwd-activity li { display: flex; gap: 12px; padding: 7px 2px; border-bottom: 1px dashed #eef2f7; font-size: 12.5px; }
+.fwd-activity li:last-child { border-bottom: 0; }
+.fwd-activity-time { flex-shrink: 0; width: 96px; color: #94a3b8; font-size: 11.5px; padding-top: 1px; }
+.fwd-activity-text { color: #334155; line-height: 1.5; }
+
+.fwd-shipper-reply { margin-top: 10px; padding: 9px 12px; border-left: 3px solid #15803d; background: #f0fdf4; border-radius: 0 8px 8px 0; }
+.fwd-shipper-reply strong { display: block; font-size: 11.5px; color: #15803d; margin-bottom: 3px; }
+.fwd-shipper-reply p { margin: 0; font-size: 12.5px; color: #16233b; line-height: 1.55; white-space: pre-line; }
+
+.revise-reply { display: flex; gap: 8px; margin-top: 10px; }
+.revise-reply .form-input { flex: 1; font-size: 12.5px; }
+.revise-reply .btn { white-space: nowrap; }
+@media (max-width: 640px) { .fwd-note-form, .revise-reply { flex-direction: column; } }

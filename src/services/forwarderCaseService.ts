@@ -100,8 +100,8 @@ function deriveNextAction(
 ): string {
   const returnRequest = state?.returnRequest;
   if (returnRequest) {
-    if (returnRequest.resolvedAt) return '화주 재제출 확인 — 재검토 시작';
-    return shipperEditing ? '화주 수정 중 — 재제출 대기' : '화주 보완 회신 대기';
+    if (returnRequest.resolvedAt) return '재검토 필요 — 수정본 확인';
+    return shipperEditing ? '화주 수정 중 — 재제출 대기' : '화주 보완 대기';
   }
   switch (stage) {
     case 'received':
@@ -155,6 +155,8 @@ export function deriveForwarderCase(trade: SavedTrade): ForwarderImportCase | nu
     arrivalNotice,
     returnRequest,
     shipperEditing,
+    issueNotes: state?.issueNotes ?? {},
+    activity: state?.activity ?? [],
     snapshot,
     trade,
   };
@@ -205,7 +207,9 @@ export async function listForwarderCases(): Promise<ForwarderImportCase[]> {
 /** 포워더 운영 상태 저장 — workflow_data.forwarderCase만 병합 갱신한다. */
 export async function saveForwarderCaseState(
   tradeId: string,
-  patch: Partial<Omit<ForwarderCaseState, 'updatedAt'>>,
+  patch: Partial<Omit<ForwarderCaseState, 'updatedAt' | 'activity'>>,
+  /** 처리 이력에 덧붙일 문장들 — 판단·요청·단계 이동이 기록으로 남는다 */
+  appendActivity: string[] = [],
 ): Promise<ForwarderCaseState> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
@@ -223,12 +227,18 @@ export async function saveForwarderCaseState(
 
   const workflowData = (row.workflow_data ?? {}) as TradeWorkflowData;
   const previous = workflowData.forwarderCase;
+  const now = new Date().toISOString();
   const next: ForwarderCaseState = {
     stage: patch.stage ?? previous?.stage ?? 'received',
     issueResolutions: { ...(previous?.issueResolutions ?? {}), ...(patch.issueResolutions ?? {}) },
+    issueNotes: { ...(previous?.issueNotes ?? {}), ...(patch.issueNotes ?? {}) },
     arrivalNotice: patch.arrivalNotice !== undefined ? patch.arrivalNotice : previous?.arrivalNotice ?? null,
     returnRequest: patch.returnRequest !== undefined ? patch.returnRequest : previous?.returnRequest ?? null,
-    updatedAt: new Date().toISOString(),
+    activity: [
+      ...(previous?.activity ?? []),
+      ...appendActivity.map((text) => ({ at: now, text })),
+    ],
+    updatedAt: now,
   };
 
   const { error: writeError } = await supabase
@@ -238,4 +248,37 @@ export async function saveForwarderCaseState(
     .eq('user_id', userId);
   if (writeError) throw writeError;
   return next;
+}
+
+/** 화주가 보완 요청에 회신 메모를 남긴다 — 요청과 회신이 같은 의뢰에 모인다. */
+export async function saveShipperReturnReply(tradeId: string, reply: string): Promise<void> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  const userId = userData.user?.id;
+  if (!userId) throw new Error('로그인이 필요합니다.');
+
+  const { data: row, error: readError } = await supabase
+    .from('trades')
+    .select('workflow_data')
+    .eq('id', tradeId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (readError) throw readError;
+  const workflowData = (row?.workflow_data ?? {}) as TradeWorkflowData;
+  const previous = workflowData.forwarderCase;
+  if (!previous?.returnRequest) return;
+
+  const now = new Date().toISOString();
+  const next: ForwarderCaseState = {
+    ...previous,
+    returnRequest: { ...previous.returnRequest, shipperReply: reply.trim(), shipperReplyAt: now },
+    activity: [...(previous.activity ?? []), { at: now, text: `화주 회신: ${reply.trim()}` }],
+    updatedAt: now,
+  };
+  const { error: writeError } = await supabase
+    .from('trades')
+    .update({ workflow_data: { ...workflowData, forwarderCase: next } })
+    .eq('id', tradeId)
+    .eq('user_id', userId);
+  if (writeError) throw writeError;
 }

@@ -109,7 +109,7 @@ describe('보완 요청(반송) 루프', () => {
     const waiting = deriveForwarderCase(makeTrade({
       forwarderCase: { stage: 'review', returnRequest: baseRequest, updatedAt: '2026-09-10T00:00:00.000Z' },
     }));
-    expect(waiting?.nextAction).toBe('화주 보완 회신 대기');
+    expect(waiting?.nextAction).toBe('화주 보완 대기');
     expect(waiting?.shipperEditing).toBe(false);
 
     const editing = deriveForwarderCase(makeTrade({
@@ -129,7 +129,7 @@ describe('보완 요청(반송) 루프', () => {
         updatedAt: '2026-09-11T00:00:00.000Z',
       },
     }));
-    expect(resolved?.nextAction).toBe('화주 재제출 확인 — 재검토 시작');
+    expect(resolved?.nextAction).toBe('재검토 필요 — 수정본 확인');
   });
 
   it('보완 요청이 없는 미제출 화주 거래는 여전히 큐에서 제외된다', () => {

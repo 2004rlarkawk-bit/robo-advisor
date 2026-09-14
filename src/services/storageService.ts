@@ -189,9 +189,14 @@ async function carryForwarderCase(
     .maybeSingle();
   const existing = (data?.workflow_data as TradeWorkflowData | null)?.forwarderCase;
   if (!existing) return;
-  // 화주가 보완 요청을 받고 재제출하는 시점이면 요청을 '회신됨'으로 기록한다.
+  // 화주가 보완 요청을 받고 재제출하는 시점이면 요청을 '회신됨'으로 기록하고 이력에 남긴다.
+  const resubmittedAt = new Date().toISOString();
   const carried = options.markReturnResolved && existing.returnRequest && !existing.returnRequest.resolvedAt
-    ? { ...existing, returnRequest: { ...existing.returnRequest, resolvedAt: new Date().toISOString() } }
+    ? {
+      ...existing,
+      returnRequest: { ...existing.returnRequest, resolvedAt: resubmittedAt },
+      activity: [...(existing.activity ?? []), { at: resubmittedAt, text: '화주가 수정 후 재제출 — 재검토 필요' }],
+    }
     : existing;
   payload.workflow_data = { ...payload.workflow_data, forwarderCase: carried };
 }

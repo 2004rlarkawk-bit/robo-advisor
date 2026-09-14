@@ -19,7 +19,7 @@ export const FORWARDER_STAGE_LABEL: Record<ForwarderCaseStage, string> = {
   received: '의뢰 접수',
   review: '서류 검토',
   clearance: '통관·도착',
-  done: '완료',
+  done: '서류 완료',
 };
 
 /** 유입 경로 — 화주가 전송한 의뢰가 1순위, 직접 등록은 fallback */
@@ -44,6 +44,15 @@ export interface ForwarderReturnRequest {
   issueTitles: string[];
   requestedAt: string;
   resolvedAt?: string;
+  /** 화주가 재제출하며 남긴 회신 메모 — 요청·회신이 같은 의뢰에 모이게 한다 */
+  shipperReply?: string;
+  shipperReplyAt?: string;
+}
+
+/** 건별 처리 이력 한 줄 — 포워더의 판단·조율 과정이 기록으로 남는다 */
+export interface ForwarderCaseActivity {
+  at: string;
+  text: string;
 }
 
 /** trades.workflow_data.forwarderCase 로 저장되는 포워더 운영 상태 */
@@ -51,8 +60,11 @@ export interface ForwarderCaseState {
   stage: ForwarderCaseStage;
   /** 이슈 id → 확인 완료 여부 (포워더가 건별로 체크) */
   issueResolutions?: Record<string, boolean>;
+  /** 이슈 id → 종결 시 남긴 확인 내용(판단 근거) */
+  issueNotes?: Record<string, string>;
   arrivalNotice?: ArrivalNoticeMeta | null;
   returnRequest?: ForwarderReturnRequest | null;
+  activity?: ForwarderCaseActivity[];
   updatedAt: string;
 }
 
@@ -78,6 +90,10 @@ export interface ForwarderImportCase {
   returnRequest: ForwarderReturnRequest | null;
   /** 보완 요청 후 화주가 거래를 다시 열어 수정하고 있는 상태 */
   shipperEditing: boolean;
+  /** 이슈 종결 시 남긴 확인 내용 */
+  issueNotes: Record<string, string>;
+  /** 접수·판단·요청·회신·완료의 처리 이력 (오래된 것부터) */
+  activity: ForwarderCaseActivity[];
   snapshot: ImportTradeSnapshot;
   trade: SavedTrade;
 }

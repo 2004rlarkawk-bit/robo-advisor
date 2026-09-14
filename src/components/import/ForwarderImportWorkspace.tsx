@@ -88,6 +88,9 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
   const [detailTab, setDetailTab] = useState<DetailTab>('overview');
   const [docBusyId, setDocBusyId] = useState<string | null>(null);
   const [anBusy, setAnBusy] = useState(false);
+  // 이슈 종결 시 확인 내용(판단 근거)을 함께 기록한다
+  const [noteFormId, setNoteFormId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState('');
   const [queueFilter, setQueueFilter] = useState<QueueFilter>('active');
 
   const load = useCallback(async () => {
@@ -123,13 +126,14 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
 
   const persist = useCallback(async (
     caseItem: ForwarderImportCase,
-    patch: Partial<Omit<ForwarderCaseState, 'updatedAt'>>,
+    patch: Partial<Omit<ForwarderCaseState, 'updatedAt' | 'activity'>>,
+    appendActivity: string[] = [],
   ): Promise<boolean> => {
     if (saving) return false;
     setSaving(true);
     setError('');
     try {
-      const next = await saveForwarderCaseState(caseItem.tradeId, patch);
+      const next = await saveForwarderCaseState(caseItem.tradeId, patch, appendActivity);
       applyState(caseItem.tradeId, next);
       return true;
     } catch (err) {
@@ -146,7 +150,13 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
     stage: ForwarderCaseStage,
     nextTab: DetailTab,
   ) => {
-    if (await persist(caseItem, { stage })) setDetailTab(nextTab);
+    const STAGE_ACTIVITY: Record<ForwarderCaseStage, string> = {
+      received: '의뢰 접수 단계로 이동',
+      review: '서류 검토 시작',
+      clearance: '통관·도착 관리 시작',
+      done: '서류 작업 완료',
+    };
+    if (await persist(caseItem, { stage }, [STAGE_ACTIVITY[stage]])) setDetailTab(nextTab);
   }, [persist]);
 
   // 화주가 올린 원본 서류를 새 탭에서 연다 — 대사 결과의 근거를 눈으로 확인하는 실무 필수 동작
@@ -197,7 +207,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
     const arrivalNoticeNote = caseItem.arrivalNotice?.storagePath
       ? ''
       : '\n\n도착통지서(A/N)가 첨부되지 않았습니다.';
-    if (window.confirm(`실제 통관·반출 확인이 끝난 건인가요?${arrivalNoticeNote}\n\n완료 처리 후에는 업무 큐의 완료 건으로 이동합니다.`)) {
+    if (window.confirm(`이 건의 서류 작업을 완료 처리할까요?${arrivalNoticeNote}\n\n완료 후에는 업무 큐의 서류 완료 목록으로 이동합니다.`)) {
       void moveToStage(caseItem, 'done', 'overview');
     }
   };
@@ -275,13 +285,19 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
               <span className="fwd-return-date">{selected.returnRequest.requestedAt.slice(0, 10)} 요청</span>
             </div>
             <p className="fwd-return-reason">{selected.returnRequest.reason}</p>
+            {selected.returnRequest.shipperReply && (
+              <div className="fwd-shipper-reply">
+                <strong>화주 회신</strong>
+                <p>{selected.returnRequest.shipperReply}</p>
+              </div>
+            )}
             <div className="fwd-return-actions">
               {selected.returnRequest.resolvedAt ? (
                 <button
                   type="button"
                   className="btn btn-primary"
                   disabled={saving}
-                  onClick={() => void persist(selected, { returnRequest: null, stage: 'review' })}
+                  onClick={() => void persist(selected, { returnRequest: null, stage: 'review' }, ['재검토 시작'])}
                 >
                   재검토 시작
                 </button>
@@ -291,7 +307,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                     type="button"
                     className="btn btn-secondary"
                     disabled={saving}
-                    onClick={() => void persist(selected, { returnRequest: null })}
+                    onClick={() => void persist(selected, { returnRequest: null }, ['보완 요청 취소'])}
                   >
                     요청 취소
                   </button>
@@ -340,21 +356,70 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                 <div className="fwd-issue-list">
                   {group.items.map((issue) => (
                     <div key={issue.id} className={`fwd-issue ${group.className}${issue.resolved ? ' is-resolved' : ''}`}>
-                      <span className="fwd-issue-body">
-                        <span className="fwd-issue-title">{issue.title}</span>
-                        <span className="fwd-issue-detail">{issue.detail}</span>
-                      </span>
-                      {/* 확인 처리 = 포워더가 직접 확인해 종결. 화주에게 보낼 항목은 아래 [보완 요청] 폼에서 고른다. */}
-                      <button
-                        type="button"
-                        className={`fwd-issue-check${issue.resolved ? ' on' : ''}`}
-                        disabled={saving}
-                        onClick={() => void persist(selected, {
-                          issueResolutions: { [issue.id]: !issue.resolved },
-                        })}
-                      >
-                        <CheckCircle2 size={13} /> {issue.resolved ? '확인 완료' : '확인 처리'}
-                      </button>
+                      <div className="fwd-issue-main">
+                        <span className="fwd-issue-body">
+                          <span className="fwd-issue-title">{issue.title}</span>
+                          <span className="fwd-issue-detail">{issue.detail}</span>
+                          {issue.resolved && selected.issueNotes[issue.id] && (
+                            <span className="fwd-issue-note">처리 기록 — {selected.issueNotes[issue.id]}</span>
+                          )}
+                        </span>
+                        {/* 확인 종결 = 포워더가 직접 확인·판단해 끝냄. 화주에게 보낼 항목은 아래 [보완 요청] 폼에서 고른다. */}
+                        {issue.resolved ? (
+                          <button
+                            type="button"
+                            className="fwd-issue-check on"
+                            disabled={saving}
+                            onClick={() => void persist(
+                              selected,
+                              { issueResolutions: { [issue.id]: false } },
+                              [`'${issue.title}' 종결 취소`],
+                            )}
+                          >
+                            <CheckCircle2 size={13} /> 확인 완료
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="fwd-issue-check"
+                            disabled={saving}
+                            onClick={() => {
+                              setNoteFormId(noteFormId === issue.id ? null : issue.id);
+                              setNoteText('');
+                            }}
+                          >
+                            <CheckCircle2 size={13} /> 확인 종결
+                          </button>
+                        )}
+                      </div>
+                      {noteFormId === issue.id && !issue.resolved && (
+                        <div className="fwd-note-form">
+                          <input
+                            className="form-input"
+                            value={noteText}
+                            onChange={(event) => setNoteText(event.target.value)}
+                            placeholder="확인 내용 기록 (예: 선사 검량 확인 — B/L 1,280kg 기준 적용)"
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={saving}
+                            onClick={() => {
+                              const note = noteText.trim();
+                              void persist(
+                                selected,
+                                {
+                                  issueResolutions: { [issue.id]: true },
+                                  ...(note ? { issueNotes: { [issue.id]: note } } : {}),
+                                },
+                                [`'${issue.title}' 확인 종결${note ? ` — ${note}` : ''}`],
+                              ).then(() => setNoteFormId(null));
+                            }}
+                          >
+                            기록하고 종결
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -424,7 +489,8 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                                 issueTitles: picked.map((issue) => issue.title),
                                 requestedAt: new Date().toISOString(),
                               },
-                            }).then(() => setReturnFormOpen(false));
+                            }, [`화주에게 보완 요청 (${picked.length}건: ${picked.map((issue) => issue.title).join(', ')})`])
+                              .then(() => setReturnFormOpen(false));
                           }}
                         >
                           <CornerUpLeft size={15} /> 보완 요청 보내기{picked.length > 0 ? ` (${picked.length}건)` : ''}
@@ -451,6 +517,22 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                 </div>
               );
             })()}
+          </section>
+        )}
+
+        {detailTab === 'overview' && selected.activity.length > 0 && (
+          <section className="form-card import-card">
+            <div className="import-card-heading"><div><h2>처리 이력</h2><p>이 건에 대한 판단·요청·회신이 시간순으로 기록됩니다.</p></div></div>
+            <ol className="fwd-activity">
+              {[...selected.activity].reverse().map((entry, index) => (
+                <li key={`${entry.at}-${index}`}>
+                  <span className="fwd-activity-time">
+                    {new Date(entry.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  <span className="fwd-activity-text">{entry.text}</span>
+                </li>
+              ))}
+            </ol>
           </section>
         )}
 
@@ -582,14 +664,14 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
           {!returnPending && selected.stage === 'clearance' && (
             <>
               <button type="button" className="btn btn-primary" disabled={saving} onClick={() => finishClearance(selected)}>
-                <CheckCircle2 size={15} /> 통관 완료 처리
+                <CheckCircle2 size={15} /> 서류 작업 완료
               </button>
               {!selected.arrivalNotice?.storagePath && <p className="fwd-action-hint">도착통지서(A/N)를 첨부해 두면 완료 이력에 함께 보관됩니다.</p>}
             </>
           )}
           {!returnPending && selected.stage === 'done' && (
             <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => void moveToStage(selected, 'clearance', 'clearance')}>
-              통관 진행으로 되돌리기
+              서류 작업으로 되돌리기
             </button>
           )}
         </div>
@@ -688,7 +770,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                         <span className={`fwd-stage-badge ${STAGE_BADGE_CLASS[item.stage]}`}>{FORWARDER_STAGE_LABEL[item.stage]}</span>
                         {item.returnRequest && (
                           <span className={`fwd-return-badge${item.returnRequest.resolvedAt ? ' is-resolved' : ''}`}>
-                            {item.returnRequest.resolvedAt ? '재제출됨' : item.shipperEditing ? '화주 수정 중' : '보완 요청'}
+                            {item.returnRequest.resolvedAt ? '재검토 필요' : item.shipperEditing ? '화주 수정 중' : '화주 보완 대기'}
                           </span>
                         )}
                       </td>
