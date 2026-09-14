@@ -53,14 +53,24 @@ const STAGE_BADGE_CLASS: Record<ForwarderCaseStage, string> = {
 type DetailTab = 'overview' | 'review' | 'clearance';
 type QueueFilter = 'active' | 'received' | 'blockers' | 'done';
 
+// AI 추출 ETA는 ISO(2026-09-20)일 수도, 원문 표기(SEP. 20, 2026)일 수도 있다.
+// ISO가 아닌 문자열을 10글자로 자르면 연도가 잘려 엉뚱한 날짜가 되므로 ISO일 때만 자른다.
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}/;
+
 function formatEta(eta: string): string {
-  return eta ? eta.slice(0, 10) : '미정';
+  if (!eta) return '미정';
+  return ISO_DATE.test(eta) ? eta.slice(0, 10) : eta;
 }
 
 /** ETA까지 남은 날짜 배지 — 임박(D-3 이내)·지남을 색으로 구분해 우선순위를 보여준다 */
 function etaDday(eta: string): { label: string; tone: 'overdue' | 'imminent' | 'normal' } | null {
-  const date = new Date(eta.slice(0, 10));
+  if (!eta) return null;
+  const date = new Date(ISO_DATE.test(eta) ? eta.slice(0, 10) : eta);
   if (Number.isNaN(date.getTime())) return null;
+  // 연도가 잘리거나 빠진 추출값이 과거·미래의 엉뚱한 연도로 파싱되면 배지를 숨긴다
+  const year = date.getFullYear();
+  const thisYear = new Date().getFullYear();
+  if (year < thisYear - 1 || year > thisYear + 1) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const days = Math.round((date.getTime() - today.getTime()) / 86400000);
@@ -783,7 +793,11 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                   disabled={dispatchBusy || !dispatch.carrierCompany.trim()}
                   onClick={() => {
                     setDispatchBusy(true);
-                    void persist(selected, { dispatchRequest: { ...dispatch, issuedAt: new Date().toISOString() } })
+                    void persist(
+                      selected,
+                      { dispatchRequest: { ...dispatch, issuedAt: new Date().toISOString() } },
+                      [`배차 의뢰서 생성 — ${dispatch.carrierCompany.trim()}`],
+                    )
                       .then(() => downloadDispatchRequestDocx(selected, dispatch, deliveryRequest, issuerName))
                       .catch((err) => {
                         console.error('배차 의뢰서 생성 실패:', err);
