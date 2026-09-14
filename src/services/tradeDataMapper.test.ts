@@ -105,6 +105,23 @@ describe('TradeFormData v3 mapper', () => {
     expect(restored.shipperItems?.map((item) => item.itemName)).toEqual(['Item A', 'Item B']);
   });
 
+  it('수출신고서 입력과 품목 상표명·성분을 form_data로 저장하고 복원한다', () => {
+    const exportDeclaration = { customsCode: 'ABC1234567890', tradeKind: 'GENERAL' as const, freightKrw: 150000 };
+    const withDeclaration: TradeProfile = {
+      ...profile,
+      exportDeclaration,
+      shipperItems: profile.shipperItems?.map((item, index) => index === 0 ? { ...item, brand: 'NO BRAND', composition: 'COTTON 100%' } : item),
+    };
+    const formData = tradeProfileToFormData(withDeclaration, 'shipper');
+    const restored = tradeFormDataToProfile(formData);
+
+    expect(formData.exportDeclaration).toEqual(exportDeclaration);
+    expect(restored.exportDeclaration).toEqual(exportDeclaration);
+    expect(restored.shipperItems?.[0]).toMatchObject({ brand: 'NO BRAND', composition: 'COTTON 100%' });
+    // 입력이 없던 저장분은 키 자체가 생기지 않는다(기존 계약 유지).
+    expect(tradeProfileToFormData(profile, 'shipper')).not.toHaveProperty('exportDeclaration');
+  });
+
   it('FAS와 운송방식 미정 값을 기존 form_data 구조로 손실 없이 왕복한다', () => {
     const formData = tradeProfileToFormData({ ...profile, incoterms: 'FAS', loadingMode: undefined }, 'shipper');
     const restored = tradeFormDataToProfile(formData);

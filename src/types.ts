@@ -48,6 +48,10 @@ export interface ShipperItem {
    * (예: itemName "Ballpoint Pen" + detail "Blue Ink" → C/I "Ballpoint Pen, Blue Ink")
    */
   detail?: string;
+  /** 상표명 → 수출신고서 상표명란(선택). */
+  brand?: string;
+  /** 성분(재질·함량) → 수출신고서 성분란(선택). */
+  composition?: string;
   hsCode: string;
   quantity: NumericInput;
   /** 표준 영문 단위 코드 또는 사용자가 직접 입력한 영문 단위. */
@@ -71,6 +75,39 @@ export interface ShipperSupplementalState {
 export type BookingStatus = 'requested' | 'confirmed' | 'cancelled';
 export type ForwarderLoadingMode = 'FCL' | 'LCL';
 export type ContainerSize = '20GP' | '40GP' | '40HC' | '45HC';
+
+/**
+ * 수출신고서(초안) 전용 입력. 화주가 직접 고른 값만 담는다.
+ * 코드 변환 기준: 수출통관 사무처리에 관한 고시 [별표 1] 수출신고서 작성요령.
+ */
+export interface ExportDeclarationInfo {
+  /** 수출화주 대표자 성명 */
+  ownerCeoName?: string;
+  /** 수출화주(=수출대행자) 통관고유부호 */
+  customsCode?: string;
+  /** 수출화주 소재지 우편번호(5자리) */
+  postalCode?: string;
+  /** 구매자부호(해외거래처부호) */
+  buyerCustomsCode?: string;
+  /** 거래 형태 — GENERAL이면 거래구분 11·종류 A. 그 외 거래는 관세사가 판단한다. */
+  tradeKind?: '' | 'GENERAL';
+  /** 물품상태 — N 신품, O 중고품, M 혼재 */
+  goodsCondition?: '' | 'N' | 'O' | 'M';
+  /** L/C 결제 시 일람출급(LS)/기한부(LU) 구분 */
+  lcPaymentType?: '' | 'SIGHT' | 'USANCE';
+  /** 운임(원) */
+  freightKrw?: NumericInput;
+  /** 보험료(원) */
+  insuranceKrw?: NumericInput;
+  /** 수출자구분 — A 직접 제조, C 완제품을 공급받아 수출 */
+  exporterType?: '' | 'A' | 'C';
+  /** 제조자(수출자구분 C일 때 입력) */
+  makerName?: string;
+  makerCustomsCode?: string;
+  makerPostalCode?: string;
+  /** 산업단지부호(산업단지가 아니면 999) */
+  industrialComplexCode?: string;
+}
 
 export interface TradeProfile {
   tradeType: TradeType;
@@ -190,6 +227,8 @@ export interface TradeProfile {
   /** 수출 화주 폼 전용 JSON 상태. 기존 profile JSON 저장/복원 흐름을 그대로 사용한다. */
   shipperItems?: ShipperItem[];
   shipperSupplemental?: ShipperSupplementalState;
+  /** 수출신고서(초안) 전용 입력 */
+  exportDeclaration?: ExportDeclarationInfo;
   /** 수출 포워더 화물명세. form_data.items 배열과 왕복한다. */
   forwarderCargoItems?: ForwarderCargoItem[];
   forwarderCargoTotals?: ForwarderCargoTotals;
@@ -335,6 +374,8 @@ export interface TradeItem {
   detailedDescription?: string;
   /** 색상·재질·규격 원문 → 수출신고서 규격(model_spec)란. 품명과 분리해서 싣는다. */
   detail?: string;
+  brand?: string;         // → 수출신고서 상표명
+  composition?: string;   // → 수출신고서 성분
   hsCode: string;         // → C/I goods_spec
   quantity: number;       // 수량(개수) → C/I quantity. net_weight와 다른 값이다.
   unit: string;
@@ -634,6 +675,8 @@ export interface CustomsDeclarationData {
   containerNo?: string;
   invoiceNo?: string;
   invoiceDate?: string;
+  paymentTerms?: string;
+  exportDeclaration?: ExportDeclarationInfo;
 
   [key: string]: any;
 }export interface CustomsCargoProgressEvent {

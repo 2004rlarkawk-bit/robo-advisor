@@ -32,6 +32,8 @@ export function shipperItemToTradeItem(si: ShipperItem): TradeItem {
     description: si.itemName || '',
     detailedDescription: composeDetailedDescription(si.itemName, si.detail),
     detail: (si.detail || '').trim() || undefined,
+    brand: (si.brand || '').trim() || undefined,
+    composition: (si.composition || '').trim() || undefined,
     hsCode: si.hsCode || '',
     quantity: Number(si.quantity) || 0,
     unit: si.unit || '',

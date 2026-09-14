@@ -97,7 +97,8 @@ function profileItems(profile: TradeProfile, role: TradeRole): TradeFormItem[] {
       modelName: '',
       specification: '',
       material: '',
-      composition: '',
+      composition: item.composition ?? '',
+      ...(item.brand ? { brand: item.brand } : {}),
       intendedUse: '',
       originCountry: profile.countryOfOrigin ?? '',
       quantity: item.quantity,
@@ -252,6 +253,7 @@ export function tradeProfileToFormData(
       containerQuantity: profile.containerQuantity ?? '',
     },
     attachments,
+    ...(profile.exportDeclaration ? { exportDeclaration: profile.exportDeclaration } : {}),
   };
 }
 
@@ -359,6 +361,8 @@ export function tradeFormDataToProfile(formData: TradeFormDataV3): TradeProfile 
       unit: supportedItemUnit(item.unit),
       unitPrice: numericInput(item.unitPrice),
       currency: supportedCurrency(item.currency || terms.currency),
+      ...(item.brand ? { brand: item.brand } : {}),
+      ...(item.composition ? { composition: item.composition } : {}),
     })) : undefined,
     forwarderCargoItems: formData.role === 'forwarder' ? formData.items.map((item) => ({
       id: item.id,
@@ -385,6 +389,7 @@ export function tradeFormDataToProfile(formData: TradeFormDataV3): TradeProfile 
         ? terms.originCriterion as '세번변경기준' | '부가가치기준' | '완전생산기준'
         : '',
     },
+    ...(formData.exportDeclaration ? { exportDeclaration: formData.exportDeclaration } : {}),
   });
 }
 

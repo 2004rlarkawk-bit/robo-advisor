@@ -27,6 +27,8 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
             description: item.itemName || '',
             detailedDescription: composeDetailedDescription(item.itemName, item.detail),
             detail: (item.detail || '').trim() || undefined,
+            brand: (item.brand || '').trim() || undefined,
+            composition: (item.composition || '').trim() || undefined,
             hsCode: item.hsCode || '',
             quantity: Number(item.quantity) || 0,
             unit: item.unit || '',
@@ -435,6 +437,8 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         departureDate: profile.departureDate || '',
         transportType: profile.loadingMode || '', // 수출 화주 운송방식(FCL/LCL), 미정은 공란
         lcNo,                                     // 비신용장이면 위에서 ''로 강제됨
+        paymentTerms,
+        exportDeclaration: profile.exportDeclaration,
         totalWeight,
         totalPackages,
         paymentAmount: invoiceAmount,

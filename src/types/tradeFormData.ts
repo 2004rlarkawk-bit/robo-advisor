@@ -1,4 +1,5 @@
 import type {
+  ExportDeclarationInfo,
   GeneratedDocuments,
   Incoterms,
   NumericInput,
@@ -73,6 +74,7 @@ export interface TradeFormItem {
   specification: string;
   material: string;
   composition: string;
+  brand?: string;
   intendedUse: string;
   originCountry: string;
   quantity: NumericInput | string;
@@ -158,6 +160,8 @@ export interface TradeFormDataV3 {
   shipment: TradeFormShipment;
   packaging: TradeFormPackaging;
   attachments: TradeAttachment[];
+  /** 수출신고서(초안) 전용 입력 — 없던 시절 저장분은 키가 없다. */
+  exportDeclaration?: ExportDeclarationInfo;
 }
 
 export interface ImportTradeWorkflowData {

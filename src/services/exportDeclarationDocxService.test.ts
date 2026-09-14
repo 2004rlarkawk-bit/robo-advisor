@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapExportDeclarationToDocxSchema } from './exportDeclarationDocxService';
+import { mapExportDeclarationToDocxSchema, paymentMethodCode, transportTypeCode } from './exportDeclarationDocxService';
 import type { CustomsDeclarationData, TradeItem } from '../types';
 
 const item = (o: Partial<TradeItem> = {}): TradeItem => ({
@@ -56,12 +56,77 @@ describe('mapExportDeclarationToDocxSchema — 갑지/을지 + A/B/C 그룹', ()
     expect(s.firstItem.qty_unit).toBe('100 CTN');
   });
 
-  it('(B) 관세사 기재는 전부 공란 — AI 추정 금지', () => {
+  it('(B) 화주가 고른 값이 없으면 코드란은 전부 공란 — AI 추정 금지', () => {
     const s = mapExportDeclarationToDocxSchema(base());
     for (const k of ['decl_kind', 'declarant', 'trade_kind', 'decl_category', 'payment_method',
-      'exporter_type', 'refund_applicant', 'simple_refund', 'declarant_note', 'staff'] as const) {
+      'exporter_type', 'goods_status', 'refund_applicant', 'simple_refund', 'declarant_note', 'staff'] as const) {
       expect(s[k]).toBe('');
     }
+  });
+
+  it('결제조건 → 결제방법 부호: L/C는 일람출급·기한부를 알 때만', () => {
+    expect(paymentMethodCode('T/T')).toBe('TT');
+    expect(paymentMethodCode('D/A')).toBe('DA');
+    expect(paymentMethodCode('D/P')).toBe('DP');
+    expect(paymentMethodCode('L/C')).toBe('');
+    expect(paymentMethodCode('L/C', 'SIGHT')).toBe('LS');
+    expect(paymentMethodCode('L/C', 'USANCE')).toBe('LU');
+    expect(paymentMethodCode('Open Account')).toBe('');
+    expect(paymentMethodCode('')).toBe('');
+  });
+
+  it('운송방식 → 운송형태 부호', () => {
+    expect(transportTypeCode('FCL')).toBe('10FC');
+    expect(transportTypeCode('LCL')).toBe('10LC');
+    expect(transportTypeCode('')).toBe('');
+  });
+
+  it('화주가 고른 거래 형태·물품상태·제조자 구분이 부호로 들어간다', () => {
+    const s = mapExportDeclarationToDocxSchema(base({
+      paymentTerms: 'T/T', transportType: 'FCL',
+      exportDeclaration: {
+        tradeKind: 'GENERAL', goodsCondition: 'N', exporterType: 'A',
+        ownerCeoName: '홍길동', customsCode: 'SEAFOOD1234567', postalCode: '48943',
+        buyerCustomsCode: 'JPTOKYO1234', freightKrw: 150000, insuranceKrw: 20000, industrialComplexCode: '999',
+      },
+    }));
+    expect(s.payment_method).toBe('TT');
+    expect(s.transport_type).toBe('10FC');
+    expect(s.trade_kind).toBe('11');
+    expect(s.decl_category).toBe('A');
+    expect(s.goods_status).toBe('N');
+    expect(s.exporter_type).toBe('A');
+    expect(s.owner_ceo).toBe('홍길동');
+    expect(s.owner_code).toBe('SEAFOOD1234567');
+    expect(s.agent_code).toBe('SEAFOOD1234567');
+    expect(s.owner_location).toBe('48943');
+    expect(s.buyer_code).toBe('JPTOKYO1234');
+    expect(s.freight).toBe('150,000');
+    expect(s.insurance).toBe('20,000');
+    // 직접 제조(A) → 제조자 = 수출화주
+    expect(s.maker_name).toBe('SEAFOOD EXPORT CO');
+    expect(s.maker_code).toBe('SEAFOOD1234567');
+    expect(s.maker_place).toBe('48943');
+    expect(s.industrial_code).toBe('999');
+    // 신고인이 정하는 칸은 여전히 공란
+    expect(s.decl_kind).toBe('');
+    expect(s.refund_applicant).toBe('');
+  });
+
+  it('완제품 공급(C)이면 입력한 제조자 정보를 쓴다', () => {
+    const s = mapExportDeclarationToDocxSchema(base({
+      exportDeclaration: { exporterType: 'C', makerName: 'MAKER CO', makerCustomsCode: 'MAKER123', makerPostalCode: '13457' },
+    }));
+    expect(s.exporter_type).toBe('C');
+    expect(s.maker_name).toBe('MAKER CO');
+    expect(s.maker_code).toBe('MAKER123');
+    expect(s.maker_place).toBe('13457');
+  });
+
+  it('품목 상표명·성분이 있으면 채운다', () => {
+    const s = mapExportDeclarationToDocxSchema(base({ items: [item({ brand: 'NO BRAND', composition: 'COTTON 100%' })] }));
+    expect(s.firstItem.brand).toBe('NO BRAND');
+    expect(s.firstItem.composition).toBe('COTTON 100%');
   });
 
   it('FOB: KRW면 금액 그대로, 외화+환율이면 환산, 외화+환율없으면 공란', () => {

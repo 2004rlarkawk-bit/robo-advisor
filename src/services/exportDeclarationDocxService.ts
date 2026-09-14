@@ -69,6 +69,30 @@ function fobKrw(amount: number, currency: string, rate: number | null | undefine
   return ''; // 외화인데 환율 미확보 → 공란(자동 추정 안 함)
 }
 
+/**
+ * 결제조건 → 결제방법 부호. 작성요령 예시(TT)·통계부호표(LS·LU·DA·DP) 기준.
+ * L/C는 일람출급/기한부를 모르면 부호가 정해지지 않으므로 공란.
+ */
+export function paymentMethodCode(paymentTerms: string | undefined, lcPaymentType?: string): string {
+  switch ((paymentTerms || '').trim().toUpperCase()) {
+    case 'T/T': return 'TT';
+    case 'D/A': return 'DA';
+    case 'D/P': return 'DP';
+    case 'L/C': return lcPaymentType === 'SIGHT' ? 'LS' : lcPaymentType === 'USANCE' ? 'LU' : '';
+    default: return '';
+  }
+}
+
+/** 운송방식 → 운송형태(운송수단 10 선박 + 운송용기 FC/LC). 미정이면 공란. */
+export function transportTypeCode(loadingMode: string | undefined): string {
+  const mode = (loadingMode || '').trim().toUpperCase();
+  if (mode === 'FCL') return '10FC';
+  if (mode === 'LCL') return '10LC';
+  return '';
+}
+
+const krw = (n: unknown) => (Number(n) > 0 ? Math.round(Number(n)).toLocaleString() : '');
+
 function mapItem(it: TradeItem, idx: number, total: number, ctx: {
   currency: string; rate: number | null | undefined; invoiceNo: string; origin: string;
 }): ExportDeclItemSchema {
@@ -78,9 +102,9 @@ function mapItem(it: TradeItem, idx: number, total: number, ctx: {
     item_total: String(total),
     goods_name: s(it.description),
     trade_name: '',       // 소스 없음
-    brand: '',            // 소스 없음
+    brand: s(it.brand),
     model_spec: s(it.detail),  // 상세 정보(색상·재질·규격) — 품명은 기본 품명 유지
-    composition: '',      // 소스 없음
+    composition: s(it.composition),
     qty_unit: Number(it.quantity) > 0 ? `${Number(it.quantity).toLocaleString()} ${s(it.unit)}`.trim() : '',
     unit_price: num(it.unitPrice),
     amount: num(amt),
@@ -124,32 +148,44 @@ export function mapExportDeclarationToDocxSchema(cd: CustomsDeclarationData): Ex
 
   const exporterName = s(cd.exporter?.name);
   const exporterAddr = s(cd.ownerAddress) || s(cd.exporter?.address);
+  const ed = cd.exportDeclaration ?? {};
+  const customsCode = s(ed.customsCode);
+  const postalCode = s(ed.postalCode);
+  const general = ed.tradeKind === 'GENERAL';
+  // 제조자: 직접 제조(A)면 수출화주 정보, 완제품 공급(C)이면 입력한 제조자, 미선택이면 기존 기본값.
+  const maker = ed.exporterType === 'A'
+    ? { name: exporterName, code: customsCode, place: postalCode }
+    : ed.exporterType === 'C'
+      ? { name: s(ed.makerName), code: s(ed.makerCustomsCode), place: s(ed.makerPostalCode) }
+      : { name: s(cd.makerName), code: '', place: '' };
 
   return {
     decl_date: s(cd.declarationDate),
-    // 수출대행자·수출화주 = 화주 상호(대행 별도 소스 없으면 동일). 통관고유부호·대표자·소재지는 소스 없음 → 공란.
-    agent_name: exporterName, agent_code: '',
-    owner_name: exporterName, owner_code: '', owner_addr: exporterAddr, owner_ceo: '', owner_location: '',
+    // 수출대행자·수출화주 = 화주 상호(대행 별도 소스 없으면 동일). 통관고유부호·대표자·소재지는 화주 입력값.
+    agent_name: exporterName, agent_code: customsCode,
+    owner_name: exporterName, owner_code: customsCode, owner_addr: exporterAddr, owner_ceo: s(ed.ownerCeoName), owner_location: postalCode,
     owner_bizno: s(cd.ownerBizNo),
     dest_country: s(cd.destCountry) || s(cd.dischargePort),
     load_port: s(cd.loadPort),
     carrier: s(cd.carrier),
     vessel: s(cd.vessel),
     departure_date: s(cd.departureDate),
-    bonded_area: '', transport_type: s(cd.transportType), inspect_date: '', goods_location: '',
-    maker_name: s(cd.makerName), maker_code: '', maker_place: '', industrial_code: '',
+    bonded_area: '', transport_type: transportTypeCode(cd.transportType), inspect_date: '', goods_location: '',
+    maker_name: maker.name, maker_code: maker.code, maker_place: maker.place, industrial_code: s(ed.industrialComplexCode),
     lc_no: s(cd.lcNo), return_reason: '',
-    buyer_name: s(cd.buyerName), buyer_code: '',
+    buyer_name: s(cd.buyerName), buyer_code: s(ed.buyerCustomsCode),
     total_weight: wt(cd.totalWeight),
     total_packages: Number(cd.totalPackages) > 0 ? String(Number(cd.totalPackages).toLocaleString()) : '',
     total_fob_usd: totalFobUsd,
     total_fob_krw: totalFobKrw,
-    freight: '', insurance: '',
+    freight: krw(ed.freightKrw), insurance: krw(ed.insuranceKrw),
     payment_amount: invoiceAmount > 0 ? `${currency} ${invoiceAmount.toLocaleString()}` : '',
     cargo_no: '', container_no: s(cd.containerNo),
-    // (B) 관세사 기재 — 전부 공란
-    decl_kind: '', declarant: '', exporter_type: '', trade_kind: '', decl_category: '',
-    payment_method: '', goods_status: '', pre_open: '', refund_applicant: '', simple_refund: '',
+    // (B) 코드란 — 화주가 고른 값에서 하나로 정해지는 부호만 채우고, 나머지는 관세사가 기재(공란).
+    decl_kind: '', declarant: '', exporter_type: s(ed.exporterType),
+    trade_kind: general ? '11' : '', decl_category: general ? 'A' : '',
+    payment_method: paymentMethodCode(cd.paymentTerms, ed.lcPaymentType),
+    goods_status: s(ed.goodsCondition), pre_open: '', refund_applicant: '', simple_refund: '',
     declarant_note: '', transport_declarant: '', staff: '',
     firstItem,
     extraItems,

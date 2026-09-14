@@ -285,17 +285,45 @@ describe('화주용 통관 입력 폼', () => {
     });
 
     expect(rendered.onProfilePatch).toHaveBeenCalledWith({ companyName: 'Changed Exporter Co., Ltd.' });
-    expect(rendered.container.textContent).not.toContain('통관고유부호');
   });
 
-  it('서명자를 회사명으로 복사하고 Open Account 및 L/C 조건부 필드를 제공한다', () => {
-    const rendered = renderForm([firstItem], false, { paymentTerms: 'L/C', contactName: 'Gildong Hong' });
-    const signerCheckbox = Array.from(rendered.container.querySelectorAll('label'))
-      .find((label) => label.textContent?.includes('회사명과 서명자 동일'))
-      ?.querySelector<HTMLInputElement>('input');
+  it('수출신고서용 선택 입력은 exportDeclaration에 모아 저장한다', () => {
+    const rendered = renderForm([firstItem], false, { exportDeclaration: { ownerCeoName: '홍길동' } });
+    const findControl = <T extends HTMLElement>(labelStart: string, selector: string) => Array.from(rendered.container.querySelectorAll('label'))
+      .find((label) => label.textContent?.startsWith(labelStart))
+      ?.parentElement?.querySelector<T>(selector);
 
-    act(() => signerCheckbox?.click());
-    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ signedBy: '인천테크' });
+    const customsInput = findControl<HTMLInputElement>('통관고유부호', 'input');
+    act(() => {
+      if (!customsInput) return;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(customsInput, 'ABC1234567890');
+      customsInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({
+      exportDeclaration: { ownerCeoName: '홍길동', customsCode: 'ABC1234567890' },
+    });
+
+    const tradeKindSelect = findControl<HTMLSelectElement>('수출 거래 형태', 'select');
+    act(() => {
+      if (!tradeKindSelect) return;
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(tradeKindSelect, 'GENERAL');
+      tradeKindSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({
+      exportDeclaration: { ownerCeoName: '홍길동', tradeKind: 'GENERAL' },
+    });
+  });
+
+  it('L/C 결제일 때만 L/C 종류를 고른다', () => {
+    const tt = renderForm([firstItem], false, { paymentTerms: 'T/T' });
+    expect(tt.container.textContent).not.toContain('L/C 종류');
+  });
+
+  it('서명자 입력칸 없이 Open Account 및 L/C 조건부 필드를 제공한다', () => {
+    const rendered = renderForm([firstItem], false, { paymentTerms: 'L/C', contactName: 'Gildong Hong' });
+
+    expect(rendered.container.textContent).not.toContain('서명자 영문명');
+    expect(rendered.container.textContent).not.toContain('회사명과 서명자 동일');
     expect(rendered.container.textContent).toContain('Open Account');
     expect(rendered.container.textContent).toContain('L/C No.');
     expect(rendered.container.textContent).toContain('L/C Date');
@@ -458,41 +486,6 @@ describe('화주용 통관 입력 폼', () => {
       customInput.dispatchEvent(new Event('input', { bubbles: true }));
     });
     expect(rendered.onProfilePatch).toHaveBeenCalledWith({ packageType: 'WOVEN SACK' });
-  });
-
-  it('회사명 동일 상태에서는 서명자가 읽기 전용이며 해제 시 체크 전 거래 서명자를 복원한다', () => {
-    const rendered = renderForm(
-      [firstItem],
-      false,
-      { signedBy: '인천테크', contactName: '현재 프로필 담당자' },
-      { isSignerSameAsCompany: true, signerNameBeforeCompany: 'Saved Trade Signer' },
-      '현재 프로필 담당자',
-    );
-    const signerGroup = Array.from(rendered.container.querySelectorAll('label'))
-      .find((label) => label.textContent === '서명자 영문명')
-      ?.parentElement;
-    const signerInput = signerGroup?.querySelector<HTMLInputElement>('input.form-input');
-    const checkbox = signerGroup?.querySelector<HTMLInputElement>('input[type="checkbox"]');
-
-    expect(signerInput?.readOnly).toBe(true);
-    act(() => checkbox?.click());
-    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ signedBy: 'Saved Trade Signer' });
-  });
-
-  it('체크 전 서명자가 없으면 해제 시 현재 회원프로필 담당자를 사용한다', () => {
-    const rendered = renderForm(
-      [firstItem],
-      false,
-      { signedBy: '인천테크', contactName: '거래 내 담당자' },
-      { isSignerSameAsCompany: true, signerNameBeforeCompany: '' },
-      'Profile Contact',
-    );
-    const checkbox = Array.from(rendered.container.querySelectorAll('label'))
-      .find((label) => label.textContent?.includes('회사명과 서명자 동일'))
-      ?.querySelector<HTMLInputElement>('input');
-
-    act(() => checkbox?.click());
-    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ signedBy: 'Profile Contact' });
   });
 
   it('화인 없음 체크 시 N/M을 설정하고 기존 화인을 보관한다', () => {
