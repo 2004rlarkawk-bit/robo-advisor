@@ -395,10 +395,13 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', send
         )}
 
         {detailTab === 'messages' && !selected.returnRequest && (
-          <section className="form-card import-card">
-            <h2>아직 보낸 요청이 없습니다.</h2>
-            <p>서류 검토에서 보완할 항목을 선택해 한 번에 요청하세요.</p>
-            <button type="button" className="btn btn-secondary" onClick={() => setDetailTab('review')}>서류 검토로 이동</button>
+          <section className="form-card import-card fwd-message-empty">
+            <span className="fwd-message-empty-icon" aria-hidden="true"><Mail size={22} /></span>
+            <div className="fwd-message-empty-copy">
+              <h2>아직 보낸 요청이 없습니다.</h2>
+              <p>서류 검토에서 필요한 항목을 선택하면 보완 요청을 보낼 수 있어요.</p>
+            </div>
+            <button type="button" className="btn btn-secondary" onClick={() => setDetailTab('review')}>서류 검토로 이동 <span aria-hidden="true">→</span></button>
           </section>
         )}
 
