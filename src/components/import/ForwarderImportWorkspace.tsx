@@ -7,7 +7,7 @@
  * 운영 상태는 forwarderCaseService를 통해 workflow_data.forwarderCase에 저장한다.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, CheckCircle2, CornerUpLeft, Download, Inbox, MoreHorizontal, RefreshCw, Search, Ship } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, CornerUpLeft, Download, Search } from 'lucide-react';
 import {
   FORWARDER_STAGE_LABEL,
   FORWARDER_STAGE_ORDER,
@@ -34,6 +34,7 @@ import { loadTradeAttachmentFile } from '../../services/tradeAttachmentStorageSe
 import { downloadArrivalNoticeDocx } from '../../services/arrivalNoticeDocxService';
 import ImportDocumentComparison from './ImportDocumentComparison';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
+import ForwarderImportInbox from './ForwarderImportInbox';
 
 interface Props {
   userId: string;
@@ -51,7 +52,6 @@ const STAGE_BADGE_CLASS: Record<ForwarderCaseStage, string> = {
 };
 
 type DetailTab = 'overview' | 'review' | 'clearance';
-type QueueFilter = 'active' | 'received' | 'blockers' | 'done';
 
 function formatEta(eta: string): string {
   return eta ? eta.slice(0, 10) : '미정';
@@ -91,16 +91,18 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
   const [dispatchBusy, setDispatchBusy] = useState(false);
   /** 배차 의뢰 입력 — 저장 전까지 화면에만 두고, 생성 시 케이스에 기록한다. */
   const [dispatchDraft, setDispatchDraft] = useState<Record<string, ImportDispatchRequest>>({});
-  const [queueFilter, setQueueFilter] = useState<QueueFilter>('active');
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
+    setRefreshing(true);
     try {
       setCases(await listForwarderCases());
     } catch (err) {
       console.error('포워더 업무 큐 조회 실패:', err);
-      setCases([]);
       setError('업무 목록을 불러오지 못했습니다. 새로고침을 눌러 다시 시도해 주세요.');
+    } finally {
+      setRefreshing(false);
     }
   }, []);
 
@@ -837,110 +839,6 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
     );
   }
 
-  // ---------- 업무 큐(목록) 화면 ----------
-  const summary = {
-    active: cases?.filter((item) => item.stage !== 'done').length ?? 0,
-    blockers: cases?.reduce((total, item) => total + item.blockerCount, 0) ?? 0,
-  };
-  const visibleCases = (cases ?? []).filter((item) => {
-    if (queueFilter === 'active') return item.stage !== 'done';
-    if (queueFilter === 'received') return item.stage === 'received';
-    if (queueFilter === 'blockers') return item.blockerCount > 0;
-    return item.stage === 'done';
-  });
-  const filterOptions: { value: QueueFilter; label: string; count: number }[] = [
-    { value: 'active', label: '진행 중', count: summary.active },
-    { value: 'received', label: '신규 접수', count: cases?.filter((item) => item.stage === 'received').length ?? 0 },
-    { value: 'blockers', label: '차단', count: cases?.filter((item) => item.blockerCount > 0).length ?? 0 },
-    { value: 'done', label: '완료', count: cases?.filter((item) => item.stage === 'done').length ?? 0 },
-  ];
-
-  return (
-    <div className="fwd-workspace">
-      <section className="form-card import-card">
-        <div className="import-card-heading fwd-queue-heading">
-          <div>
-            <h2><Ship size={18} /> 수입 업무 큐</h2>
-            <p className="fwd-queue-status"><strong>처리 필요 {summary.active}건</strong>{summary.blockers > 0 && <> · <span>{summary.blockers}건 차단</span></>}</p>
-          </div>
-          <div className="fwd-queue-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => void load()}><RefreshCw size={15} /> 새로고침</button>
-            <details className="fwd-more-menu">
-              <summary aria-label="추가 작업"><MoreHorizontal size={19} /></summary>
-              <button type="button" onClick={onDirectUpload}>직접 등록</button>
-            </details>
-          </div>
-        </div>
-
-        {error && <div className="form-message error">{error}</div>}
-
-        {cases !== null && cases.length > 0 && (
-          <div className="fwd-filter-bar" aria-label="업무 목록 필터">
-            {filterOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={queueFilter === option.value ? 'is-active' : ''}
-                onClick={() => setQueueFilter(option.value)}
-              >
-                {option.label} <span>{option.count}</span>
-              </button>
-            ))}
-            <span className="fwd-sort-note">차단 건 · 업무 단계 · ETA 순</span>
-          </div>
-        )}
-
-        {cases === null && <p className="fwd-empty">업무 목록을 불러오는 중…</p>}
-
-        {cases !== null && cases.length === 0 && (
-          <div className="fwd-empty">
-            <Inbox size={28} />
-            <p><strong>접수된 수입 건이 없습니다.</strong></p>
-            <p>화주가 수입 서류 분석을 완료해 전송하면 이곳에 의뢰로 도착합니다.<br />의뢰 없이 받은 서류는 [직접 등록]으로 시작할 수 있습니다.</p>
-          </div>
-        )}
-
-        {cases !== null && visibleCases.length === 0 && (
-          <p className="fwd-filter-empty">이 조건에 해당하는 업무가 없습니다.</p>
-        )}
-
-        {cases !== null && visibleCases.length > 0 && (
-          <div className="import-table-wrap">
-            <table className="import-table fwd-queue-table">
-              <thead>
-                <tr><th>ETA</th><th>수입 건</th><th>상태</th><th>다음 조치</th></tr>
-              </thead>
-              <tbody>
-                {visibleCases.map((item) => {
-                  const dday = etaDday(item.eta);
-                  return (
-                    <tr key={item.tradeId} className="fwd-row" onClick={() => openCase(item.tradeId)}>
-                      <td className="fwd-eta-cell">
-                        {formatEta(item.eta)}
-                        {dday && item.stage !== 'done' && <span className={`fwd-dday is-${dday.tone}`}>{dday.label}</span>}
-                      </td>
-                      <td className="fwd-case-cell">
-                        <strong>{item.importer}</strong>
-                        <span>{item.blNo} · {item.vesselName || '선박 미정'}</span>
-                        {item.origin === 'shipper_request' && <span className="fwd-origin is-request">화주 의뢰</span>}
-                      </td>
-                      <td>
-                        <span className={`fwd-stage-badge ${STAGE_BADGE_CLASS[item.stage]}`}>{FORWARDER_STAGE_LABEL[item.stage]}</span>
-                        {item.returnRequest && (
-                          <span className={`fwd-return-badge${item.returnRequest.resolvedAt ? ' is-resolved' : ''}`}>
-                            {item.returnRequest.resolvedAt ? '재검토 필요' : item.shipperEditing ? '화주 수정 중' : '화주 보완 대기'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="fwd-next-cell">{item.nextAction}{item.blockerCount > 0 && <span className="fwd-blocker-inline">차단 {item.blockerCount}</span>}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </div>
-  );
+  return <ForwarderImportInbox cases={cases} error={error} refreshing={refreshing}
+    onRefresh={() => void load()} onDirectUpload={onDirectUpload} onOpen={openCase} />;
 }
