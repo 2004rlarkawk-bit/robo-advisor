@@ -8,6 +8,7 @@ import {
 import type { AuthSessionUser } from '../../services/authService';
 import type { UserProfile } from '../../services/profileService';
 import type { AppMenu } from '../../services/workspaceSessionService';
+import type { WorkspaceRole } from '../../utils/workspaceRole';
 import NotificationBell from '../NotificationBell';
 import '../../styles/forwarderPolish.css';
 
@@ -17,6 +18,9 @@ interface AppHeaderProps {
   profile: UserProfile;
   /** 포워더 역할이면 헤더 색을 남색으로 바꿔 화주 화면과 즉시 구분되게 한다 */
   forwarderMode?: boolean;
+  /** 화주·포워더 겸용 계정이면 헤더 칩을 눌러 역할을 전환할 수 있다 */
+  canSwitchRole?: boolean;
+  onRoleChange?: (role: WorkspaceRole) => void;
   /** 알림 벨 폴링을 다시 트리거하는 값 (예: activeMenu 변경 시) */
   notificationPollKey?: unknown;
   onToggleSidebar: () => void;
@@ -29,6 +33,8 @@ export default function AppHeader({
   user,
   profile,
   forwarderMode = false,
+  canSwitchRole = false,
+  onRoleChange,
   notificationPollKey,
   onToggleSidebar,
   onNavigate,
@@ -49,10 +55,32 @@ export default function AppHeader({
           {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
         </button>
         <span className="header-product-name">PortAI</span>
-        <span className="header-role-chip">
-          {forwarderMode ? <Briefcase size={14} aria-hidden="true" /> : <Package size={14} aria-hidden="true" />}
-          {forwarderMode ? '포워더 업무' : '화주 업무'}
-        </span>
+        {canSwitchRole && onRoleChange ? (
+          // 겸용 계정: 두 칩을 모두 보여주고, 비활성 칩을 누르면 그 역할로 전환한다.
+          <div className="header-role-switch" role="group" aria-label="업무 역할 전환">
+            <button
+              type="button"
+              className={`header-role-chip${forwarderMode ? ' is-inactive' : ''}`}
+              aria-pressed={!forwarderMode}
+              onClick={() => onRoleChange('shipper')}
+            >
+              <Package size={14} aria-hidden="true" /> 화주 업무
+            </button>
+            <button
+              type="button"
+              className={`header-role-chip${forwarderMode ? '' : ' is-inactive'}`}
+              aria-pressed={forwarderMode}
+              onClick={() => onRoleChange('forwarder')}
+            >
+              <Briefcase size={14} aria-hidden="true" /> 포워더 업무
+            </button>
+          </div>
+        ) : (
+          <span className="header-role-chip">
+            {forwarderMode ? <Briefcase size={14} aria-hidden="true" /> : <Package size={14} aria-hidden="true" />}
+            {forwarderMode ? '포워더 업무' : '화주 업무'}
+          </span>
+        )}
       </div>
 
       <div className="header-actions">
