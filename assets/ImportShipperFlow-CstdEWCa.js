@@ -1,0 +1,1 @@
+import{j as o}from"./index-OFsY7fke.js";import{I as p}from"./ImportTradeFlow-BLAb9rYw.js";import"./icons-CIyJ6vGy.js";import"./react-D860gvYl.js";import"./cargoProgressService-Cy1vN0r0.js";import"./index-C9noi5d0.js";function f(r){return o.jsx(p,{role:"shipper",...r})}export{f as default};
