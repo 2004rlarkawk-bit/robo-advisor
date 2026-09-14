@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, CornerUpLeft, ExternalLink, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, Info } from 'lucide-react';
 import type { ForwarderCaseIssue } from '../../types/forwarderCase';
 import type { ImportComparisonRow, ImportDocumentMeta } from '../../types/importTrade';
 import { getIssueComparisons } from '../../utils/forwarderIssueComparisons';
@@ -25,13 +25,14 @@ interface Props {
   comparisons?: ImportComparisonRow[];
   documentBusyId?: string | null;
   onOpenDocument?: (document: ImportDocumentMeta) => void;
-  onRequestCorrection?: (issue: ForwarderCaseIssue, note: string) => void;
+  requestPicks?: Record<string, boolean>;
+  onToggleRequest?: (issue: ForwarderCaseIssue, checked: boolean) => void;
   onResolve: (issue: ForwarderCaseIssue, note: string) => Promise<boolean>;
   onReopen: (issue: ForwarderCaseIssue) => Promise<boolean>;
 }
 
 /** Presentation only: keep every issue ID and existing resolution semantics intact. */
-export default function ForwarderIssueReview({ issues, notes, saving, documents = [], comparisons = [], documentBusyId = null, onOpenDocument, onRequestCorrection, onResolve, onReopen }: Props) {
+export default function ForwarderIssueReview({ issues, notes, saving, documents = [], comparisons = [], documentBusyId = null, onOpenDocument, requestPicks = {}, onToggleRequest, onResolve, onReopen }: Props) {
   const [filter, setFilter] = useState<Group>(() =>
     issues.some((issue) => issueReviewGroup(issue) === 'required') ? 'required'
       : issues.some((issue) => issueReviewGroup(issue) === 'recommended') ? 'recommended' : 'done');
@@ -57,7 +58,9 @@ export default function ForwarderIssueReview({ issues, notes, saving, documents 
         const shownDocuments = evidence.length ? evidence : documents;
         return <div className={`fwd-review-item is-${filter}`} key={issue.id}>
         <div className="fwd-review-row">
-          <span className="fwd-review-dot" aria-hidden="true"/>
+          {onToggleRequest && !issue.resolved && issue.severity !== 'info'
+            ? <input className="fwd-review-pick" type="checkbox" aria-label={`${issue.title} 보완 요청 선택`} checked={Boolean(requestPicks[issue.id])} disabled={saving} onChange={event => onToggleRequest(issue, event.target.checked)} />
+            : <span className="fwd-review-dot" aria-hidden="true"/>}
           <div className="fwd-review-summary"><span className="fwd-review-name">{issue.title}{issue.severity === 'info' && <small>참고</small>}</span><p className="fwd-review-description">{issue.detail}</p></div>
           <button type="button" className="fwd-review-toggle" aria-label={`${issue.title} ${expandedId === issue.id ? '검토 닫기' : issue.resolved ? '기록 보기' : '검토하기'}`} aria-expanded={expandedId === issue.id} aria-controls={`fwd-review-${issue.id}`} onClick={() => setExpandedId(expandedId === issue.id ? null : issue.id)}>
             <span className="fwd-review-open">{expandedId === issue.id ? '접기' : issue.resolved ? '기록 보기' : '검토하기'}</span><ChevronDown size={16} aria-hidden="true"/>
@@ -83,11 +86,10 @@ export default function ForwarderIssueReview({ issues, notes, saving, documents 
             {notes[issue.id] && <p className="fwd-issue-note">검토 기록 · {notes[issue.id]}</p>}
             <button type="button" className="btn btn-secondary" disabled={saving} onClick={async () => { if (await onReopen(issue)) { setExpandedId(null); setFeedback('확인을 취소했습니다. 해당 검토 분류에서 다시 확인할 수 있습니다.'); } }}>완료 취소</button>
           </> : <>
-            <label htmlFor={`fwd-review-note-${issue.id}`} className="form-label">검토 메모 <span className="fwd-review-optional">(선택)</span></label>
+            <label htmlFor={`fwd-review-note-${issue.id}`} className="form-label">검토 메모 <span className="fwd-review-optional">{issue.severity === 'blocker' ? '(문제없음 판단 시 필수)' : '(선택)'}</span></label>
             <textarea id={`fwd-review-note-${issue.id}`} className="form-input" rows={2} value={drafts[issue.id] ?? ''} onChange={(event) => setDrafts((current) => ({ ...current, [issue.id]: event.target.value }))} placeholder="원문 확인 결과나 판단 근거를 기록하세요."/>
             <div className="fwd-review-detail-actions">
-              {onRequestCorrection && issue.severity !== 'info' && <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => onRequestCorrection(issue, (drafts[issue.id] ?? '').trim())}><CornerUpLeft size={15} aria-hidden="true"/>보완 요청 작성</button>}
-              <button type="button" className="btn btn-primary" disabled={saving} onClick={async () => { if (await onResolve(issue, (drafts[issue.id] ?? '').trim())) { setExpandedId(null); setDrafts((current) => ({ ...current, [issue.id]: '' })); setFeedback('검토 결과를 저장했습니다. 확인 완료에서 볼 수 있습니다.'); } }}><CheckCircle2 size={15} aria-hidden="true"/>검토 완료</button>
+              <button type="button" className="btn btn-primary" disabled={saving || Boolean(requestPicks[issue.id]) || (issue.severity === 'blocker' && !(drafts[issue.id] ?? '').trim())} onClick={async () => { if (await onResolve(issue, (drafts[issue.id] ?? '').trim())) { setExpandedId(null); setDrafts((current) => ({ ...current, [issue.id]: '' })); setFeedback('검토 결과를 저장했습니다. 확인 완료에서 볼 수 있습니다.'); } }}><CheckCircle2 size={15} aria-hidden="true"/>문제없음으로 확인</button>
             </div>
           </>}
         </div>

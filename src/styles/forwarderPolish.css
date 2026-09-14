@@ -94,6 +94,24 @@
 .fwd-workspace .fwd-review-item:last-child { border-bottom: 1px solid #e4eaf2; }
 .fwd-workspace .fwd-review-row { display: flex; align-items: flex-start; gap: 11px; padding: 18px 4px; }
 .fwd-workspace .fwd-review-row > .fwd-review-dot { margin-top: 8px; }
+.fwd-workspace .fwd-review-pick { width: 18px; height: 18px; margin: 3px 0 0; flex-shrink: 0; accent-color: #2563c9; cursor: pointer; }
+.fwd-workspace .fwd-batch-review { border: 1px solid #dbe3ee; border-radius: 10px; background: #fff; overflow: hidden; }
+.fwd-workspace .fwd-batch-toolbar { padding: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: #f1f6fd; color: #45658d; font-size: 13px; }
+.fwd-workspace .fwd-batch-toolbar > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.fwd-workspace .fwd-batch-toolbar .btn { padding: 10px 12px; font-size: 13px; }
+.fwd-workspace .fwd-batch-review .btn:disabled { background: #e8edf4; border-color: #dce3ed; color: #78889f; box-shadow: none; cursor: not-allowed; }
+.fwd-workspace .fwd-batch-composer, .fwd-workspace .fwd-batch-confirm { padding: 20px; border-top: 1px solid #dbe3ee; }
+.fwd-workspace .fwd-batch-composer:first-child, .fwd-workspace .fwd-batch-confirm:first-child { border-top: 0; }
+.fwd-workspace .fwd-batch-composer h3, .fwd-workspace .fwd-batch-confirm h3 { margin: 0 0 16px; font-size: 16px; }
+.fwd-workspace .fwd-batch-confirm p, .fwd-workspace .fwd-batch-confirm li { font-size: 13px; color: #64748b; line-height: 1.7; }
+.fwd-workspace .fwd-batch-outstanding { display: block; padding: 12px 14px; margin: 0 0 18px; border-radius: 7px; background: #fff4f4; font-size: 13px; line-height: 1.6; }
+.fwd-workspace .fwd-batch-outstanding strong { color: #a42632; white-space: nowrap; }
+.fwd-workspace .fwd-batch-outstanding span { color: #6c5860; overflow-wrap: anywhere; }
+.fwd-workspace .fwd-batch-outstanding ul { width: 100%; list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 14px; }
+.fwd-workspace .fwd-batch-outstanding li { display: grid; grid-template-columns: 1fr; gap: 3px; }
+.fwd-workspace .fwd-batch-outstanding li b { font-weight: 600; color: #49576b; }
+.fwd-workspace .fwd-batch-confirm .fwd-return-actions { margin-top: 18px; padding-top: 0; border-top: 0; }
+.fwd-workspace .fwd-batch-confirm .btn { font-size: 13px; padding: 10px 14px; }
 .fwd-workspace .fwd-review-summary { min-width: 0; flex: 1; }
 .fwd-workspace .fwd-review-description { margin: 6px 0 0; color: #65758c; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; white-space: pre-line; }
 .fwd-workspace .fwd-review-toggle { flex-shrink: 0; display: flex; align-items: center; gap: 7px; padding: 6px 8px; border: 1px solid #dce5f0; border-radius: 7px; background: #fff; text-align: left; color: #25344a; font: inherit; cursor: pointer; }

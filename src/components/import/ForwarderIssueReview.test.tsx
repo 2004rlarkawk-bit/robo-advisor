@@ -62,20 +62,20 @@ describe('ForwarderIssueReview', () => {
     await act(async () => button('필수 확인').click());
     await act(async () => button('총중량 불일치').click());
     expect(container.querySelector<HTMLTextAreaElement>('#fwd-review-note-weight')?.value).toBe('선사 검량 확인');
-    await act(async () => button('검토 완료').click());
+    await act(async () => button('문제없음으로 확인').click());
     expect(onResolve).toHaveBeenCalledWith(issues[0], '선사 검량 확인');
     expect(container.querySelector('[role=status]')?.textContent).toContain('저장했습니다');
   });
 
   it('keeps failed saves open, respects saving and supports undo with existing notes', async () => {
     onResolve.mockResolvedValue(false);
-    await render();
+    await render({ issues: [{ ...issues[0], severity: 'check' }] });
     await act(async () => button('총중량 불일치').click());
-    await act(async () => button('검토 완료').click());
+    await act(async () => button('문제없음으로 확인').click());
     expect(container.querySelector<HTMLElement>('#fwd-review-weight')?.hidden).toBe(false);
     expect(container.querySelector('[role=status]')).toBeNull();
     await render({ saving: true });
-    expect(button('검토 완료').disabled).toBe(true);
+    expect(button('문제없음으로 확인').disabled).toBe(true);
     await render();
     await act(async () => button('확인 완료').click());
     await act(async () => button('확인된 항목').click());
@@ -98,8 +98,8 @@ describe('ForwarderIssueReview', () => {
 
   it('shows evidence and actions inside review without repeating the problem description', async () => {
     const onOpenDocument = vi.fn();
-    const onRequestCorrection = vi.fn();
-    await render({ documents, onOpenDocument, onRequestCorrection });
+    const onToggleRequest = vi.fn();
+    await render({ documents, onOpenDocument, onToggleRequest });
     await act(async () => button('총중량 불일치').click());
     const detail = container.querySelector('#fwd-review-weight')!;
     expect(detail.textContent).not.toContain(issues[0].detail);
@@ -108,15 +108,15 @@ describe('ForwarderIssueReview', () => {
     expect(detail.textContent).not.toContain('invoice.pdf');
     await act(async () => detail.querySelector<HTMLButtonElement>('.fwd-review-source')!.click());
     expect(onOpenDocument).toHaveBeenCalledWith(documents[1]);
-    await act(async () => button('보완 요청 작성').click());
-    expect(onRequestCorrection).toHaveBeenCalledWith(issues[0], '');
+    await act(async () => container.querySelector<HTMLInputElement>('.fwd-review-pick')!.click());
+    expect(onToggleRequest).toHaveBeenCalledWith(issues[0], true);
     expect(onResolve).not.toHaveBeenCalled();
-    await render({ documents, onOpenDocument, onRequestCorrection, documentBusyId: 'pl' });
+    await render({ documents, onOpenDocument, onToggleRequest, documentBusyId: 'pl' });
     expect([...detail.querySelectorAll<HTMLButtonElement>('.fwd-review-source')].every(x=>x.disabled)).toBe(true);
   });
 
   it('does not invent evidence or expose request actions on ineligible items', async () => {
-    await render({ documents, onOpenDocument: vi.fn(), onRequestCorrection: vi.fn() });
+    await render({ documents, onOpenDocument: vi.fn(), onToggleRequest: vi.fn() });
     await act(async () => button('권장 사항').click());
     await act(async () => button('참고 자료').click());
     const detail = container.querySelector('#fwd-review-info')!;
