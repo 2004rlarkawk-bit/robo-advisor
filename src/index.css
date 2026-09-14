@@ -567,7 +567,10 @@ body {
 .forwarder-cargo-item { border: 1px solid var(--border-color); border-radius: 10px; background: var(--surface-color); overflow: hidden; }
 .forwarder-cargo-item > summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; list-style-position: inside; }
 .forwarder-cargo-item > summary span { min-width: 0; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.forwarder-cargo-item .form-grid { padding-top: 4px; }
+/* 화물명세 카드 안쪽 그리드 — .form-section > .form-grid 의 직계 자식 규칙이 안 닿는 위치라
+   좌우·아래 여백을 직접 준다(없으면 라벨이 카드 왼쪽 끝에 붙고 .form-grid 기본 margin-bottom 32px만 남음).
+   좌우 14px은 위쪽 summary(품명)의 padding과 같은 값으로, 제목과 입력칸의 시작선을 맞춘다. */
+.forwarder-cargo-item .form-grid { padding: 4px 14px 14px; margin-bottom: 0; }
 .forwarder-step-description { margin: 4px 0 0; color: var(--text-light); font-size: 13px; }
 .forwarder-bl-review > .form-message { margin: 16px 0; }
 .forwarder-generated-document-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 18px; padding: 20px; border: 1px solid var(--border-color); border-radius: 12px; background: #fff; }
