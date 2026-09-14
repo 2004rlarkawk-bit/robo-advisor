@@ -4163,6 +4163,7 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: 'ì ‘ê
   margin-top: 20px; background: #fff; border: 1px solid #cbd5e1;
   border-radius: 16px; box-shadow: 0 1px 4px rgba(15, 23, 42, .06); overflow: hidden;
 }
+.forwarder-workspace-form .doc-panel { margin-bottom: 20px; }
 .doc-panel-head {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 14px;
   padding: 18px 24px; background: #fafbfc; border: none; cursor: pointer;
