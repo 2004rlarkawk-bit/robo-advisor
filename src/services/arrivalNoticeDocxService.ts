@@ -1,263 +1,145 @@
-/**
- * 포워더 도착통지서(Arrival Notice) 발행.
- *
- * 실제 선사·포워더가 쓰는 A/N 서식(B/L형 격자 양식)을 따른다:
- * 레터헤드 → 당사자/선적정보 격자 → 화물명세 표 → FREIGHT & CHARGES
- * (통화·기준·단가·금액 컬럼) → 계좌·프리타임 → 안내문·담당 서명란.
- */
+/** 한영 병기 해상 도착통지서. 비용 청구서 및 화물 인도지시서와 구분한다. */
 import {
-  AlignmentType, BorderStyle, Document, Packer, Paragraph, Table, TableCell, TableRow,
-  TextRun, VerticalAlign, WidthType,
+  AlignmentType, BorderStyle, Document, Footer, Packer, PageNumber, Paragraph,
+  Table, TableCell, TableLayoutType, TableRow, TextRun, VerticalAlign, WidthType,
 } from 'docx';
 import type { ForwarderImportCase } from '../types/forwarderCase';
+import type { ImportParty } from '../types/importTrade';
 
-const s = (v: unknown): string => (v === null || v === undefined ? '' : String(v)).trim();
+const text = (value: unknown): string => {
+  const result = value == null ? '' : String(value).trim();
+  return result === '-' ? '' : result;
+};
+const first = (...values: unknown[]) => values.map(text).find(Boolean) || '';
+const missing = '미확인 / Not provided';
+const line = { style: BorderStyle.SINGLE, size: 4, color: 'D9D9D9' };
+const borders = { top: line, bottom: line, left: line, right: line };
+const width = 10400;
 
-const LINE = { style: BorderStyle.SINGLE, size: 4, color: '000000' };
-const BOX = { top: LINE, bottom: LINE, left: LINE, right: LINE };
-const NONE = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
-const NO_BOX = { top: NONE, bottom: NONE, left: NONE, right: NONE };
+function partyLines(name: string, details?: ImportParty): string[] {
+  // 이름이 다른 당사자의 주소·연락처가 섞이지 않도록 한다.
+  const matching = !name || !text(details?.name) || name.toLowerCase() === text(details?.name).toLowerCase();
+  return [name || text(details?.name), ...(matching ? [text(details?.address), text(details?.country),
+    [text(details?.phone), text(details?.email)].filter(Boolean).join(' / ')] : [])].filter(Boolean);
+}
 
-/** 실무 서식의 셀 — 작은 대문자 라벨 + 본문 값. 값이 없으면 기입 공간만 남긴다. */
-function box(label: string, lines: string[], widthPct: number, opts: { minLines?: number; center?: boolean } = {}): TableCell {
-  const contentLines = lines.filter(Boolean);
-  const padded = [...contentLines];
-  while (padded.length < (opts.minLines ?? 1)) padded.push(' ');
+/** 구형 snapshot도 처리하며 B/L 종류, 운임 조건, 프리타임을 추정하지 않는다. */
+export function mapArrivalNotice(caseItem: ForwarderImportCase) {
+  const e = caseItem.snapshot.analysis.extracted;
+  const gross = first(e.cargoTotals?.grossWeight, e.grossWeight);
+  const packages = first(e.cargoTotals?.numberOfPackages, e.totalPackageCount);
+  const withUnit = (value: string, unit: string) => value && /^[-\d.,\s]+$/.test(value) && unit ? value + ' ' + unit : value;
+  return {
+    blNo: first(caseItem.blNo, e.blNo),
+    shipper: partyLines(first(e.shipper, e.exporterDetails?.name, caseItem.shipperName), e.exporterDetails),
+    consignee: partyLines(first(e.consignee, e.consigneeDetails?.name, caseItem.importer), e.consigneeDetails),
+    notify: partyLines(first(e.notifyParty, e.notifyPartyDetails?.name), e.notifyPartyDetails),
+    vessel: [first(e.vesselName, caseItem.vesselName), text(e.voyageNo)].filter(Boolean).join(' / '),
+    eta: first(e.estimatedArrivalDate, caseItem.eta),
+    loading: text(e.loadPort), discharge: text(e.dischargePort),
+    shipmentDate: text(e.shipmentDate), loadingMode: text(e.loadingMode),
+    containers: (e.containerNumbers?.filter(v => text(v)) || []).length ? e.containerNumbers.join('\n') : text(e.containerNo),
+    seals: (e.sealNumbers?.filter(v => text(v)) || []).length ? e.sealNumbers.join('\n') : text(e.sealNo),
+    description: first(e.productDescription, e.items?.map(item => text(item.description)).filter(Boolean).join('\n')),
+    packages: withUnit(packages, text(e.packageUnit)),
+    gross: withUnit(gross, text(e.grossWeightUnit)),
+    measurement: first(e.cargoTotals?.measurement, e.measurement),
+    invoice: text(e.invoiceNo), marks: text(e.shippingMarks),
+  };
+}
+
+function p(value: string, options: { bold?: boolean; size?: number; center?: boolean; after?: number } = {}) {
+  return new Paragraph({
+    alignment: options.center ? AlignmentType.CENTER : AlignmentType.LEFT,
+    spacing: { before: 0, after: options.after ?? 35, line: 250 },
+    children: [new TextRun({ text: value, size: options.size ?? 18, bold: options.bold, color: '000000' })],
+  });
+}
+
+function cell(label: string, values: string[], cellWidth: number): TableCell {
+  const lines = values.flatMap(value => value.split('\n')).filter(Boolean);
   return new TableCell({
-    width: { size: widthPct, type: WidthType.PERCENTAGE },
-    borders: BOX,
-    verticalAlign: VerticalAlign.TOP,
-    margins: { top: 40, bottom: 40, left: 90, right: 90 },
-    children: [
-      new Paragraph({ children: [new TextRun({ text: label, size: 12, color: '444444' })] }),
-      ...padded.map((line) => new Paragraph({
-        alignment: opts.center ? AlignmentType.CENTER : AlignmentType.LEFT,
-        children: [new TextRun({ text: line, size: 18 })],
-      })),
-    ],
+    width: { size: cellWidth, type: WidthType.DXA }, borders,
+    margins: { top: 90, bottom: 90, left: 120, right: 120 }, verticalAlign: VerticalAlign.TOP,
+    children: [p(label, { bold: true, size: 16, after: 70 }), ...((lines.length ? lines : [missing]).map(value => p(value)))],
   });
 }
 
-function chargeCell(text: string, widthPct: number, opts: { bold?: boolean; center?: boolean; right?: boolean; header?: boolean } = {}): TableCell {
-  return new TableCell({
-    width: { size: widthPct, type: WidthType.PERCENTAGE },
-    borders: BOX,
-    verticalAlign: VerticalAlign.CENTER,
-    margins: { top: 40, bottom: 40, left: 90, right: 90 },
-    shading: opts.header ? { fill: 'EFEFEF' } : undefined,
-    children: [new Paragraph({
-      alignment: opts.center ? AlignmentType.CENTER : opts.right ? AlignmentType.RIGHT : AlignmentType.LEFT,
-      children: [new TextRun({ text: text || ' ', size: opts.header ? 14 : 18, bold: opts.bold ?? opts.header ?? false })],
-    })],
-  });
+function table(rows: TableRow[], columns: number[]) {
+  return new Table({ width: { size: width, type: WidthType.DXA }, layout: TableLayoutType.FIXED, columnWidths: columns,
+    borders: { ...borders, insideHorizontal: line, insideVertical: line }, rows });
 }
-
-function chargeRow(item: string, cur = '', per = '', opts: { total?: boolean } = {}): TableRow {
-  return new TableRow({
-    children: [
-      chargeCell(item, 40, { bold: opts.total }),
-      chargeCell(cur, 12, { center: true }),
-      chargeCell(per, 12, { center: true }),
-      chargeCell('', 16, { right: true }),
-      chargeCell('', 20, { right: true, bold: opts.total }),
-    ],
-  });
+function pair(a: string, av: string[], b: string, bv: string[]) {
+  return new TableRow({ cantSplit: true, children: [cell(a, av, width / 2), cell(b, bv, width / 2)] });
 }
+const gap = () => new Paragraph({ spacing: { before: 0, after: 90, line: 60 }, children: [] });
 
-/** 수입 건 데이터로 도착통지서 DOCX Blob을 만든다. issuerName은 발행 포워더 상호. */
-export async function buildArrivalNoticeDocx(caseItem: ForwarderImportCase, issuerName = ''): Promise<Blob> {
-  const extracted = caseItem.snapshot.analysis.extracted;
-  const containers = extracted.containerNumbers.length > 0
-    ? extracted.containerNumbers.join(', ')
-    : extracted.containerNo;
-  const seal = extracted.sealNumbers.length > 0 ? extracted.sealNumbers.join(', ') : extracted.sealNo;
-  const packages = extracted.cargoTotals.numberOfPackages || extracted.totalPackageCount;
-  const grossWeight = [extracted.cargoTotals.grossWeight || extracted.grossWeight, extracted.grossWeightUnit || 'KG']
-    .filter(Boolean).join(' ');
-  const measurement = extracted.cargoTotals.measurement || extracted.measurement;
-  const issuedDate = new Date().toISOString().slice(0, 10);
-  const vesselVoyage = [s(extracted.vesselName || caseItem.vesselName), s(extracted.voyageNo)].filter(Boolean).join(' / ');
-
-  // 운임 조건은 인코텀즈로 추정 — C·D 조건은 수출자 부담(PREPAID), E·F 조건은 수입자 부담(COLLECT).
-  const incoterms = s(extracted.incoterms).toUpperCase().slice(0, 3);
-  const freightTerm = ['CIF', 'CFR', 'CIP', 'CPT', 'DAP', 'DPU', 'DDP'].includes(incoterms)
-    ? 'FREIGHT PREPAID'
-    : ['FOB', 'FCA', 'FAS', 'EXW'].includes(incoterms) ? 'FREIGHT COLLECT' : '';
-
+export async function buildArrivalNoticeDocx(caseItem: ForwarderImportCase, issuerName = '', contactName = ''): Promise<Blob> {
+  const data = mapArrivalNotice(caseItem);
+  const issuedDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+  const cargoWidths = [2400, 3200, 1500, 1700, 1600];
+  const cargoHeaders = ['Container / Seal\n컨테이너 / 봉인번호', 'Description of Goods\n품명', 'Packages\n포장 수량', 'Gross Weight\n총중량', 'Measurement\n용적'];
+  const cargoValues = [
+    [data.containers || 'Container: 미확인', data.seals ? 'Seal: ' + data.seals : 'Seal: 미확인'].join('\n'),
+    data.description, data.packages, data.gross, data.measurement,
+  ];
   const doc = new Document({
+    creator: issuerName || 'PortAI', title: 'ARRIVAL NOTICE 화물 도착통지서',
+    styles: { default: { document: { run: { font: { ascii: 'Arial', hAnsi: 'Arial', eastAsia: 'Apple SD Gothic Neo', cs: 'Arial' }, size: 18, color: '000000' }, paragraph: { spacing: { after: 35 } } } } },
     sections: [{
-      properties: { page: { margin: { top: 620, bottom: 620, left: 760, right: 760 } } },
+      properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 720, bottom: 720, left: 920, right: 920 } } },
+      footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.RIGHT,
+        children: [new TextRun({ text: 'ARRIVAL NOTICE  |  ', size: 14 }), new TextRun({ children: [PageNumber.CURRENT], size: 14 })] })] }) },
       children: [
-        // ── 레터헤드: 좌측 발행사, 우측 문서명·발행정보 ──
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [new TableRow({
-            children: [
-              new TableCell({
-                width: { size: 58, type: WidthType.PERCENTAGE },
-                borders: NO_BOX,
-                children: [
-                  new Paragraph({ children: [new TextRun({ text: issuerName || '(FORWARDER / 발행사)', bold: true, size: 26 })] }),
-                  new Paragraph({ children: [new TextRun({ text: 'TEL :                FAX :                E-MAIL :', size: 14, color: '444444' })] }),
-                ],
-              }),
-              new TableCell({
-                width: { size: 42, type: WidthType.PERCENTAGE },
-                borders: NO_BOX,
-                children: [
-                  new Paragraph({
-                    alignment: AlignmentType.RIGHT,
-                    children: [new TextRun({ text: 'ARRIVAL NOTICE', bold: true, size: 34 })],
-                  }),
-                  new Paragraph({
-                    alignment: AlignmentType.RIGHT,
-                    children: [new TextRun({ text: '(도착통지서 겸 청구서)', size: 14, color: '444444' })],
-                  }),
-                  new Paragraph({
-                    alignment: AlignmentType.RIGHT,
-                    children: [new TextRun({ text: `DATE : ${issuedDate}     OUR REF :`, size: 16 })],
-                  }),
-                ],
-              }),
-            ],
-          })],
-        }),
-        new Paragraph({ spacing: { after: 60 }, children: [] }),
-
-        // ── 당사자 / 선적 정보 격자 (B/L형) ──
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [
-            new TableRow({
-              children: [
-                box('SHIPPER (송하인)', [s(caseItem.shipperName)], 50, { minLines: 2 }),
-                box('MBL NO.', [s(caseItem.blNo)], 25),
-                box('HBL NO.', [], 25),
-              ],
-            }),
-            new TableRow({
-              children: [
-                box('CONSIGNEE (수하인)', [s(caseItem.importer)], 50, { minLines: 2 }),
-                box('OCEAN VESSEL / VOYAGE', [vesselVoyage], 25),
-                box('E.T.A.', [s(extracted.estimatedArrivalDate || caseItem.eta)], 25),
-              ],
-            }),
-            new TableRow({
-              children: [
-                box('NOTIFY PARTY (통지처)', [s(extracted.notifyParty) || 'SAME AS CONSIGNEE'], 50),
-                box('PORT OF LOADING', [s(extracted.loadPort)], 25),
-                box('PORT OF DISCHARGE', [s(extracted.dischargePort)], 25),
-              ],
-            }),
-            new TableRow({
-              children: [
-                box('DISCHARGING TERMINAL / BONDED AREA (도착 터미널·장치장)', [], 50),
-                box('FREIGHT', [freightTerm], 25),
-                box('ON BOARD DATE', [s(extracted.shipmentDate)], 25),
-              ],
-            }),
-          ],
-        }),
-        new Paragraph({ spacing: { after: 60 }, children: [] }),
-
-        // ── 화물 명세 ──
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [
-            new TableRow({
-              children: [
-                chargeCell('CONTAINER & SEAL NO.', 28, { header: true, center: true }),
-                chargeCell('NO. & KIND OF PKGS', 16, { header: true, center: true }),
-                chargeCell('DESCRIPTION OF GOODS', 32, { header: true, center: true }),
-                chargeCell('GROSS WEIGHT', 12, { header: true, center: true }),
-                chargeCell('MEASUREMENT', 12, { header: true, center: true }),
-              ],
-            }),
-            new TableRow({
-              children: [
-                box('', [[containers, seal].filter(Boolean).join(' / ')], 28, { minLines: 3 }),
-                box('', [s(packages)], 16, { minLines: 3, center: true }),
-                box('', [s(extracted.productDescription), `INVOICE NO. ${s(extracted.invoiceNo)}`.trim()], 32, { minLines: 3 }),
-                box('', [grossWeight], 12, { minLines: 3, center: true }),
-                box('', [s(measurement)], 12, { minLines: 3, center: true }),
-              ],
-            }),
-          ],
-        }),
-        new Paragraph({ spacing: { after: 60 }, children: [] }),
-
-        // ── FREIGHT & CHARGES ──
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [
-            new TableRow({
-              children: [
-                chargeCell('FREIGHT & CHARGES', 40, { header: true, center: true }),
-                chargeCell('CUR.', 12, { header: true, center: true }),
-                chargeCell('PER', 12, { header: true, center: true }),
-                chargeCell('RATE', 16, { header: true, center: true }),
-                chargeCell('AMOUNT', 20, { header: true, center: true }),
-              ],
-            }),
-            chargeRow('OCEAN FREIGHT'),
-            chargeRow('TERMINAL HANDLING CHARGE (THC)', 'KRW', 'CNTR'),
-            chargeRow('WHARFAGE', 'KRW', 'CNTR'),
-            chargeRow('DOCUMENT FEE (D/O)', 'KRW', 'B/L'),
-            chargeRow('CONTAINER CLEANING CHARGE', 'KRW', 'CNTR'),
-            chargeRow(''),
-            chargeRow('TOTAL', '', '', { total: true }),
-          ],
-        }),
-        new Paragraph({ spacing: { after: 60 }, children: [] }),
-
-        // ── 계좌 / 프리타임 ──
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [new TableRow({
-            children: [
-              box('BANK ACCOUNT (입금 계좌)', [], 60),
-              box('FREE TIME (무료장치기간)', [], 40),
-            ],
-          })],
-        }),
-
-        // ── 안내문 + 서명 ──
-        new Paragraph({
-          spacing: { before: 160, after: 40 },
-          children: [new TextRun({
-            text: '상기 화물이 위 일정으로 도착할 예정임을 통지드립니다. 도착 전까지 상기 비용을 정산하시고, 원본 B/L(또는 SURRENDER 확인)을 제출하시면 D/O가 발급됩니다.',
-            size: 16,
-          })],
-        }),
-        new Paragraph({
-          spacing: { after: 200 },
-          children: [new TextRun({
-            text: '무료장치기간 경과 시 보관료(Storage/Demurrage)가 발생할 수 있으니 유의하시기 바랍니다.',
-            size: 16,
-          })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          children: [new TextRun({ text: issuerName || '(FORWARDER / 발행사)', bold: true, size: 20 })],
-        }),
-        new Paragraph({
-          alignment: AlignmentType.RIGHT,
-          children: [new TextRun({ text: '담당 :                        (인)', size: 18 })],
-        }),
+        p(issuerName || '발행 포워더 미입력', { bold: true, size: 24, after: 100 }),
+        new Paragraph({ style: 'Title', alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: 'ARRIVAL NOTICE', bold: true, size: 32, color: '000000' })] }),
+        p('화물 도착통지서', { center: true, size: 21, after: 100 }),
+        p('Issue Date 발행일  ' + issuedDate + '     B/L No. 선하증권번호  ' + (data.blNo || missing), { size: 17 }),
+        p('DRAFT 초안 · 기재 내용과 도착 일정을 확인한 후 전달해 주세요.', { size: 16, after: 100 }),
+        table([
+          pair('Consignee 수하인', data.consignee, 'Notify Party 통지처', data.notify),
+          pair('Shipper 송하인', data.shipper, 'Forwarder 발행 포워더', [text(issuerName), contactName ? '담당자: ' + contactName : ''].filter(Boolean)),
+        ], [5200, 5200]),
+        gap(),
+        p('Shipment Information 도착 및 운송 정보', { bold: true, size: 20, after: 80 }),
+        table([
+          pair('Vessel / Voyage 선박명 및 항차', [data.vessel], 'ETA 도착예정일', [data.eta]),
+          pair('Port of Loading 선적항', [data.loading], 'Port of Discharge 양하항', [data.discharge]),
+          pair('Shipment Date 선적일', [data.shipmentDate], 'Service Type 운송 형태', [data.loadingMode]),
+          pair('Invoice No. 상업송장번호', [data.invoice], 'Marks and Numbers 화인', [data.marks]),
+        ], [5200, 5200]),
+        gap(),
+        p('Cargo Details 화물 명세', { bold: true, size: 20, after: 80 }),
+        table([
+          new TableRow({ tableHeader: true, cantSplit: true, children: cargoHeaders.map((label, i) => new TableCell({
+            width: { size: cargoWidths[i], type: WidthType.DXA }, borders, shading: { fill: 'F0F2F4' },
+            margins: { top: 90, bottom: 90, left: 100, right: 100 },
+            children: label.split('\n').map(value => p(value, { bold: true, size: 16, center: true })),
+          })) }),
+          new TableRow({ children: cargoValues.map((value, i) => new TableCell({
+            width: { size: cargoWidths[i], type: WidthType.DXA }, borders, verticalAlign: VerticalAlign.TOP,
+            margins: { top: 120, bottom: 120, left: 120, right: 120 },
+            children: (value || missing).split('\n').map(lineText => p(lineText, { center: i > 1 })),
+          })) }),
+        ], cargoWidths),
+        p('수량·중량·용적은 제출 서류에 기재된 화물 전체 기준입니다.', { size: 15, after: 100 }),
+        p('Remarks 안내사항', { bold: true, size: 20, after: 70 }),
+        p('상기 화물의 도착 예정 정보를 안내드립니다. 일정은 변경될 수 있으므로 실제 입항 및 반출 가능 여부는 선사·터미널에 확인해 주세요.', { size: 17 }),
+        p('본 문서는 비용 청구서 또는 화물인도지시서(D/O)가 아닙니다. 반출에 필요한 서류·비용·무료장치기간은 담당자에게 별도로 확인해 주세요.', { size: 17 }),
+        p('미확인 항목은 원본 서류 및 담당자 확인 후 보완해 주세요.', { size: 17, after: 110 }),
+        p([text(issuerName), text(contactName)].filter(Boolean).join(' · ') || '발행 포워더 미입력', { bold: true, size: 18 }),
       ],
     }],
   });
-
   return Packer.toBlob(doc);
 }
 
-/** 도착통지서를 생성해 즉시 내려받는다. */
-export async function downloadArrivalNoticeDocx(caseItem: ForwarderImportCase, issuerName = ''): Promise<void> {
-  const blob = await buildArrivalNoticeDocx(caseItem, issuerName);
+export async function downloadArrivalNoticeDocx(caseItem: ForwarderImportCase, issuerName = '', contactName = ''): Promise<void> {
+  const blob = await buildArrivalNoticeDocx(caseItem, issuerName, contactName);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `ARRIVAL_NOTICE_${caseItem.blNo !== '-' ? caseItem.blNo : caseItem.tradeId}.docx`;
+  link.download = 'ARRIVAL_NOTICE_' + (text(caseItem.blNo) || caseItem.tradeId).replace(/[\\/:*?"<>|]/g, '_') + '.docx';
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }

@@ -570,7 +570,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', send
                   onClick={() => {
                     if (documentsLocked || saving) return;
                     setAnBusy(true);
-                    void downloadArrivalNoticeDocx(selected, issuerName)
+                    void downloadArrivalNoticeDocx(selected, issuerName, senderContactName)
                       .catch((err) => {
                         console.error('A/N 생성 실패:', err);
                         setError('도착통지서를 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.');
@@ -581,7 +581,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', send
                   {anBusy ? '생성 중…' : 'A/N 생성·다운로드'}
                 </button>
               )}
-              notice={documentsLocked ? undefined : '초안 생성 · 청구 금액 확인 후 사용'}
+              notice={documentsLocked ? undefined : '한영 병기 · 비용 제외 · 도착 정보 확인 후 사용'}
             />
 
             {/* 배차 의뢰서 — D/O를 받은 뒤 운송사에 보내는 서류.
