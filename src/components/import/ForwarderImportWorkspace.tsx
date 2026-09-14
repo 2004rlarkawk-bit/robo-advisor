@@ -7,7 +7,7 @@
  * 운영 상태는 forwarderCaseService를 통해 workflow_data.forwarderCase에 저장한다.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, CheckCircle2, CornerUpLeft, Download, Search } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, CornerUpLeft, Download, ExternalLink, Info, Search } from 'lucide-react';
 import {
   FORWARDER_STAGE_LABEL,
   FORWARDER_STAGE_ORDER,
@@ -52,6 +52,23 @@ const STAGE_BADGE_CLASS: Record<ForwarderCaseStage, string> = {
 };
 
 type DetailTab = 'overview' | 'review' | 'clearance';
+
+/** 서류 썸네일 머리글(영문 서식명)과 하단 약칭 — 실제 서류처럼 보이는 미니 미리보기용 */
+const DOC_THUMB_TITLE: Record<string, string> = {
+  commercial_invoice: 'COMMERCIAL INVOICE',
+  packing_list: 'PACKING LIST',
+  bill_of_lading: 'BILL OF LADING',
+  certificate_of_origin: 'CERTIFICATE OF ORIGIN',
+  transport_request: 'SHIPMENT REQUEST',
+  export_declaration: 'EXPORT DECLARATION',
+  insurance_policy: 'INSURANCE POLICY',
+};
+const DOC_THUMB_ABBR: Record<string, string> = {
+  commercial_invoice: 'C/I',
+  packing_list: 'P/L',
+  bill_of_lading: 'B/L',
+  certificate_of_origin: 'C/O',
+};
 
 // AI 추출 ETA는 ISO(2026-09-20)일 수도, 원문 표기(SEP. 20, 2026)일 수도 있다.
 // ISO가 아닌 문자열을 10글자로 자르면 연도가 잘려 엉뚱한 날짜가 되므로 ISO일 때만 자른다.
@@ -231,6 +248,10 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
     const unresolvedBlockers = blockers.filter((issue) => !issue.resolved);
     const checks = selected.issues.filter((issue) => issue.severity === 'check');
     const infos = selected.issues.filter((issue) => issue.severity === 'info');
+    // 요약 칩용 집계 — 필수(미해결 차단) / 권장(미해결 확인·참고) / 완료
+    const unresolvedSoft = selected.issues.filter((issue) => !issue.resolved && issue.severity !== 'blocker').length;
+    const resolvedCount = selected.issues.filter((issue) => issue.resolved).length;
+    const sourceDocs = selected.snapshot.documents.filter((doc) => doc.storagePath);
     const canFinishReview = selected.blockerCount === 0;
     // 화주가 입력한 배송 요청 — 배차 의뢰서의 배송지 칸으로 그대로 넘어간다.
     const deliveryRequest = selected.snapshot.deliveryRequest;
@@ -359,11 +380,44 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
           </button>
         </nav>
 
+        {detailTab === 'overview' && sourceDocs.length > 0 && (
+          <section className="form-card import-card">
+            <div className="import-card-heading">
+              <div><h2>화주가 제출한 서류 <span className="fwd-doc-count">{sourceDocs.length}</span></h2></div>
+            </div>
+            <div className="fwd-doc-gallery">
+              {sourceDocs.map((doc) => (
+                <button
+                  key={doc.id}
+                  type="button"
+                  className="fwd-doc-thumb"
+                  disabled={docBusyId !== null}
+                  title={doc.name}
+                  onClick={() => void openSourceDocument(doc)}
+                >
+                  <span className="fwd-doc-page" aria-hidden="true">
+                    <strong>{DOC_THUMB_TITLE[doc.type] ?? IMPORT_DOCUMENT_TYPE_LABELS[doc.type] ?? '기타서류'}</strong>
+                  </span>
+                  <span className="fwd-doc-thumb-foot">
+                    {DOC_THUMB_ABBR[doc.type] ?? IMPORT_DOCUMENT_TYPE_LABELS[doc.type] ?? '기타'}
+                    {docBusyId === doc.id ? <span className="fwd-doc-opening">여는 중…</span> : <ExternalLink size={14} />}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {detailTab === 'overview' && (blockers.length > 0 || checks.length > 0 || infos.length > 0) && (
           <section className="form-card import-card">
             <div className="import-card-heading">
               <div><h2>이슈 점검</h2></div>
               <span className="source-badge">{selected.blockerCount + selected.checkCount}건 미처리</span>
+            </div>
+            <div className="fwd-issue-stats">
+              <span className="fwd-stat is-must"><AlertTriangle size={15} /> 필수 확인 <strong>{unresolvedBlockers.length}</strong></span>
+              <span className="fwd-stat is-reco"><Info size={15} /> 권장 확인 <strong>{unresolvedSoft}</strong></span>
+              <span className="fwd-stat is-done"><CheckCircle2 size={15} /> 확인 완료 <strong>{resolvedCount}</strong></span>
             </div>
             {unresolvedBlockers.length > 0 && (
               <div className="fwd-blocker-alert" role="alert">
