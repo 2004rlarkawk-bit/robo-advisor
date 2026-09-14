@@ -1,4 +1,5 @@
 import {
+  Briefcase,
   HelpCircle,
   PanelLeftClose,
   PanelLeftOpen,
@@ -12,6 +13,8 @@ interface AppHeaderProps {
   collapsed: boolean;
   user: AuthSessionUser;
   profile: UserProfile;
+  /** 포워더 역할이면 헤더 색을 남색으로 바꿔 화주 화면과 즉시 구분되게 한다 */
+  forwarderMode?: boolean;
   /** 알림 벨 폴링을 다시 트리거하는 값 (예: activeMenu 변경 시) */
   notificationPollKey?: unknown;
   onToggleSidebar: () => void;
@@ -23,6 +26,7 @@ export default function AppHeader({
   collapsed,
   user,
   profile,
+  forwarderMode = false,
   notificationPollKey,
   onToggleSidebar,
   onNavigate,
@@ -33,7 +37,7 @@ export default function AppHeader({
   const avatarLabel = userLabel.trim().charAt(0) || (user.type === 'member' ? '회' : '비');
 
   return (
-    <header className="header">
+    <header className={`header${forwarderMode ? ' header--forwarder' : ''}`}>
       <div className="header-title-sec">
         <button
           className="icon-btn sidebar-toggle"
@@ -43,6 +47,11 @@ export default function AppHeader({
           {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
         </button>
         <span className="platform-badge">Mentoring Project 2026</span>
+        {forwarderMode && (
+          <span className="header-role-chip">
+            <Briefcase size={13} /> 포워더 모드
+          </span>
+        )}
       </div>
 
       <div className="header-actions">
