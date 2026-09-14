@@ -3242,6 +3242,20 @@ body {
   border: none; background: none; padding: 0; cursor: pointer;
   font-size: 13.5px; color: var(--primary-color); text-decoration: underline;
 }
+/* 수정본 생성 후 — 파일명 + 원본/생성 문서 열기 버튼 한 줄 */
+.rv-match-doc-head.is-done { margin-bottom: 0; padding: 6px 0; flex-wrap: wrap; }
+.rv-match-doc-head.is-done .rv-match-doc-name { font-size: 16px; gap: 8px; }
+.rv-match-done-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.rv-match-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border-radius: 10px; font-family: inherit;
+  font-size: 14.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  transition: background .15s ease, filter .15s ease;
+}
+.rv-match-btn.outline { border: 1px solid #334155; background: #fff; color: var(--text-dark); }
+.rv-match-btn.outline:hover { background: #f8fafc; }
+.rv-match-btn.primary { border: 1px solid var(--primary-color); background: var(--primary-color); color: #fff; }
+.rv-match-btn.primary:hover { filter: brightness(0.94); }
 .rv-match-error { margin: 0; font-size: 14.5px; color: var(--warning-color); }
 .rv-match-table { width: 100%; border-collapse: collapse; font-size: 16px; }
 .rv-match-table thead th {

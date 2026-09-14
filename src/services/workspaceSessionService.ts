@@ -11,8 +11,7 @@ export type AppMenu =
   | 'customs_history'
   | 'analysis'
   | 'profile'
-  | 'guide'
-  | 'settings';
+  | 'guide';
 
 export interface WorkspaceSessionState {
   userId: string;
@@ -33,7 +32,6 @@ const MENUS = new Set<AppMenu>([
   'analysis',
   'profile',
   'guide',
-  'settings',
 ]);
 const DIRECTIONS = new Set<TradeType>(['export', 'import']);
 const ROLES = new Set<TradeRole>(['shipper', 'forwarder']);

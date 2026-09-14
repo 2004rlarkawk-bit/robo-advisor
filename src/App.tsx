@@ -27,7 +27,8 @@ import {
   PenLine,
   ChevronRight,
   Paperclip,
-  Mail
+  Mail,
+  FileCheck2
 } from 'lucide-react';
 import {
   TradeProfile,
@@ -442,6 +443,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [isMatchingExportDocs, setIsMatchingExportDocs] = useState(false);
   // 불일치 항목에서 업로드 서류 값을 골라 입력값을 바꾼 상태 — 재생성 전까지 안내를 띄운다.
   const [hasPendingMatchEdits, setHasPendingMatchEdits] = useState(false);
+  // 대조표에서 [수정본 생성]을 마쳤으면 표를 접고 원본/재생성 문서 열기만 남긴다.
+  const [matchRegenerated, setMatchRegenerated] = useState(false);
   // 불일치 항목별로 어느 쪽 값을 맞다고 골랐는지. 고른 칸에 체크가 뜨고, 다시 누르면 해제된다.
   const [matchChoices, setMatchChoices] = useState<Record<string, MatchChoice>>({});
   // AI 품명 정리를 기다리는 항목 키 — 해당 칸을 잠시 잠근다.
@@ -1255,7 +1258,10 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   };
 
   /** 생성을 시작했으면 true, 입력 문제로 시작조차 못 했으면 false. */
-  const handleGenerateDocuments = async (profileOverride?: TradeProfile): Promise<boolean> => {
+  const handleGenerateDocuments = async (
+    profileOverride?: TradeProfile,
+    options: { skipDocumentMatch?: boolean } = {},
+  ): Promise<boolean> => {
     if (isProcessing) return false;
     // 방금 만든 프로필로 생성할 때는 상태 반영을 기다리지 않도록 그 프로필의 품목으로 검사한다.
     const validationProfile = profileOverride ?? profile;
@@ -1305,7 +1311,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       setDocuments(result.documents?.documents || []);
       setIssues(result.issues?.issues || []);
       setFeedbackReport(result.feedback?.report || null);
-      void runExportDocumentMatch();
+      // 대조표에서 값을 골라 수정본을 만들 때는 이미 대조가 끝났으므로 다시 읽지 않는다.
+      if (!options.skipDocumentMatch) void runExportDocumentMatch();
       setHsCandidates(result.hs?.candidates || []);
       setHsDisambiguation(result.hs?.disambiguation || null);
 
@@ -1885,6 +1892,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       return;
     }
     setIsMatchingExportDocs(true);
+    setMatchChoices({});
+    setHasPendingMatchEdits(false);
+    setMatchRegenerated(false);
     try {
       const matches = await matchUploadedExportDocuments({
         attachments: shipperAttachments,
@@ -1959,13 +1969,15 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
 
   /**
    * 대조 결과를 바탕으로 서류를 다시 생성한다 — 파이프라인 콘솔을 그대로 띄운다.
+   * 업로드 서류를 다시 읽어 대조하지 않는다(사용자가 이미 값을 골랐으므로 기다리게 하지 않는다).
+   * 고른 값 표시는 남겨 두고, 결과는 [재생성 문서 열기]로 바로 확인하게 한다.
    * 입력 문제로 생성이 시작되지 않으면 고른 값을 그대로 둔다 (다시 고르게 하지 않는다).
    */
   const regenerateAfterMatchEdits = async (overrideProfile?: TradeProfile) => {
-    const started = await handleGenerateDocuments(overrideProfile);
+    const started = await handleGenerateDocuments(overrideProfile, { skipDocumentMatch: true });
     if (!started) return;
     setHasPendingMatchEdits(false);
-    setMatchChoices({});
+    setMatchRegenerated(true);
   };
 
   /**
@@ -3753,7 +3765,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   <div className="rv-panel rv-match-panel">
                     <div className="rv-panel-head">
                       내 서류 대조
-                      {!isMatchingExportDocs && (
+                      {!isMatchingExportDocs && !matchRegenerated && (
                         <span className={`rv-match-total${totalMatchMismatches > 0 || failedMatchCount > 0 ? ' bad' : ' ok'}`}>
                           {totalMatchMismatches > 0
                             ? `불일치 ${totalMatchMismatches}건`
@@ -3762,7 +3774,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                               : '모두 일치'}
                         </span>
                       )}
-                      {!isMatchingExportDocs && totalMatchMismatches > 0 && (
+                      {!isMatchingExportDocs && !matchRegenerated && totalMatchMismatches > 0 && (
                         <button
                           className="rv-match-apply-all"
                           disabled={isProcessing}
@@ -3776,12 +3788,35 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                       <p className="rv-match-loading">업로드한 서류를 읽어 입력값과 대조하는 중입니다…</p>
                     ) : exportDocMatches.map((match) => (
                       <div className="rv-match-doc" key={match.attachmentId}>
-                        <div className="rv-match-doc-head">
+                        <div className={`rv-match-doc-head${matchRegenerated ? ' is-done' : ''}`}>
                           <span className="rv-match-doc-name">
-                            <Paperclip size={13} /> {match.documentLabel} · {match.fileName}
+                            <Paperclip size={matchRegenerated ? 16 : 13} /> {match.documentLabel} · {match.fileName}
                           </span>
+                          {/* 수정본 생성 후: 표 대신 원본 / 생성 문서 열기 버튼만 */}
+                          {matchRegenerated && (
+                            <div className="rv-match-done-actions">
+                              <button
+                                type="button"
+                                className="rv-match-btn outline"
+                                onClick={() => void handleDownloadUploadedDoc(
+                                  shipperAttachments.find((a) => a.id === match.attachmentId)!,
+                                )}
+                              >
+                                <FileText size={17} /> 원본 파일 열기
+                              </button>
+                              {(() => {
+                                const docId = documentIdForAttachmentType(match.documentType);
+                                if (!docId || !hasDoc(docId)) return null;
+                                return (
+                                  <button type="button" className="rv-match-btn primary" onClick={() => setPreviewDocId(docId)}>
+                                    <FileCheck2 size={17} /> 생성 문서 열기
+                                  </button>
+                                );
+                              })()}
+                            </div>
+                          )}
                         </div>
-                        {match.error ? (
+                        {matchRegenerated ? null : match.error ? (
                           <p className="rv-match-error">{match.error}</p>
                         ) : (
                           <table className="rv-match-table">
@@ -3845,7 +3880,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                             </tbody>
                           </table>
                         )}
-                        <div className="rv-match-doc-actions">
+                        {!matchRegenerated && <div className="rv-match-doc-actions">
                           <button
                             className="rv-match-open"
                             onClick={() => void handleDownloadUploadedDoc(
@@ -3863,10 +3898,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                               </button>
                             );
                           })()}
-                        </div>
+                        </div>}
                       </div>
                     ))}
-                    {exportCrossChecks.length > 0 && (
+                    {!matchRegenerated && exportCrossChecks.length > 0 && (
                       <div className="rv-cross">
                         <div className="rv-cross-head">
                           서류 간 교차 대조
@@ -3904,11 +3939,11 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                         </table>
                       </div>
                     )}
-                    <p className="rv-match-note">
+                    {!matchRegenerated && <p className="rv-match-note">
                       추출값 기반 대조라 100% 정확하지 않을 수 있습니다. 불일치 항목은 원본과 함께 확인한 뒤,
                       맞는 값(현재 입력값 또는 업로드 서류 값)을 눌러 골라 주세요. 업로드 서류 값을 고른 항목만 입력값이 바뀝니다.
-                    </p>
-                    {!isMatchingExportDocs && (
+                    </p>}
+                    {!isMatchingExportDocs && !matchRegenerated && (
                       <div className="rv-match-footer">
                         <button
                           className="btn btn-primary btn-sm"

@@ -54,17 +54,30 @@ describe('OnboardingTour 다시 보기', () => {
 });
 
 describe('GuidePanel 수출/수입 탭', () => {
-  it('기본은 수출 흐름을 보여주고, 수입 탭을 누르면 수입 흐름과 대조 항목으로 바뀐다', () => {
+  it('기본은 수출 흐름과 서류 6종을 보여주고, 수입 탭을 누르면 수입 흐름으로 바뀐다', () => {
     const view = renderWithMenu();
     expect(view.textContent).toContain('필요 서류 자동 생성');
     expect(view.textContent).toContain('수출 서류 6종');
-    expect(view.textContent).not.toContain('수입신고 의뢰서');
+    expect(view.textContent).not.toContain('서류 업로드 · AI 분석');
 
     const importTab = [...view.querySelectorAll('button[role="tab"]')].find((b) => b.textContent?.includes('수입할 때'));
     act(() => { (importTab as HTMLButtonElement).click(); });
 
-    expect(view.textContent).toContain('수입신고 의뢰서');
-    expect(view.textContent).toContain('서류끼리 무엇을 대조하나요?');
+    expect(view.textContent).toContain('서류 업로드 · AI 분석');
     expect(view.textContent).not.toContain('수출 서류 6종');
+  });
+
+  it('FAQ는 공통·수출·수입 탭으로 나뉘고, 고른 묶음의 질문만 보인다', () => {
+    const view = renderWithMenu();
+    const faqTabs = [...view.querySelectorAll('.gs-faq-tab')];
+    expect(faqTabs.map((el) => el.textContent)).toEqual(['공통', '수출', '수입']);
+
+    // 기본은 공통
+    expect(view.textContent).toContain('작성하다가 나가면 어떻게 되나요?');
+    expect(view.textContent).not.toContain('해외 서류에 적힌 HS CODE를 그대로 쓰면 되나요?');
+
+    act(() => { (faqTabs[2] as HTMLButtonElement).click(); });
+    expect(view.textContent).toContain('해외 서류에 적힌 HS CODE를 그대로 쓰면 되나요?');
+    expect(view.textContent).not.toContain('작성하다가 나가면 어떻게 되나요?');
   });
 });

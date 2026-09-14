@@ -4,7 +4,7 @@
  * 공통 내용(결과 화면 읽는 법, 자주 묻는 질문)은 탭 아래에 둔다.
  */
 import { useState } from 'react';
-import { ArrowRight, PlayCircle } from 'lucide-react';
+import { ArrowRight, FileCheck2, Landmark, PlayCircle } from 'lucide-react';
 import { replayOnboardingTour } from './OnboardingTour';
 
 type Props = {
@@ -64,18 +64,41 @@ const IMPORT_FLOWS: RoleFlow[] = [
 ];
 
 /** 수출 서류 6종 — 우리가 만드는 것 / 다른 곳에서 발급받는 것 */
-const EXPORT_DOCS_MADE = [
-  { abbr: 'C/I', name: '상업송장', note: '거래 금액·조건' },
-  { abbr: 'P/L', name: '패킹리스트', note: '포장 수량·중량·부피' },
-  { abbr: 'E/D', name: '수출신고서 (초안)', note: '실제 신고는 관세사가 진행' },
-];
-const EXPORT_DOCS_EXTERNAL = [
-  { abbr: 'B/L', name: '선하증권', note: '포워더·선사 발행' },
-  { abbr: 'C/O', name: '원산지증명서', note: '상공회의소 발급' },
-  { abbr: 'I/P', name: '적하보험증권', note: '보험사 발급' },
-];
+interface DocGroup {
+  tone: 'made' | 'external';
+  icon: typeof FileCheck2;
+  title: string;
+  sub: string;
+  badge: string;
+  docs: { abbr: string; name: string; note: string }[];
+}
 
-const IMPORT_CHECKS = ['품명', '수량', '중량', '포장 개수', '금액', '통화', 'HS CODE', 'Incoterms', '필수 서류'];
+const EXPORT_DOC_GROUPS: DocGroup[] = [
+  {
+    tone: 'made',
+    icon: FileCheck2,
+    title: 'PortAI 자동 생성',
+    sub: 'PortAI가 초안을 만들어요.',
+    badge: 'PortAI 생성',
+    docs: [
+      { abbr: 'C/I', name: '상업송장', note: '거래 금액·조건' },
+      { abbr: 'P/L', name: '패킹리스트', note: '포장 수량·중량·부피' },
+      { abbr: 'E/D', name: '수출신고서 (초안)', note: '실제 신고는 관세사가 진행' },
+    ],
+  },
+  {
+    tone: 'external',
+    icon: Landmark,
+    title: '외부 기관 발급',
+    sub: '발급 기관이 보내줘요.',
+    badge: '외부 발급',
+    docs: [
+      { abbr: 'B/L', name: '선하증권', note: '포워더·선사 발행' },
+      { abbr: 'C/O', name: '원산지증명서', note: '상공회의소 발급' },
+      { abbr: 'I/P', name: '적하보험증권', note: '보험사 발급' },
+    ],
+  },
+];
 
 const LEGEND = [
   { tone: 'red', label: '반드시 수정', desc: '해결해야 전송할 수 있어요.' },
@@ -84,26 +107,85 @@ const LEGEND = [
   { tone: 'gray', label: '발행 대기', desc: '다른 기관이 발급하는 서류예요.' },
 ];
 
-const FAQ: { q: string; a: string }[] = [
+/** 자주 묻는 질문 — 공통 / 수출 / 수입으로 나눠서 보여준다. */
+const FAQ_GROUPS: { key: string; label: string; items: { q: string; a: string }[] }[] = [
   {
-    q: '작성하다가 나가면 어떻게 되나요?',
-    a: '자동으로 저장돼요. AI 통관 작업실 맨 아래 임시보관함에서 [이어서 작업]을 누르세요.',
+    key: 'common',
+    label: '공통',
+    items: [
+      {
+        q: '작성하다가 나가면 어떻게 되나요?',
+        a: '자동으로 저장돼요. 문서 관리 맨 위 임시보관함에서 [이어서 작업]을 누르면 쓰던 곳부터 이어집니다.',
+      },
+      {
+        q: '지난번 거래를 다시 쓰고 싶어요.',
+        a: '문서 관리에서 해당 거래의 [새 거래로 복사]를 누르면 입력값이 채워진 새 거래가 열려요.',
+      },
+      {
+        q: '통관이 어디까지 진행됐는지 알고 싶어요.',
+        a: '통관 내역 메뉴에서 수출·수입을 골라 보고, 통관 준비도와 화물 진행 단계를 확인할 수 있어요. B/L 번호가 있으면 [통관 상태 조회]로 최신 상태를 불러옵니다.',
+      },
+      {
+        q: '화주와 포워더 역할을 번갈아 쓰고 싶어요.',
+        a: '프로필의 서비스 이용 목적을 [화주·포워더 통합]으로 저장하면, AI 통관 작업실에서 그때그때 역할을 고를 수 있어요.',
+      },
+      {
+        q: '"반드시 수정"이 있어도 서류를 볼 수 있나요?',
+        a: '미리보기와 다운로드는 됩니다. 막히는 건 최종 전송뿐이에요. 사정이 있으면 사유를 적고 [경고 무시하고 생성]으로 진행할 수도 있어요.',
+      },
+    ],
   },
   {
-    q: '지난번 거래를 다시 쓰고 싶어요.',
-    a: '문서 관리에서 해당 거래의 [새 거래로 복사]를 누르면 입력값이 채워진 새 거래가 열려요.',
+    key: 'export',
+    label: '수출',
+    items: [
+      {
+        q: 'HS CODE를 몰라요.',
+        a: '품명만 구체적으로 적으면 관세청 품목분류 사례와 대조해 후보를 추천해요. 상세정보를 채우고 [HS 재추천]을 누르거나, 소호를 골라 범위를 좁히거나, 아는 코드를 직접 입력해도 됩니다.',
+      },
+      {
+        q: '서류는 어떤 파일로 받나요?',
+        a: '상업송장은 Word와 인쇄용 PDF 두 가지로, 패킹리스트·수출신고서·운송의뢰서는 Word로, B/L은 PDF로 내려받을 수 있어요.',
+      },
+      {
+        q: '이미 가진 서류를 첨부하면 어떻게 되나요?',
+        a: '입력칸이 자동으로 바뀌지는 않아요. 결과 화면의 [내 서류 대조]에서 입력값과 업로드 서류 값을 항목별로 비교해, 원하는 값을 눌러 채택하거나 한 번에 맞출 수 있어요.',
+      },
+      {
+        q: '수출신고서를 그대로 제출해도 되나요?',
+        a: '아니요. 세관 제출본이 아닌 초안이에요. 실제 신고는 관세사가 진행합니다.',
+      },
+      {
+        q: '경고를 그냥 넘기면 안 되나요?',
+        a: '[보완 권장]은 그대로 진행해도 되고, [반드시 수정]은 해결해야 최종 전송이 열려요. 부득이할 땐 사유를 남기고 생성할 수 있지만, 그 거래는 제출 보류로 표시됩니다.',
+      },
+    ],
   },
   {
-    q: '통관이 어디까지 진행됐는지 알고 싶어요.',
-    a: '통관 내역 메뉴에서 신고 접수부터 출항까지 단계별로 확인할 수 있어요.',
-  },
-  {
-    q: 'HS CODE를 몰라요.',
-    a: '비워두고 품명을 구체적으로 적어주세요. 후보가 갈리면 PortAI가 선택지를 보여줘요.',
-  },
-  {
-    q: '"반드시 수정"이 있어도 서류를 볼 수 있나요?',
-    a: '초안은 미리보기·다운로드할 수 있어요. 최종 전송은 해결한 뒤에 가능해요.',
+    key: 'import',
+    label: '수입',
+    items: [
+      {
+        q: '어떤 서류를 올려야 하나요?',
+        a: '화주는 상업송장·포장명세서·선하증권·원산지증명서를, 포워더는 B/L과 C/I·P/L 사본을 올리면 돼요. PDF·PNG·JPG를 지원합니다.',
+      },
+      {
+        q: '서류끼리 무엇을 대조하나요?',
+        a: '품명·수량·중량·포장 개수·금액·통화·HS CODE·Incoterms가 서로 맞는지 봐요. 포워더 화면에서는 C/I·P/L·B/L 값을 나란히 놓은 대사표로 확인합니다.',
+      },
+      {
+        q: '해외 서류에 적힌 HS CODE를 그대로 쓰면 되나요?',
+        a: '참고용일 뿐이에요. 한국 세율은 10자리 HSK로 정해지므로, 추천 후보 중에 고르거나 직접 입력해 따로 확정해야 합니다.',
+      },
+      {
+        q: '예상 세액은 얼마나 믿을 수 있나요?',
+        a: '적용 환율과 기준일, 기본 관세율을 함께 보여줘요. FTA 세율은 원산지증명서와 요건을 확인하기 전에는 적용하지 않고, 값이 모자라면 임의값을 쓰지 않고 계산을 보류합니다.',
+      },
+      {
+        q: '수입신고 의뢰서와 도착통지서는요?',
+        a: '의뢰서는 화면에서 바로 보고 PDF나 Word로 받을 수 있어요. 포워더는 도착통지서를 첨부해야 완료 처리되고, 없으면 진행 중으로 저장됩니다.',
+      },
+    ],
   },
 ];
 
@@ -129,15 +211,23 @@ function FlowColumn({ flow }: { flow: RoleFlow }) {
   );
 }
 
-function DocList({ label, tone, docs }: { label: string; tone: 'made' | 'external'; docs: typeof EXPORT_DOCS_MADE }) {
+function DocGroupCard({ group }: { group: DocGroup }) {
+  const Icon = group.icon;
   return (
-    <div className="gs-docs-col">
-      <div className="gs-docs-label">{label}</div>
-      {docs.map((d) => (
+    <div className={`gs-docs-col ${group.tone}`}>
+      <div className="gs-docs-head">
+        <span className="gs-docs-icon" aria-hidden="true"><Icon size={22} /></span>
+        <div>
+          <div className="gs-docs-title">{group.title}</div>
+          <div className="gs-docs-sub">{group.sub}</div>
+        </div>
+      </div>
+      {group.docs.map((d) => (
         <div className="gs-doc" key={d.abbr}>
-          <span className={`gs-doc-abbr ${tone}`}>{d.abbr}</span>
+          <span className="gs-doc-abbr">{d.abbr}</span>
           <span className="gs-doc-name">{d.name}</span>
           <span className="gs-doc-note">{d.note}</span>
+          <span className="gs-doc-badge">{group.badge}</span>
         </div>
       ))}
     </div>
@@ -146,7 +236,9 @@ function DocList({ label, tone, docs }: { label: string; tone: 'made' | 'externa
 
 export default function GuidePanel({ onNavigate }: Props) {
   const [tab, setTab] = useState<GuideTab>('export');
+  const [faqTab, setFaqTab] = useState<string>(FAQ_GROUPS[0].key);
   const flows = tab === 'export' ? EXPORT_FLOWS : IMPORT_FLOWS;
+  const faqItems = (FAQ_GROUPS.find((g) => g.key === faqTab) ?? FAQ_GROUPS[0]).items;
 
   return (
     <div className="gs-page">
@@ -197,28 +289,19 @@ export default function GuidePanel({ onNavigate }: Props) {
         </div>
       </section>
 
-      {tab === 'export' ? (
+      {tab === 'export' && (
         <section className="gs-section">
           <h2 className="gs-section-title">수출 서류 6종, 누가 만드나요?</h2>
-          <p className="gs-section-sub">다른 곳에서 발급되는 서류는 결과 화면에 회색으로 표시돼요.</p>
+          <p className="gs-section-sub">PortAI 생성 문서는 파란색 · 외부 발급 문서는 회색으로 표시돼요.</p>
           <div className="gs-docs">
-            <DocList label="PortAI가 만들어요" tone="made" docs={EXPORT_DOCS_MADE} />
-            <DocList label="다른 곳에서 발급돼요" tone="external" docs={EXPORT_DOCS_EXTERNAL} />
-          </div>
-        </section>
-      ) : (
-        <section className="gs-section">
-          <h2 className="gs-section-title">서류끼리 무엇을 대조하나요?</h2>
-          <p className="gs-section-sub">C/I·P/L·B/L에 적힌 값이 서로 맞는지 아래 항목을 확인해요.</p>
-          <div className="gs-checks">
-            {IMPORT_CHECKS.map((c) => <span className="gs-check" key={c}>{c}</span>)}
+            {EXPORT_DOC_GROUPS.map((g) => <DocGroupCard key={g.tone} group={g} />)}
           </div>
         </section>
       )}
 
-      {/* 결과 화면 읽는 법 */}
+      {/* 결과 화면 읽는 법 — 제목은 카드 밖으로 */}
+      <h2 className="gs-outer-title">결과 화면 읽는 법</h2>
       <section className="gs-section">
-        <h2 className="gs-section-title">결과 화면 읽는 법</h2>
         <div className="gs-legend">
           {LEGEND.map((l) => (
             <div className="gs-legend-item" key={l.label}>
@@ -232,13 +315,29 @@ export default function GuidePanel({ onNavigate }: Props) {
         </div>
       </section>
 
-      {/* 자주 묻는 질문 */}
+      {/* 자주 묻는 질문 — 공통 / 수출 / 수입 중 고른 묶음만 보여준다 */}
+      <h2 className="gs-outer-title">FAQ · 자주 묻는 질문</h2>
       <section className="gs-section">
-        <h2 className="gs-section-title">FAQ · 자주 묻는 질문</h2>
+        <div className="gs-faq-tabs" role="tablist" aria-label="질문 분류">
+          {FAQ_GROUPS.map((group) => (
+            <button
+              key={group.key}
+              role="tab"
+              aria-selected={faqTab === group.key}
+              className={`gs-faq-tab ${faqTab === group.key ? 'active' : ''}`}
+              onClick={() => setFaqTab(group.key)}
+            >
+              {group.label}
+            </button>
+          ))}
+        </div>
         <div className="gs-faq">
-          {FAQ.map((item) => (
+          {faqItems.map((item, i) => (
             <details className="gs-faq-item" key={item.q}>
-              <summary>{item.q}</summary>
+              <summary>
+                <span className="gs-faq-no">Q{i + 1}</span>
+                <span className="gs-faq-q">{item.q}</span>
+              </summary>
               <p>{item.a}</p>
             </details>
           ))}

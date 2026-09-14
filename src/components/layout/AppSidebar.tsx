@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Mail,
   PhoneCall,
-  Settings,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -28,7 +27,6 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
   { menu: 'analysis', label: '데이터 분석', icon: BarChart3 },
   { menu: 'profile', label: '프로필 관리', icon: UserRound },
   { menu: 'guide', label: '사용 안내', icon: BookOpen },
-  { menu: 'settings', label: '설정', icon: Settings },
 ];
 
 interface AppSidebarProps {
