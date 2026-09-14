@@ -792,7 +792,10 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setHasGenerated(false);
   };
 
-  // 입력 화면으로 전환되면 해당 필드로 스크롤 + 강조 표시. (5초 후 자동 해제)
+  // 입력 화면으로 전환되면 해당 필드로 스크롤 + 강조 표시.
+  // 예전엔 5초 후 자동 해제하는 토스트 타이머가 있었는데, 접힌 섹션을 펼치고 스크롤하는 사이
+  // 시간이 걸리는 필드는 강조가 사라진 뒤에야 눈에 띄어 "표시가 안 된다"는 혼란을 줬다.
+  // 인라인 안내 카드(강조된 항목을 수정하세요)와 동일하게, 사용자가 직접 닫을 때까지 유지한다.
   useEffect(() => {
     if (hasGenerated || !highlightField) return;
     const raf = requestAnimationFrame(() => {
@@ -807,12 +810,6 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       const input = el.querySelector<HTMLElement>('input, select, textarea');
       if (input) setTimeout(() => input.focus({ preventScroll: true }), 320);
     });
-    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-    highlightTimerRef.current = setTimeout(() => {
-      document.querySelectorAll('.field-focus').forEach((e) => e.classList.remove('field-focus'));
-      setHighlightField(null);
-      setHighlightHint('');
-    }, 5000);
     return () => cancelAnimationFrame(raf);
   }, [highlightField, hasGenerated]);
 
@@ -2760,7 +2757,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     if (originNotKoreaIssue) { setOverrideTarget(originNotKoreaIssue); setOverrideReason(''); }
                   }}
                   fixNotice={shipperFixNotice}
-                  onDismissFixNotice={() => setActiveFixIssue(null)}
+                  onDismissFixNotice={clearFieldHighlight}
                   toolbar={IS_DEV_TEST_ENABLED ? (
                     <div className="dev-test-actions">
                       <span className="dev-badge">DEV</span>
