@@ -2588,7 +2588,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
           collapsed={sidebarCollapsed}
           user={user}
           profile={userProfile}
-          forwarderMode={workspaceRole === 'forwarder'}
           notificationPollKey={activeMenu}
           onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
           onNavigate={handleAppNavigate}
