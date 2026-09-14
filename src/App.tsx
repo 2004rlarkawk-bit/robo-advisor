@@ -133,6 +133,13 @@ import {
   applyExportRequestToForwarderForm,
   type ForwarderExportRequest,
 } from './services/forwarderExportRequestService';
+import { saveExportForwarderCaseState } from './services/exportForwarderCaseService';
+import {
+  EXPORT_PROGRESS_STAGE_LABEL,
+  type ExportForwarderCaseState,
+  type ExportProgressStageKey,
+  type ExportProgressStatus,
+} from './types/exportForwarderCase';
 import {
   issueKey,
   issueToFieldKey,
@@ -459,6 +466,10 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [isForwarderSaving, setIsForwarderSaving] = useState(false);
   /** 수신함에서 불러온 화주 운송의뢰의 거래 id — 목록에 '불러옴' 표시용 */
   const [appliedExportRequestId, setAppliedExportRequestId] = useState<string | null>(null);
+  /** 수신함에서 불러온 의뢰의 화주 연락처 — 5단계 '화주에게 알림' 패널 기본값으로만 사용 */
+  const [appliedExportRequestShipperContact, setAppliedExportRequestShipperContact] = useState<{ email: string; company: string } | null>(null);
+  /** 수출 포워더 5단계 운영 상태(선적 진행단계·Master B/L 번호·전달 이력). trades.workflow_data.exportForwarderCase */
+  const [exportForwarderCase, setExportForwarderCase] = useState<ExportForwarderCaseState | null>(null);
 
   const tradeDraftDefaultProfile: TradeProfile = {
     ...EMPTY_TRADE_PROFILE,
@@ -564,6 +575,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       forwarderGenerationError: string;
       overrides: Record<string, string>;
       hasSubmittedTrade: boolean;
+      exportForwarderCase: ExportForwarderCaseState | null;
+      appliedExportRequestId: string | null;
+      appliedExportRequestShipperContact: { email: string; company: string } | null;
     };
     importCache: { key: string; value: string | null } | null;
   } | null>(null);
@@ -861,6 +875,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setPreviewDocId(null);
     setDevTestMode(null);
     setDevTestMessage('');
+    setExportForwarderCase(null);
+    setAppliedExportRequestId(null);
+    setAppliedExportRequestShipperContact(null);
     hasSubmittedTradeRef.current = false;
     exportDraftCompletedRef.current = true;
     clearWorkspaceSession();
@@ -871,112 +888,209 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const handleApplyExportRequest = (request: ForwarderExportRequest) => {
     setForwarderForm((current) => applyExportRequestToForwarderForm(request, current));
     setAppliedExportRequestId(request.tradeId);
+    const contact = request.trade.profile.contact?.trim() ?? '';
+    setAppliedExportRequestShipperContact({
+      email: contact.includes('@') ? contact : '',
+      company: request.exporterName,
+    });
   };
 
-  const handleSaveForwarderTrade = async () => {
+  // 수출 포워더 1~2단계 공통 저장 — 화물·당사자·Booking 입력값(TradeProfile)을 trades row에 반영한다.
+  // B/L 발행 정보·진행상태·Master B/L 번호는 별도 액션(H/B/L 생성, 진행상태 갱신)에서 저장한다.
+  const persistForwarderProfile = async (nextStep: number): Promise<SavedTrade | null> => {
+    if (currentTradeStatus === 'submitted') {
+      alert('이미 선적 완료 처리된 거래입니다.');
+      return null;
+    }
+    const savedProfile = forwarderFormToTradeProfile(forwarderForm);
+    const existingGeneratedDocs = billOfLadingData || htmlTemplates.bl
+      ? {
+          billOfLading: billOfLadingData ?? undefined,
+          htmlTemplates,
+        }
+      : undefined;
+    const data = {
+      profile: savedProfile,
+      tradeDirection: 'export' as const,
+      tradeRole: 'forwarder' as const,
+      attachments: forwarderAttachments,
+      documents,
+      issues,
+      generatedDocs: existingGeneratedDocs,
+    };
+    const tradeId = currentTradeId;
+    const saved = tradeId && currentTradeStatus === 'generated'
+      ? await updateGeneratedTrade(tradeId, data)
+      : await createGeneratedTrade(data);
+    let savedAttachments = forwarderAttachments;
+    if (!tradeId && forwarderAttachments.length > 0 && user) {
+      const scopedAttachments = await moveTradeAttachmentsToScope({
+        userId: user.id,
+        scopeId: saved.id,
+        attachments: forwarderAttachments,
+      });
+      await updateGeneratedTrade(saved.id, { ...data, attachments: scopedAttachments });
+      setForwarderAttachments(scopedAttachments);
+      savedAttachments = scopedAttachments;
+    }
+    setCurrentTradeId(saved.id);
+    setCurrentTradeStatus('generated');
+    hasSubmittedTradeRef.current = false;
+    if (user) {
+      try {
+        await saveTradeDraft(user.id, savedProfile, 'forwarder', {
+          attachments: savedAttachments,
+          currentStep: nextStep,
+          tradeId: saved.id,
+        });
+      } catch (draftError) {
+        console.warn('[Trade Draft] 포워더 저장 후 초안 캐시 갱신 실패:', draftError);
+      }
+    }
+    return saved;
+  };
+
+  // STEP 1 — 운송 의뢰 접수 + AI 서류 분석 → 저장 후 STEP 2(Booking)로 이동
+  const handleForwarderStep1Next = async () => {
+    if (isForwarderSaving) return;
+    const hasCargo = forwarderForm.cargoItems.some((item) => String(item.descriptionOfGoods).trim());
+    if (!forwarderForm.companyName.trim() || !forwarderForm.partnerName.trim() || !hasCargo) {
+      alert('Shipper, Consignee, 화물명세(품명)를 입력해야 Booking 단계로 진행할 수 있습니다.');
+      return;
+    }
+    setIsForwarderSaving(true);
+    try {
+      const saved = await persistForwarderProfile(2);
+      if (saved) setWorkspaceCurrentStep(2);
+    } catch (error) {
+      console.error('[Forwarder Export] 의뢰 접수 저장 실패:', error);
+      alert('입력 정보를 저장하지 못했습니다. 현재 입력값을 유지한 채 다시 시도해주세요.');
+    } finally {
+      setIsForwarderSaving(false);
+    }
+  };
+
+  // STEP 2 — 선적 Booking → 저장 후 STEP 3(선적 진행 관리)로 이동
+  const handleForwarderStep2Save = async () => {
+    if (isForwarderSaving) return;
+    if (isEtaBeforeEtd(forwarderForm.departureDate, forwarderForm.arrivalDate)) {
+      alert('ETA는 ETD보다 빠를 수 없습니다.');
+      return;
+    }
+    if (!forwarderForm.bookingNo.trim() || !forwarderForm.vesselOrFlight.trim() || !forwarderForm.carrier.trim()) {
+      const proceed = window.confirm('Carrier / Booking No. / Vessel 정보가 비어 있습니다. 이대로 저장할까요?');
+      if (!proceed) return;
+    }
+    setIsForwarderSaving(true);
+    try {
+      const saved = await persistForwarderProfile(3);
+      if (saved) setWorkspaceCurrentStep(3);
+    } catch (error) {
+      console.error('[Forwarder Export] Booking 저장 실패:', error);
+      alert('Booking 정보를 저장하지 못했습니다. 현재 입력값을 유지한 채 다시 시도해주세요.');
+    } finally {
+      setIsForwarderSaving(false);
+    }
+  };
+
+  // STEP 3 — 선적 진행 관리(수출신고번호 등 변경사항 저장) → STEP 4(B/L 관리)로 이동
+  const handleForwarderStep3Next = async () => {
+    if (isForwarderSaving) return;
+    setIsForwarderSaving(true);
+    try {
+      const saved = await persistForwarderProfile(4);
+      if (saved) setWorkspaceCurrentStep(4);
+    } catch (error) {
+      console.error('[Forwarder Export] 선적 진행 정보 저장 실패:', error);
+      alert('수출신고번호 등 변경사항을 저장하지 못했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsForwarderSaving(false);
+    }
+  };
+
+  // 선적 진행 단계(Booking 완료 → 화물 반입 → 수출통관 → 선적 → 출항) 상태를 즉시 저장한다.
+  const handleForwarderProgressChange = async (stage: ExportProgressStageKey, status: ExportProgressStatus) => {
+    if (!currentTradeId) {
+      alert('먼저 1단계에서 정보를 저장해 주세요.');
+      return;
+    }
+    try {
+      const next = await saveExportForwarderCaseState(
+        currentTradeId,
+        { progress: { [stage]: status } },
+        [`${EXPORT_PROGRESS_STAGE_LABEL[stage]} 상태를 '${status === 'done' ? '완료' : status === 'in_progress' ? '진행중' : '대기'}'(으)로 변경`],
+      );
+      setExportForwarderCase(next);
+    } catch (error) {
+      console.error('[Forwarder Export] 진행 상태 저장 실패:', error);
+      alert('진행 상태를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    }
+  };
+
+  // 선사가 발행한 Master B/L 번호 등록 — PortAI는 M/B/L을 생성하지 않고 등록만 한다.
+  const handleSaveMasterBlNo = async (value: string) => {
+    if (!currentTradeId) {
+      alert('먼저 1단계에서 정보를 저장해 주세요.');
+      return;
+    }
+    try {
+      const next = await saveExportForwarderCaseState(currentTradeId, { masterBlNo: value }, ['Master B/L 번호 등록']);
+      setExportForwarderCase(next);
+    } catch (error) {
+      console.error('[Forwarder Export] Master B/L 번호 저장 실패:', error);
+      alert('Master B/L 번호를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    }
+  };
+
+  // STEP 4 — House B/L 생성. Master B/L(선사 발행)과 달리 포워더가 발행하는 문서이므로 PortAI가 생성한다.
+  const handleGenerateHouseBillOfLading = async () => {
     if (isForwarderSaving) return;
     const validation = validateForwarderBillOfLading(forwarderForm);
     if (!validation.valid) {
-      alert(`B/L 법정 기재사항이 비어 있습니다. 다음 항목을 입력해 주세요:\n\n· ${validation.missingLabels.join('\n· ')}`);
+      alert(`H/B/L 생성에 필요한 정보가 부족합니다. 다음 항목을 입력해 주세요:\n\n· ${validation.missingLabels.join('\n· ')}`);
       return;
     }
     // 발행은 가능하지만 실무상 확인이 필요한 항목은 진행 여부를 사용자가 정하게 한다.
     if (validation.warningLabels.length > 0) {
       const proceed = window.confirm(
-        `아래 항목을 확인해 주세요.\n\n· ${validation.warningLabels.join('\n· ')}\n\n이대로 B/L을 생성할까요?`,
+        `아래 항목을 확인해 주세요.\n\n· ${validation.warningLabels.join('\n· ')}\n\n이대로 H/B/L을 생성할까요?`,
       );
       if (!proceed) return;
     }
-    if (isEtaBeforeEtd(forwarderForm.departureDate, forwarderForm.arrivalDate)) return;
-    if (currentTradeStatus === 'submitted') {
-      alert('이미 전송이 완료된 거래입니다.');
-      return;
-    }
-
     setIsForwarderSaving(true);
     setForwarderGenerationError('');
     try {
-      const savedProfile = forwarderFormToTradeProfile(forwarderForm);
-      const existingGeneratedDocs = billOfLadingData || htmlTemplates.bl
-        ? {
-            billOfLading: billOfLadingData ?? undefined,
-            htmlTemplates,
-          }
-        : undefined;
-      const data = {
-        profile: savedProfile,
-        tradeDirection: 'export' as const,
-        tradeRole: 'forwarder' as const,
+      const saved = await persistForwarderProfile(4);
+      if (!saved) return;
+      const generatedBill = createForwarderBillOfLadingDraft(forwarderForm, saved.id);
+      const generatedDocuments = [
+        ...documents.filter((document) => document.id !== 'bl'),
+        { id: 'bl' as const, name: '선하증권(B/L)', status: 'completed' as const, statusText: '초안' },
+      ];
+      // 선하증권은 무역협회 표준 서식 docx에서 생성·미리보기하므로 HTML을 만들지 않는다.
+      const generatedTemplates = { ...htmlTemplates };
+      delete generatedTemplates.bl;
+      await updateGeneratedTrade(saved.id, {
+        profile: forwarderFormToTradeProfile(forwarderForm),
+        tradeDirection: 'export',
+        tradeRole: 'forwarder',
         attachments: forwarderAttachments,
-        documents,
+        documents: generatedDocuments,
         issues,
-        generatedDocs: existingGeneratedDocs,
-      };
-      const tradeId = currentTradeId;
-      const saved = tradeId && currentTradeStatus === 'generated'
-        ? await updateGeneratedTrade(tradeId, data)
-        : await createGeneratedTrade(data);
-      let savedAttachments = forwarderAttachments;
-      if (!tradeId && forwarderAttachments.length > 0 && user) {
-        const scopedAttachments = await moveTradeAttachmentsToScope({
-          userId: user.id,
-          scopeId: saved.id,
-          attachments: forwarderAttachments,
-        });
-        await updateGeneratedTrade(saved.id, { ...data, attachments: scopedAttachments });
-        setForwarderAttachments(scopedAttachments);
-        savedAttachments = scopedAttachments;
-      }
-      setCurrentTradeId(saved.id);
-      setCurrentTradeStatus('generated');
-      setWorkspaceCurrentStep(2);
-      hasSubmittedTradeRef.current = false;
-      if (user) {
-        try {
-          await saveTradeDraft(user.id, savedProfile, 'forwarder', {
-            attachments: savedAttachments,
-            currentStep: 2,
-            tradeId: saved.id,
-          });
-        } catch (draftError) {
-          console.warn('[Trade Draft] 포워더 저장 후 초안 캐시 갱신 실패:', draftError);
-        }
-      }
-
-      try {
-        const generatedBill = createForwarderBillOfLadingDraft(forwarderForm, saved.id);
-        const generatedDocuments = [
-          ...documents.filter((document) => document.id !== 'bl'),
-          { id: 'bl' as const, name: '선하증권(B/L)', status: 'completed' as const, statusText: '초안' },
-        ];
-        // 선하증권은 무역협회 표준 서식 docx에서 생성·미리보기하므로 HTML을 만들지 않는다.
-        const generatedTemplates = { ...htmlTemplates };
-        delete generatedTemplates.bl;
-        await updateGeneratedTrade(saved.id, {
-          profile: savedProfile,
-          tradeDirection: 'export',
-          tradeRole: 'forwarder',
-          attachments: savedAttachments,
-          documents: generatedDocuments,
-          issues,
-          generatedDocs: {
-            billOfLading: generatedBill,
-            htmlTemplates: generatedTemplates,
-          },
-        });
-        setBillOfLadingData(generatedBill);
-        setHtmlTemplates(generatedTemplates);
-        setDocuments(generatedDocuments);
-        setForwarderGenerationError('');
-        alert('입력 정보가 저장되고 B/L 초안이 생성되었습니다.');
-      } catch (generationError) {
-        console.error('[Forwarder Export] B/L 생성 실패:', generationError);
-        setForwarderGenerationError('B/L 생성에 실패했습니다. 저장된 입력값은 유지됩니다. 다시 시도해주세요.');
-        alert('입력 정보는 저장되었지만 B/L 생성에 실패했습니다. 다시 시도해주세요.');
-      }
+        generatedDocs: {
+          billOfLading: generatedBill,
+          htmlTemplates: generatedTemplates,
+        },
+      });
+      setBillOfLadingData(generatedBill);
+      setHtmlTemplates(generatedTemplates);
+      setDocuments(generatedDocuments);
+      setForwarderGenerationError('');
+      alert('H/B/L이 생성되었습니다.');
     } catch (error) {
-      console.error('[Forwarder Export] generated 저장 실패:', error);
-      alert('입력 정보를 저장하지 못했습니다. 현재 입력값을 유지한 채 다시 시도해주세요.');
+      console.error('[Forwarder Export] H/B/L 생성 실패:', error);
+      setForwarderGenerationError('H/B/L 생성에 실패했습니다. 저장된 입력값은 유지됩니다. 다시 시도해주세요.');
+      alert('H/B/L 생성에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setIsForwarderSaving(false);
     }
@@ -986,8 +1100,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     if (isDocumentManagerReadOnlyView) return;
     const tradeId = currentTradeId;
     if (!tradeId || currentTradeStatus !== 'generated' || isForwarderSaving) return;
-    if (!billOfLadingData || !htmlTemplates.bl || forwarderGenerationError) {
-      alert('B/L을 먼저 생성해주세요.');
+    if (!billOfLadingData || forwarderGenerationError) {
+      alert('H/B/L을 먼저 생성해주세요.');
       return;
     }
     setIsForwarderSaving(true);
@@ -1003,6 +1117,16 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
           htmlTemplates,
         },
       });
+      try {
+        await saveExportForwarderCaseState(
+          tradeId,
+          { progress: { departed: 'done' }, completedAt: new Date().toISOString() },
+          ['선적 완료 처리'],
+        );
+      } catch (progressError) {
+        // 전송 자체는 완료되었으므로 진행상태 기록 실패로 전체 흐름을 막지 않는다.
+        console.warn('[Forwarder Export] 완료 상태 기록 실패:', progressError);
+      }
       setCurrentTradeStatus('submitted');
       hasSubmittedTradeRef.current = true;
       try {
@@ -1012,12 +1136,40 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       }
       clearExportAuthoringStateAfterSubmission();
       setActiveMenu('docs');
-      alert('포워더 거래가 전송 완료 상태로 저장되었습니다.');
+      alert('선적 완료로 처리되었습니다. 문서관리에서 확인할 수 있습니다.');
     } catch (error) {
       console.error('[Forwarder Export] submitted 저장 실패:', error);
-      alert('전체 문서 전송 상태를 저장하지 못했습니다.');
+      alert('선적 완료 처리를 저장하지 못했습니다.');
     } finally {
       setIsForwarderSaving(false);
+    }
+  };
+
+  // STEP 5 — 화주에게 선적완료 알림 / 해외 파트너 포워더 Shipping Advice 전달 이력 기록
+  const handleForwarderShipperNotified = async () => {
+    if (!currentTradeId) return;
+    try {
+      const next = await saveExportForwarderCaseState(
+        currentTradeId,
+        { shipperNotifiedAt: new Date().toISOString() },
+        ['화주에게 선적완료 알림 이메일 전송'],
+      );
+      setExportForwarderCase(next);
+    } catch (error) {
+      console.warn('[Forwarder Export] 화주 알림 기록 실패(이메일 전송 자체는 완료됨):', error);
+    }
+  };
+  const handleForwarderShippingAdviceSent = async () => {
+    if (!currentTradeId) return;
+    try {
+      const next = await saveExportForwarderCaseState(
+        currentTradeId,
+        { shippingAdviceSentAt: new Date().toISOString() },
+        ['해외 파트너 포워더에게 Shipping Advice 전달'],
+      );
+      setExportForwarderCase(next);
+    } catch (error) {
+      console.warn('[Forwarder Export] Shipping Advice 기록 실패(이메일 전송 자체는 완료됨):', error);
     }
   };
 
@@ -1033,6 +1185,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setHtmlTemplates({});
     setBillOfLadingData(null);
     setForwarderGenerationError('');
+    setExportForwarderCase(null);
+    setAppliedExportRequestId(null);
+    setAppliedExportRequestShipperContact(null);
     hasSubmittedTradeRef.current = false;
   };
 
@@ -1167,6 +1322,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   setWorkspaceCurrentStep(1);
   setCurrentTradeId(null);
   setCurrentTradeStatus(null);
+  setExportForwarderCase(null);
+  setAppliedExportRequestId(null);
+  setAppliedExportRequestShipperContact(null);
   isSubmittingTradeRef.current = false;
   hasSubmittedTradeRef.current = false;
   setFeedbackReport(null);
@@ -1396,12 +1554,16 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       setForwarderAttachments(t.attachments ?? []);
       setCurrentTradeId(t.id);
       setCurrentTradeStatus(t.status ?? 'generated');
-      setWorkspaceCurrentStep(2);
+      // 조회(view)로 완료 거래를 열면 선적 완료 화면부터, 그 외에는 이어서 작업하던 단계로 연다.
+      setWorkspaceCurrentStep(openMode === 'view' && t.status === 'submitted' ? 5 : 1);
       setDocuments(t.documents);
       setIssues(t.issues);
       setHtmlTemplates((t.generatedDocs?.htmlTemplates as Record<string, string>) || {});
       setBillOfLadingData((t.generatedDocs?.billOfLading as BillOfLadingData) || null);
       setForwarderGenerationError('');
+      setExportForwarderCase((t.exportForwarderCase as ExportForwarderCaseState | null) ?? null);
+      setAppliedExportRequestId(null);
+      setAppliedExportRequestShipperContact(null);
       hasSubmittedTradeRef.current = t.status === 'submitted';
       setActiveMenu('dashboard');
       return;
@@ -1465,6 +1627,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
         forwarderGenerationError,
         overrides,
         hasSubmittedTrade: hasSubmittedTradeRef.current,
+        exportForwarderCase,
+        appliedExportRequestId,
+        appliedExportRequestShipperContact,
       },
       importCache: importCacheKey
         ? { key: importCacheKey, value: localStorage.getItem(importCacheKey) }
@@ -1574,6 +1739,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setBillOfLadingData(snapshot.billOfLadingData);
     setForwarderGenerationError(snapshot.forwarderGenerationError);
     setOverrides(snapshot.overrides);
+    setExportForwarderCase(snapshot.exportForwarderCase);
+    setAppliedExportRequestId(snapshot.appliedExportRequestId);
+    setAppliedExportRequestShipperContact(snapshot.appliedExportRequestShipperContact);
     hasSubmittedTradeRef.current = snapshot.hasSubmittedTrade;
     setPreviewDocId(null);
     blockedGenRef.current = null;
@@ -1696,6 +1864,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       setCurrentTradeId(null);
       setCurrentTradeStatus(null);
       setWorkspaceCurrentStep(1);
+      // 복사본은 새 거래이므로 원본의 B/L·진행상태·의뢰 연결정보를 이어받지 않는다.
+      setHtmlTemplates({});
+      setBillOfLadingData(null);
+      setForwarderGenerationError('');
+      setExportForwarderCase(null);
+      setAppliedExportRequestId(null);
+      setAppliedExportRequestShipperContact(null);
       hasSubmittedTradeRef.current = false;
       setActiveMenu('dashboard');
       return;
@@ -2579,6 +2754,23 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     };
   })();
 
+  // 5단계(선적 완료) 문서 전달 패널이 쓸 최소 SavedTrade — 생성된 H/B/L 등 이미 만들어진 문서만 참조한다.
+  const currentForwarderTrade: SavedTrade | null = currentTradeId ? {
+    id: currentTradeId,
+    profile: forwarderFormToTradeProfile(forwarderForm),
+    tradeDirection: 'export',
+    tradeRole: 'forwarder',
+    attachments: forwarderAttachments,
+    documents,
+    issues,
+    status: currentTradeStatus ?? undefined,
+    generatedDocs: {
+      billOfLading: billOfLadingData ?? undefined,
+      htmlTemplates,
+    },
+    createdAt: new Date().toISOString(),
+  } : null;
+
   return (
     <div className="app-container">
       <OnboardingTour />
@@ -2724,9 +2916,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 onChange={setForwarderForm}
                 status={currentTradeStatus}
                 busy={isForwarderSaving}
-                onSave={handleSaveForwarderTrade}
-                onSubmit={handleSubmitForwarderTrade}
-                onReset={handleResetForwarderTrade}
                 userId={user.id}
                 attachmentScopeId={currentTradeId ?? `draft-export-forwarder`}
                 attachments={forwarderAttachments}
@@ -2735,18 +2924,32 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 readOnly={isDocumentManagerReadOnlyView}
                 onClose={handleCloseDocumentPreview}
                 currentStep={workspaceCurrentStep}
-                billOfLadingHtml={htmlTemplates.bl ?? ''}
-                generationError={forwarderGenerationError}
-                onPreviousStep={() => {
-                  setForwarderGenerationError('');
-                  setWorkspaceCurrentStep(1);
-                }}
+                onStepChange={setWorkspaceCurrentStep}
+                onNextFromRequest={() => void handleForwarderStep1Next()}
+                onResetTrade={handleResetForwarderTrade}
                 showRequestInbox
                 appliedRequestTradeId={appliedExportRequestId}
                 onApplyExportRequest={handleApplyExportRequest}
+                onSaveBooking={() => void handleForwarderStep2Save()}
+                progress={exportForwarderCase?.progress ?? {}}
+                onProgressChange={(stage, statusValue) => void handleForwarderProgressChange(stage, statusValue)}
+                onNextFromProgress={() => void handleForwarderStep3Next()}
+                masterBlNo={exportForwarderCase?.masterBlNo ?? ''}
+                onSaveMasterBl={(value) => void handleSaveMasterBlNo(value)}
+                billOfLadingData={billOfLadingData}
+                generationError={forwarderGenerationError}
+                onGenerateHouseBillOfLading={() => void handleGenerateHouseBillOfLading()}
                 onViewBillOfLading={() => setPreviewDocId('bl')}
                 onDownloadBillOfLading={() => void handleDownloadDoc('bl')}
-                onRegenerateBillOfLading={handleSaveForwarderTrade}
+                onNextFromBL={() => setWorkspaceCurrentStep(5)}
+                trade={currentForwarderTrade}
+                shipperNotifiedAt={exportForwarderCase?.shipperNotifiedAt}
+                shippingAdviceSentAt={exportForwarderCase?.shippingAdviceSentAt}
+                onShipperNotified={() => void handleForwarderShipperNotified()}
+                onShippingAdviceSent={() => void handleForwarderShippingAdviceSent()}
+                onCompleteShipment={() => void handleSubmitForwarderTrade()}
+                defaultShipperEmail={appliedExportRequestShipperContact?.email}
+                defaultShipperCompany={appliedExportRequestShipperContact?.company}
               />
             ) : !hasGenerated ? (
               /* --- 거래 정보 입력 모드 --- */

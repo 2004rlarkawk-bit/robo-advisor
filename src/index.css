@@ -579,12 +579,22 @@ body {
 .forwarder-generated-document-summary { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .forwarder-generated-document-summary strong { display: block; color: var(--text-dark); font-size: 16px; }
 .forwarder-generated-document-summary p { margin: 6px 0 0; color: var(--error-color); font-size: 13px; }
+.forwarder-generated-document-summary p.forwarder-generated-document-meta { color: var(--text-light); }
 .forwarder-generated-document-icon { display: grid; width: 46px; height: 46px; flex: 0 0 46px; place-items: center; border-radius: 10px; background: #dcfce7; color: #166534; font-size: 13px; font-weight: 800; }
 .forwarder-generated-document-status { display: inline-block; margin-top: 5px; font-size: 12px; font-weight: 700; }
 .forwarder-generated-document-status.is-complete { color: #15803d; }
 .forwarder-generated-document-status.is-failed { color: var(--error-color); }
-.forwarder-bl-document-actions { display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+.forwarder-bl-document-actions { display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
 .forwarder-bl-review-actions { flex-wrap: wrap; }
+/* 수출 포워더 5단계 흐름 — Step 표시줄과 각 단계 카드를 세로로 쌓는다. */
+.forwarder-export-flow { display: grid; gap: 20px; }
+/* Master B/L·수출신고필증 등 문서 1건 등록 위젯 — 기존 import-document-row/list 톤을 그대로 쓴다. */
+.forwarder-document-slot { display: grid; gap: 10px; margin-top: 12px; }
+.forwarder-document-slot-head { display: flex; align-items: baseline; gap: 8px; }
+.forwarder-completion-checklist { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+.forwarder-completion-checklist li { display: flex; align-items: center; gap: 8px; color: var(--text-light); font-size: 14px; }
+.forwarder-completion-checklist li svg { flex-shrink: 0; }
+.forwarder-completion-checklist li.is-done { color: #15803d; }
 @media (max-width: 760px) {
   .forwarder-generated-document-card { align-items: stretch; flex-direction: column; }
   .forwarder-bl-document-actions .btn,

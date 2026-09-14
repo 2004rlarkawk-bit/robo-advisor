@@ -10,6 +10,8 @@ import {
   mergeForwarderAutoFill,
   mergeForwarderCargoDocuments,
 } from '../services/forwarderDocumentAnalysisService';
+import { createForwarderBillOfLadingDraft } from '../services/forwarderBillOfLadingService';
+import type { SavedTrade } from '../types';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -23,18 +25,24 @@ afterEach(() => {
   container = null;
 });
 
+const FIXTURE_TRADE: SavedTrade = {
+  id: 'trade-1',
+  profile: { tradeType: 'export', itemName: 'Facial Toner', hsCode: '', loadPort: 'Busan Port', dischargePort: 'Tokyo Port', incoterms: 'FOB', quantity: '', weight: '', departureDate: '', arrivalDate: '', companyName: 'ABC KOREA', contact: '' },
+  documents: [],
+  issues: [],
+  status: 'generated',
+  createdAt: new Date().toISOString(),
+};
+
+const FIXTURE_BILL_OF_LADING = createForwarderBillOfLadingDraft(
+  { ...createEmptyForwarderFormState(), blNo: 'HBLKR0001' },
+  'trade-1',
+  '2026-09-01T00:00:00.000Z',
+);
+
 function renderForm(
   overrides: Partial<ForwarderFormState> = {},
-  viewOptions: {
-    readOnly?: boolean;
-    onClose?: () => void;
-    currentStep?: number;
-    billOfLadingHtml?: string;
-    generationError?: string;
-    onPreviousStep?: () => void;
-    onViewBillOfLading?: () => void;
-    onDownloadBillOfLading?: () => void;
-  } = {},
+  viewOptions: Partial<React.ComponentProps<typeof ForwarderWorkspaceForm>> = {},
 ) {
   const onChange = vi.fn();
   container = document.createElement('div');
@@ -47,13 +55,27 @@ function renderForm(
         onChange={onChange}
         status={null}
         busy={false}
-        onSave={vi.fn()}
-        onSubmit={vi.fn()}
-        onReset={vi.fn()}
         userId="user-1"
         attachmentScopeId="draft-export-forwarder"
         attachments={[]}
         onAttachmentsChange={vi.fn()}
+        currentStep={1}
+        onStepChange={vi.fn()}
+        onNextFromRequest={vi.fn()}
+        onResetTrade={vi.fn()}
+        onSaveBooking={vi.fn()}
+        progress={{}}
+        onProgressChange={vi.fn()}
+        onNextFromProgress={vi.fn()}
+        masterBlNo=""
+        onSaveMasterBl={vi.fn()}
+        billOfLadingData={null}
+        onGenerateHouseBillOfLading={vi.fn()}
+        onNextFromBL={vi.fn()}
+        trade={null}
+        onShipperNotified={vi.fn()}
+        onShippingAdviceSent={vi.fn()}
+        onCompleteShipment={vi.fn()}
         {...viewOptions}
       />,
     );
@@ -61,253 +83,336 @@ function renderForm(
   return { container, onChange };
 }
 
-describe('포워더용 선적 및 부킹 입력 폼', () => {
-  it('요청한 네 영역만 표시하고 별도 부킹 상태 입력은 두지 않는다', () => {
+describe('수출 포워더 5단계 워크플로우', () => {
+  it('Step 표시줄에 5단계 라벨을 모두 표시한다', () => {
     const rendered = renderForm();
-    expect(rendered.container.textContent).toContain('1. 화주 운송의뢰 정보');
-    expect(rendered.container.textContent).toContain('2. 선복예약 및 스케줄');
-    expect(rendered.container.textContent).toContain('3. 컨테이너 정보');
-    expect(rendered.container.textContent).toContain('4. 화물명세');
-    expect(rendered.container.textContent).not.toContain('부킹 상태');
-    expect(rendered.container.textContent).not.toContain('수출신고필증번호');
-    expect(rendered.container.textContent).toContain('수출신고번호 (선택)');
-  });
-
-  it('Booking No.로 등록 상태를 자동 표시하며 빈 값도 허용한다', () => {
-    const unregistered = renderForm({ bookingNo: '', bookingStatus: 'confirmed' });
-    expect(unregistered.container.textContent).toContain('부킹 미등록');
-    expect(unregistered.container.querySelector('input[required]')).toBeNull();
-    act(() => root?.unmount());
-    root = null;
-    unregistered.container.remove();
-    container = null;
-    const registered = renderForm({ bookingNo: 'BK-100' });
-    expect(registered.container.textContent).toContain('부킹 등록 완료');
-  });
-
-  it('FCL에서만 컨테이너 입력 전체를 표시한다', () => {
-    const fcl = renderForm({ loadingMode: 'FCL' });
-    expect(fcl.container.textContent).toContain('컨테이너 규격');
-    expect(fcl.container.textContent).toContain('컨테이너 번호');
-    expect(fcl.container.textContent).toContain('Seal 번호');
-    act(() => root?.unmount());
-    root = null;
-    fcl.container.remove();
-    container = null;
-
-    const lcl = renderForm({ loadingMode: 'LCL' });
-    expect(lcl.container.textContent).not.toContain('컨테이너 규격');
-    expect(lcl.container.textContent).not.toContain('컨테이너 수량');
-    expect(lcl.container.textContent).not.toContain('컨테이너 번호');
-    expect(lcl.container.textContent).not.toContain('Seal 번호');
-  });
-
-  it('ETA가 ETD보다 빠르면 일정 오류를 표시한다', () => {
-    const rendered = renderForm({ departureDate: '2026-08-10', arrivalDate: '2026-08-09' });
-    expect(rendered.container.textContent).toContain('ETA는 ETD보다 빠를 수 없습니다.');
-  });
-
-  it('AI 자동입력과 직접입력 필드의 경계를 안내한다', () => {
-    const rendered = renderForm();
-    expect(rendered.container.textContent).toContain('업로드 문서에서 자동입력');
-    expect(rendered.container.textContent).toContain('부킹 확정 후 입력');
-    expect(rendered.container.textContent).toContain('Marks & Numbers (선택)');
-  });
-
-  it('다품목 화물명세를 품목별 카드로 모두 표시한다', () => {
-    const rendered = renderForm({ cargoItems: [
-      { id: 'a', itemNo: '', sku: '', descriptionOfGoods: 'Facial Toner', numberOfPackages: 10, kindOfPackages: 'CARTON', grossWeightKg: 100, measurementCbm: '0.5', marksAndNumbers: '', sourceDocumentIds: ['ci'] },
-      { id: 'b', itemNo: '', sku: '', descriptionOfGoods: 'Moisturizing Cream', numberOfPackages: 20, kindOfPackages: 'CARTON', grossWeightKg: 200, measurementCbm: '1.0', marksAndNumbers: '', sourceDocumentIds: ['pl'] },
-    ] });
-    expect(rendered.container.textContent).not.toContain('품목 1');
-    expect(rendered.container.textContent).toContain('Facial Toner');
-    expect(rendered.container.textContent).not.toContain('품목 2');
-    expect(rendered.container.textContent).toContain('Moisturizing Cream');
-    expect(rendered.container.querySelector<HTMLInputElement>('#cargo-packages-0')?.value).toBe('10');
-    expect(rendered.container.querySelector<HTMLInputElement>('#cargo-packages-1')?.value).toBe('20');
-  });
-
-  it('Edge 응답 fixture의 C/I 3품목과 P/L 물류값을 병합해 카드 입력값까지 전달한다', () => {
-    const ci = mapExtractedFieldsToForwarderForm(normalizeImportAnalysisResult({ extracted: { items: [
-      { id: 'ci-1', description: 'Hydrating Hyaluronic Serum 50 mL' },
-      { id: 'ci-2', description: 'Ceramide Barrier Cream 50 mL' },
-      { id: 'ci-3', description: 'Low-pH Cleansing Foam 150 mL' },
-    ] } }).extracted);
-    const pl = mapExtractedFieldsToForwarderForm(normalizeImportAnalysisResult({ extracted: {
-      totalPackageCount: '60 CARTONS', grossWeight: '600 KG', measurement: '3.00 CBM',
-      items: [
-        { id: 'pl-1', description: 'HYDRATING HYALURONIC SERUM 50ML', packageCount: '10 CARTONS', grossWeight: '100 KG', measurement: '0.50 CBM', shippingMarks: 'SERUM' },
-        { id: 'pl-2', description: 'CERAMIDE BARRIER CREAM 50ML', packageCount: '20 CARTONS', grossWeight: '200 KG', measurement: '1.00 CBM', shippingMarks: 'CREAM' },
-        { id: 'pl-3', description: 'LOW-PH CLEANSING FOAM 150ML', packageCount: '30 CARTONS', grossWeight: '300 KG', measurement: '1.50 CBM' },
-      ],
-    } }).extracted);
-    const cargo = mergeForwarderCargoDocuments([
-      { items: ci.cargoItems!, totals: ci.cargoTotals!, documentType: 'commercial_invoice' },
-      { items: pl.cargoItems!, totals: pl.cargoTotals!, documentType: 'packing_list' },
-    ]);
-    const state = mergeForwarderAutoFill(createEmptyForwarderFormState(), {
-      cargoItems: cargo.items,
-      cargoTotals: cargo.totals,
-    }).state;
-    const rendered = renderForm(state);
-
-    expect(cargo.items.map((item) => ({
-      description: item.descriptionOfGoods,
-      packages: item.numberOfPackages,
-      type: item.kindOfPackages,
-      weight: item.grossWeightKg,
-      cbm: item.measurementCbm,
-    }))).toEqual([
-      { description: 'Hydrating Hyaluronic Serum 50 mL', packages: 10, type: 'CARTON', weight: 100, cbm: '0.50' },
-      { description: 'Ceramide Barrier Cream 50 mL', packages: 20, type: 'CARTON', weight: 200, cbm: '1.00' },
-      { description: 'Low-pH Cleansing Foam 150 mL', packages: 30, type: 'CARTON', weight: 300, cbm: '1.50' },
-    ]);
-    expect(cargo.totals).toEqual({ numberOfPackages: 60, grossWeightKg: 600, measurementCbm: '3.00' });
-    expect(rendered.container.textContent).not.toMatch(/품목\s+[123]/);
-    expect(rendered.container.querySelector<HTMLInputElement>('#cargo-packages-2')?.value).toBe('30');
-    expect(rendered.container.querySelector<HTMLInputElement>('#cargo-package-type-2')?.value).toBe('CARTON');
-    expect(rendered.container.querySelector<HTMLInputElement>('#cargo-weight-2')?.value).toBe('300');
-    expect(rendered.container.querySelector<HTMLInputElement>('#cargo-measurement-2')?.value).toBe('1.50');
-  });
-
-  it('수출 화주와 같은 국내 POL·해외 POD 옵션과 기타항 직접입력을 사용한다', () => {
-    const rendered = renderForm();
-    const polGroup = rendered.container.querySelector('[data-field="loadPort"]');
-    const podGroup = rendered.container.querySelector('[data-field="dischargePort"]');
-    const polSelect = polGroup?.querySelector<HTMLSelectElement>('select');
-    const podSelect = podGroup?.querySelector<HTMLSelectElement>('select');
-
-    expect(polSelect?.textContent).toContain('Busan Port (부산항)');
-    expect(polSelect?.textContent).toContain('기타 국내항');
-    expect(polSelect?.textContent).not.toContain('Shanghai');
-    expect(podSelect?.textContent).toContain('Tokyo Port (도쿄항)');
-    expect(podSelect?.textContent).toContain('New York-New Jersey Port (뉴욕·뉴저지항)');
-    expect(podSelect?.textContent).toContain('기타 해외항');
-    expect(podSelect?.textContent).not.toContain('Busan Port');
-
-    act(() => {
-      if (!podSelect) return;
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(podSelect, 'Tokyo Port');
-      podSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    ['의뢰 접수', 'Booking', '선적 진행', 'B/L 관리', '선적 완료'].forEach((label) => {
+      expect(rendered.container.textContent).toContain(label);
     });
-    expect(rendered.onChange).toHaveBeenCalledWith(expect.objectContaining({ dischargePort: 'Tokyo Port' }));
+  });
 
-    act(() => {
-      if (!polSelect) return;
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(polSelect, '__OTHER_DOMESTIC_PORT__');
-      polSelect.dispatchEvent(new Event('change', { bubbles: true }));
+  describe('STEP 1 — 운송 의뢰 접수 + AI 서류 분석', () => {
+    it('화주 운송의뢰 정보와 화물명세를 표시하고, 직접 등록 영역은 기본적으로 숨긴다', () => {
+      const rendered = renderForm({}, { currentStep: 1 });
+      expect(rendered.container.textContent).toContain('운송 의뢰 접수 + AI 서류 분석');
+      expect(rendered.container.textContent).toContain('화주 운송의뢰 정보');
+      expect(rendered.container.textContent).toContain('화물명세');
+      expect(rendered.container.textContent).toContain('직접 등록');
+      // 직접 등록을 열기 전에는 업로드 영역이 보이지 않는다.
+      expect(rendered.container.textContent).not.toContain('직접 의뢰 등록');
+      expect(rendered.container.textContent).not.toContain('여러 파일 선택');
+      expect(rendered.container.textContent).not.toContain('AI 분석 및 빈 필드 자동입력');
+      // Booking/컨테이너/B/L 발행정보는 이제 1단계에 없다 — 2·4단계로 이동했다.
+      expect(rendered.container.textContent).not.toContain('선복예약');
+      expect(rendered.container.textContent).not.toContain('컨테이너 정보');
+      expect(rendered.container.textContent).not.toContain('선하증권 발행 정보');
     });
-    const customPolInput = polGroup?.querySelector<HTMLInputElement>('input[aria-label="기타 국내항 직접 입력"]');
-    expect(customPolInput).not.toBeNull();
-    act(() => {
-      if (!customPolInput) return;
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(customPolInput, 'Masan Port');
-      customPolInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    it('[+ 직접 등록] 클릭 시 서류 업로드 영역이 열리고, 닫기를 누르면 다시 숨겨진다', () => {
+      const rendered = renderForm({}, { currentStep: 1, showRequestInbox: true, onApplyExportRequest: vi.fn() });
+      const openButton = Array.from(rendered.container.querySelectorAll('button'))
+        .find((button) => button.textContent?.trim() === '직접 등록') as HTMLButtonElement;
+      expect(openButton).toBeTruthy();
+
+      act(() => openButton.click());
+      expect(rendered.container.textContent).toContain('직접 의뢰 등록');
+      expect(rendered.container.textContent).toContain('이메일, 메신저 등 외부에서 받은');
+      expect(rendered.container.textContent).toContain('여러 파일 선택');
+      expect(rendered.container.textContent).toContain('AI 분석 및 빈 필드 자동입력');
+      // 받은 의뢰함은 직접 등록 여부와 무관하게 그대로 유지된다.
+      expect(rendered.container.textContent).toContain('화주 운송의뢰 수신함');
+
+      const closeButton = Array.from(rendered.container.querySelectorAll('button'))
+        .find((button) => button.textContent?.trim() === '닫기') as HTMLButtonElement;
+      act(() => closeButton.click());
+      expect(rendered.container.textContent).not.toContain('직접 의뢰 등록');
+      expect(rendered.container.textContent).not.toContain('여러 파일 선택');
+
+      // 다시 열면 정상적으로 재표시된다.
+      const reopenButton = Array.from(rendered.container.querySelectorAll('button'))
+        .find((button) => button.textContent?.trim() === '직접 등록') as HTMLButtonElement;
+      act(() => reopenButton.click());
+      expect(rendered.container.textContent).toContain('직접 의뢰 등록');
     });
-    expect(rendered.onChange).toHaveBeenCalledWith(expect.objectContaining({ loadPort: 'Masan Port' }));
-  });
 
-  it('기존 목록 밖 항만값은 기타항 직접입력으로 보존한다', () => {
-    const rendered = renderForm({ loadPort: 'Legacy Foreign POL', dischargePort: 'Legacy Domestic POD' });
-    const customPol = rendered.container.querySelector<HTMLInputElement>('input[aria-label="기타 국내항 직접 입력"]');
-    const customPod = rendered.container.querySelector<HTMLInputElement>('input[aria-label="기타 해외항 직접 입력"]');
-    expect(customPol?.value).toBe('Legacy Foreign POL');
-    expect(customPod?.value).toBe('Legacy Domestic POD');
-  });
-
-  it.each(['Tokyo', 'Tokyo Port', 'TOKYO PORT'])(
-    '기존 POD %s를 Tokyo Port 옵션으로 복원한다',
-    (legacyValue) => {
-      const rendered = renderForm({ dischargePort: legacyValue });
-      const podSelect = rendered.container.querySelector<HTMLSelectElement>('[data-field="dischargePort"] select');
-      expect(podSelect?.value).toBe('Tokyo Port');
-      expect(rendered.container.querySelector('input[aria-label="기타 해외항 직접 입력"]')).toBeNull();
-    },
-  );
-
-  it('수출 포워더 첨부 영역과 허용 파일 input을 표시한다', () => {
-    const rendered = renderForm();
-    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]');
-    expect(rendered.container.textContent).toContain('여러 파일 선택');
-    expect(rendered.container.textContent).toContain('AI 분석 및 빈 필드 자동입력');
-    expect(rendered.container.textContent).toContain('첨부된 파일이 없습니다.');
-    expect(input?.accept).toBe('.pdf,.png,.jpg,.jpeg');
-    expect(input?.multiple).toBe(true);
-  });
-
-  it('문서관리 조회 모드에서는 수정·저장·전송 액션 대신 닫기만 표시한다', () => {
-    const onClose = vi.fn();
-    const rendered = renderForm({}, { readOnly: true, onClose });
-    const closeButton = Array.from(rendered.container.querySelectorAll('button'))
-      .find((candidate) => candidate.textContent?.trim() === '닫기') as HTMLButtonElement;
-
-    expect(rendered.container.textContent).not.toContain('초기화');
-    expect(rendered.container.textContent).not.toContain('선적·부킹 정보 저장');
-    expect(rendered.container.textContent).not.toContain('전체 문서 전송');
-    expect(rendered.container.querySelector('fieldset')?.disabled).toBe(true);
-    act(() => closeButton.click());
-    expect(onClose).toHaveBeenCalledOnce();
-  });
-
-  it('1단계에서는 최종 전송을 숨기고 정보 저장 및 B/L 생성만 제공한다', () => {
-    const rendered = renderForm();
-    expect(rendered.container.textContent).toContain('1. B/L 생성 정보 입력');
-    expect(rendered.container.textContent).toContain('정보 저장 및 B/L 생성');
-    expect(rendered.container.textContent).not.toContain('전체 문서 전송');
-  });
-
-  it('2단계에서는 B/L을 인라인 렌더링하지 않고 생성 완료 카드와 액션만 제공한다', () => {
-    const onPreviousStep = vi.fn();
-    const onViewBillOfLading = vi.fn();
-    const onDownloadBillOfLading = vi.fn();
-    const rendered = renderForm({}, {
-      currentStep: 2,
-      billOfLadingHtml: '<div>Generated B/L</div>',
-      onPreviousStep,
-      onViewBillOfLading,
-      onDownloadBillOfLading,
+    it('조회모드에서는 직접 등록 버튼을 표시하지 않는다', () => {
+      const rendered = renderForm({}, { currentStep: 1, readOnly: true, onClose: vi.fn() });
+      expect(Array.from(rendered.container.querySelectorAll('button'))
+        .some((button) => button.textContent?.includes('직접 등록'))).toBe(false);
     });
-    expect(rendered.container.textContent).toContain('2. B/L 생성 및 확인');
-    expect(rendered.container.textContent).toContain('선하증권 (B/L)');
-    expect(rendered.container.textContent).toContain('생성 완료');
-    expect(rendered.container.textContent).not.toContain('Generated B/L');
-    expect(rendered.container.querySelector('[aria-label="B/L 미리보기 영역"]')).toBeNull();
-    const buttons = Array.from(rendered.container.querySelectorAll('button'));
-    act(() => buttons.find((button) => button.textContent?.includes('이전 단계'))?.click());
-    act(() => buttons.find((button) => button.textContent?.trim() === '보기')?.click());
-    act(() => buttons.find((button) => button.textContent?.trim() === '다운로드')?.click());
-    expect(onPreviousStep).toHaveBeenCalledOnce();
-    expect(onViewBillOfLading).toHaveBeenCalledOnce();
-    expect(onDownloadBillOfLading).toHaveBeenCalledOnce();
-    expect(rendered.container.textContent).toContain('전체 문서 전송');
+
+    it('다품목 화물명세를 품목별 카드로 모두 표시한다', () => {
+      const rendered = renderForm({ cargoItems: [
+        { id: 'a', itemNo: '', sku: '', descriptionOfGoods: 'Facial Toner', numberOfPackages: 10, kindOfPackages: 'CARTON', grossWeightKg: 100, measurementCbm: '0.5', marksAndNumbers: '', sourceDocumentIds: ['ci'] },
+        { id: 'b', itemNo: '', sku: '', descriptionOfGoods: 'Moisturizing Cream', numberOfPackages: 20, kindOfPackages: 'CARTON', grossWeightKg: 200, measurementCbm: '1.0', marksAndNumbers: '', sourceDocumentIds: ['pl'] },
+      ] }, { currentStep: 1 });
+      expect(rendered.container.textContent).toContain('Facial Toner');
+      expect(rendered.container.textContent).toContain('Moisturizing Cream');
+      expect(rendered.container.querySelector<HTMLInputElement>('#cargo-packages-0')?.value).toBe('10');
+      expect(rendered.container.querySelector<HTMLInputElement>('#cargo-packages-1')?.value).toBe('20');
+    });
+
+    it('Edge 응답 fixture의 C/I 3품목과 P/L 물류값을 병합해 카드 입력값까지 전달한다', () => {
+      const ci = mapExtractedFieldsToForwarderForm(normalizeImportAnalysisResult({ extracted: { items: [
+        { id: 'ci-1', description: 'Hydrating Hyaluronic Serum 50 mL' },
+        { id: 'ci-2', description: 'Ceramide Barrier Cream 50 mL' },
+        { id: 'ci-3', description: 'Low-pH Cleansing Foam 150 mL' },
+      ] } }).extracted);
+      const pl = mapExtractedFieldsToForwarderForm(normalizeImportAnalysisResult({ extracted: {
+        totalPackageCount: '60 CARTONS', grossWeight: '600 KG', measurement: '3.00 CBM',
+        items: [
+          { id: 'pl-1', description: 'HYDRATING HYALURONIC SERUM 50ML', packageCount: '10 CARTONS', grossWeight: '100 KG', measurement: '0.50 CBM', shippingMarks: 'SERUM' },
+          { id: 'pl-2', description: 'CERAMIDE BARRIER CREAM 50ML', packageCount: '20 CARTONS', grossWeight: '200 KG', measurement: '1.00 CBM', shippingMarks: 'CREAM' },
+          { id: 'pl-3', description: 'LOW-PH CLEANSING FOAM 150ML', packageCount: '30 CARTONS', grossWeight: '300 KG', measurement: '1.50 CBM' },
+        ],
+      } }).extracted);
+      const cargo = mergeForwarderCargoDocuments([
+        { items: ci.cargoItems!, totals: ci.cargoTotals!, documentType: 'commercial_invoice' },
+        { items: pl.cargoItems!, totals: pl.cargoTotals!, documentType: 'packing_list' },
+      ]);
+      const state = mergeForwarderAutoFill(createEmptyForwarderFormState(), {
+        cargoItems: cargo.items,
+        cargoTotals: cargo.totals,
+      }).state;
+      const rendered = renderForm(state, { currentStep: 1 });
+
+      expect(cargo.totals).toEqual({ numberOfPackages: 60, grossWeightKg: 600, measurementCbm: '3.00' });
+      expect(rendered.container.querySelector<HTMLInputElement>('#cargo-packages-2')?.value).toBe('30');
+      expect(rendered.container.querySelector<HTMLInputElement>('#cargo-weight-2')?.value).toBe('300');
+    });
+
+    it('다음: Booking 클릭 시 onNextFromRequest를 호출한다', () => {
+      const onNextFromRequest = vi.fn();
+      const rendered = renderForm({}, { currentStep: 1, onNextFromRequest });
+      const button = Array.from(rendered.container.querySelectorAll('button'))
+        .find((candidate) => candidate.textContent?.includes('다음: Booking')) as HTMLButtonElement;
+      act(() => button.click());
+      expect(onNextFromRequest).toHaveBeenCalledOnce();
+    });
+
+    it('초기화 클릭 시 onResetTrade를 호출한다', () => {
+      const onResetTrade = vi.fn();
+      const rendered = renderForm({}, { currentStep: 1, onResetTrade });
+      const button = Array.from(rendered.container.querySelectorAll('button'))
+        .find((candidate) => candidate.textContent?.trim() === '초기화') as HTMLButtonElement;
+      act(() => button.click());
+      expect(onResetTrade).toHaveBeenCalledOnce();
+    });
   });
 
-  it('2단계 B/L 생성 실패 시 입력 단계 대신 재생성 액션을 유지한다', () => {
-    const rendered = renderForm({}, {
-      currentStep: 2,
-      generationError: 'B/L 생성에 실패했습니다. 다시 시도해주세요.',
+  describe('STEP 2 — 선적 Booking', () => {
+    it('화물정보 Summary와 Booking·컨테이너 입력을 표시한다', () => {
+      const rendered = renderForm({
+        loadingMode: 'FCL',
+        cargoItems: [{ id: 'a', itemNo: '', sku: '', descriptionOfGoods: 'Facial Toner', numberOfPackages: 10, kindOfPackages: 'CARTON', grossWeightKg: 100, measurementCbm: '0.5', marksAndNumbers: '', sourceDocumentIds: [] }],
+      }, { currentStep: 2 });
+      expect(rendered.container.textContent).toContain('선적 Booking');
+      expect(rendered.container.textContent).toContain('화물정보 Summary');
+      expect(rendered.container.textContent).toContain('Facial Toner');
+      expect(rendered.container.textContent).toContain('Carrier / 선사');
+      expect(rendered.container.textContent).toContain('Booking No.');
+      expect(rendered.container.textContent).toContain('컨테이너 규격');
+      expect(rendered.container.textContent).toContain('PortAI가 선사 부킹을 대행하지 않습니다');
     });
-    expect(rendered.container.textContent).toContain('B/L 생성에 실패했습니다. 다시 시도해주세요.');
-    expect(rendered.container.textContent).toContain('생성 실패');
-    expect(rendered.container.textContent).toContain('재생성');
-    const submit = Array.from(rendered.container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('전체 문서 전송')) as HTMLButtonElement;
-    expect(submit.disabled).toBe(true);
+
+    it('수출 화주와 같은 국내 POL·해외 POD 옵션을 재사용한다', () => {
+      const rendered = renderForm({}, { currentStep: 2 });
+      const polSelect = rendered.container.querySelector('[data-field="loadPort"] select');
+      const podSelect = rendered.container.querySelector('[data-field="dischargePort"] select');
+      expect(polSelect?.textContent).toContain('Busan Port (부산항)');
+      expect(podSelect?.textContent).toContain('Tokyo Port (도쿄항)');
+    });
+
+    it('ETA가 ETD보다 빠르면 일정 오류를 표시한다', () => {
+      const rendered = renderForm({ departureDate: '2026-08-10', arrivalDate: '2026-08-09' }, { currentStep: 2 });
+      expect(rendered.container.textContent).toContain('ETA는 ETD보다 빠를 수 없습니다.');
+    });
+
+    it('Booking 정보 저장 클릭 시 onSaveBooking을 호출한다', () => {
+      const onSaveBooking = vi.fn();
+      const rendered = renderForm({}, { currentStep: 2, onSaveBooking });
+      const button = Array.from(rendered.container.querySelectorAll('button'))
+        .find((candidate) => candidate.textContent?.includes('Booking 정보 저장')) as HTMLButtonElement;
+      act(() => button.click());
+      expect(onSaveBooking).toHaveBeenCalledOnce();
+    });
   });
 
-  it('문서관리의 포워더 2단계 조회에서도 제출 액션 대신 닫기만 표시한다', () => {
-    const onClose = vi.fn();
-    const rendered = renderForm({}, {
-      currentStep: 2,
-      billOfLadingHtml: '<div>Saved B/L</div>',
-      readOnly: true,
-      onClose,
+  describe('STEP 3 — 선적 진행 관리', () => {
+    it('진행 단계 5개와 수출통관 정보 등록을 표시한다', () => {
+      const rendered = renderForm({}, { currentStep: 3 });
+      ['Booking 완료', '화물 반입', '수출통관', '선적', '출항'].forEach((label) => {
+        expect(rendered.container.textContent).toContain(label);
+      });
+      expect(rendered.container.textContent).toContain('수출신고번호');
+      expect(rendered.container.textContent).toContain('수출신고필증');
+      expect(rendered.container.textContent).toContain('PortAI는 수출신고서를 생성하지 않습니다');
     });
-    expect(rendered.container.textContent).not.toContain('이전 단계');
-    expect(rendered.container.textContent).not.toContain('전체 문서 전송');
-    const close = Array.from(rendered.container.querySelectorAll('button'))
-      .find((button) => button.textContent?.trim() === '닫기') as HTMLButtonElement;
-    act(() => close.click());
-    expect(onClose).toHaveBeenCalledOnce();
+
+    it('진행 상태를 변경하면 onProgressChange를 호출한다', () => {
+      const onProgressChange = vi.fn();
+      const rendered = renderForm({}, { currentStep: 3, onProgressChange });
+      const select = rendered.container.querySelector<HTMLSelectElement>('select[aria-label="화물 반입 상태"]');
+      act(() => {
+        if (!select) return;
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(select, 'done');
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      expect(onProgressChange).toHaveBeenCalledWith('cargoReceived', 'done');
+    });
+
+    it('Booking 완료 상태는 2단계 Booking No. 저장 여부로 자동 판정되며 직접 변경할 수 없다', () => {
+      const onProgressChange = vi.fn();
+      const withoutBooking = renderForm({ bookingNo: '' }, { currentStep: 3, onProgressChange });
+      const bookingSelect = withoutBooking.container.querySelector<HTMLSelectElement>('select[aria-label="Booking 완료 상태"]');
+      expect(bookingSelect?.value).toBe('pending');
+      expect(bookingSelect?.disabled).toBe(true);
+
+      const withBooking = renderForm({ bookingNo: 'BK-100' }, { currentStep: 3 });
+      const bookingSelectDone = withBooking.container.querySelector<HTMLSelectElement>('select[aria-label="Booking 완료 상태"]');
+      expect(bookingSelectDone?.value).toBe('done');
+    });
+  });
+
+  describe('STEP 4 — B/L 관리', () => {
+    it('Master B/L(등록)과 House B/L(생성)을 분리해 표시한다', () => {
+      const rendered = renderForm({ carrier: 'ONE', vesselOrFlight: 'ONE HAMBURG', voyageNo: '001E', loadPort: 'Busan Port', dischargePort: 'Tokyo Port' }, { currentStep: 4, masterBlNo: 'MBLKR0001' });
+      expect(rendered.container.textContent).toContain('Master B/L');
+      expect(rendered.container.textContent).toContain('선사가 발행하는 문서');
+      expect(rendered.container.querySelector<HTMLInputElement>('#mbl-no')?.value).toBe('MBLKR0001');
+      const carrierInputs = Array.from(rendered.container.querySelectorAll<HTMLInputElement>('input[disabled]'));
+      expect(carrierInputs.some((input) => input.value === 'ONE')).toBe(true);
+      expect(rendered.container.textContent).toContain('House B/L');
+      expect(rendered.container.textContent).toContain('생성 대기');
+      expect(rendered.container.textContent).toContain('H/B/L 생성');
+    });
+
+    it('H/B/L 생성 완료 시 완료 상태·B/L 번호·보기/다운로드/재생성 버튼을 표시한다', () => {
+      const onViewBillOfLading = vi.fn();
+      const onDownloadBillOfLading = vi.fn();
+      const rendered = renderForm({}, {
+        currentStep: 4,
+        billOfLadingData: FIXTURE_BILL_OF_LADING,
+        onViewBillOfLading,
+        onDownloadBillOfLading,
+      });
+      expect(rendered.container.textContent).toContain('생성 완료');
+      expect(rendered.container.textContent).toContain(FIXTURE_BILL_OF_LADING.blNo);
+      const buttons = Array.from(rendered.container.querySelectorAll('button'));
+      expect(buttons.some((button) => button.textContent?.trim() === '보기')).toBe(true);
+      expect(buttons.some((button) => button.textContent?.trim() === '다운로드')).toBe(true);
+      expect(buttons.some((button) => button.textContent?.includes('재생성'))).toBe(true);
+      act(() => buttons.find((button) => button.textContent?.trim() === '보기')?.click());
+      act(() => buttons.find((button) => button.textContent?.trim() === '다운로드')?.click());
+      expect(onViewBillOfLading).toHaveBeenCalledOnce();
+      expect(onDownloadBillOfLading).toHaveBeenCalledOnce();
+    });
+
+    it('생성 전(읽기전용 아님)에는 보기/다운로드 대신 H/B/L 생성 버튼만 표시한다', () => {
+      const rendered = renderForm({}, { currentStep: 4 });
+      const buttons = Array.from(rendered.container.querySelectorAll('button'));
+      expect(buttons.some((button) => button.textContent?.trim() === '보기')).toBe(false);
+      expect(buttons.some((button) => button.textContent?.trim() === '다운로드')).toBe(false);
+      expect(buttons.some((button) => button.textContent?.includes('H/B/L 생성'))).toBe(true);
+    });
+
+    it('조회모드에서 생성 완료된 H/B/L은 보기/다운로드만 가능하고 재생성은 숨긴다', () => {
+      const rendered = renderForm({}, {
+        currentStep: 4,
+        readOnly: true,
+        billOfLadingData: FIXTURE_BILL_OF_LADING,
+      });
+      const buttons = Array.from(rendered.container.querySelectorAll('button'));
+      expect(buttons.some((button) => button.textContent?.trim() === '보기')).toBe(true);
+      expect(buttons.some((button) => button.textContent?.trim() === '다운로드')).toBe(true);
+      expect(buttons.some((button) => button.textContent?.includes('재생성'))).toBe(false);
+      expect(buttons.some((button) => button.textContent?.includes('H/B/L 생성'))).toBe(false);
+    });
+
+    it('H/B/L 생성 실패 시 생성 실패 상태와 오류 메시지를 유지한다', () => {
+      const rendered = renderForm({}, {
+        currentStep: 4,
+        generationError: 'H/B/L 생성에 실패했습니다. 다시 시도해주세요.',
+      });
+      expect(rendered.container.textContent).toContain('H/B/L 생성에 실패했습니다. 다시 시도해주세요.');
+      expect(rendered.container.textContent).toContain('생성 실패');
+    });
+  });
+
+  describe('STEP 5 — 선적 완료 및 문서 전달', () => {
+    it('완료 체크리스트를 표시하고 미완료 시 완료 처리를 막는다', () => {
+      const onCompleteShipment = vi.fn();
+      const rendered = renderForm({}, { currentStep: 5, onCompleteShipment, trade: FIXTURE_TRADE });
+      expect(rendered.container.textContent).toContain('선적 완료 확인');
+      const button = Array.from(rendered.container.querySelectorAll('button'))
+        .find((candidate) => candidate.textContent?.trim() === '선적 완료 처리') as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      act(() => button.click());
+      expect(onCompleteShipment).not.toHaveBeenCalled();
+    });
+
+    it('모든 조건이 충족되면 선적 완료 처리 버튼이 활성화된다', () => {
+      const rendered = renderForm({ bookingNo: 'BK-100' }, {
+        currentStep: 5,
+        trade: FIXTURE_TRADE,
+        billOfLadingData: FIXTURE_BILL_OF_LADING,
+        masterBlNo: 'MBLKR0001',
+        progress: { cargoReceived: 'done', customsCleared: 'done', loaded: 'done', departed: 'done' },
+      });
+      const button = Array.from(rendered.container.querySelectorAll('button'))
+        .find((candidate) => candidate.textContent?.trim() === '선적 완료 처리') as HTMLButtonElement;
+      expect(button.disabled).toBe(false);
+    });
+
+    it('화주 알림과 해외 파트너 Shipping Advice 전달 패널을 표시한다', () => {
+      const rendered = renderForm({}, { currentStep: 5, trade: FIXTURE_TRADE });
+      expect(rendered.container.textContent).toContain('화주에게 선적완료 알림');
+      expect(rendered.container.textContent).toContain('해외 파트너 포워더 Shipping Advice');
+    });
+
+    it('Booking 완료는 exportForwarderCase.progress가 아니라 2단계 Booking No. 저장 여부로 판정한다', () => {
+      // progress.booking이 전혀 없어도(2단계에서 진행상태를 따로 건드린 적 없어도) bookingNo만 있으면 완료로 본다.
+      const withBooking = renderForm({ bookingNo: 'BK-100' }, { currentStep: 5, progress: {} });
+      const items = Array.from(withBooking.container.querySelectorAll('.forwarder-completion-checklist li'));
+      const bookingItem = items.find((li) => li.textContent?.includes('Booking 완료'));
+      expect(bookingItem?.className).toContain('is-done');
+    });
+
+    it('Booking 정보가 없으면 미완료로 표시한다', () => {
+      const rendered = renderForm({ bookingNo: '' }, { currentStep: 5, progress: {} });
+      const items = Array.from(rendered.container.querySelectorAll('.forwarder-completion-checklist li'));
+      const bookingItem = items.find((li) => li.textContent?.includes('Booking 완료'));
+      expect(bookingItem?.className).not.toContain('is-done');
+    });
+  });
+
+  describe('조회모드(readOnly)', () => {
+    it('입력·저장 액션 대신 닫기만 표시하고 필드 수정을 막는다', () => {
+      const onClose = vi.fn();
+      const rendered = renderForm({}, { currentStep: 1, readOnly: true, onClose });
+      expect(rendered.container.textContent).not.toContain('초기화');
+      expect(rendered.container.textContent).not.toContain('다음: Booking');
+      expect(rendered.container.querySelector('fieldset')?.disabled).toBe(true);
+      const closeButton = Array.from(rendered.container.querySelectorAll('button'))
+        .find((candidate) => candidate.textContent?.trim() === '닫기') as HTMLButtonElement;
+      act(() => closeButton.click());
+      expect(onClose).toHaveBeenCalledOnce();
+    });
+
+    it('조회모드에서도 Step 표시줄로 모든 단계를 이동할 수 있다', () => {
+      const onStepChange = vi.fn();
+      const rendered = renderForm({}, { currentStep: 1, readOnly: true, onStepChange, status: 'submitted' });
+      const stepButtons = Array.from(rendered.container.querySelectorAll('.import-steps button'));
+      expect(stepButtons.every((button) => !(button as HTMLButtonElement).disabled)).toBe(true);
+      act(() => (stepButtons[4] as HTMLButtonElement).click());
+      expect(onStepChange).toHaveBeenCalledWith(5);
+    });
+
+    it('거래가 아직 저장되지 않은 편집모드에서는 1단계 외 이동을 막는다', () => {
+      const rendered = renderForm({}, { currentStep: 1, status: null });
+      const stepButtons = Array.from(rendered.container.querySelectorAll('.import-steps button'));
+      expect((stepButtons[0] as HTMLButtonElement).disabled).toBe(false);
+      expect((stepButtons[1] as HTMLButtonElement).disabled).toBe(true);
+    });
   });
 });

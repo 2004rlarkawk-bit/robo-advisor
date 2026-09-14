@@ -179,6 +179,8 @@ export interface TradeWorkflowData {
   importTrade?: ImportTradeWorkflowData;
   /** 포워더 수입 워크스페이스의 운영 상태(단계·이슈 확인·A/N). 화주 측 데이터와 분리 저장. */
   forwarderCase?: import('./forwarderCase').ForwarderCaseState;
+  /** 포워더 수출 워크스페이스의 운영 상태(선적 진행단계·Master B/L 번호·전달 이력). */
+  exportForwarderCase?: import('./exportForwarderCase').ExportForwarderCaseState;
 }
 
 export interface TradeDocumentData {
