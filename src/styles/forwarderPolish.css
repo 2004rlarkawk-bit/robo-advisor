@@ -1,14 +1,4 @@
 /* Scoped refinement: no shipper styles, workflow rules or role-switch controls. */
-.header.header--forwarder { gap: 16px; height: auto; min-height: 64px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
-.header--forwarder .header-title-sec { min-width: 0; flex-shrink: 0; gap: 12px; }
-.header--forwarder .header-product-name { color: #f8fafc; font-size: 20px; font-weight: 750; letter-spacing: -.5px; white-space: nowrap; }
-.header.header--forwarder .header-role-chip { border: 1px solid #b6c6d9; background: #e7eef6; color: #3c526d; border-radius: 7px; padding: 6px 9px; gap: 7px; font-size: 12px; font-weight: 600; }
-.header--forwarder .header-actions { min-width: 0; margin-left: auto; gap: 12px; }
-.header--forwarder .user-info-section { min-width: 0; gap: 10px; }
-.header--forwarder .user-profile { min-width: 0; padding: 5px 6px; }
-.header--forwarder .user-profile > span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.header--forwarder .user-avatar, .header--forwarder .icon-btn { flex-shrink: 0; }
-.header--forwarder .btn-logout { flex-shrink: 0; white-space: nowrap; }
 .page-heading.page-heading--import-forwarder { text-align: left; margin-bottom: 0; }
 .page-heading--import-forwarder .page-title { font-size: 26px; margin-bottom: 8px; letter-spacing: -.5px; }
 .page-heading--import-forwarder .page-subtitle { font-size: 14px; line-height: 1.6; margin: 0; }
@@ -201,9 +191,6 @@
 .fwd-workspace .fwd-activity-text { overflow-wrap: anywhere; }
 .fwd-workspace .fwd-review-filter:focus-visible, .fwd-workspace .fwd-review-toggle:focus-visible, .fwd-workspace .fwd-doc-thumb:focus-visible { outline: 3px solid #8eb4f0; outline-offset: 3px; }
 @media (max-width: 1100px) {
-  .header.header--forwarder { padding-left: 20px; padding-right: 20px; gap: 10px; }
-  .header--forwarder .header-actions { gap: 7px; }
-  .header--forwarder .user-profile > span { max-width: 120px; }
   .fwd-workspace .fwd-head-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
@@ -211,10 +198,6 @@
   .fwd-workspace .fwd-return-envelope, .fwd-workspace .fwd-return-sections { padding: 18px 16px; }
   .fwd-workspace .fwd-return-envelope h3 span { display: block; }
   .fwd-workspace .fwd-return-section { grid-template-columns: 1fr; gap: 8px; }
-  .header.header--forwarder { padding: 10px 14px; }
-  .header--forwarder .header-title-sec { gap: 8px; }
-  .header--forwarder .header-actions { flex-wrap: wrap; }
-  .header--forwarder .user-profile > span { max-width: 90px; }
   .page-heading--import-forwarder .page-title { font-size: 23px; }
   .page-heading--import-forwarder .page-subtitle { font-size: 13px; }
   .fwd-workspace .fwd-head-grid { gap: 14px; }
