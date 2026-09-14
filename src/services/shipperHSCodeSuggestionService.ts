@@ -3,9 +3,12 @@ import {
   suggestHSCodeFromCandidates,
 } from './claudeService';
 import {
+  findTenDigitHSKByPrefix,
   formatCode,
   lookupHSByCode,
+  lookupHSHierarchy,
   searchHSByKeyword,
+  searchHSHeadingsByKeyword,
 } from './hsDataService';
 import type {
   HSCodeCandidateContext,
@@ -26,6 +29,7 @@ import {
   annotateBagNames,
   bagPrefixesForQuery,
 } from './hsBagNomenclature';
+import { isSearchableItemName } from './hsItemName';
 
 /** 소호 보조표(의류·가방)로 후보 품명에 분류 기준을 덧붙인다. */
 function annotateCandidateNames(
@@ -41,6 +45,14 @@ const LOCAL_CANDIDATE_LIMIT = 30;
 /** 의류 후보 확장 상한 — 남성·여성·편물·가죽 호를 함께 담아야 한다. */
 const APPAREL_CANDIDATE_LIMIT = 60;
 const DISPLAY_SUGGESTION_LIMIT = 3;
+/** Edge Function이 받는 후보 상한(openai-assistant normalizeCandidateCodes). 넘기면 서버에서 뒤가 잘린다. */
+const SERVER_CANDIDATE_LIMIT = 30;
+/** 후보 설명에 덧붙이는 호·소호 제목 길이 — 서버가 필드당 300자에서 자르므로 합이 넘지 않게 둔다. */
+const SUBHEADING_TITLE_LIMIT = 150;
+const HEADING_TITLE_LIMIT = 100;
+
+// 훅·폼 테스트가 이 서비스를 통째로 목업하므로 길이 판정은 별도 모듈에 둔다.
+export { isSearchableItemName };
 
 export function normalizeHSKCode(code: string): string {
   return code.replace(/[\s.-]/g, '');
@@ -146,12 +158,22 @@ async function expandCandidateContext(
 ): Promise<HSCodeCandidateContext[]> {
   const expanded = new Map<string, HSCodeCandidateContext>();
 
-  for (const prefix of prefixes) {
-    const descendants = await searchHSByKeyword(
-      prefix,
-      LOCAL_CANDIDATE_LIMIT
-    );
-    for (const result of descendants) {
+  // 접두별 10자리 후보를 소호(6자리) 단위로 번갈아 담는다.
+  // 앞에서부터 자르면 4202처럼 넓은 호에서 뒤쪽 소호(4202.92 배낭)가 통째로 빠지고,
+  // 첫 접두가 상한을 다 채우면 다음 접두(남성용 코트 → 여성용 코트)도 빠진다.
+  const descendantsByPrefix = await Promise.all(
+    prefixes.map(async (prefix) =>
+      interleaveBySubheading(await findTenDigitHSKByPrefix(prefix, 1000))
+    )
+  );
+  const rounds = Math.max(
+    0,
+    ...descendantsByPrefix.map((descendants) => descendants.length)
+  );
+  for (let round = 0; round < rounds && expanded.size < limit; round += 1) {
+    for (const descendants of descendantsByPrefix) {
+      const result = descendants[round];
+      if (!result) continue;
       const code = normalizeHSKCode(result.code);
       if (!isTenDigitHSK(code) || expanded.has(code)) continue;
       expanded.set(code, {
@@ -161,6 +183,7 @@ async function expandCandidateContext(
           ? { classificationName: result.category }
           : {}),
       });
+      if (expanded.size >= limit) break;
     }
   }
 
@@ -185,6 +208,60 @@ async function expandCandidateContext(
     );
   }
   return candidates;
+}
+
+/** 같은 소호끼리 몰려 있는 목록을 소호별로 한 건씩 번갈아 나열한다. */
+function interleaveBySubheading<T extends { code: string }>(entries: T[]): T[] {
+  const groups = new Map<string, T[]>();
+  for (const entry of entries) {
+    const subheading = entry.code.slice(0, 6);
+    const group = groups.get(subheading);
+    if (group) group.push(entry);
+    else groups.set(subheading, [entry]);
+  }
+  const lists = Array.from(groups.values());
+  const longest = Math.max(0, ...lists.map((list) => list.length));
+  const interleaved: T[] = [];
+  for (let index = 0; index < longest; index += 1) {
+    for (const list of lists) {
+      if (list[index]) interleaved.push(list[index]);
+    }
+  }
+  return interleaved;
+}
+
+const clipTitle = (title: string, limit: number) =>
+  title.length > limit ? `${title.slice(0, limit - 1)}…` : title;
+
+/**
+ * AI에 넘기는 후보에 호(4자리)·소호(6자리) 제목을 덧붙인다.
+ * "기타 / Other"만 있는 10자리 품명도 "부분품인지·어떤 제품군인지" 구분할 수 있게 한다.
+ * 되묻기 판정은 원래 품명으로 하므로 전송 직전에만 붙인다
+ * — 호 제목의 단어가 모든 소호에 똑같이 걸려 선택지가 부풀지 않게.
+ */
+async function withHierarchyTitles(
+  candidates: HSCodeCandidateContext[]
+): Promise<HSCodeCandidateContext[]> {
+  return Promise.all(
+    candidates.slice(0, SERVER_CANDIDATE_LIMIT).map(async (candidate) => {
+      const { heading, subheading } = await lookupHSHierarchy(candidate.code);
+      const titles = [
+        subheading
+          ? `HS ${formatSubheading(candidate.code.slice(0, 6))}: ${clipTitle(subheading, SUBHEADING_TITLE_LIMIT)}`
+          : '',
+        heading
+          ? `HS ${candidate.code.slice(0, 4)}: ${clipTitle(heading, HEADING_TITLE_LIMIT)}`
+          : '',
+      ].filter(Boolean).join(' / ');
+      if (!titles) return candidate;
+      return {
+        ...candidate,
+        classificationName: [candidate.classificationName, titles]
+          .filter(Boolean)
+          .join(' / '),
+      };
+    })
+  );
 }
 
 function inferOfficialNamePrefixes(
@@ -503,7 +580,7 @@ export async function recommendShipperHSCode(
   chosenSubheading?: string | null
 ): Promise<HSCodeSuggestionResponse> {
   const normalizedItemName = itemName.trim();
-  if (normalizedItemName.length < 3) {
+  if (!isSearchableItemName(normalizedItemName)) {
     return {
       suggestions: [],
       additionalInformationRequired: false,
@@ -564,11 +641,16 @@ export async function recommendShipperHSCode(
     ? []
     : bagPrefixesForQuery(normalizedItemName);
   const indexedPrefixes = [...apparelPrefixes, ...bagPrefixes];
+  // AI 방향이 틀려도 소호 제목에 품명 단어가 그대로 있으면 그 소호를 함께 본다.
+  const titlePrefixes = chosenSubheading
+    ? []
+    : await searchHSHeadingsByKeyword(normalizedItemName, 2);
   const discoveryPrefixes = Array.from(new Set([
     ...indexedPrefixes,
     ...discovery.suggestedPrefixes,
+    ...titlePrefixes,
     ...officialNamePrefixes,
-  ])).slice(0, 5 + indexedPrefixes.length);
+  ])).slice(0, 6 + indexedPrefixes.length);
   const expandedCandidateCodes = await expandCandidateContext(
     initialCandidateCodes,
     discoveryPrefixes,
@@ -617,16 +699,17 @@ export async function recommendShipperHSCode(
     }
   }
 
+  const promptCandidates = await withHierarchyTitles(candidateCodes);
   const decision = debugItemId
     ? await suggestHSCodeFromCandidates(
         normalizedItemName,
-        candidateCodes,
+        promptCandidates,
         itemDetails,
         debugItemId
       )
     : await suggestHSCodeFromCandidates(
         normalizedItemName,
-        candidateCodes,
+        promptCandidates,
         itemDetails
       );
 

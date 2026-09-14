@@ -13,6 +13,7 @@ import {
   normalizeHSKCode,
   recommendShipperHSCode,
 } from '../services/shipperHSCodeSuggestionService';
+import { isSearchableItemName } from '../services/hsItemName';
 
 const DEBOUNCE_MS = 700;
 
@@ -200,7 +201,7 @@ export function useShipperHSCodeSuggestions(
         chosenSubheading: null,
       });
 
-      if (itemName.length < 3) continue;
+      if (!isSearchableItemName(itemName)) continue;
 
       const timer = setTimeout(() => {
         timersRef.current.delete(item.id);
@@ -225,7 +226,7 @@ export function useShipperHSCodeSuggestions(
     if (!item) return;
 
     const normalizedItemName = normalizeItemName(item.itemName);
-    if (normalizedItemName.length < 3) return;
+    if (!isSearchableItemName(normalizedItemName)) return;
     const requestItemName =
       item.itemName.trim().replace(/\s+/g, ' ');
 
@@ -308,7 +309,7 @@ export function useShipperHSCodeSuggestions(
     const requestItemName = (nextItemName ?? item.itemName)
       .trim()
       .replace(/\s+/g, ' ');
-    if (normalizeItemName(requestItemName).length < 3) return;
+    if (!isSearchableItemName(requestItemName)) return;
     if (nextItemName) {
       observedNamesRef.current.set(
         itemId,
