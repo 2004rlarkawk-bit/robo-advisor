@@ -3,11 +3,11 @@
  *
  * 화주의 3단계 위저드와 달리 진행 상태·다음 조치 중심으로 구성한다.
  *  - 목록: ETA·수입 건·상태·다음 조치
- *  - 상세: 이슈(차단/확인/참고) → 문서 대사 → 통관·도착 관리 → 완료
+ *  - 상세: 서류 검토 / 요청·회신 / 후속 서류 (상태 변경 규칙은 유지)
  * 운영 상태는 forwarderCaseService를 통해 workflow_data.forwarderCase에 저장한다.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, CheckCircle2, CornerUpLeft, Download, ExternalLink, Info, Search } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, CornerUpLeft, Download, ExternalLink, Mail } from 'lucide-react';
 import {
   FORWARDER_STAGE_LABEL,
   FORWARDER_STAGE_ORDER,
@@ -16,7 +16,7 @@ import {
   type ForwarderImportCase,
 } from '../../types/forwarderCase';
 import type {
-  CargoTrackingResult,
+  ArrivalNoticeMeta,
   DispatchSettlement,
   DispatchVehicleType,
   ImportDispatchRequest,
@@ -28,18 +28,24 @@ import {
   listForwarderCases,
   saveForwarderCaseState,
 } from '../../services/forwarderCaseService';
-import { lookupImportCargo } from '../../services/cargoProgressService';
+import ForwarderCargoPanel from './ForwarderCargoPanel';
 import { IMPORT_DOCUMENT_TYPE_LABELS } from '../../services/importDocumentAnalysisService';
 import { loadTradeAttachmentFile } from '../../services/tradeAttachmentStorageService';
 import { downloadArrivalNoticeDocx } from '../../services/arrivalNoticeDocxService';
 import ImportDocumentComparison from './ImportDocumentComparison';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 import ForwarderImportInbox from './ForwarderImportInbox';
+import ForwarderIssueReview from './ForwarderIssueReview';
+import ForwarderDocumentThumbnail from './ForwarderDocumentThumbnail';
+import ForwarderReturnRequestContent, { buildReturnRequestLetter } from './ForwarderReturnRequestContent';
+import { getInboxImporterName } from '../../utils/forwarderInbox';
+import '../../styles/forwarderPolish.css';
 
 interface Props {
   userId: string;
   /** A/N 레터헤드에 들어갈 발행 포워더 상호 */
   issuerName?: string;
+  senderContactName?: string;
   /** Pre-alert를 화주 의뢰 없이 직접 등록해야 할 때 기존 업로드 플로우로 전환 */
   onDirectUpload: () => void;
 }
@@ -51,18 +57,9 @@ const STAGE_BADGE_CLASS: Record<ForwarderCaseStage, string> = {
   done: 'fwd-stage-done',
 };
 
-type DetailTab = 'overview' | 'review' | 'clearance';
+type DetailTab = 'review' | 'messages' | 'clearance';
 
-/** 서류 썸네일 머리글(영문 서식명)과 하단 약칭 — 실제 서류처럼 보이는 미니 미리보기용 */
-const DOC_THUMB_TITLE: Record<string, string> = {
-  commercial_invoice: 'COMMERCIAL INVOICE',
-  packing_list: 'PACKING LIST',
-  bill_of_lading: 'BILL OF LADING',
-  certificate_of_origin: 'CERTIFICATE OF ORIGIN',
-  transport_request: 'SHIPMENT REQUEST',
-  export_declaration: 'EXPORT DECLARATION',
-  insurance_policy: 'INSURANCE POLICY',
-};
+/** 원본 미리보기 하단의 서류 약칭. */
 const DOC_THUMB_ABBR: Record<string, string> = {
   commercial_invoice: 'C/I',
   packing_list: 'P/L',
@@ -96,25 +93,27 @@ function etaDday(eta: string): { label: string; tone: 'overdue' | 'imminent' | '
   return { label: `D-${days}`, tone: days <= 3 ? 'imminent' : 'normal' };
 }
 
-export default function ForwarderImportWorkspace({ userId, issuerName = '', onDirectUpload }: Props) {
+export default function ForwarderImportWorkspace({ userId, issuerName = '', senderContactName = '', onDirectUpload }: Props) {
   const [cases, setCases] = useState<ForwarderImportCase[] | null>(null);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [cargo, setCargo] = useState<CargoTrackingResult | null>(null);
-  const [cargoBusy, setCargoBusy] = useState(false);
-  // 조회용 B/L — 추출값을 기본으로 쓰되, 추출이 틀리거나 비어 있으면 직접 고쳐서 조회할 수 있게 한다.
-  const [cargoBlNo, setCargoBlNo] = useState('');
   const [returnFormOpen, setReturnFormOpen] = useState(false);
+  const returnFormRef = useRef<HTMLDivElement>(null);
+  const [returnFormFocusKey, setReturnFormFocusKey] = useState(0);
+  useEffect(() => {
+    if (returnFormFocusKey > 0 && returnFormOpen) {
+      returnFormRef.current?.scrollIntoView({ block: 'nearest' });
+      returnFormRef.current?.focus({ preventScroll: true });
+    }
+  }, [returnFormFocusKey, returnFormOpen]);
   // 보완 요청은 이슈를 골라 보낸다 — 선택된 이슈가 곧 요청 내용, 메모는 부가 안내.
   const [returnPicks, setReturnPicks] = useState<Record<string, boolean>>({});
   const [returnMemo, setReturnMemo] = useState('');
-  const [detailTab, setDetailTab] = useState<DetailTab>('overview');
+  const [detailTab, setDetailTab] = useState<DetailTab>('review');
   const [docBusyId, setDocBusyId] = useState<string | null>(null);
   const [anBusy, setAnBusy] = useState(false);
-  // 이슈 종결 시 확인 내용(판단 근거)을 함께 기록한다
-  const [noteFormId, setNoteFormId] = useState<string | null>(null);
-  const [noteText, setNoteText] = useState('');
+  const [anFileBusy, setAnFileBusy] = useState(false);
   const [dispatchBusy, setDispatchBusy] = useState(false);
   /** 배차 의뢰 입력 — 저장 전까지 화면에만 두고, 생성 시 케이스에 기록한다. */
   const [dispatchDraft, setDispatchDraft] = useState<Record<string, ImportDispatchRequest>>({});
@@ -183,7 +182,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
       received: '의뢰 접수 단계로 이동',
       review: '서류 검토 시작',
       clearance: '통관·도착 관리 시작',
-      done: '서류 작업 완료',
+      done: '서류 업무 완료',
     };
     if (await persist(caseItem, { stage }, [STAGE_ACTIVITY[stage]])) setDetailTab(nextTab);
   }, [persist]);
@@ -212,32 +211,40 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
     }
   }, [userId]);
 
-  const lookupCargo = useCallback(async (blNo: string) => {
-    setCargoBusy(true);
+  const openArrivalFile = async (meta: ArrivalNoticeMeta, download: boolean) => {
+    if (!meta.storageBucket || !meta.storagePath || anFileBusy) return;
+    const previewWindow = download ? null : window.open('', '_blank');
+    if (previewWindow) previewWindow.opener = null;
+    setAnFileBusy(true);
+    setError('');
     try {
-      setCargo(await lookupImportCargo(blNo));
-    } finally {
-      setCargoBusy(false);
-    }
-  }, []);
+      const file = await loadTradeAttachmentFile({ storageBucket: meta.storageBucket, storagePath: meta.storagePath, fileName: meta.fileName, mimeType: meta.mimeType, documentType: 'arrival_notice' }, userId);
+      const url = URL.createObjectURL(file);
+      if (download) {
+        const link = document.createElement('a'); link.href = url; link.download = meta.fileName; document.body.appendChild(link); link.click(); link.remove();
+      } else if (previewWindow) previewWindow.location.href = url;
+      else setError('팝업이 차단되었습니다. 팝업을 허용하거나 다운로드를 이용하세요.');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      previewWindow?.close();
+      setError('도착통지서를 열지 못했습니다. 다시 시도해 주세요.');
+    } finally { setAnFileBusy(false); }
+  };
 
   const openCase = (tradeId: string) => {
     setSelectedId(tradeId);
-    setCargo(null);
-    const opened = cases?.find((item) => item.tradeId === tradeId);
-    setCargoBlNo(opened && opened.blNo !== '-' ? opened.blNo : '');
     setReturnFormOpen(false);
     setReturnPicks({});
     setReturnMemo('');
-    setDetailTab('overview');
+    setDetailTab('review');
   };
 
   const finishClearance = (caseItem: ForwarderImportCase) => {
     const arrivalNoticeNote = caseItem.arrivalNotice?.storagePath
       ? ''
       : '\n\n도착통지서(A/N)가 첨부되지 않았습니다.';
-    if (window.confirm(`이 건의 서류 작업을 완료 처리할까요?${arrivalNoticeNote}\n\n완료 후에는 업무 큐의 서류 완료 목록으로 이동합니다.`)) {
-      void moveToStage(caseItem, 'done', 'overview');
+    if (window.confirm(`이 건의 서류 업무를 완료 처리할까요?${arrivalNoticeNote}\n\n실제 통관 상태는 바뀌지 않습니다. 완료 후에는 업무 큐의 서류 완료 목록으로 이동합니다.`)) {
+      void moveToStage(caseItem, 'done', 'clearance');
     }
   };
 
@@ -245,12 +252,8 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
   if (selected) {
     const stageIndex = FORWARDER_STAGE_ORDER.indexOf(selected.stage);
     const blockers = selected.issues.filter((issue) => issue.severity === 'blocker');
-    const unresolvedBlockers = blockers.filter((issue) => !issue.resolved);
     const checks = selected.issues.filter((issue) => issue.severity === 'check');
     const infos = selected.issues.filter((issue) => issue.severity === 'info');
-    // 요약 칩용 집계 — 필수(미해결 차단) / 권장(미해결 확인·참고) / 완료
-    const unresolvedSoft = selected.issues.filter((issue) => !issue.resolved && issue.severity !== 'blocker').length;
-    const resolvedCount = selected.issues.filter((issue) => issue.resolved).length;
     const sourceDocs = selected.snapshot.documents.filter((doc) => doc.storagePath);
     const canFinishReview = selected.blockerCount === 0;
     // 화주가 입력한 배송 요청 — 배차 의뢰서의 배송지 칸으로 그대로 넘어간다.
@@ -270,6 +273,8 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
       }));
     };
     const returnPending = Boolean(selected.returnRequest && !selected.returnRequest.resolvedAt);
+    const documentsLocked = stageIndex < FORWARDER_STAGE_ORDER.indexOf('clearance') || returnPending;
+    const documentLockReason = returnPending ? '화주 회신·재검토 후 사용 가능' : '서류 검토 후 사용 가능';
 
     return (
       <div className="fwd-workspace">
@@ -284,13 +289,13 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
 
         <section className="form-card import-card fwd-head-card">
           <div className="fwd-head-main">
-            <h2>{selected.importer} · {selected.blNo}</h2>
+            <h2>{getInboxImporterName(selected) === '화주명 미입력' ? '' : `${getInboxImporterName(selected)} · `}B/L {selected.blNo}</h2>
             <span className={`fwd-origin ${selected.origin === 'shipper_request' ? 'is-request' : ''}`}>
               {selected.origin === 'shipper_request' ? '화주 의뢰' : '직접 등록'}
             </span>
           </div>
           <dl className="fwd-head-grid">
-            <div><dt>송하인</dt><dd>{selected.shipperName}</dd></div>
+            <div><dt>송하인</dt><dd>{selected.shipperName || '미입력'}</dd></div>
             <div><dt>선박</dt><dd>{selected.vesselName || '-'}</dd></div>
             <div><dt>ETA</dt><dd>
               {formatEta(selected.eta)}
@@ -320,35 +325,52 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
 
         {error && <div className="form-message error">{error}</div>}
 
-        {selected.returnRequest && (
+        <nav className="fwd-tabs" aria-label="수입 업무 상세 탭">
+          <button type="button" aria-current={detailTab === 'review' ? 'page' : undefined} className={detailTab === 'review' ? 'is-active' : ''} onClick={() => setDetailTab('review')}>서류 검토</button>
+          <button type="button" aria-current={detailTab === 'messages' ? 'page' : undefined} className={detailTab === 'messages' ? 'is-active' : ''} onClick={() => setDetailTab('messages')}>요청·회신{selected.returnRequest?.resolvedAt && <span className="fwd-tab-notice">회신 도착</span>}</button>
+          <button type="button" aria-current={detailTab === 'clearance' ? 'page' : undefined} className={detailTab === 'clearance' ? 'is-active' : ''} onClick={() => setDetailTab('clearance')}>통관·도착</button>
+        </nav>
+
+        {detailTab === 'messages' && <div className="fwd-message-toolbar"><span>화주와 주고받은 보완 요청 및 회신</span><button type="button" className="btn btn-secondary" disabled={refreshing} onClick={() => void load()}>{refreshing ? '확인 중…' : '새 회신 확인'}</button></div>}
+
+        {detailTab === 'messages' && selected.returnRequest && (
           <section className={`fwd-return-banner${selected.returnRequest.resolvedAt ? ' is-resolved' : ''}`}>
             <div className="fwd-return-head">
-              <CornerUpLeft size={16} />
-              <strong>
+              <Mail size={17} aria-hidden="true" />
+              <strong>보낸 요청</strong>
+              <span className="fwd-return-channel">서비스 내 메시지</span>
+              <span className={`fwd-return-status${selected.returnRequest.resolvedAt ? ' is-replied' : ''}`}>
                 {selected.returnRequest.resolvedAt
-                  ? '화주가 수정 후 재제출했습니다'
+                  ? '보완 회신 도착'
                   : selected.shipperEditing
-                    ? '화주가 서류를 수정하고 있습니다'
-                    : '화주에게 보완을 요청했습니다 — 회신 대기 중'}
-              </strong>
-              <span className="fwd-return-date">{selected.returnRequest.requestedAt.slice(0, 10)} 요청</span>
+                    ? '화주 수정 중'
+                    : '회신 대기'}
+              </span>
             </div>
-            <p className="fwd-return-reason">{selected.returnRequest.reason}</p>
+            <div className="fwd-return-envelope">
+              <h3>수입 서류 보완 요청 <span>· B/L {selected.blNo || '번호 미입력'}</span></h3>
+              <dl>
+                <div><dt>받는 사람</dt><dd>{getInboxImporterName(selected) === '화주명 미입력' ? '화주 담당자 (상호 미입력)' : `${getInboxImporterName(selected)} 담당자`}</dd></div>
+                <div><dt>보낸 날짜</dt><dd><time dateTime={selected.returnRequest.requestedAt}>{selected.returnRequest.requestedAt.slice(0, 10)}</time></dd></div>
+              </dl>
+            </div>
+            <ForwarderReturnRequestContent reason={selected.returnRequest.reason} />
             {selected.returnRequest.shipperReply && (
               <div className="fwd-shipper-reply">
                 <strong>화주 회신</strong>
                 <p>{selected.returnRequest.shipperReply}</p>
               </div>
             )}
+            {selected.returnRequest.resolvedAt && <div className="fwd-reply-documents"><strong>현재 제출 서류</strong><div>{sourceDocs.map((doc) => <button type="button" key={doc.id} disabled={docBusyId !== null} onClick={() => void openSourceDocument(doc)}>{doc.name} <ExternalLink size={13} /></button>)}</div>{sourceDocs.length === 0 && <p>보관된 원본 파일이 없습니다.</p>}</div>}
             <div className="fwd-return-actions">
               {selected.returnRequest.resolvedAt ? (
                 <button
                   type="button"
                   className="btn btn-primary"
                   disabled={saving}
-                  onClick={() => void persist(selected, { returnRequest: null, stage: 'review' }, ['재검토 시작'])}
+                  onClick={async () => { if (await persist(selected, { returnRequest: null, stage: 'review' }, ['재검토 시작'])) setDetailTab('review'); }}
                 >
-                  재검토 시작
+                  수정본 검토 시작
                 </button>
               ) : (
                 !selected.shipperEditing && (
@@ -366,148 +388,9 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
           </section>
         )}
 
-        <nav className="fwd-tabs" aria-label="수입 업무 상세 탭">
-          <button type="button" className={detailTab === 'overview' ? 'is-active' : ''} onClick={() => setDetailTab('overview')}>개요</button>
-          <button type="button" className={detailTab === 'review' ? 'is-active' : ''} onClick={() => setDetailTab('review')}>서류 검토</button>
-          <button
-            type="button"
-            className={detailTab === 'clearance' ? 'is-active' : ''}
-            disabled={stageIndex < FORWARDER_STAGE_ORDER.indexOf('clearance')}
-            title={stageIndex < FORWARDER_STAGE_ORDER.indexOf('clearance') ? '서류 검토를 완료하면 열립니다.' : undefined}
-            onClick={() => setDetailTab('clearance')}
-          >
-            통관 처리
-          </button>
-        </nav>
-
-        {detailTab === 'overview' && sourceDocs.length > 0 && (
+        {detailTab === 'messages' && !selected.returnRequest && (
           <section className="form-card import-card">
-            <div className="import-card-heading">
-              <div><h2>화주가 제출한 서류 <span className="fwd-doc-count">{sourceDocs.length}</span></h2></div>
-            </div>
-            <div className="fwd-doc-gallery">
-              {sourceDocs.map((doc) => (
-                <button
-                  key={doc.id}
-                  type="button"
-                  className="fwd-doc-thumb"
-                  disabled={docBusyId !== null}
-                  title={doc.name}
-                  onClick={() => void openSourceDocument(doc)}
-                >
-                  <span className="fwd-doc-page" aria-hidden="true">
-                    <strong>{DOC_THUMB_TITLE[doc.type] ?? IMPORT_DOCUMENT_TYPE_LABELS[doc.type] ?? '기타서류'}</strong>
-                  </span>
-                  <span className="fwd-doc-thumb-foot">
-                    {DOC_THUMB_ABBR[doc.type] ?? IMPORT_DOCUMENT_TYPE_LABELS[doc.type] ?? '기타'}
-                    {docBusyId === doc.id ? <span className="fwd-doc-opening">여는 중…</span> : <ExternalLink size={14} />}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {detailTab === 'overview' && (blockers.length > 0 || checks.length > 0 || infos.length > 0) && (
-          <section className="form-card import-card">
-            <div className="import-card-heading">
-              <div><h2>이슈 점검</h2></div>
-              <span className="source-badge">{selected.blockerCount + selected.checkCount}건 미처리</span>
-            </div>
-            <div className="fwd-issue-stats">
-              <span className="fwd-stat is-must"><AlertTriangle size={15} /> 필수 확인 <strong>{unresolvedBlockers.length}</strong></span>
-              <span className="fwd-stat is-reco"><Info size={15} /> 권장 확인 <strong>{unresolvedSoft}</strong></span>
-              <span className="fwd-stat is-done"><CheckCircle2 size={15} /> 확인 완료 <strong>{resolvedCount}</strong></span>
-            </div>
-            {unresolvedBlockers.length > 0 && (
-              <div className="fwd-blocker-alert" role="alert">
-                <AlertTriangle size={17} />
-                <div>
-                  <strong>통관 진행 전 해결할 차단 이슈 {unresolvedBlockers.length}건</strong>
-                  <span>{unresolvedBlockers.map((issue) => issue.title).join(' · ')}</span>
-                </div>
-              </div>
-            )}
-            {[
-              { label: '업무 차단', items: blockers, className: 'is-blocker' },
-              { label: '확인 필요', items: checks, className: 'is-check' },
-              { label: '참고', items: infos, className: 'is-info' },
-            ].filter((group) => group.items.length > 0).map((group) => (
-              <details key={group.label} className="fwd-issue-group" open={group.label === '업무 차단'}>
-                <summary>{group.label} <span>{group.items.length}</span></summary>
-                <div className="fwd-issue-list">
-                  {group.items.map((issue) => (
-                    <div key={issue.id} className={`fwd-issue ${group.className}${issue.resolved ? ' is-resolved' : ''}`}>
-                      <div className="fwd-issue-main">
-                        <span className="fwd-issue-body">
-                          <span className="fwd-issue-title">{issue.title}</span>
-                          <span className="fwd-issue-detail">{issue.detail}</span>
-                          {issue.resolved && selected.issueNotes[issue.id] && (
-                            <span className="fwd-issue-note">처리 기록 — {selected.issueNotes[issue.id]}</span>
-                          )}
-                        </span>
-                        {/* 확인 종결 = 포워더가 직접 확인·판단해 끝냄. 화주에게 보낼 항목은 아래 [보완 요청] 폼에서 고른다. */}
-                        {issue.resolved ? (
-                          <button
-                            type="button"
-                            className="fwd-issue-check on"
-                            disabled={saving}
-                            onClick={() => void persist(
-                              selected,
-                              { issueResolutions: { [issue.id]: false } },
-                              [`'${issue.title}' 종결 취소`],
-                            )}
-                          >
-                            <CheckCircle2 size={13} /> 확인 완료
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="fwd-issue-check"
-                            disabled={saving}
-                            onClick={() => {
-                              setNoteFormId(noteFormId === issue.id ? null : issue.id);
-                              setNoteText('');
-                            }}
-                          >
-                            <CheckCircle2 size={13} /> 확인 종결
-                          </button>
-                        )}
-                      </div>
-                      {noteFormId === issue.id && !issue.resolved && (
-                        <div className="fwd-note-form">
-                          <input
-                            className="form-input"
-                            value={noteText}
-                            onChange={(event) => setNoteText(event.target.value)}
-                            placeholder="확인 내용 기록 (예: 선사 검량 확인 — B/L 1,280kg 기준 적용)"
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            disabled={saving}
-                            onClick={() => {
-                              const note = noteText.trim();
-                              void persist(
-                                selected,
-                                {
-                                  issueResolutions: { [issue.id]: true },
-                                  ...(note ? { issueNotes: { [issue.id]: note } } : {}),
-                                },
-                                [`'${issue.title}' 확인 종결${note ? ` — ${note}` : ''}`],
-                              ).then(() => setNoteFormId(null));
-                            }}
-                          >
-                            기록하고 종결
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </details>
-            ))}
-
+            <div className="import-card-heading"><div><h2>보완 요청 작성</h2><p>아직 보낸 요청이 없습니다. 필요한 항목을 선택해 화주에게 요청하세요.</p></div></div>
             {!selected.returnRequest && (selected.stage === 'received' || selected.stage === 'review') && (() => {
               // 같은 제목의 중복 이슈(검증·규칙·리스크가 겹치는 경우)는 하나만 고르게 한다.
               const seenTitles = new Set<string>();
@@ -526,10 +409,10 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                 if (blockerLines.length > 0) sections.push(`[반드시 수정]\n${blockerLines.join('\n')}`);
                 if (checkLines.length > 0) sections.push(`[함께 확인 요청]\n${checkLines.join('\n')}`);
                 if (returnMemo.trim() !== '') sections.push(`(추가 안내) ${returnMemo.trim()}`);
-                return sections.join('\n\n');
+                return buildReturnRequestLetter(sections.join('\n\n'), issuerName, senderContactName);
               };
               return (
-                <div className="fwd-return-form">
+                <div className="fwd-return-form" ref={returnFormRef} tabIndex={-1} aria-label="화주에게 보완 요청 작성">
                   {returnFormOpen ? (
                     <>
                       <p className="form-label">화주에게 보완을 요청할 항목을 선택하세요</p>
@@ -558,6 +441,10 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                           placeholder="예: 수정한 P/L을 다시 첨부해 주세요."
                         />
                       </label>
+                      <details className="fwd-return-letter-preview">
+                        <summary>보낼 요청 전문 확인</summary>
+                        <ForwarderReturnRequestContent reason={buildReason()} />
+                      </details>
                       <div className="fwd-return-actions">
                         <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => setReturnFormOpen(false)}>취소</button>
                         <button
@@ -572,7 +459,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                                 requestedAt: new Date().toISOString(),
                               },
                             }, [`화주에게 보완 요청 (${picked.length}건: ${picked.map((issue) => issue.title).join(', ')})`])
-                              .then(() => setReturnFormOpen(false));
+                              .then((saved) => { if (saved) setReturnFormOpen(false); });
                           }}
                         >
                           <CornerUpLeft size={15} /> 보완 요청 보내기{picked.length > 0 ? ` (${picked.length}건)` : ''}
@@ -595,14 +482,86 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                       <CornerUpLeft size={15} /> 화주에게 보완 요청
                     </button>
                   )}
-                  <p className="fwd-action-hint">직접 확인해 끝낼 수 있는 항목은 [확인 처리]로 종결하고, 화주가 고쳐야 하는 항목만 골라서 보내세요.</p>
+                  <p className="fwd-action-hint">화주의 수정이 필요한 항목만 선택해 요청하세요.</p>
                 </div>
               );
             })()}
+            <button type="button" className="btn btn-secondary" onClick={() => setDetailTab('review')}>서류 검토로 돌아가기</button>
           </section>
         )}
 
-        {detailTab === 'overview' && selected.activity.length > 0 && (
+        {detailTab === 'review' && selected.returnRequest && <div className="fwd-message-link">
+          <span>{selected.returnRequest.resolvedAt ? '화주의 보완 회신이 도착했습니다.' : selected.shipperEditing ? '화주가 서류를 수정하고 있습니다.' : '화주에게 보완을 요청했습니다. 회신 대기 중입니다.'}</span>
+          <button type="button" onClick={() => setDetailTab('messages')}>요청·회신 보기 →</button>
+        </div>}
+
+        {detailTab === 'review' && (
+          <section className="form-card import-card">
+            <div className="import-card-heading">
+              <div><h2>화주가 제출한 서류 <span className="fwd-doc-count">{sourceDocs.length}</span></h2></div>
+            </div>
+            {sourceDocs.length === 0 && <p className="fwd-doc-empty">보관된 원본 파일이 없습니다.</p>}
+            <div className="fwd-doc-gallery">
+              {sourceDocs.map((doc) => (
+                <button
+                  key={doc.id}
+                  type="button"
+                  className="fwd-doc-thumb"
+                  disabled={docBusyId !== null}
+                  title={doc.name}
+                  aria-label={`${doc.name} 원본 서류 열기`}
+                  onClick={() => void openSourceDocument(doc)}
+                >
+                  <ForwarderDocumentThumbnail document={doc} userId={userId} />
+                  <span className="fwd-doc-thumb-foot">
+                    {DOC_THUMB_ABBR[doc.type] ?? IMPORT_DOCUMENT_TYPE_LABELS[doc.type] ?? '기타'}
+                    {docBusyId === doc.id ? <span className="fwd-doc-opening">여는 중…</span> : <ExternalLink size={14} />}
+                  </span>
+                  <span className="fwd-doc-filename">{doc.name}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {detailTab === 'review' && (blockers.length > 0 || checks.length > 0 || infos.length > 0) && (
+          <section className="form-card import-card">
+            <ForwarderIssueReview
+              key={selected.tradeId}
+              issues={selected.issues}
+              notes={selected.issueNotes}
+              saving={saving}
+              comparisons={selected.snapshot.analysis.comparison}
+              documents={selected.snapshot.documents}
+              documentBusyId={docBusyId}
+              onOpenDocument={(document) => void openSourceDocument(document)}
+              onRequestCorrection={!selected.returnRequest && (selected.stage === 'received' || selected.stage === 'review') ? (issue, note) => {
+                // The existing request form deduplicates exact titles: pick its canonical ID.
+                const picked = selected.issues.find((candidate) => !candidate.resolved && candidate.severity !== 'info' && candidate.title === issue.title);
+                if (!picked) return;
+                setReturnPicks({ [picked.id]: true });
+                setReturnMemo(note);
+                setReturnFormOpen(true);
+                setDetailTab('messages');
+                setReturnFormFocusKey((current) => current + 1);
+              } : undefined}
+              onResolve={(issue, note) => persist(
+                selected,
+                { issueResolutions: { [issue.id]: true }, ...(note ? { issueNotes: { [issue.id]: note } } : {}) },
+                [`'${issue.title}' 확인 종결${note ? ` — ${note}` : ''}`],
+              )}
+              onReopen={(issue) => persist(
+                selected,
+                { issueResolutions: { [issue.id]: false } },
+                [`'${issue.title}' 종결 취소`],
+              )}
+            />
+
+
+          </section>
+        )}
+
+        {detailTab === 'messages' && selected.activity.length > 0 && (
           <section className="form-card import-card">
             <div className="import-card-heading"><div><h2>처리 이력</h2><p>이 건에 대한 판단·요청·회신이 시간순으로 기록됩니다.</p></div></div>
             <ol className="fwd-activity">
@@ -618,97 +577,37 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
           </section>
         )}
 
-        {detailTab === 'overview' && blockers.length === 0 && checks.length === 0 && infos.length === 0 && (
+        {detailTab === 'review' && <details className="fwd-all-comparisons"><summary>전체 비교 결과 보기 · {selected.snapshot.analysis.comparison.length}개 항목</summary><ImportDocumentComparison title="서류 간 정보 비교" rows={selected.snapshot.analysis.comparison} /></details>}
+
+        {detailTab === 'review' && blockers.length === 0 && checks.length === 0 && infos.length === 0 && (
           <section className="form-card import-card fwd-clear-overview">
             <CheckCircle2 size={20} /> <div><strong>지금 확인할 이슈가 없습니다.</strong><span>다음 조치를 진행해 주세요.</span></div>
           </section>
         )}
 
-        {detailTab === 'review' && (
-          <>
-            <section className="form-card import-card">
-              <div className="import-card-heading">
-                <div><h2>원본 서류</h2><p>화주가 제출한 원본을 열어 대사 결과의 근거를 직접 확인합니다.</p></div>
-              </div>
-              {selected.snapshot.documents.filter((doc) => doc.storagePath).length === 0 ? (
-                <p className="fwd-doc-empty">보관된 원본 파일이 없습니다.</p>
-              ) : (
-                <ul className="fwd-doc-list">
-                  {selected.snapshot.documents.filter((doc) => doc.storagePath).map((doc) => (
-                    <li key={doc.id}>
-                      <span className="fwd-doc-type">{IMPORT_DOCUMENT_TYPE_LABELS[doc.type] ?? '기타서류'}</span>
-                      <span className="fwd-doc-name">{doc.name}</span>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        disabled={docBusyId !== null}
-                        onClick={() => void openSourceDocument(doc)}
-                      >
-                        {docBusyId === doc.id ? '여는 중…' : '원본 열기'}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-            <ImportDocumentComparison rows={selected.snapshot.analysis.comparison} />
-          </>
-        )}
+        <div hidden={detailTab !== 'clearance'}><ForwarderCargoPanel key={selected.tradeId} initialBlNo={selected.blNo} /></div>
 
-        {detailTab === 'clearance' && stageIndex >= FORWARDER_STAGE_ORDER.indexOf('clearance') && (
+        {detailTab === 'clearance' && (
           <>
-            <section className="form-card import-card">
-              <div className="import-card-heading"><div><h2>통관 진행 현황</h2></div></div>
-              <div className="cargo-query">
-                <label className="form-group">
-                  <span className="form-label">M/H B/L 번호</span>
-                  <input
-                    className="form-input"
-                    value={cargoBlNo}
-                    onChange={(event) => setCargoBlNo(event.target.value)}
-                    placeholder="B/L 번호 입력"
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={cargoBusy || cargoBlNo.trim() === ''}
-                  onClick={() => void lookupCargo(cargoBlNo.trim())}
-                >
-                  <Search size={16} /> {cargoBusy ? '조회 중…' : '조회'}
-                </button>
-              </div>
-              {cargo && (
-                <div className="cargo-result">
-                  <p className="cargo-status-text">
-                    <strong>{cargo.status}</strong> · {cargo.detail}
-                    {cargo.source === 'simulation' && <span className="da-sim-badge">시뮬레이션</span>}
-                  </p>
-                  {cargo.lookupStatus !== 'empty' && (
-                    <ol className="cargo-steps">
-                      {cargo.timeline.map((step) => (
-                        <li key={step.label} className={`${step.completed ? 'is-done' : ''}${step.current ? ' is-current' : ''}`}>
-                          {step.label}
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                  {cargo.arrivalPort && <p className="cargo-meta">도착항 {cargo.arrivalPort} · 화물관리번호 {cargo.cargoNo}</p>}
-                </div>
-              )}
-            </section>
+            {documentsLocked && <div className="fwd-document-lock" role="status"><span>{returnPending ? '화주 회신을 재검토하면 도착통지서와 배차 의뢰서를 작성할 수 있습니다.' : '서류 검토를 완료하면 도착통지서와 배차 의뢰서를 작성할 수 있습니다.'}</span><button type="button" className="btn btn-secondary" onClick={() => setDetailTab('review')}>서류 검토로 이동</button></div>}
             <ArrivalNoticeUploader
+              workspaceMode
+              showDisabledReason={false}
+              disabledReason={documentsLocked ? documentLockReason : undefined}
+              fileActions={selected.arrivalNotice?.storagePath ? <div className="fwd-an-file-actions"><button type="button" className="btn btn-secondary" disabled={anFileBusy} onClick={() => void openArrivalFile(selected.arrivalNotice!, false)}>원본 열기</button><button type="button" className="btn btn-secondary" disabled={anFileBusy} onClick={() => void openArrivalFile(selected.arrivalNotice!, true)}>다운로드</button></div> : undefined}
               value={selected.arrivalNotice}
               onChange={(arrivalNotice) => void persist(selected, { arrivalNotice })}
               userId={userId}
               tradeId={selected.tradeId}
-              readOnly={saving}
+              readOnly={saving || documentsLocked}
               headerAction={(
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={anBusy}
+                  disabled={anBusy || documentsLocked || saving}
+                  title={documentsLocked ? documentLockReason : undefined}
                   onClick={() => {
+                    if (documentsLocked || saving) return;
                     setAnBusy(true);
                     void downloadArrivalNoticeDocx(selected, issuerName)
                       .catch((err) => {
@@ -721,7 +620,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                   {anBusy ? '생성 중…' : 'A/N 생성·다운로드'}
                 </button>
               )}
-              notice="이 건의 B/L·선박·화물 정보로 도착통지서를 생성해 화주에게 전달하세요. 청구 금액란은 비워서 발행되며, 전달본은 아래에 첨부해 이력으로 보관할 수 있습니다."
+              notice={documentsLocked ? undefined : '초안 생성 · 청구 금액 확인 후 사용'}
             />
 
             {/* 배차 의뢰서 — D/O를 받은 뒤 운송사에 보내는 서류.
@@ -729,8 +628,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                 배송지 관련 칸은 화주가 입력한 배송 요청에서 자동으로 채워진다. */}
             <section className="form-card import-card">
               <div className="import-card-heading">
-                <div><h2>배차 의뢰서</h2></div>
-                <p>D/O 수령 후 운송사에 보낼 배차 의뢰서를 작성합니다. 배송지 정보는 화주 요청에서 자동으로 들어갑니다.</p>
+                <div><h2><span className="fwd-section-number">3</span> 국내 운송 준비</h2></div>
               </div>
 
               {deliveryRequest ? (
@@ -746,11 +644,10 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                   {deliveryRequest.remarks && <p>요청사항: {deliveryRequest.remarks}</p>}
                 </div>
               ) : (
-                <div className="form-message info" role="status">
-                  화주가 아직 배송 요청을 입력하지 않았습니다. 배송지·희망일시는 직접 확인해 주세요.
-                </div>
+                <p className="fwd-action-hint">배송 요청 미등록</p>
               )}
 
+              <fieldset className="fwd-dispatch-fields" disabled={documentsLocked || saving || dispatchBusy} aria-label="배차 의뢰서 작성">
               <div className="form-grid">
                 <div className="form-group">
                   <label className="form-label" htmlFor="dr-carrier">수신 운송사</label>
@@ -820,10 +717,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                 </div>
               </div>
 
-              <div className="import-card-heading" style={{ marginTop: 14 }}>
-                <div><h2 style={{ fontSize: 15 }}>배차 회신</h2></div>
-                <p>운송사에서 차량이 확정되면 여기에 기록해 두세요.</p>
-              </div>
+              <details className="fwd-dispatch-reply"><summary>배차 회신 입력 · 차량·기사 정보</summary>
               <div className="form-grid">
                 <div className="form-group">
                   <label className="form-label" htmlFor="dr-vno">차량번호</label>
@@ -842,12 +736,14 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                 </div>
               </div>
 
+              </details>
               <div className="document-preview-actions" style={{ marginTop: 12 }}>
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={dispatchBusy || !dispatch.carrierCompany.trim()}
+                  disabled={documentsLocked || saving || dispatchBusy || !dispatch.carrierCompany.trim()}
                   onClick={() => {
+                    if (documentsLocked || saving) return;
                     setDispatchBusy(true);
                     void persist(
                       selected,
@@ -864,40 +760,42 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
                 >
                   <Download size={16} /> {dispatchBusy ? '생성 중…' : '배차 의뢰서 생성·다운로드'}
                 </button>
-                {!dispatch.carrierCompany.trim() && (
-                  <p className="fwd-action-hint">수신 운송사를 입력하면 생성할 수 있습니다.</p>
+                {!documentsLocked && !dispatch.carrierCompany.trim() && (
+                  <p className="fwd-action-hint">수신 운송사 입력 필요</p>
                 )}
               </div>
+              </fieldset>
             </section>
+
           </>
         )}
 
         <div className="import-actions fwd-actions">
-          {returnPending && (
+          {detailTab === 'review' && returnPending && (
             <p className="fwd-action-hint">화주 보완 회신을 기다리는 중에는 단계를 진행하지 않습니다.</p>
           )}
-          {!returnPending && selected.stage === 'received' && (
+          {detailTab === 'review' && !returnPending && selected.stage === 'received' && (
             <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void moveToStage(selected, 'review', 'review')}>
               서류 검토 시작
             </button>
           )}
-          {!returnPending && selected.stage === 'review' && (
+          {detailTab === 'review' && !returnPending && selected.stage === 'review' && (
             <>
               <button type="button" className="btn btn-primary" disabled={saving || !canFinishReview} onClick={() => void moveToStage(selected, 'clearance', 'clearance')}>
-                검토 완료 — 통관 진행
+                검토 완료 — 통관·도착으로
               </button>
-              {!canFinishReview && <p className="fwd-action-hint">차단 이슈를 모두 확인 처리해야 통관 진행으로 넘어갈 수 있습니다.</p>}
+              {!canFinishReview && <p className="fwd-action-hint">필수 확인 항목을 모두 검토해야 후속 서류를 작성할 수 있습니다.</p>}
             </>
           )}
-          {!returnPending && selected.stage === 'clearance' && (
+          {detailTab === 'clearance' && !returnPending && selected.stage === 'clearance' && (
             <>
               <button type="button" className="btn btn-primary" disabled={saving} onClick={() => finishClearance(selected)}>
-                <CheckCircle2 size={15} /> 서류 작업 완료
+                <CheckCircle2 size={15} /> 서류 업무 완료
               </button>
-              {!selected.arrivalNotice?.storagePath && <p className="fwd-action-hint">도착통지서(A/N)를 첨부해 두면 완료 이력에 함께 보관됩니다.</p>}
+              <p className="fwd-action-hint">서류 업무 완료는 실제 통관 완료와 별개입니다.</p>
             </>
           )}
-          {!returnPending && selected.stage === 'done' && (
+          {detailTab === 'clearance' && !returnPending && selected.stage === 'done' && (
             <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => void moveToStage(selected, 'clearance', 'clearance')}>
               서류 작업으로 되돌리기
             </button>

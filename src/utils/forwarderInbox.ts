@@ -3,6 +3,12 @@ import type { ForwarderImportCase } from '../types/forwarderCase';
 export type InboxCategory = 'new' | 'progress' | 'reply' | 'done';
 export type InboxFilter = 'all' | InboxCategory;
 
+/** Missing data must be labelled, not replaced with a guessed company name. */
+export function getInboxImporterName(item: Pick<ForwarderImportCase, 'importer'>): string {
+  const name = item.importer.trim();
+  return !name || /^[-–—]+$/.test(name) ? '화주명 미입력' : name;
+}
+
 /** Mutually exclusive inbox groups; reviewing a reply clears returnRequest in the existing workflow. */
 export function getInboxState(item: ForwarderImportCase): { category: InboxCategory; label: string; next: string; tone: string } {
   if (item.stage === 'done') return { category: 'done', label: '서류 완료', next: '최종 서류 보기', tone: 'done' };

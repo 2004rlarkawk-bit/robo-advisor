@@ -8,6 +8,7 @@ import type { AuthSessionUser } from '../../services/authService';
 import type { UserProfile } from '../../services/profileService';
 import type { AppMenu } from '../../services/workspaceSessionService';
 import NotificationBell from '../NotificationBell';
+import '../../styles/forwarderPolish.css';
 
 interface AppHeaderProps {
   collapsed: boolean;
@@ -46,10 +47,10 @@ export default function AppHeader({
         >
           {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
         </button>
-        <span className="platform-badge">Mentoring Project 2026</span>
+        <span className={forwarderMode ? 'header-product-name' : 'platform-badge'}>{forwarderMode ? 'PortAI' : 'Mentoring Project 2026'}</span>
         {forwarderMode && (
           <span className="header-role-chip">
-            <Briefcase size={13} /> 포워더 모드
+            <Briefcase size={14} aria-hidden="true" /> 포워더 업무
           </span>
         )}
       </div>

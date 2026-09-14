@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowRight, Inbox, Plus, RefreshCw } from 'lucide-react';
 import type { ForwarderImportCase } from '../../types/forwarderCase';
 import { IMPORT_DOCUMENT_TYPE_LABELS } from '../../services/importDocumentAnalysisService';
-import { formatInboxEta, getInboxItemName, getInboxState, type InboxFilter } from '../../utils/forwarderInbox';
+import { formatInboxEta, getInboxImporterName, getInboxItemName, getInboxState, type InboxFilter } from '../../utils/forwarderInbox';
 import '../../styles/forwarderImportInbox.css';
 
 interface Props {
@@ -53,8 +53,8 @@ export default function ForwarderImportInbox({ cases, error, refreshing, onRefre
             <caption className="fwd-inbox-sr">받은 의뢰 목록. 의뢰를 선택한 후 하단의 열기 버튼을 누르세요.</caption>
             <thead><tr><th scope="col"><span className="fwd-inbox-sr">선택</span></th><th scope="col">화주 / 품목</th><th scope="col">도착 예정일</th><th scope="col">상태</th><th scope="col">다음 할 일</th></tr></thead>
             <tbody>{visible.map(({ item, state }) => <tr key={item.tradeId} className={picked?.tradeId === item.tradeId ? 'is-selected' : ''} onClick={() => setPickedId(item.tradeId)}>
-              <td><input type="radio" name="forwarder-import-case" aria-label={`${item.importer} · B/L ${item.blNo} 선택`} checked={picked?.tradeId === item.tradeId} onChange={() => setPickedId(item.tradeId)} /></td>
-              <td className="fwd-inbox-party"><strong>{item.importer}</strong><span>{getInboxItemName(item)} · B/L {item.blNo}</span>{item.origin === 'direct_upload' && <small>직접 등록</small>}</td>
+              <td><input type="radio" name="forwarder-import-case" aria-label={`${getInboxImporterName(item)} · B/L ${item.blNo} 선택`} checked={picked?.tradeId === item.tradeId} onChange={() => setPickedId(item.tradeId)} /></td>
+              <td className="fwd-inbox-party"><strong>{getInboxImporterName(item)}</strong><span>{getInboxItemName(item)} · B/L {item.blNo}</span>{item.origin === 'direct_upload' && <small>직접 등록</small>}</td>
               <td className="fwd-inbox-eta">{formatInboxEta(item.eta)}</td>
               <td><span className={`fwd-inbox-badge is-${state.tone}`}>{state.label}</span></td>
               <td>{state.next}</td>
@@ -62,7 +62,7 @@ export default function ForwarderImportInbox({ cases, error, refreshing, onRefre
           </table>
         </div>}
       {picked && <div className="fwd-inbox-selection" aria-live="polite">
-        <strong>{picked.importer}</strong><span>· 첨부 서류 {documents.length}개</span>
+        <strong>{getInboxImporterName(picked)}</strong><span>· 첨부 서류 {documents.length}개</span>
         <div className="fwd-inbox-documents">{documentTypes.map((type) => <span key={type} title={IMPORT_DOCUMENT_TYPE_LABELS[type]}>
           {type === 'commercial_invoice' ? 'C/I' : type === 'packing_list' ? 'P/L' : type === 'bill_of_lading' ? 'B/L' : IMPORT_DOCUMENT_TYPE_LABELS[type]}
         </span>)}</div>
