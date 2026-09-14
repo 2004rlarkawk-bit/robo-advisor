@@ -4,13 +4,14 @@ import {
   BookOpen,
   FileCheck2,
   FolderKanban,
+  Inbox,
   LayoutDashboard,
-  Mail,
   PhoneCall,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
 import type { AppMenu } from '../../services/workspaceSessionService';
+import type { WorkspaceRole } from '../../utils/workspaceRole';
 
 interface NavigationItem {
   menu: AppMenu;
@@ -18,20 +19,36 @@ interface NavigationItem {
   icon: LucideIcon;
 }
 
-const NAVIGATION_ITEMS: NavigationItem[] = [
+// 역할별 메뉴 — 화주는 신고 준비·이력·분석 중심, 포워더는 의뢰 큐 중심.
+// 같은 menu 키라도 역할에 따라 라벨이 다르다 (dashboard: 작업실 ↔ 업무 큐).
+const SHIPPER_ITEMS: NavigationItem[] = [
   { menu: 'about', label: '서비스 소개', icon: Anchor },
   { menu: 'dashboard', label: 'AI 통관 작업실', icon: LayoutDashboard },
   { menu: 'docs', label: '문서 관리', icon: FolderKanban },
-  { menu: 'requests', label: '의뢰 관리', icon: Mail },
   { menu: 'customs_history', label: '통관 내역', icon: FileCheck2 },
   { menu: 'analysis', label: '데이터 분석', icon: BarChart3 },
   { menu: 'profile', label: '프로필 관리', icon: UserRound },
   { menu: 'guide', label: '사용 안내', icon: BookOpen },
 ];
 
+const FORWARDER_ITEMS: NavigationItem[] = [
+  { menu: 'about', label: '서비스 소개', icon: Anchor },
+  { menu: 'dashboard', label: '업무 큐', icon: LayoutDashboard },
+  { menu: 'requests', label: '받은 의뢰', icon: Inbox },
+  { menu: 'docs', label: '문서 관리', icon: FolderKanban },
+  { menu: 'profile', label: '프로필 관리', icon: UserRound },
+  { menu: 'guide', label: '사용 안내', icon: BookOpen },
+];
+
+export function navigationItemsForRole(role: WorkspaceRole): NavigationItem[] {
+  return role === 'forwarder' ? FORWARDER_ITEMS : SHIPPER_ITEMS;
+}
+
 interface AppSidebarProps {
   activeMenu: AppMenu;
   collapsed: boolean;
+  /** 현재 워크스페이스 역할 — 메뉴 구성이 달라진다 */
+  role: WorkspaceRole;
   /** 로고 클릭 시 실행 — 현재 작업 중인 화면을 첫 화면(빈 입력 폼)으로 되돌린다. */
   onLogoClick: () => void;
   onNavigate: (menu: AppMenu) => void;
@@ -39,7 +56,7 @@ interface AppSidebarProps {
   badges?: Partial<Record<AppMenu, number>>;
 }
 
-export default function AppSidebar({ activeMenu, collapsed, onNavigate, onLogoClick, badges }: AppSidebarProps) {
+export default function AppSidebar({ activeMenu, collapsed, role, onNavigate, onLogoClick, badges }: AppSidebarProps) {
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       {/* 로고 클릭 = 작업실 첫 화면으로 이동. 새로고침(F5)은 진행 중 작업을 이어보여주지만
@@ -65,7 +82,7 @@ export default function AppSidebar({ activeMenu, collapsed, onNavigate, onLogoCl
       </div>
 
       <ul className="menu-list">
-        {NAVIGATION_ITEMS.map(({ menu, label, icon: Icon }) => (
+        {navigationItemsForRole(role).map(({ menu, label, icon: Icon }) => (
           <li key={menu}>
             <div
               className={`menu-item ${activeMenu === menu ? 'active' : ''}`}

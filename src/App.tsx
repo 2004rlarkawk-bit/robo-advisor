@@ -53,7 +53,7 @@ import OnboardingTour from './components/OnboardingTour';
 import TradeDirectionSelector from './components/trade/TradeDirectionSelector';
 import TradeRoleSelector from './components/trade/TradeRoleSelector';
 import AppHeader from './components/layout/AppHeader';
-import AppSidebar from './components/layout/AppSidebar';
+import AppSidebar, { navigationItemsForRole } from './components/layout/AppSidebar';
 import DocumentManagerReadOnlyAction from './components/DocumentManagerReadOnlyAction';
 import type { ImportTradeSnapshot, TradeDirection } from './types/importTrade';
 import type { TradeAttachment } from './types/tradeFormData';
@@ -197,6 +197,13 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   }, [user?.id, userProfile?.service_role]);
 
   const workspaceRole = resolveWorkspaceRole(userProfile?.service_role, integratedWorkspaceRole);
+
+  // 역할이 바뀌어 현재 메뉴가 그 역할의 사이드바에 없으면 작업 화면으로 되돌린다.
+  useEffect(() => {
+    if (!navigationItemsForRole(workspaceRole).some((item) => item.menu === activeMenu)) {
+      setActiveMenu('dashboard');
+    }
+  }, [workspaceRole, activeMenu]);
 
   useEffect(() => {
     if (
@@ -2577,6 +2584,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       <AppSidebar
         activeMenu={activeMenu}
         collapsed={sidebarCollapsed}
+        role={workspaceRole}
         onNavigate={handleAppNavigate}
         onLogoClick={handleLogoClick}
         badges={{ docs: workspaceRole === 'forwarder' ? 0 : returnRequestCount }}
