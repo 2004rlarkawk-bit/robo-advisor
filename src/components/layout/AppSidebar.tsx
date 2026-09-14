@@ -33,7 +33,7 @@ const SHIPPER_ITEMS: NavigationItem[] = [
 
 const FORWARDER_ITEMS: NavigationItem[] = [
   { menu: 'about', label: '서비스 소개', icon: Anchor },
-  { menu: 'dashboard', label: '업무 큐', icon: LayoutDashboard },
+  { menu: 'dashboard', label: 'AI 통관 작업실', icon: LayoutDashboard },
   { menu: 'requests', label: '받은 의뢰', icon: Inbox },
   { menu: 'docs', label: '문서 관리', icon: FolderKanban },
   { menu: 'profile', label: '프로필 관리', icon: UserRound },

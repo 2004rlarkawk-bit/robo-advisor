@@ -242,10 +242,8 @@
   .fwd-workspace .fwd-doc-gallery { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* 헤더 역할 전환 스위치 — 겸용 계정에서 두 칩을 나란히, 비활성 칩 클릭으로 전환 */
-.header-role-switch { display: inline-flex; gap: 6px; min-width: 0; }
-.header-role-switch .header-role-chip { display: inline-flex; align-items: center; cursor: pointer; font-family: inherit; white-space: nowrap; }
-.header--shipper .header-role-switch .header-role-chip.is-inactive { background: transparent; border-color: #dde5ef; color: #8494ab; }
-.header--shipper .header-role-switch .header-role-chip.is-inactive:hover { background: #f2f7ff; color: #365d91; }
-.header--forwarder .header-role-switch .header-role-chip.is-inactive { background: transparent; border-color: rgba(255, 255, 255, 0.3); color: #b9c6d9; }
-.header--forwarder .header-role-switch .header-role-chip.is-inactive:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+/* 헤더 역할 전환 칩 — 겸용 계정에서 칩 하나를 누르면 반대 역할로 전환 */
+.header-role-chip--toggle { display: inline-flex; align-items: center; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.header-role-swap { margin-left: 2px; opacity: 0.55; }
+.header--shipper .header-role-chip--toggle:hover { background: #dcebff; }
+.header--forwarder .header-role-chip--toggle:hover { background: #d8e4f2; }
