@@ -183,6 +183,45 @@ describe('수출 화주 HS Code 추천 서비스', () => {
     ).rejects.toThrow('network');
   });
 
+  it('배낭은 사전 품명에 없어도 4202.9x 소호를 먼저 끌어와 소호 기준을 붙여 AI에 넘긴다', async () => {
+    const textileRucksack = {
+      ...localTenDigit,
+      code: '4202922000',
+      ko: '방직용 섬유재료로 만든 것',
+      en: 'Of textile materials',
+      category: '(직물제 가방)',
+      formattedCode: '4202.92-2000',
+    };
+    searchMock.mockImplementation(async (keyword: string) =>
+      keyword === '420292' ? [textileRucksack] : []
+    );
+    // AI가 4자리만 줘도 색인 소호가 앞에 와야 확장 상한에서 잘리지 않는다.
+    discoverPrefixesMock.mockResolvedValue({
+      suggestedPrefixes: ['4202'],
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+    suggestFromCandidatesMock.mockResolvedValue({
+      suggestions: [],
+      additionalInformationRequired: true,
+      requiredAdditionalInfo: ['외면 소재'],
+    });
+
+    await recommendShipperHSCode('backpack');
+
+    const prefixSearches = searchMock.mock.calls
+      .map(([keyword]) => keyword)
+      .filter((keyword) => /^\d+$/.test(keyword));
+    expect(prefixSearches).toEqual(['420292', '420291', '420299', '4202']);
+    const [, candidates] = suggestFromCandidatesMock.mock.calls[0];
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        code: '4202922000',
+        koreanName: expect.stringContaining('배낭'),
+      }),
+    ]);
+  });
+
   it('코드 정규화가 선행 0을 보존한다', () => {
     expect(normalizeHSKCode('0101.21-1000')).toBe('0101211000');
   });

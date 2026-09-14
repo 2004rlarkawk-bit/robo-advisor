@@ -22,6 +22,20 @@ import {
   apparelScopeOf,
   composeApparelGoodsName,
 } from './hsApparelNomenclature';
+import {
+  annotateBagNames,
+  bagPrefixesForQuery,
+} from './hsBagNomenclature';
+
+/** 소호 보조표(의류·가방)로 후보 품명에 분류 기준을 덧붙인다. */
+function annotateCandidateNames(
+  code: string,
+  koreanName: string,
+  englishName: string
+): { koreanName: string; englishName: string } {
+  const apparel = annotateApparelNames(code, koreanName, englishName);
+  return annotateBagNames(code, apparel.koreanName, apparel.englishName);
+}
 
 const LOCAL_CANDIDATE_LIMIT = 30;
 /** 의류 후보 확장 상한 — 남성·여성·편물·가죽 호를 함께 담아야 한다. */
@@ -106,7 +120,7 @@ async function buildCandidateContext(
     seen.add(code);
     candidates.push({
       code,
-      ...annotateApparelNames(code, result.ko, result.en),
+      ...annotateCandidateNames(code, result.ko, result.en),
       ...(result.category
         ? { classificationName: result.category }
         : {}),
@@ -142,7 +156,7 @@ async function expandCandidateContext(
       if (!isTenDigitHSK(code) || expanded.has(code)) continue;
       expanded.set(code, {
         code,
-        ...annotateApparelNames(code, result.ko, result.en),
+        ...annotateCandidateNames(code, result.ko, result.en),
         ...(result.category
           ? { classificationName: result.category }
           : {}),
@@ -544,11 +558,17 @@ export async function recommendShipperHSCode(
   const apparelPrefixes = chosenSubheading
     ? []
     : apparelPrefixesForQuery(normalizedItemName);
+  // 배낭도 사전 품명이 "방직용 섬유재료로 만든 것"뿐이라 같은 방식으로 소호를 끌어온다.
+  // AI가 4자리(4202)만 주면 확장 상한에서 배낭 코드가 잘리므로 색인 소호를 앞에 둔다.
+  const bagPrefixes = chosenSubheading
+    ? []
+    : bagPrefixesForQuery(normalizedItemName);
+  const indexedPrefixes = [...apparelPrefixes, ...bagPrefixes];
   const discoveryPrefixes = Array.from(new Set([
-    ...apparelPrefixes,
+    ...indexedPrefixes,
     ...discovery.suggestedPrefixes,
     ...officialNamePrefixes,
-  ])).slice(0, 5 + apparelPrefixes.length);
+  ])).slice(0, 5 + indexedPrefixes.length);
   const expandedCandidateCodes = await expandCandidateContext(
     initialCandidateCodes,
     discoveryPrefixes,
