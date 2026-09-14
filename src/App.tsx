@@ -1037,6 +1037,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   };
 
   const handleWorkspaceRoleChange = (role: WorkspaceRole) => {
+    // 헤더 칩에서 이미 활성인 역할을 다시 누르면 진행 중 작업을 초기화하지 않는다.
+    if (role === workspaceRole) return;
     if (tradeDirection === 'export') {
       void flushTradeDraft().catch(() => undefined);
     }
@@ -2597,6 +2599,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
           user={user}
           profile={userProfile}
           forwarderMode={workspaceRole === 'forwarder'}
+          canSwitchRole={userProfile.service_role === 'integrated'}
+          onRoleChange={handleWorkspaceRoleChange}
           notificationPollKey={activeMenu}
           onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
           onNavigate={handleAppNavigate}
