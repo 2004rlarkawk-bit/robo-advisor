@@ -9,6 +9,7 @@ export type ImportDocumentType =
   | 'certificate_of_origin'
   | 'transport_request'
   | 'export_declaration'
+  | 'insurance_policy'
   | 'other'
   | 'unknown';
 export type ImportAnalysisStatus =
@@ -121,6 +122,9 @@ export interface ImportExtractedFields {
   loadingMode: string;
   measurement: string;
   shippingMarks: string;
+  /** 적하보험증권의 보험금액·통화 (insurance_policy 첨부 시) */
+  insuredAmount: string;
+  insuredCurrency: string;
 
   exporterDetails: ImportParty;
   importerDetails: ImportParty;
@@ -181,6 +185,13 @@ export interface ImportDocFields {
   currency?: string;
   hsCode?: string;
   incoterms?: string;
+  /** 교차대조 확장(IR11~IR14): 원산지·항구·수하인·보험금액 */
+  originCountry?: string;
+  loadPort?: string;
+  dischargePort?: string;
+  consignee?: string;
+  insuredAmount?: string;
+  insuredCurrency?: string;
 }
 
 export type ImportReconciliationInput = Partial<Record<ImportDocumentType, ImportDocFields>>;

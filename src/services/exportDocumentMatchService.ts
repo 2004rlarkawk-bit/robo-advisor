@@ -12,6 +12,7 @@ import type { TradeAttachment, TradeAttachmentDocumentType } from '../types/trad
 import type { ShipperItem, TradeProfile } from '../types';
 import { parseTradeNumber } from '../utils/number';
 import { areEquivalentTradeFieldValues, isAbsentTradeValue } from '../utils/tradeValueNormalization';
+import { portComparisonKey } from './importReconciliationRules';
 
 export type ExportMatchStatus = 'match' | 'mismatch' | 'unknown';
 
@@ -49,6 +50,7 @@ const DOCUMENT_LABEL: Partial<Record<TradeAttachmentDocumentType, string>> = {
   packing_list: '포장명세서(P/L)',
   transport_request: '수출 운송의뢰서(T/R)',
   export_declaration: '수출신고필증(E/D)',
+  insurance_policy: '적하보험증권',
   certificate_of_origin: '원산지증명서(C/O)',
   other: '기타서류',
 };
@@ -60,7 +62,11 @@ const COMPARABLE_TYPES: TradeAttachmentDocumentType[] = [
   'transport_request',
   'export_declaration',
   'certificate_of_origin',
+  'insurance_policy',
 ];
+
+/** CIF·CIP 관행상 보험금액은 송장금액의 110% 이상이어야 한다 (Incoterms 2020 A5, UCP 600 제28조). */
+const INSURANCE_COVERAGE_RATIO = 1.1;
 
 const text = (value: unknown): string => String(value ?? '').trim();
 
@@ -99,8 +105,18 @@ function isSameHSCode(left: string, right: string): boolean {
 function compare(field: string, uploadedValue: string, formValue: string): ExportMatchStatus {
   // "N/A", "-", "미기재"는 값이 없는 것 — 불일치가 아니라 확인 불가로 둔다.
   if (isAbsentTradeValue(uploadedValue) || isAbsentTradeValue(formValue)) return 'unknown';
+  // 보험금액은 같아야 하는 값이 아니라 "필요 담보액 이상"이면 된다.
+  if (field === 'insuredAmount') {
+    const insured = parseTradeNumber(uploadedValue);
+    const required = parseTradeNumber(formValue);
+    if (insured === null || required === null) return 'unknown';
+    return insured + 0.005 >= required ? 'match' : 'mismatch';
+  }
   if (normalize(uploadedValue) === normalize(formValue)) return 'match';
   if (field === 'hsCode') return isSameHSCode(uploadedValue, formValue) ? 'match' : 'mismatch';
+  // 항구명은 "BUSAN, KOREA" / "Busan Port" / "KRPUS Busan" 을 같은 항구로 본다.
+  if ((field === 'loadPort' || field === 'dischargePort')
+    && portComparisonKey(uploadedValue) === portComparisonKey(formValue)) return 'match';
   // 항구명(Busan / Busan Port), 포장 종류(CT / CARTON), Incoterms(FOB BUSAN / FOB)는 의미로 비교한다.
   if (areEquivalentTradeFieldValues(field, uploadedValue, formValue)) return 'match';
   if (!NUMERIC_COMPARE_FIELDS.has(field)) return 'mismatch';
@@ -190,6 +206,16 @@ function buildRows(
       itemRows();
       add('countryOfOrigin', '원산지', extractedItem?.originCountry, profile.countryOfOrigin ?? '');
       break;
+    case 'insurance_policy': {
+      // 보험증권은 폼 값과 1:1 대응이 아니라 "송장금액 × 110% 이상 담보"를 본다.
+      const invoiceTotal = parseTradeNumber(text(profile.totalAmount || profile.invoiceAmount));
+      const required = invoiceTotal === null ? '' : String(Math.round(invoiceTotal * INSURANCE_COVERAGE_RATIO * 100) / 100);
+      add('insuredAmount', '보험금액 (송장금액 × 110% 이상)', extracted.insuredAmount, required);
+      add('insuredCurrency', '보험 통화', extracted.insuredCurrency, profile.currency ?? '');
+      add('loadPort', '선적항', extracted.loadPort, profile.loadPort);
+      add('dischargePort', '도착항', extracted.dischargePort, profile.dischargePort);
+      break;
+    }
     default:
       break;
   }
@@ -305,6 +331,86 @@ export async function matchUploadedExportDocuments(input: {
   });
 
   return results;
+}
+
+// ── 서류 간 교차 대조 ──────────────────────────────────────────
+// 위 대조는 "업로드 서류 ↔ 입력값"이고, 여기서는 업로드한 서류끼리 직접 비교한다.
+// 예) B/L 선적항 ↔ C/I 선적항, C/O 원산지 ↔ C/I 원산지, 보험증권 보험금액 ↔ C/I 총액 × 110%.
+// 은행·세관은 서류끼리 대조하므로 입력값이 맞아도 서류 간 어긋남은 따로 보여줘야 한다.
+
+export interface ExportCrossCheckValue {
+  attachmentId: string;
+  documentLabel: string;
+  value: string;
+}
+export interface ExportCrossCheck {
+  field: string;
+  label: string;
+  values: ExportCrossCheckValue[];
+  status: 'match' | 'mismatch';
+  /** 불일치 사유(보험 담보 부족 등 단순 비교가 아닌 경우) */
+  note?: string;
+}
+
+/** 두 서류 이상에 실린 항목만 교차 대조한다. 순서는 사람이 보는 서류 우선순위(C/I → P/L → …). */
+const CROSS_CHECK_FIELDS: Array<{ field: string; label: string }> = [
+  { field: 'companyName', label: '수출자' },
+  { field: 'partnerName', label: '수입자' },
+  { field: 'itemName', label: '품목' },
+  { field: 'hsCode', label: 'HS Code' },
+  { field: 'quantity', label: '수량' },
+  { field: 'totalAmount', label: '총액' },
+  { field: 'countryOfOrigin', label: '원산지' },
+  { field: 'loadPort', label: '선적항' },
+  { field: 'dischargePort', label: '도착항' },
+  { field: 'packageCount', label: '포장 수량' },
+  { field: 'grossWeight', label: '총중량' },
+  { field: 'incoterms', label: 'Incoterms' },
+];
+
+export function buildExportCrossChecks(matches: ExportDocMatchResult[]): ExportCrossCheck[] {
+  const usable = matches.filter((match) => !match.error);
+  const checks: ExportCrossCheck[] = [];
+
+  for (const { field, label } of CROSS_CHECK_FIELDS) {
+    const values: ExportCrossCheckValue[] = [];
+    for (const match of usable) {
+      const row = match.rows.find((r) => r.field === field);
+      if (row && !isAbsentTradeValue(row.uploadedValue)) {
+        values.push({ attachmentId: match.attachmentId, documentLabel: match.documentLabel, value: row.uploadedValue });
+      }
+    }
+    if (values.length < 2) continue;
+    const base = values[0].value;
+    const allSame = values.every((v) => compare(field, v.value, base) === 'match');
+    checks.push({ field, label, values, status: allSame ? 'match' : 'mismatch' });
+  }
+
+  // 보험증권 ↔ 상업송장: 보험금액 ≥ 송장 총액 × 110%
+  const insurance = usable.find((m) => m.documentType === 'insurance_policy');
+  const invoice = usable.find((m) => m.documentType === 'commercial_invoice');
+  if (insurance && invoice) {
+    const insuredRaw = insurance.rows.find((r) => r.field === 'insuredAmount')?.uploadedValue ?? '';
+    const totalRaw = invoice.rows.find((r) => r.field === 'totalAmount')?.uploadedValue ?? '';
+    const insured = parseTradeNumber(insuredRaw);
+    const total = parseTradeNumber(totalRaw);
+    if (insured !== null && total !== null) {
+      const required = Math.round(total * INSURANCE_COVERAGE_RATIO * 100) / 100;
+      const ok = insured + 0.005 >= required;
+      checks.push({
+        field: 'insuranceCoverage',
+        label: '보험 담보 (보험금액 ≥ 송장금액 × 110%)',
+        values: [
+          { attachmentId: insurance.attachmentId, documentLabel: insurance.documentLabel, value: insuredRaw },
+          { attachmentId: invoice.attachmentId, documentLabel: invoice.documentLabel, value: `${totalRaw} → 필요 담보 ${required.toLocaleString()}` },
+        ],
+        status: ok ? 'match' : 'mismatch',
+        note: ok ? undefined : 'CIF·CIP 조건의 관행적 최소 담보(송장금액의 110%)에 미달합니다. 보험사에 증액을 요청하세요.',
+      });
+    }
+  }
+
+  return checks;
 }
 
 /** 품목 단위로 관리되는 필드 — profile.shipperItems[0]에 반영해야 서류에 실제로 반영된다. */

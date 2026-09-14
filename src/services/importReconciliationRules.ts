@@ -31,9 +31,45 @@ export function jaccard(a: string[], b: string[]): number {
 const CI: ImportDocumentType = 'commercial_invoice';
 const PL: ImportDocumentType = 'packing_list';
 const BL: ImportDocumentType = 'bill_of_lading';
+const CO: ImportDocumentType = 'certificate_of_origin';
+const INS: ImportDocumentType = 'insurance_policy';
 const DOC_LABEL: Partial<Record<ImportDocumentType, string>> = {
   commercial_invoice: 'C/I', packing_list: 'P/L', bill_of_lading: 'B/L',
+  certificate_of_origin: 'C/O', insurance_policy: '보험증권',
 };
+/** CIF·CIP 조건의 관행적 최소 보험금액 = 송장금액 × 110% (Incoterms 2020 A5, UCP 600 제28조 f항 ii). */
+export const INSURANCE_COVERAGE_RATIO = 1.1;
+
+/** 국가명 표기 차이("KOREA" / "Republic of Korea" / "KR" / "대한민국")를 흡수하는 비교 키. */
+const COUNTRY_KEYS: Array<[RegExp, string]> = [
+  [/korea|한국|대한민국|\bkr\b/i, 'KR'], [/japan|일본|\bjp\b/i, 'JP'], [/china|중국|\bcn\b/i, 'CN'],
+  [/united states|u\.?s\.?a\.?|america|미국|\bus\b/i, 'US'], [/viet ?nam|베트남|\bvn\b/i, 'VN'],
+  [/thailand|태국|\bth\b/i, 'TH'], [/taiwan|대만|\btw\b/i, 'TW'], [/germany|독일|\bde\b/i, 'DE'],
+  [/italy|이탈리아|\bit\b/i, 'IT'], [/france|프랑스|\bfr\b/i, 'FR'], [/india|인도(?!네시아)|\bin\b/i, 'IN'],
+  [/indonesia|인도네시아|\bid\b/i, 'ID'], [/malaysia|말레이시아|\bmy\b/i, 'MY'], [/singapore|싱가포르|\bsg\b/i, 'SG'],
+];
+export function countryKey(value?: string): string {
+  const text = (value ?? '').trim();
+  if (!text) return '';
+  for (const [pattern, code] of COUNTRY_KEYS) if (pattern.test(text)) return code;
+  return text.toLowerCase().replace(/[^a-z가-힣]/g, '');
+}
+/** 항구명 비교 키 — "BUSAN, KOREA" / "Busan Port" / "KRPUS Busan" 를 같은 항구로 본다. */
+export function portComparisonKey(value?: string): string {
+  return (value ?? '')
+    .normalize('NFKC').toLowerCase()
+    .replace(/\b(sea ?port|port of|port|harbou?r|terminal|pt)\b/g, ' ')
+    .replace(/\b[a-z]{2}[a-z2-9]{3}\b/g, ' ')            // LOCODE 제거
+    .replace(/,.*$/, '')                                  // ", KOREA" 등 국가 접미 제거
+    .replace(/[^a-z0-9가-힣]/g, '');
+}
+/** 회사명 비교 키 — 법인 접미(CO., LTD / INC / CORP)와 구두점 차이를 무시한다. */
+export function partyKey(value?: string): string {
+  return (value ?? '')
+    .normalize('NFKC').toLowerCase()
+    .replace(/\b(co|ltd|limited|inc|corp|corporation|company|llc|gmbh|plc|pte|kk|주식회사|㈜)\b\.?/g, ' ')
+    .replace(/[^a-z0-9가-힣]/g, '');
+}
 const label = (type: ImportDocumentType) => DOC_LABEL[type] ?? type;
 const formatNumber = (value: number) => value.toLocaleString();
 
@@ -170,6 +206,63 @@ export const IMPORT_RECONCILIATION_RULES: ReconciliationRule[] = [
       return STANDARD_INCOTERMS.has(code)
         ? { status: 'pass', evidence: `Incoterms 표준 조건: ${code}.` }
         : { status: 'fail', evidence: `Incoterms "${raw}"는 2020 표준 11종에 없습니다.` };
+    },
+  },
+  {
+    id: 'IR11', label: '원산지 일치 (C/O ↔ C/I)', severity: 'error', documents: [CO, CI],
+    evaluate: (input) => {
+      const co = get(input, CO)?.originCountry?.trim();
+      const ci = get(input, CI)?.originCountry?.trim();
+      if (!co || !ci) return { status: 'skip', evidence: 'C/O 또는 C/I에 원산지 표기가 없어 대조할 수 없습니다.' };
+      return countryKey(co) === countryKey(ci)
+        ? { status: 'pass', evidence: `원산지 일치: C/O "${co}", C/I "${ci}".` }
+        : { status: 'fail', evidence: `원산지 불일치: C/O "${co}" vs C/I "${ci}" -> 협정세율(FTA) 적용이 거부될 수 있습니다.` };
+    },
+  },
+  {
+    id: 'IR12', label: '선적항·도착항 일치 (B/L ↔ C/I)', severity: 'error', documents: [BL, CI],
+    evaluate: (input) => {
+      const bl = get(input, BL); const ci = get(input, CI);
+      const pairs: Array<[string, string | undefined, string | undefined]> = [
+        ['선적항', bl?.loadPort, ci?.loadPort], ['도착항', bl?.dischargePort, ci?.dischargePort],
+      ];
+      const comparable = pairs.filter(([, a, b]) => a?.trim() && b?.trim());
+      if (!comparable.length) return { status: 'skip', evidence: 'B/L과 C/I 양쪽에 항구 표기가 있는 항목이 없어 대조할 수 없습니다.' };
+      const mismatched = comparable.filter(([, a, b]) => portComparisonKey(a) !== portComparisonKey(b));
+      return mismatched.length
+        ? { status: 'fail', evidence: mismatched.map(([name, a, b]) => `${name} 불일치: B/L "${a}" vs C/I "${b}"`).join('; ') + '.' }
+        : { status: 'pass', evidence: comparable.map(([name, a]) => `${name} 일치: ${a}`).join(', ') + '.' };
+    },
+  },
+  {
+    id: 'IR13', label: 'Consignee 일치 (B/L ↔ C/I)', severity: 'warning', documents: [BL, CI],
+    evaluate: (input) => {
+      const bl = get(input, BL)?.consignee?.trim();
+      const ci = get(input, CI)?.consignee?.trim();
+      if (!bl || !ci) return { status: 'skip', evidence: 'B/L 또는 C/I에 Consignee 표기가 없어 대조할 수 없습니다.' };
+      const a = partyKey(bl), b = partyKey(ci);
+      const same = a === b || (a.length >= 4 && b.length >= 4 && (a.includes(b) || b.includes(a)));
+      return same
+        ? { status: 'pass', evidence: `Consignee 일치: "${bl}".` }
+        : { status: 'fail', evidence: `Consignee 불일치: B/L "${bl}" vs C/I "${ci}" -> 화물 인수 주체가 달라 통관·화물 인도에서 문제가 됩니다.` };
+    },
+  },
+  {
+    id: 'IR14', label: '보험금액 담보 (보험증권 ↔ C/I)', severity: 'warning', documents: [INS, CI],
+    evaluate: (input) => {
+      const ins = get(input, INS); const ci = get(input, CI);
+      const insured = parseTradeNumber(ins?.insuredAmount);
+      const invoice = parseTradeNumber(ci?.totalAmount);
+      if (insured == null || invoice == null) return { status: 'skip', evidence: '보험증권 보험금액 또는 C/I 총액이 없어 담보 범위를 확인할 수 없습니다.' };
+      const insCur = (ins?.insuredCurrency ?? '').trim().toUpperCase();
+      const ciCur = (ci?.currency ?? '').trim().toUpperCase();
+      if (insCur && ciCur && insCur !== ciCur) {
+        return { status: 'fail', evidence: `보험금액 통화(${insCur})가 송장 통화(${ciCur})와 달라 담보 범위를 비교할 수 없습니다.` };
+      }
+      const required = invoice * INSURANCE_COVERAGE_RATIO;
+      return insured + 0.005 >= required
+        ? { status: 'pass', evidence: `보험금액 ${formatNumber(insured)} ≥ 송장금액 ${formatNumber(invoice)} × 110% = ${formatNumber(Math.round(required * 100) / 100)}.` }
+        : { status: 'fail', evidence: `보험금액 ${formatNumber(insured)}이 송장금액 × 110% (${formatNumber(Math.round(required * 100) / 100)})에 미달합니다. CIF·CIP 관행상 담보 부족.` };
     },
   },
   {

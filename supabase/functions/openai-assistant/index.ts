@@ -14,7 +14,8 @@ type OpenAIAction =
   | "suggest-hs-code"
   | "generate-feedback"
   | "auto-fill-document"
-  | "normalize-goods-description";
+  | "normalize-goods-description"
+  | "flag-field-anomalies";
 
 interface HSCodeRequest {
   action: "suggest-hs-code";
@@ -632,6 +633,70 @@ async function handleGoodsDescriptionNormalize(
   return jsonResponse({ success: true, baseName, detail, attributes });
 }
 
+// ── 자유 텍스트 이상치 탐지 ──────────────────────────────────────
+// 회사명·주소·품명처럼 룰로 못 잡는 입력값을 "무역서류에 쓰기에 이상해 보이는지"만 묻는다.
+// 판정은 보수적으로: 임시값(test/asdf/회사명), 필드가 뒤바뀐 값(회사명 칸에 주소), 잘린 값,
+// 의미 없는 문자열만 표시한다. 정상적인 값을 "이상하다"고 하면 시연에서 오탐이 되므로
+// 확신이 없으면 표시하지 않도록 프롬프트와 응답 검증(입력에 없는 field 는 버림)으로 묶는다.
+interface FieldAnomalyRequest {
+  fields?: unknown;
+}
+const ANOMALY_FIELD_LIMIT = 20;
+
+async function handleFieldAnomalies(
+  apiKey: string,
+  body: FieldAnomalyRequest,
+): Promise<Response> {
+  const fields = (Array.isArray(body.fields) ? body.fields : [])
+    .filter(isRecord)
+    .map((entry) => ({
+      field: getString(entry.field, 60),
+      label: getString(entry.label, 60),
+      value: getString(entry.value, 300),
+    }))
+    .filter((entry) => entry.field && entry.value)
+    .slice(0, ANOMALY_FIELD_LIMIT);
+
+  if (!fields.length) {
+    return jsonResponse({ success: true, anomalies: [] });
+  }
+
+  const systemPrompt = [
+    "You review free-text fields typed into a Korean export/import document generator (commercial invoice, packing list, B/L, customs declaration).",
+    "For each field decide whether the value looks WRONG for trade paperwork. Flag ONLY clear problems:",
+    "- placeholder or test text (e.g. test, asdf, abc, 123, 회사명, 홍길동, sample, xxx, N/A used as a real value)",
+    "- the value clearly belongs to a different field (an address typed into a company-name field, a product name in an address field, a person's name as a company)",
+    "- obviously truncated or garbled text, repeated characters, keyboard mash",
+    "- a goods description that is not a product at all (a sentence, a question, an instruction)",
+    "Do NOT flag: unfamiliar but plausible company names, short but real product names, foreign-language names, abbreviations like CO., LTD, or values you are merely unsure about.",
+    "When in doubt, do not flag. A missed anomaly is acceptable; a false alarm is not.",
+    "Return ONLY a JSON object: {\"anomalies\": [{\"field\": string, \"reason\": string}]}.",
+    "reason: one short Korean sentence (max 60 chars) telling the user what looks wrong and what to enter instead. Use the field name exactly as given. Do not wrap the JSON in markdown.",
+  ].join("\n");
+
+  const userMessage = fields
+    .map((entry) => `field: ${entry.field}\nlabel: ${entry.label || entry.field}\nvalue: ${entry.value}`)
+    .join("\n\n");
+
+  const outputText = await callOpenAI(apiKey, systemPrompt, userMessage);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(extractJson(outputText));
+  } catch {
+    return jsonResponse({ success: false, error: "이상치 판정 결과를 해석하지 못했습니다." }, 502);
+  }
+  const rawList = isRecord(parsed) && Array.isArray(parsed.anomalies) ? parsed.anomalies : [];
+  const known = new Set(fields.map((entry) => entry.field));
+  const anomalies = rawList
+    .filter(isRecord)
+    .map((entry) => ({ field: getString(entry.field, 60), reason: getString(entry.reason, 200) }))
+    // 입력에 없는 필드나 사유 없는 항목은 모델이 지어낸 것으로 보고 버린다.
+    .filter((entry) => known.has(entry.field) && entry.reason);
+
+  return jsonResponse({ success: true, anomalies });
+}
+
 async function handleHSCodeSuggestion(
   apiKey: string,
   body: HSCodeRequest,
@@ -1210,6 +1275,12 @@ export default {
           return await handleGoodsDescriptionNormalize(
             apiKey,
             rawBody as unknown as GoodsDescriptionRequest,
+          );
+
+        case "flag-field-anomalies":
+          return await handleFieldAnomalies(
+            apiKey,
+            rawBody as unknown as FieldAnomalyRequest,
           );
 
         default:

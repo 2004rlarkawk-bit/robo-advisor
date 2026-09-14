@@ -24,6 +24,7 @@ export type TradeAttachmentDocumentType =
   | 'certificate_of_origin'
   | 'transport_request'
   | 'export_declaration'
+  | 'insurance_policy'
   | 'arrival_notice'
   | 'other';
 

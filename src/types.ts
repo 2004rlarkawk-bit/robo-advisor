@@ -259,6 +259,11 @@ export interface ValidationIssue {
    */
   amounts?: { expected: number; actual: number; currency: string };
   /**
+   * 룰이 제안하는 구체적 수정값(항구 오타 → UN/LOCODE 항구 등).
+   * 결과 카드에서 "제안 값으로 수정" 버튼으로 바로 반영한다.
+   */
+  fix?: { field: keyof TradeProfile | string; value: string; label: string };
+  /**
    * 패킹↔송장 수량 불일치(R10)의 구조화된 값 — 결과 카드에서 수량 칩과
    * "어느 쪽을 어떻게 고칠지" 선택지 2줄로 렌더한다.
    */

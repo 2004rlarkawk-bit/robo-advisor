@@ -102,6 +102,7 @@ import { resolveWorkspaceRole, type WorkspaceRole } from './utils/workspaceRole'
 import { countShipperReturnRequests } from './services/forwarderCaseService';
 import {
   applyMatchPatchToProfile,
+  buildExportCrossChecks,
   documentIdForAttachmentType,
   extractEnglishGoodsName,
   matchUploadedExportDocuments,
@@ -768,6 +769,17 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setHighlightField(null);
     setHighlightHint('');
     setActiveFixIssue(null);
+  };
+
+  /**
+   * 룰이 제안한 구체적 수정값(issue.fix)을 입력값에 바로 반영한다.
+   * 예) 항구 오타 "Busn" → "Busan Port". 반영한 이슈는 목록에서 지우고, 재생성 때 다시 검증된다.
+   */
+  const applyIssueFix = (issue: ValidationIssue) => {
+    const fix = issue.fix;
+    if (!fix) return;
+    setProfile((current) => ({ ...current, [fix.field]: fix.value }));
+    setIssues((current) => current.filter((item) => item !== issue));
   };
 
   const goToFieldFix = (issue: ValidationIssue) => {
@@ -2300,6 +2312,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   const totalMatchMismatches = exportDocMatches.reduce((sum, match) => sum + match.mismatchCount, 0);
   // 분석에 실패한 서류는 대조된 적이 없다 — '모두 일치'로 표시하면 안 된다.
   const failedMatchCount = exportDocMatches.filter((match) => match.error).length;
+  // 업로드 서류끼리의 교차 대조(B/L↔C/I 항구, C/O↔C/I 원산지, 보험증권↔C/I 담보 등) — 2건 이상 올렸을 때만 의미 있다.
+  const exportCrossChecks = buildExportCrossChecks(exportDocMatches);
+  const crossMismatchCount = exportCrossChecks.filter((check) => check.status === 'mismatch').length;
   const isGenerationBlocked = blockingIssuesCount > 0;
   const isSubmitReady = !isGenerationBlocked && ownDocs.length > 0 && ownReadyCount === ownDocs.length;
 
@@ -3851,6 +3866,44 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                         </div>
                       </div>
                     ))}
+                    {exportCrossChecks.length > 0 && (
+                      <div className="rv-cross">
+                        <div className="rv-cross-head">
+                          서류 간 교차 대조
+                          <span className={`rv-match-total${crossMismatchCount > 0 ? ' bad' : ' ok'}`}>
+                            {crossMismatchCount > 0 ? `불일치 ${crossMismatchCount}건` : '모두 일치'}
+                          </span>
+                          <span className="rv-cross-hint">업로드한 서류끼리 직접 비교한 결과입니다 (은행·세관이 보는 방식).</span>
+                        </div>
+                        <table className="rv-match-table">
+                          <thead>
+                            <tr><th>항목</th><th>서류별 값</th><th>결과</th></tr>
+                          </thead>
+                          <tbody>
+                            {exportCrossChecks.map((check) => (
+                              <tr key={check.field} className={`rv-match-${check.status}`}>
+                                <th>{check.label}</th>
+                                <td>
+                                  <div className="rv-cross-values">
+                                    {check.values.map((v) => (
+                                      <span key={`${check.field}-${v.attachmentId}`} className="rv-cross-value">
+                                        <em>{v.documentLabel}</em> {v.value}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  {check.note && <p className="rv-cross-note">{check.note}</p>}
+                                </td>
+                                <td>
+                                  {check.status === 'match'
+                                    ? <span className="rv-match-badge ok">일치</span>
+                                    : <span className="rv-match-badge bad">불일치</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                     <p className="rv-match-note">
                       추출값 기반 대조라 100% 정확하지 않을 수 있습니다. 불일치 항목은 원본과 함께 확인한 뒤,
                       맞는 값(현재 입력값 또는 업로드 서류 값)을 눌러 골라 주세요. 업로드 서류 값을 고른 항목만 입력값이 바뀝니다.
@@ -4000,6 +4053,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           // 확인 항목 카드용 손질 카피 — 원 검증 메시지 대신 짧은 제목 + 명령형 설명.
                           const present = (i: ValidationIssue): { title: string; desc: string } | null => {
                             if (i.field === 'weight') return { title: '중량 입력', desc: '총 중량 또는 순중량 정보를 입력하세요.' };
+                            if (i.id.startsWith('llm-anomaly-')) {
+                              // "AI 참고 — 라벨: 사유" 형식. 제목은 라벨까지, 설명은 사유.
+                              const m = /^AI 참고 — ([^:]+):\s*(.+)$/.exec(i.message.replace(/\s*\[근거:[^\]]*\]\s*$/, ''));
+                              return m
+                                ? { title: `AI 참고 · ${m[1]} 값 확인`, desc: `${m[2]} (AI가 표기를 검토한 참고 의견이며, 실제 값이 맞다면 그대로 진행해도 됩니다.)` }
+                                : { title: 'AI 참고 · 입력값 확인', desc: i.message };
+                            }
                             if (i.docType === 'co') return { title: '원산지증명서 필요 여부', desc: '구매자가 FTA 적용 또는 원산지증명서를 요청했는지 확인해 주세요.' };
                             if (i.id === 'r2-departure-missing' || i.field === 'departureDate') return { title: '선적일 확인', desc: '선적일이 비어 있습니다. 확정 시 입력을 권장합니다.' };
                             if (i.field === 'hsCode') return { title: 'HS CODE 확인', desc: '품목에 맞는 HS CODE를 확인·입력하세요.' };
@@ -4124,6 +4184,11 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                           </div>
                                         );
                                       })()}
+                                      {issue.fix && !isDocumentManagerReadOnlyView && (
+                                        <button type="button" className="fix-card__suggest" onClick={() => applyIssueFix(issue)}>
+                                          <CheckCircle2 size={14} /> {issue.fix.label}
+                                        </button>
+                                      )}
                                       {isErr && issue.amounts && (
                                         <div className="fix-card__meta">
                                           <span className="fix-card__amt"><em>계산 금액</em><b>{issue.amounts.expected.toLocaleString()} {issue.amounts.currency}</b></span>

@@ -16,6 +16,7 @@ export const IMPORT_DOCUMENT_TYPE_LABELS: Record<ImportDocumentType, string> = {
   certificate_of_origin: '원산지증명서',
   transport_request: '수출 운송의뢰서',
   export_declaration: '수출신고필증',
+  insurance_policy: '적하보험증권',
   other: '기타서류',
   unknown: '기타서류',
 };
@@ -27,6 +28,7 @@ const STRONG_FILE_NAME_HINTS: Array<[RegExp, ImportDocumentType]> = [
   [/(?:원산지\s*증명(?:서)?|CERTIFICATE\s+OF\s+ORIGIN|(?:^|\s)C\s*(?:\/\s*)?O(?=\s|$))/, 'certificate_of_origin'],
   [/(?:수출\s*운송\s*의뢰서|운송\s*의뢰서|선적\s*의뢰서|선적\s*요청|SHIPPING\s+(?:REQUEST|INSTRUCTION|ORDER)|EXPORT\s+TRANSPORT\s+REQUEST|TRANSPORT\s+REQUEST|(?:^|\s)(?:T\s*(?:\/\s*)?R|S\s*(?:\/\s*)?I)(?=\s|$))/, 'transport_request'],
   [/(?:수출\s*신고(?:필증|서)|EXPORT\s+DECLARATION|EXPORT\s+PERMIT)/, 'export_declaration'],
+  [/(?:적하\s*)?보험\s*(?:증권|증명서)|INSURANCE\s+(?:POLICY|CERTIFICATE)|CERTIFICATE\s+OF\s+INSURANCE|CARGO\s+INSURANCE/, 'insurance_policy'],
 ];
 
 const WEAK_FILE_NAME_HINTS: Array<[RegExp, ImportDocumentType]> = [
@@ -274,6 +276,8 @@ export function normalizeImportExtractedFields(value: unknown): ImportExtractedF
     netWeightUnit: text(raw.netWeightUnit),
     freight: text(raw.freight),
     insurance: text(raw.insurance),
+    insuredAmount: text(raw.insuredAmount),
+    insuredCurrency: text(raw.insuredCurrency),
     otherAdditions: text(raw.otherAdditions),
   };
 }

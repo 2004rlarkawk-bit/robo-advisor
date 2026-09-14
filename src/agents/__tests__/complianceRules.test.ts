@@ -420,3 +420,93 @@ describe('R12 Buyer 정보 일관성', () => {
     expect(list).not.toContain('r12-buyer-name-missing');
   });
 });
+
+// ── R20 항구명 실존 확인 · R5 전 세계 국가 추정 (UN/LOCODE) ─────────────
+import { readFileSync } from 'node:fs';
+import { resolve as resolvePath } from 'node:path';
+import { __setPortDataForTests } from '../../services/portLocodeService';
+
+describe('R20 항구명 실존 확인 (UN/LOCODE)', () => {
+  beforeEach(() => {
+    const raw = JSON.parse(readFileSync(resolvePath(__dirname, '../../../public/data/unlocodePorts.json'), 'utf8'));
+    __setPortDataForTests(raw);
+  });
+  afterEach(() => __setPortDataForTests(null));
+
+  it('실존 항구는 통과', () => {
+    const list = ids({ loadPort: 'Busan Port', dischargePort: 'Rotterdam' });
+    expect(list).not.toContain('r20-port-typo');
+    expect(list).not.toContain('r20-port-not-found');
+  });
+
+  it('오타는 warning + 제안 항구를 fix 로 준다', () => {
+    const issue = find({ loadPort: 'Busn' }, 'r20-port-typo')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('warning');
+    expect(issue.message).toContain('Busan (KRPUS)');
+    expect(issue.fix).toEqual({ field: 'loadPort', value: 'Busan Port', label: 'Busan (KRPUS)(으)로 수정' });
+  });
+
+  it('한글 오타(부싼)도 제안한다', () => {
+    const issue = find({ loadPort: '부싼' }, 'r20-port-typo')!;
+    expect(issue?.fix?.value).toBe('Busan Port');
+  });
+
+  it('비슷한 것도 없으면 not-found warning', () => {
+    const issue = find({ dischargePort: 'Xqzvport' }, 'r20-port-not-found')!;
+    expect(issue).toBeTruthy();
+    expect(issue.severity).toBe('warning');
+  });
+
+  it('R5 — 5개국 밖 항구도 국가를 맞춰 동일국가 운송을 잡는다', () => {
+    expect(ids({ loadPort: 'Rotterdam', dischargePort: 'Amsterdam' })).toContain('r5-same-country-ports');
+    expect(ids({ loadPort: 'Rotterdam', dischargePort: 'Hamburg' })).not.toContain('r5-same-country-ports');
+  });
+
+  it('사전이 없으면 R20 은 판정 보류(정규식 폴백으로 R5 만 동작)', () => {
+    __setPortDataForTests(null);
+    const list = ids({ loadPort: 'Busn', dischargePort: 'Osaka' });
+    expect(list).not.toContain('r20-port-typo');
+    expect(list).not.toContain('r20-port-not-found');
+  });
+});
+
+describe('R21 날짜 이상치', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 14)); // 2026-09-14 고정
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('도착예정일 < 출항일 → error(override 가능)', () => {
+    const issue = find({ departureDate: '2026-09-20', arrivalDate: '2026-09-18' }, 'r21-arrival-before-departure')!;
+    expect(issue.severity).toBe('error');
+    expect(issue.overridable).toBe(true);
+  });
+
+  it('운송 기간 120일 초과 → warning', () => {
+    expect(ids({ departureDate: '2026-09-20', arrivalDate: '2027-03-01' })).toContain('r21-transit-too-long');
+    expect(ids({ departureDate: '2026-09-20', arrivalDate: '2026-10-20' })).not.toContain('r21-transit-too-long');
+  });
+
+  it('송장 작성일이 오늘보다 뒤 → warning', () => {
+    expect(ids({ invoiceDate: '2026-09-15' })).toContain('r21-invoice-date-future');
+    expect(ids({ invoiceDate: '2026-09-14' })).not.toContain('r21-invoice-date-future');
+  });
+
+  it('송장 작성일 > 출항일 → warning', () => {
+    expect(ids({ invoiceDate: '2026-09-10', departureDate: '2026-09-05' })).toContain('r21-invoice-after-departure');
+    expect(ids({ invoiceDate: '2026-09-01', departureDate: '2026-09-05' })).not.toContain('r21-invoice-after-departure');
+  });
+
+  it('송장·도착·L/C 날짜의 비현실적 연도 → warning', () => {
+    const list = run({ invoiceDate: '2016-09-01', arrivalDate: '2062-01-01', lcDate: '2016-08-01', departureDate: '2026-09-05', paymentTerms: 'L/C' })
+      .filter((i) => i.id === 'r21-date-out-of-range');
+    expect(list.map((i) => i.field).sort()).toEqual(['arrivalDate', 'invoiceDate', 'lcDate']);
+  });
+
+  it('정상 날짜는 발행하지 않는다', () => {
+    const list = ids({ invoiceDate: '2026-09-01', departureDate: '2026-09-05', arrivalDate: '2026-09-12' });
+    expect(list.filter((id) => id.startsWith('r21-'))).toEqual([]);
+  });
+});

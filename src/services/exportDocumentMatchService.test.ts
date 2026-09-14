@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { applyMatchPatchToProfile, extractEnglishGoodsName, matchUploadedExportDocuments } from './exportDocumentMatchService';
+import { applyMatchPatchToProfile, buildExportCrossChecks, extractEnglishGoodsName, matchUploadedExportDocuments, type ExportDocMatchResult } from './exportDocumentMatchService';
 import type { ShipperItem, TradeProfile } from '../types';
 import type { TradeAttachment } from '../types/tradeFormData';
 import type { ImportExtractedFields } from '../types/importTrade';
@@ -247,5 +247,56 @@ describe('extractEnglishGoodsName', () => {
   it('영문이 전혀 없으면 null — AI 정리로 넘긴다', () => {
     expect(extractEnglishGoodsName('냉동 갈치')).toBeNull();
     expect(extractEnglishGoodsName('  ')).toBeNull();
+  });
+});
+
+describe('buildExportCrossChecks — 업로드 서류끼리 교차 대조', () => {
+  const doc = (
+    attachmentId: string,
+    documentType: ExportDocMatchResult['documentType'],
+    documentLabel: string,
+    rows: Array<[string, string]>,
+  ): ExportDocMatchResult => ({
+    attachmentId,
+    fileName: `${attachmentId}.pdf`,
+    documentType,
+    documentLabel,
+    mismatchCount: 0,
+    rows: rows.map(([field, uploadedValue]) => ({ field, label: field, uploadedValue, formValue: '', status: 'unknown' as const })),
+  });
+
+  it('B/L↔C/I 항구·C/O↔C/I 원산지를 서류끼리 비교한다', () => {
+    const checks = buildExportCrossChecks([
+      doc('ci', 'commercial_invoice', 'C/I', [['loadPort', 'BUSAN, KOREA'], ['countryOfOrigin', 'KOREA'], ['totalAmount', 'USD 8,000.00']]),
+      doc('tr', 'transport_request', 'T/R', [['loadPort', 'Busan Port'], ['dischargePort', 'Osaka']]),
+      doc('co', 'certificate_of_origin', 'C/O', [['countryOfOrigin', 'CHINA']]),
+    ]);
+    const byField = Object.fromEntries(checks.map((c) => [c.field, c.status]));
+    expect(byField.loadPort).toBe('match');
+    expect(byField.countryOfOrigin).toBe('mismatch');
+    // 도착항은 한 서류에만 있어 대조 대상이 아니다.
+    expect(byField.dischargePort).toBeUndefined();
+  });
+
+  it('보험증권 보험금액이 송장금액 × 110% 미만이면 불일치 + 안내', () => {
+    const checks = buildExportCrossChecks([
+      doc('ci', 'commercial_invoice', 'C/I', [['totalAmount', 'USD 8,000.00']]),
+      doc('ins', 'insurance_policy', '보험증권', [['insuredAmount', '8,000']]),
+    ]);
+    const coverage = checks.find((c) => c.field === 'insuranceCoverage')!;
+    expect(coverage.status).toBe('mismatch');
+    expect(coverage.note).toContain('110%');
+    const ok = buildExportCrossChecks([
+      doc('ci', 'commercial_invoice', 'C/I', [['totalAmount', 'USD 8,000.00']]),
+      doc('ins', 'insurance_policy', '보험증권', [['insuredAmount', '8,800.00']]),
+    ]).find((c) => c.field === 'insuranceCoverage')!;
+    expect(ok.status).toBe('match');
+  });
+
+  it('분석 실패 서류는 제외하고, 2건 미만이면 빈 배열', () => {
+    expect(buildExportCrossChecks([
+      doc('ci', 'commercial_invoice', 'C/I', [['loadPort', 'Busan']]),
+      { ...doc('tr', 'transport_request', 'T/R', [['loadPort', 'Osaka']]), error: '읽기 실패' },
+    ])).toEqual([]);
   });
 });

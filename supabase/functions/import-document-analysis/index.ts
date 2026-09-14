@@ -9,6 +9,7 @@ const DOCUMENT_TYPES = [
   "certificate_of_origin",
   "transport_request",
   "export_declaration",
+  "insurance_policy",
   "other",
   "unknown",
 ] as const;
@@ -65,6 +66,7 @@ const legacyFields = [
   "shipmentDate", "estimatedArrivalDate", "totalPackageCount", "packageUnit",
   "grossWeightUnit", "netWeightUnit", "freight", "insurance", "otherAdditions",
   "exportDeclarationNo", "loadingMode", "measurement", "shippingMarks",
+  "insuredAmount", "insuredCurrency",
 ];
 const itemSchema = {
   type: "object",
@@ -413,7 +415,8 @@ async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
       "첨부된 해상 무역 문서에 실제로 기재된 값만 추출하세요.",
       "문서에 없는 값은 추측하거나 생성하지 말고 빈 문자열 또는 빈 배열로 반환하세요.",
       "항공운송 문서나 필드를 만들지 마세요.",
-      "각 파일을 commercial_invoice, packing_list, bill_of_lading, certificate_of_origin, transport_request, export_declaration, other 중 하나로 분류하세요.",
+      "각 파일을 commercial_invoice, packing_list, bill_of_lading, certificate_of_origin, transport_request, export_declaration, insurance_policy, other 중 하나로 분류하세요.",
+      "적하보험증권·보험증권·보험증명서·INSURANCE POLICY·CERTIFICATE OF INSURANCE·CARGO INSURANCE는 insurance_policy로 분류하고, 보험금액(Amount Insured/Sum Insured/Insured Value)은 insuredAmount에 숫자 문자열로, 그 통화는 insuredCurrency에 넣으세요. 보험증권이 없으면 두 값은 빈 문자열입니다.",
       "문서 분류 근거의 우선순위는 ① 문서 내부의 명확한 제목 ② 파일명의 명확한 문서명 ③ 본문의 특징적인 필드 조합 ④ 사전 분류 힌트입니다.",
       "파일명과 문서 내부 제목이 다르면 반드시 문서 내부 제목을 우선하세요.",
       "내부 제목에서 상업송장·상업 송장·상업송장서·COMMERCIAL INVOICE는 commercial_invoice, 포장명세서·포장 명세서·포장내역서·포장 목록·PACKING LIST는 packing_list로 분류하세요.",
@@ -437,7 +440,8 @@ async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
       "문서에서 발견한 해외 HS Code는 documentHSCode에만 원문 표기대로 넣고 대한민국 HSK를 추천하거나 생성하지 마세요.",
       "품목분류 판단에 쓰일 수 있는 품명·한국어 품명·재질·성분비·직물/편물·제품 형태·가공 상태·성별·용도·모델명·규격·원산지를 문서에 있는 경우에만 추출하세요.",
       "금액은 통화기호 없이 숫자 문자열로, 단위는 별도 필드에 적으세요.",
-      "문서 간 품명, 수량/단위, Consignee, Invoice 번호, 포장, 중량, 통화, 원산지, 컨테이너, Seal 불일치를 비교하세요.",
+      "문서 간 품명, 수량/단위, Consignee, Invoice 번호, 포장, 중량, 통화, 원산지, 선적항(POL), 도착항(POD), 컨테이너, Seal 불일치를 비교하세요.",
+      "comparison 배열에는 최소한 품명·수량·원산지·선적항·도착항·Consignee 행을 넣고, 각 행의 invoice/packingList/billOfLading/certificateOfOrigin 칸에는 그 서류에 실제 기재된 값만 적으세요(없으면 빈 문자열).",
     ].join("\n"),
   }];
   for (const document of documents) {

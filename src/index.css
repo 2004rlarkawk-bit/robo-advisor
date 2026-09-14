@@ -3296,6 +3296,16 @@ body {
   padding-top: 14px; border-top: 1px solid #f2f5f9; flex-wrap: wrap;
 }
 .rv-match-hint { font-size: 14px; color: var(--text-light); }
+/* 서류 간 교차 대조 (업로드 서류끼리) */
+.rv-cross { margin-top: 18px; padding-top: 14px; border-top: 1px dashed #e2e8f0; }
+.rv-cross-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;
+  font-size: 14.5px; font-weight: 700; color: var(--text-dark);
+}
+.rv-cross-hint { flex-basis: 100%; font-size: 13px; font-weight: 400; color: var(--text-light); }
+.rv-cross-values { display: flex; flex-direction: column; gap: 4px; }
+.rv-cross-value em { font-style: normal; font-size: 12.5px; color: var(--text-light); margin-right: 6px; }
+.rv-cross-note { margin: 6px 0 0; font-size: 13px; color: var(--warning-color); }
 .rv-match-note { margin: 14px 0 0; font-size: 14px; color: var(--text-light); line-height: 1.55; }
 .form-section-note {
   margin: 0 18px 14px; font-size: 13px; color: var(--text-light); line-height: 1.6;
@@ -3354,6 +3364,29 @@ body {
 .shipper-custom-unit-input {
   margin-top: 0.5rem;
 }
+
+/* 기타항 직접 입력 아래 UN/LOCODE 확인 안내 */
+.port-hint {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px;
+  margin: 6px 0 0; font-size: 12.5px; line-height: 1.5;
+}
+.port-hint--ok { color: var(--success-color); }
+.port-hint--warn { color: var(--warning-color); }
+.port-hint--unknown { color: var(--text-light); }
+.port-hint__alt { flex-basis: 100%; color: var(--text-light); }
+.port-hint__pick {
+  border: 1px solid var(--primary-color); background: #fff; color: var(--primary-color);
+  padding: 2px 8px; border-radius: 6px; font: inherit; font-weight: 700; cursor: pointer;
+}
+.port-hint__pick:hover { background: var(--primary-color); color: #fff; }
+
+/* 결과 카드: 룰이 제안한 값으로 즉시 수정 */
+.fix-card__suggest {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 8px;
+  border: 1px solid var(--success-color); background: #f0fdf4; color: var(--success-color);
+  padding: 5px 11px; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.fix-card__suggest:hover { background: var(--success-color); color: #fff; }
 
 .shipper-custom-package-input {
   margin-top: 0.5rem;
