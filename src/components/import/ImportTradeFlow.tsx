@@ -24,6 +24,7 @@ import {
 } from '../../services/importDeclarationService';
 import type { ImportDeclarationDownloadFormat } from '../../services/importDeclarationService';
 import { lookupImportCargo } from '../../services/cargoProgressService';
+import { saveShipperReturnReply } from '../../services/forwarderCaseService';
 import {
   arrivalNoticeToAttachment,
   findArrivalNotice,
@@ -389,6 +390,10 @@ export default function ImportTradeFlow({
   const onWorkspaceStateChangeRef = useRef(onWorkspaceStateChange);
   onWorkspaceStateChangeRef.current = onWorkspaceStateChange;
   const [downloadFormat, setDownloadFormat] = useState<ImportDeclarationDownloadFormat>('pdf');
+  // 포워더 보완 요청에 대한 화주 회신 메모 — 요청·회신이 같은 의뢰에 남는다
+  const [reviseReply, setReviseReply] = useState('');
+  const [reviseReplyBusy, setReviseReplyBusy] = useState(false);
+  const [reviseReplySaved, setReviseReplySaved] = useState(false);
   const canBrowseReadOnlyResultSteps = readOnly;
   const moveToReadOnlyResultStep = (step: number) => {
     if (!canBrowseReadOnlyResultSteps || (step !== 2 && step !== 3)) return;
@@ -1100,6 +1105,31 @@ export default function ImportTradeFlow({
                 )}
               </div>
               <p className="revise-notice-text">{state.reviseNotice.reason}</p>
+              {!readOnly && state.tradeId && (
+                <div className="revise-reply">
+                  <input
+                    className="form-input"
+                    value={reviseReply}
+                    onChange={(event) => { setReviseReply(event.target.value); setReviseReplySaved(false); }}
+                    placeholder="포워더에게 회신 메모 (예: 실측 900개가 맞아 송장을 수정했습니다)"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={reviseReplyBusy || reviseReply.trim() === ''}
+                    onClick={() => {
+                      if (!state.tradeId) return;
+                      setReviseReplyBusy(true);
+                      void saveShipperReturnReply(state.tradeId, reviseReply)
+                        .then(() => setReviseReplySaved(true))
+                        .catch((error) => console.error('회신 메모 저장 실패:', error))
+                        .finally(() => setReviseReplyBusy(false));
+                    }}
+                  >
+                    {reviseReplySaved ? '회신 저장됨 ✓' : reviseReplyBusy ? '저장 중…' : '회신 저장'}
+                  </button>
+                </div>
+              )}
             </section>
           )}
           <RiskSummary
