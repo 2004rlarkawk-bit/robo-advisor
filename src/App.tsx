@@ -28,7 +28,8 @@ import {
   ChevronRight,
   Paperclip,
   Mail,
-  FileCheck2
+  FileCheck2,
+  Briefcase
 } from 'lucide-react';
 import {
   TradeProfile,
@@ -2597,6 +2598,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         <main className="content-body">
           {/* 서비스 소개는 히어로가 화면을 꽉 채우는 디자인이라 폭 제한(1000px) 예외 */}
           <div className={`workspace-area${activeMenu === 'about' ? ' workspace-area--full' : ''}`}>
+            {/* 포워더 모드 밴드 — 화주↔포워더를 오가는 시연에서 지금 누구 화면인지 즉시 보이게 한다. */}
+            {workspaceRole === 'forwarder' && activeMenu !== 'about' && (
+              <div className="role-mode-band" role="status">
+                <Briefcase size={14} />
+                <span><strong>포워더 업무 화면</strong> — 화주 의뢰를 검토·조율하는 담당자 모드입니다.</span>
+              </div>
+            )}
             {/* 포워더 보완 요청 도착 알림(화주용) — 화주 역할일 때만, 문서 관리 밖에서 보인다. */}
             {returnRequestCount > 0
               && activeMenu !== 'docs'
