@@ -1,52 +1,52 @@
 /* List-only styles: preserve the import detail workflow and all shared screens. */
 .fwd-inbox { width: 100%; min-width: 0; color: #16233b; }
 .fwd-inbox-titlebar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
-.fwd-inbox-titlebar h2 { margin: 0; font-size: 30px; font-weight: 750; letter-spacing: -.025em; }
-.fwd-inbox .btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 12px 18px; min-height: 44px; border-radius: 8px; font-size: 15px; white-space: nowrap; }
+.fwd-inbox-titlebar h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.025em; }
+.fwd-inbox .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; min-height: 40px; border-radius: 8px; font-size: 14px; white-space: nowrap; }
 .fwd-inbox-panel { padding: 24px; background: #fff; border: 1px solid #dce4ef; border-radius: 12px; }
 .fwd-inbox-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
-.fwd-inbox-panel-heading h3 { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 22px; font-weight: 700; }
-.fwd-inbox-panel-heading h3 span { border-radius: 5px; background: #f0f4f9; color: #64748b; padding: 3px 9px; font-size: 14px; font-weight: 600; }
+.fwd-inbox-panel-heading h3 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 700; }
+.fwd-inbox-panel-heading h3 span { border-radius: 5px; background: #f0f4f9; color: #64748b; padding: 3px 9px; font-size: 13px; font-weight: 600; }
 .fwd-inbox .fwd-inbox-refresh { width: 44px; padding: 10px; background: #fff; }
 .fwd-inbox-filters { display: flex; gap: 18px; overflow-x: auto; border-bottom: 1px solid #dce4ef; }
-.fwd-inbox-filters button { flex-shrink: 0; padding: 14px 12px; border: 0; border-bottom: 3px solid transparent; color: #64748b; background: transparent; cursor: pointer; font-size: 15px; font-weight: 650; }
+.fwd-inbox-filters button { flex-shrink: 0; padding: 11px 12px; border: 0; border-bottom: 3px solid transparent; color: #64748b; background: transparent; cursor: pointer; font-size: 14px; font-weight: 650; }
 .fwd-inbox-filters button span { margin-left: 7px; font-variant-numeric: tabular-nums; }
 .fwd-inbox-filters button.is-active { border-bottom-color: #1558d6; color: #1558d6; }
 .fwd-inbox-filters button:hover { color: #1558d6; background: #f8faff; }
 .fwd-inbox-table-scroll { width: 100%; overflow-x: auto; }
 .fwd-inbox-table { width: 100%; min-width: 760px; border-collapse: separate; border-spacing: 0; table-layout: fixed; text-align: left; }
-.fwd-inbox-table th { padding: 20px 12px 16px; font-size: 14px; font-weight: 600; color: #64748b; }
+.fwd-inbox-table th { padding: 13px 12px 11px; font-size: 13px; font-weight: 600; color: #64748b; }
 .fwd-inbox-table th:first-child { width: 44px; }
 .fwd-inbox-table th:nth-child(2) { width: 38%; }
 .fwd-inbox-table th:nth-child(3) { width: 18%; }
 .fwd-inbox-table th:nth-child(4) { width: 19%; }
-.fwd-inbox-table td { padding: 18px 12px; border-top: 1px solid transparent; border-bottom: 1px solid #e5eaf2; font-size: 15px; overflow-wrap: anywhere; vertical-align: middle; }
+.fwd-inbox-table td { padding: 13px 12px; border-top: 1px solid transparent; border-bottom: 1px solid #e5eaf2; font-size: 14px; overflow-wrap: anywhere; vertical-align: middle; }
 .fwd-inbox-table tbody tr { cursor: pointer; }
 .fwd-inbox-table tbody tr:hover { background: #f6f9fd; }
 .fwd-inbox-table tr.is-selected { background: #eaf2ff; }
 .fwd-inbox-table tr.is-selected td { border-color: #cbdfff; }
 .fwd-inbox-table tr.is-selected td:first-child { border-left: 1px solid #cbdfff; border-radius: 7px 0 0 7px; }
 .fwd-inbox-table tr.is-selected td:last-child { border-right: 1px solid #cbdfff; border-radius: 0 7px 7px 0; }
-.fwd-inbox-table input[type=radio] { width: 20px; height: 20px; accent-color: #1558d6; cursor: pointer; margin: 0; }
-.fwd-inbox-party strong { display: block; font-size: 16px; font-weight: 650; line-height: 1.5; }
-.fwd-inbox-party > span { display: block; margin-top: 4px; color: #64748b; font-size: 14px; line-height: 1.6; }
+.fwd-inbox-table input[type=radio] { width: 17px; height: 17px; accent-color: #1558d6; cursor: pointer; margin: 0; }
+.fwd-inbox-party strong { display: block; font-size: 14px; font-weight: 650; line-height: 1.5; }
+.fwd-inbox-party > span { display: block; margin-top: 3px; color: #64748b; font-size: 13px; line-height: 1.6; }
 .fwd-inbox-party small { display: block; color: #64748b; font-size: 12px; margin-top: 3px; }
 .fwd-inbox-eta { font-variant-numeric: tabular-nums; }
-.fwd-inbox-badge { display: inline-block; padding: 5px 11px; border-radius: 18px; font-size: 14px; font-weight: 600; line-height: 1.4; }
+.fwd-inbox-badge { display: inline-block; padding: 4px 10px; border-radius: 18px; font-size: 12.5px; font-weight: 600; line-height: 1.4; }
 .fwd-inbox-badge.is-new { background: #dceaff; color: #1558d6; }
 .fwd-inbox-badge.is-reply { background: #fff3d7; color: #a4610c; }
 .fwd-inbox-badge.is-waiting { background: #edf1f6; color: #586b86; }
 .fwd-inbox-badge.is-progress { background: #e8f0fc; color: #415f86; }
 .fwd-inbox-badge.is-done { background: #e7f7ec; color: #237a45; }
-.fwd-inbox-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 18px; margin-top: 8px; font-size: 14px; line-height: 1.6; }
-.fwd-inbox-selection > strong { font-size: 16px; }
+.fwd-inbox-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-top: 14px; margin-top: 8px; font-size: 13.5px; line-height: 1.6; }
+.fwd-inbox-selection > strong { font-size: 14px; }
 .fwd-inbox-selection > span { color: #64748b; }
 .fwd-inbox-documents { display: flex; flex-wrap: wrap; gap: 7px; margin-left: 8px; }
 .fwd-inbox-documents span { padding: 3px 10px; border: 1px solid #dce4ef; background: #f4f7fb; border-radius: 5px; color: #586b86; }
 .fwd-inbox-footer { display: flex; justify-content: flex-end; margin-top: 20px; }
-.fwd-inbox-footer .btn { padding: 14px 22px; }
-.fwd-inbox-empty { padding: 36px 12px; margin: 0; color: #64748b; text-align: center; font-size: 16px; line-height: 1.7; }
-.fwd-inbox-empty span { font-size: 14px; }
+.fwd-inbox-footer .btn { padding: 11px 18px; }
+.fwd-inbox-empty { padding: 30px 12px; margin: 0; color: #64748b; text-align: center; font-size: 14px; line-height: 1.7; }
+.fwd-inbox-empty span { font-size: 13px; }
 .fwd-inbox button:focus-visible, .fwd-inbox input:focus-visible { outline: 2px solid #1558d6; outline-offset: 3px; }
 .fwd-inbox button:disabled { opacity: .55; cursor: not-allowed; }
 .fwd-inbox-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
