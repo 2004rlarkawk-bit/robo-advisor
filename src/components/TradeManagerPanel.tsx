@@ -77,6 +77,7 @@ export default function TradeManagerPanel({ onLoad, embedded, roleFilter }: Prop
   // 임시보관함(임베드) 전용: 접힘 상태 · 전체 보기 — 제출 문서함과 나란히 접힌 상태로 시작
   const [trayOpen, setTrayOpen] = useState(false);
   const [trayShowAll, setTrayShowAll] = useState(false);
+  const [traySort, setTraySort] = useState<'latest' | 'oldest'>('latest');
 
   const loadTrades = useCallback(async () => {
     setIsLoading(true);
@@ -150,9 +151,11 @@ export default function TradeManagerPanel({ onLoad, embedded, roleFilter }: Prop
   // 임시보관함(작업실 하단 임베드): 접힌 아코디언. 펼치면 최근 3건, [전체 보기]로 확장. 없으면 렌더하지 않는다.
   if (embedded) {
     if (isLoading || trades.length === 0) return null;
-    const sorted = [...trades].sort((a, b) =>
-      new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime()
-    );
+    const sorted = [...trades].sort((a, b) => {
+      const ta = new Date(a.updatedAt ?? a.createdAt).getTime();
+      const tb = new Date(b.updatedAt ?? b.createdAt).getTime();
+      return traySort === 'oldest' ? ta - tb : tb - ta;
+    });
     const recent = trayShowAll ? sorted : sorted.slice(0, 3);
     return (
       <section className="draft-tray" aria-label="임시보관함">
@@ -176,6 +179,18 @@ export default function TradeManagerPanel({ onLoad, embedded, roleFilter }: Prop
         {trayOpen && (
           <div className="draft-tray-body">
             {error && <div className="form-message error" role="alert">{error}</div>}
+            {/* 정렬 — 통관 내역과 같은 조작 방식으로 맞춘다 */}
+            <div className="list-sort-row">
+              <select
+                className="customs-sort-select"
+                value={traySort}
+                onChange={(e) => setTraySort(e.target.value as 'latest' | 'oldest')}
+                aria-label="임시보관함 정렬 순서"
+              >
+                <option value="latest">최신순</option>
+                <option value="oldest">오래된순</option>
+              </select>
+            </div>
             {recent.map((trade) => {
               const st = trayStatusOf(trade);
               const p = trade.profile;

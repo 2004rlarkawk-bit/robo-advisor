@@ -265,6 +265,120 @@ export async function findTenDigitHSKByPrefix(prefix: string, limit = 30): Promi
     .slice(0, limit);
 }
 
+/**
+ * HS 호(4자리)·소호(6자리) 제목 사전.
+ *
+ * 관세청 HSK 사전은 10자리 말단 품명만 담고 있어 "기타 / Other"처럼
+ * 제품 종류가 빠진 행이 많다(4202.12·4202.22·4202.92가 모두 "기타").
+ * 실제 구분 기준은 상위 호·소호 제목에만 있으므로 WCO HS 2022 제목
+ * (UN Comtrade 공개 분류표 H6, `public/data/hsHeadings.json`)을 함께 쓴다.
+ * 로드 실패 시 빈 사전으로 두어 추천 흐름은 그대로 동작한다.
+ */
+let headingCache: Record<string, string> | null = null;
+let headingLoadPromise: Promise<Record<string, string>> | null = null;
+
+export async function loadHSHeadings(): Promise<Record<string, string>> {
+  if (headingCache) return headingCache;
+  if (headingLoadPromise) return headingLoadPromise;
+
+  headingLoadPromise = (async () => {
+    try {
+      if (typeof fetch !== 'function') return {};
+      const res = await fetch(dataUrl().replace(/hsCodes\.json$/, 'hsHeadings.json'));
+      if (!res.ok) throw new Error(`HS 호·소호 제목 로드 실패 (${res.status})`);
+      headingCache = (await res.json()) as Record<string, string>;
+      return headingCache;
+    } catch (err) {
+      console.warn('HS 호·소호 제목 로드 실패, 제목 없이 진행:', err);
+      headingCache = {};
+      return headingCache;
+    } finally {
+      headingLoadPromise = null;
+    }
+  })();
+
+  return headingLoadPromise;
+}
+
+/** 10자리 코드의 호(4자리)·소호(6자리) 제목. 사전에 없으면 빈 문자열. */
+export async function lookupHSHierarchy(
+  code: string,
+): Promise<{ heading: string; subheading: string }> {
+  const headings = await loadHSHeadings();
+  const digits = code.replace(/\D/g, '');
+  return {
+    heading: headings[digits.slice(0, 4)] ?? '',
+    subheading: headings[digits.slice(0, 6)] ?? '',
+  };
+}
+
+const TITLE_STOPWORDS = new Set([
+  'with', 'and', 'for', 'the', 'other', 'made', 'type', 'kind', 'from', 'not', 'than', 'used', 'use',
+]);
+/** 영어 복수형을 단수로 — "shoes"·"soles"·"uppers"가 제목의 "shoe"·"sole"·"upper"와 맞게. */
+const singularize = (word: string) =>
+  word
+    .replace(/ies$/, 'y')
+    .replace(/(x|ch|sh|ss)es$/, '$1')
+    .replace(/([^s])s$/, '$1');
+
+function titleTokens(text: string): string[] {
+  return Array.from(new Set(
+    text
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length >= 3 && !TITLE_STOPWORDS.has(word))
+      .map(singularize)
+  ));
+}
+
+const headingIndexCache = new WeakMap<
+  Record<string, string>,
+  Array<{ code: string; title: string; words: Set<string> }>
+>();
+
+/**
+ * 영문 품명 단어가 소호(6자리) 제목에 몇 개 들어가는지로 소호를 고른다.
+ * AI가 분류 방향을 틀려도("frozen mackerel" → 0302 신선) 제목에 단어가 그대로 있는
+ * 소호(0303.54 "Fish; frozen, mackerel")를 후보에 넣기 위한 보조 경로다.
+ * 단어 하나만 겹치는 경우는 잡음이 커서("electric") 두 단어 이상 일치만 인정한다.
+ */
+export function rankHeadingTitles(
+  query: string,
+  headings: Record<string, string>,
+  limit = 2,
+): string[] {
+  const tokens = titleTokens(query);
+  if (tokens.length < 2) return [];
+
+  let index = headingIndexCache.get(headings);
+  if (!index) {
+    index = Object.entries(headings)
+      .filter(([code]) => code.length === 6)
+      .map(([code, title]) => ({ code, title, words: new Set(titleTokens(title)) }));
+    headingIndexCache.set(headings, index);
+  }
+
+  return index
+    .map(({ code, title, words }) => ({
+      code,
+      title,
+      score: tokens.filter((token) => words.has(token)).length,
+    }))
+    .filter(({ score }) => score >= 2)
+    .sort((a, b) =>
+      b.score - a.score
+      || a.title.length - b.title.length
+      || a.code.localeCompare(b.code))
+    .slice(0, limit)
+    .map(({ code }) => code);
+}
+
+/** 품명으로 호·소호 제목 사전을 검색해 6자리 소호를 반환한다. */
+export async function searchHSHeadingsByKeyword(query: string, limit = 2): Promise<string[]> {
+  return rankHeadingTitles(query, await loadHSHeadings(), limit);
+}
+
 /** 숫자 10자리 형식과 공식 관세청 HSK 사전의 정확 일치를 함께 검증합니다. */
 export async function isOfficialTenDigitHSK(code: string): Promise<boolean> {
   if (!/^\d{10}$/.test(code)) return false;

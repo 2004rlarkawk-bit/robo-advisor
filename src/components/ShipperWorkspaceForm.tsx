@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { FileSignature, FileText, PenLine, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { FileSignature, FileText, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
+import PortLocodeHint from './trade/PortLocodeHint';
 import {
   EXPORT_POD_OPTIONS,
   EXPORT_POL_OPTIONS,
@@ -7,11 +8,13 @@ import {
   OTHER_FOREIGN_PORT_VALUE,
   normalizeExportPortValue,
 } from '../constants/ports';
-import type { Incoterms, NumericInput, ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
+import type { FreightTerms, Incoterms, NumericInput, ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
+import { deriveFreightTerms, isFreightTermsUnusual, FREIGHT_TERMS_LABEL } from '../utils/freightTerms';
 import type { TradeAttachment } from '../types/tradeFormData';
 import CountrySelect from './CountrySelect';
 import TradeAttachmentUploader from './TradeAttachmentUploader';
 import { useShipperHSCodeSuggestions } from '../hooks/useShipperHSCodeSuggestions';
+import { buildHSItemDetails, normalizeGoodsDescription } from '../services/goodsDescriptionService';
 import {
   fetchFrequentTradePartners,
   type FrequentTradePartner,
@@ -202,8 +205,88 @@ export default function ShipperWorkspaceForm({
     return renderFixNoticeCard(true);
   };
   const invoiceSummary = summarizeShipperItems(items);
+  // 운임 지급조건 — 미선택이면 Incoterms 원칙값을 제안값으로 보여주고, 원칙과 어긋나면 경고만 띄운다(차단 아님).
+  const suggestedFreightTerms = deriveFreightTerms(profile.incoterms ?? '');
+  const freightTermsValue = (profile.freightTerms as FreightTerms) ?? '';
+  const freightTermsUnusual = isFreightTermsUnusual(profile.incoterms ?? '', freightTermsValue);
   const hasInvalidWeight = isGrossWeightBelowNet(profile.grossWeight, profile.netWeight);
   const hsCodeSuggestions = useShipperHSCodeSuggestions(items);
+  // 품목별 자연어 설명 → 영문 품명 정리 (AI). 입력값은 서류에 저장하지 않는 보조 입력이다.
+  const [describeText, setDescribeText] = useState<Record<string, string>>({});
+  const [describeBusy, setDescribeBusy] = useState<Record<string, boolean>>({});
+  const [describeError, setDescribeError] = useState<Record<string, string>>({});
+
+  /**
+   * "검정색 남자 가죽 재킷" → 품명 "Men's Leather Jacket" + 상세 "Black" 으로 채우고,
+   * 정리 과정에서 얻은 재질·성별 속성을 넣어 HS Code를 다시 추천한다.
+   */
+
+  /** 자연어 설명 → 영문 품명 정리 입력칸. 추가 확인사항·되묻기 패널에서 함께 쓴다. */
+  const renderDescribeBox = (item: ShipperItem, title: string) => (
+      <div className="shipper-describe">
+        <label className="form-label" htmlFor={`describe-${item.id}`}>
+          {title}
+        </label>
+        <div className="shipper-describe-row">
+          <input
+            id={`describe-${item.id}`}
+            className="form-input"
+            value={describeText[item.id] ?? ''}
+            onChange={(event) => setDescribeText((current) => ({ ...current, [item.id]: event.target.value }))}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                void handleNormalizeDescription(item);
+              }
+            }}
+            placeholder="예: 검정색 남자 가죽 재킷입니다"
+            disabled={describeBusy[item.id]}
+          />
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={describeBusy[item.id] || !(describeText[item.id] ?? '').trim()}
+            onClick={() => void handleNormalizeDescription(item)}
+          >
+            <Sparkles size={14} /> {describeBusy[item.id] ? '정리 중…' : 'AI로 품명 정리'}
+          </button>
+        </div>
+        <small className="form-help">
+          한글로 편하게 적으면 영문 품명과 상세 정보로 정리하고 HS Code를 다시 추천합니다.
+        </small>
+        {describeError[item.id] && (
+          <small className="form-help form-help-error" role="alert">{describeError[item.id]}</small>
+        )}
+      </div>
+  );
+
+  const handleNormalizeDescription = async (item: ShipperItem) => {
+    const text = (describeText[item.id] ?? '').trim();
+    if (!text) {
+      setDescribeError((current) => ({ ...current, [item.id]: '품목 설명을 입력해 주세요.' }));
+      return;
+    }
+    setDescribeBusy((current) => ({ ...current, [item.id]: true }));
+    setDescribeError((current) => ({ ...current, [item.id]: '' }));
+    try {
+      const result = await normalizeGoodsDescription(text, item.itemName);
+      updateItem(item.id, 'itemName', result.baseName);
+      updateItem(item.id, 'detail', result.detail);
+      hsCodeSuggestions.recommendWithDetails(
+        item.id,
+        buildHSItemDetails(result.detail, result.attributes),
+        result.baseName,
+      );
+      setDescribeText((current) => ({ ...current, [item.id]: '' }));
+    } catch (error) {
+      setDescribeError((current) => ({
+        ...current,
+        [item.id]: error instanceof Error ? error.message : '품명을 정리하지 못했습니다.',
+      }));
+    } finally {
+      setDescribeBusy((current) => ({ ...current, [item.id]: false }));
+    }
+  };
   const [showItemValidation, setShowItemValidation] = useState(false);
   const [incotermsPlaceSource, setIncotermsPlaceSource] = useState<'loadPort' | 'dischargePort' | null>(null);
   const [forceCustomLoadPort, setForceCustomLoadPort] = useState(false);
@@ -601,6 +684,29 @@ export default function ShipperWorkspaceForm({
                     </small>
                   )}
                 </div>
+                <div className="form-group" data-field="itemDetail">
+                  <label className="form-label">상세 정보 (선택)</label>
+                  <div className="shipper-detail-row">
+                    <input
+                      className="form-input"
+                      value={item.detail ?? ''}
+                      onChange={(event) => updateItem(item.id, 'detail', event.target.value)}
+                      placeholder="예: Blue Ink, Plastic Body"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      title="상세 정보를 반영해 HS Code를 다시 추천합니다"
+                      disabled={!(item.detail ?? '').trim() || item.itemName.trim().length < 3}
+                      onClick={() => hsCodeSuggestions.recommendWithDetails(
+                        item.id,
+                        buildHSItemDetails(item.detail),
+                      )}
+                    >
+                      HS 재추천
+                    </button>
+                  </div>
+                </div>
                 <div className="form-group" data-field="hsCode"><label className="form-label">HS Code <Req /></label><input className="form-input" value={item.hsCode} onChange={(e) => {
                   hsCodeSuggestions.markHSCodeManuallyEdited(item.id);
                   updateItem(item.id, 'hsCode', e.target.value);
@@ -666,8 +772,9 @@ export default function ShipperWorkspaceForm({
                             ))}
                           </div>
                           <small className="shipper-hs-choice-hint">
-                            위 항목 중 하나를 선택하면 그 범위에서 HS Code를 추천합니다. 해당 항목이 없다면 품명을 더 구체적으로 입력해 주세요.
+                            위 항목 중 하나를 선택하면 그 범위에서 HS Code를 추천합니다. 해당 항목이 없다면 아래에 설명을 적어 주세요.
                           </small>
+                          {renderDescribeBox(item, '또는 한글로 설명해 주세요')}
                         </div>
                       )}
 
@@ -731,6 +838,7 @@ export default function ShipperWorkspaceForm({
                               ))}
                             </ul>
                           )}
+                          {renderDescribeBox(item, '상세 정보를 더 입력해 주세요')}
                         </div>
                       )}
 
@@ -804,10 +912,32 @@ export default function ShipperWorkspaceForm({
         <summary className="form-section-summary"><span>6. 항만 및 일정</span>{sectionResetButton(6)}</summary>
         {fixNoticeCard(6)}
         <div className="form-grid">
-          <div className="form-group" data-field="loadPort"><label className="form-label">선적항 POL {profile.incoterms === 'FOB' && <Req />}</label><select className="form-input" value={loadPortSelection} onChange={(e) => { if (e.target.value === OTHER_DOMESTIC_PORT_VALUE) setForceCustomLoadPort(true); else { setForceCustomLoadPort(false); onProfilePatch({ loadPort: e.target.value }); } }}><option value="">선적항을 선택하세요</option>{EXPORT_POL_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_DOMESTIC_PORT_VALUE}>기타 국내항</option></select>{loadPortSelection === OTHER_DOMESTIC_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 국내항 직접 입력" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })} placeholder="기타 국내항 직접 입력" />}</div>
-          <div className="form-group" data-field="dischargePort"><label className="form-label">도착항 POD {(profile.incoterms === 'CIF' || profile.incoterms === 'CFR') && <Req />}</label><select className="form-input" value={dischargePortSelection} onChange={(e) => { if (e.target.value === OTHER_FOREIGN_PORT_VALUE) setForceCustomDischargePort(true); else { setForceCustomDischargePort(false); onProfilePatch({ dischargePort: e.target.value }); } }}><option value="">도착항을 선택하세요</option>{EXPORT_POD_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_FOREIGN_PORT_VALUE}>기타 해외항</option></select>{dischargePortSelection === OTHER_FOREIGN_PORT_VALUE && <input className="form-input shipper-custom-port-input" aria-label="기타 해외항 직접 입력" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })} placeholder="기타 해외항 직접 입력" />}</div>
+          <div className="form-group" data-field="loadPort"><label className="form-label">선적항 POL {profile.incoterms === 'FOB' && <Req />}</label><select className="form-input" value={loadPortSelection} onChange={(e) => { if (e.target.value === OTHER_DOMESTIC_PORT_VALUE) setForceCustomLoadPort(true); else { setForceCustomLoadPort(false); onProfilePatch({ loadPort: e.target.value }); } }}><option value="">선적항을 선택하세요</option>{EXPORT_POL_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_DOMESTIC_PORT_VALUE}>기타 국내항</option></select>{loadPortSelection === OTHER_DOMESTIC_PORT_VALUE && <><input className="form-input shipper-custom-port-input" aria-label="기타 국내항 직접 입력" value={profile.loadPort} onChange={(e) => onProfilePatch({ loadPort: e.target.value })} placeholder="기타 국내항 직접 입력" /><PortLocodeHint value={profile.loadPort} onApply={(value) => onProfilePatch({ loadPort: value })} /></>}</div>
+          <div className="form-group" data-field="dischargePort"><label className="form-label">도착항 POD {(profile.incoterms === 'CIF' || profile.incoterms === 'CFR') && <Req />}</label><select className="form-input" value={dischargePortSelection} onChange={(e) => { if (e.target.value === OTHER_FOREIGN_PORT_VALUE) setForceCustomDischargePort(true); else { setForceCustomDischargePort(false); onProfilePatch({ dischargePort: e.target.value }); } }}><option value="">도착항을 선택하세요</option>{EXPORT_POD_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_FOREIGN_PORT_VALUE}>기타 해외항</option></select>{dischargePortSelection === OTHER_FOREIGN_PORT_VALUE && <><input className="form-input shipper-custom-port-input" aria-label="기타 해외항 직접 입력" value={profile.dischargePort} onChange={(e) => onProfilePatch({ dischargePort: e.target.value })} placeholder="기타 해외항 직접 입력" /><PortLocodeHint value={profile.dischargePort} onApply={(value) => onProfilePatch({ dischargePort: value })} /></>}</div>
           <div className="form-group" data-field="departureDate"><label className="form-label">희망 출항일</label><input type="date" className="form-input" value={profile.departureDate} onChange={(e) => onProfilePatch({ departureDate: e.target.value })} /></div>
+          {/* 도착예정일 — 날짜 검증(도착<출항 등) 경고가 이 칸으로 이동·강조되도록 data-field를 둔다 */}
+          <div className="form-group" data-field="arrivalDate"><label className="form-label">도착 예정일 <span className="optional-label">(선택)</span></label><input type="date" className="form-input" value={profile.arrivalDate} min={profile.departureDate || undefined} onChange={(e) => onProfilePatch({ arrivalDate: e.target.value })} /></div>
           <div className="form-group"><label className="form-label">운송방식</label><select className="form-input" value={profile.loadingMode ?? ''} onChange={(e) => onProfilePatch({ loadingMode: e.target.value === '' ? undefined : e.target.value as TradeProfile['loadingMode'] })}><option value="">미정</option><option value="FCL">FCL</option><option value="LCL">LCL</option></select></div>
+          {/* 복합운송 구간 — 내륙 집하지·최종 인도지가 항구와 다를 때 기재(House B/L 필수 기재사항) */}
+          <div className="form-group"><label className="form-label">화물 인수지 (Place of Receipt)</label><input className="form-input" value={profile.placeOfReceipt ?? ''} onChange={(e) => onProfilePatch({ placeOfReceipt: e.target.value })} placeholder="비우면 선적항과 동일하게 처리" /></div>
+          <div className="form-group"><label className="form-label">화물 인도지 (Place of Delivery)</label><input className="form-input" value={profile.placeOfDelivery ?? ''} onChange={(e) => onProfilePatch({ placeOfDelivery: e.target.value })} placeholder="비우면 도착항과 동일하게 처리" /></div>
+          <div className="form-group">
+            <label className="form-label">운임 지급조건 (Freight Terms)</label>
+            <select
+              className="form-input"
+              value={freightTermsValue}
+              onChange={(e) => onProfilePatch({ freightTerms: e.target.value })}
+            >
+              <option value="">선택하세요</option>
+              <option value="PREPAID">{FREIGHT_TERMS_LABEL.PREPAID}</option>
+              <option value="COLLECT">{FREIGHT_TERMS_LABEL.COLLECT}</option>
+            </select>
+            {freightTermsUnusual && (
+              <small className="form-help form-help-error" role="alert">
+                {profile.incoterms} 조건은 통상 {suggestedFreightTerms}입니다. 당사자 합의로 다르게 정한 경우에만 그대로 두세요.
+              </small>
+            )}
+          </div>
         </div>
       </details>
 

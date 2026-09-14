@@ -88,6 +88,12 @@ verify_jwt = true
 import_map = "./functions/import-document-analysis/deno.json"
 entrypoint = "./functions/import-document-analysis/index.ts"
 
+[functions.send-forwarder-request-email]
+enabled = true
+verify_jwt = true
+import_map = "./functions/send-forwarder-request-email/deno.json"
+entrypoint = "./functions/send-forwarder-request-email/index.ts"
+
 [functions.law-search]
 enabled = true
 verify_jwt = false

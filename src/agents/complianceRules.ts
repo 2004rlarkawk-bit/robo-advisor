@@ -1,6 +1,8 @@
 import { TradeProfile, ValidationIssue, DocumentType, InvoiceData, PackingListData, InvoiceItem } from '../types';
 import { AgentLog, createLog } from './types';
 import { isLcPayment, isNonLcPayment } from './paymentTerms';
+import { formatPortLabel, portCountryCode, resolvePort, type PortEntry } from '../services/portLocodeService';
+import { EXPORT_POD_OPTIONS, EXPORT_POL_OPTIONS, normalizePortComparisonKey } from '../constants/ports';
 
 /**
  * 검증 정책 (타입으로 강제)
@@ -41,6 +43,13 @@ export const RULE_POLICY = {
   'r16-generic-item-name':    { severity: 'error',   overridable: true },
   'r17-hs-chapter-mismatch':  { severity: 'error',   overridable: true },
   'r19-consignee-country-address': { severity: 'error', overridable: true },
+  'r20-port-not-found':       { severity: 'warning', overridable: false },
+  'r20-port-typo':            { severity: 'warning', overridable: false },
+  'r21-arrival-before-departure': { severity: 'error', overridable: true },
+  'r21-transit-too-long':     { severity: 'warning', overridable: false },
+  'r21-invoice-date-future':  { severity: 'warning', overridable: false },
+  'r21-invoice-after-departure': { severity: 'warning', overridable: false },
+  'r21-date-out-of-range':    { severity: 'warning', overridable: false },
 } as const satisfies Record<string, RulePolicy>;
 
 export type ComplianceRuleId = keyof typeof RULE_POLICY;
@@ -78,17 +87,31 @@ const SEA_ONLY = new Set(['FAS', 'FOB', 'CFR', 'CIF']); // 해상 전용
 const STATE_KW = ['FROZEN', 'FRESH', 'CHILLED', 'LIVE', 'DRIED', 'SMOKED', 'SALTED', 'BOILED'];
 const FORM_KW = ['WHOLE ROUND', 'WHOLE', 'ROUND', 'FILLET', 'GUTTED', 'HEADLESS', 'H&G', 'HGT', 'STEAK', 'LOIN', 'CUBE', 'PORTION', 'DRESSED', 'GILLED', 'SKINLESS', 'SKIN ON'];
 
-// R5 항구명 → 국가코드 추정(경량 사전; 미상은 null → 판정 보류)
-function portCountry(port?: string): string | null {
-  const p = (port || '').toLowerCase();
-  if (!p.trim()) return null;
-  if (/korea|한국|대한민국|부산|busan|인천|incheon|광양|gwangyang|평택|pyeongtaek|울산|ulsan|군산|목포|\bkr\b|krpus|krinc/.test(p)) return 'KR';
-  if (/japan|일본|osaka|오사카|tokyo|도쿄|kobe|고베|yokohama|요코하마|nagoya|\bjp\b/.test(p)) return 'JP';
-  if (/china|중국|shanghai|상하이|qingdao|칭다오|ningbo|닝보|shenzhen|\bcn\b/.test(p)) return 'CN';
-  if (/usa|america|미국|los angeles|long beach|new york|\bla\b|\bus\b/.test(p)) return 'US';
-  if (/vietnam|베트남|haiphong|ho chi minh|\bvn\b/.test(p)) return 'VN';
-  return null;
+// R5 항구명 → 국가코드 추정.
+// UN/LOCODE 사전(portLocodeService, 17,516개 항구)이 로드돼 있으면 전 세계 범위로 맞추고,
+// 못 불러온 환경(테스트·오프라인)에서는 서비스 안의 정규식 폴백(5개국 주요 항구)을 쓴다.
+// 미상은 null → 판정 보류.
+const portCountry = (port?: string): string | null => portCountryCode(port);
+
+/**
+ * R20 제안 항구를 폼 값으로 바꿀 때: 선택 목록에 같은 항구가 있으면 그 표준값("Busan Port")을,
+ * 없으면 "Rotterdam (NLRTM)" 처럼 코드까지 붙인 값을 쓴다.
+ */
+function preferredPortValue(entry: PortEntry): string {
+  const key = normalizePortComparisonKey(entry.name);
+  const option = [...EXPORT_POL_OPTIONS, ...EXPORT_POD_OPTIONS]
+    .find((opt) => normalizePortComparisonKey(opt.value) === key);
+  return option?.value ?? formatPortLabel(entry);
 }
+
+// 날짜 룰 공통: "YYYY-MM-DD" → Date(자정). 형식이 아니면 null → 판정 보류.
+function parseDay(value?: string): Date | null {
+  const text = (value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const date = new Date(`${text}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // R6 HS 4단위 → 통상 신고 단위
 const HS4_UNIT: Record<string, string> = {
@@ -158,6 +181,51 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     }
   }
 
+  // ── R21. 날짜 이상치 ────────────────────────────────
+  // R2(출항일 범위)·R14(L/C 개설일 > 선적일) 외에 순서·범위가 어긋난 날짜를 잡는다.
+  // 폼은 <input type="date"> 라 존재하지 않는 날짜는 이미 막히므로 여기서는 "존재하지만 말이 안 되는" 값만 본다.
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const dep = parseDay(profile.departureDate);
+  const arr = parseDay(profile.arrivalDate);
+  const invDate = parseDay(profile.invoiceDate);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+
+  // 도착일 < 출발일 — 국제 해상운송에서 성립하지 않는다.
+  if (dep && arr && arr < dep) {
+    issues.push(mk('r21-arrival-before-departure', 'transport_request', 'arrivalDate',
+      `도착예정일(${fmt(arr)})이 출항일(${fmt(dep)})보다 빠릅니다. 두 날짜를 확인하세요. 환적·일자 변경선 등 특수 사유이면 사유 입력 후 진행하세요.`));
+  } else if (dep && arr && (arr.getTime() - dep.getTime()) / DAY_MS > 120) {
+    // 해상 운송이 120일을 넘는 경우는 드물다 — 연도 오타 가능성 안내.
+    issues.push(mk('r21-transit-too-long', 'transport_request', 'arrivalDate',
+      `출항일(${fmt(dep)})부터 도착예정일(${fmt(arr)})까지 ${Math.round((arr.getTime() - dep.getTime()) / DAY_MS)}일입니다. 해상 운송치고 지나치게 길어 연도·월 오타가 의심됩니다.`));
+  }
+
+  // 송장 작성일이 오늘보다 뒤 — 아직 오지 않은 날짜로 발행된 송장은 은행·세관에서 문제된다.
+  if (invDate && invDate > today) {
+    issues.push(mk('r21-invoice-date-future', 'invoice', 'invoiceDate',
+      `송장 작성일(${fmt(invDate)})이 오늘(${fmt(today)})보다 뒤입니다. 미래 날짜로 발행된 송장은 접수가 거절될 수 있으니 날짜를 확인하세요.`));
+  }
+  // 송장 작성일 > 출항일 — 통상 송장은 선적 전·당일에 발행한다.
+  if (invDate && dep && invDate > dep) {
+    issues.push(mk('r21-invoice-after-departure', 'invoice', 'invoiceDate',
+      `송장 작성일(${fmt(invDate)})이 출항일(${fmt(dep)})보다 늦습니다. 상업송장은 보통 선적 전에 발행하므로 두 날짜를 확인하세요.`));
+  }
+
+  // 비현실적 범위(오늘 기준 1년 전 ~ 2년 후) — 출항일은 R2가 보고, 나머지 날짜는 여기서 본다.
+  const rangeMin = new Date(today); rangeMin.setFullYear(today.getFullYear() - 1);
+  const rangeMax = new Date(today); rangeMax.setFullYear(today.getFullYear() + 2);
+  const rangeChecks: Array<{ field: keyof TradeProfile; label: string; docType: DocumentType; date: Date | null }> = [
+    { field: 'invoiceDate', label: '송장 작성일', docType: 'invoice', date: invDate },
+    { field: 'arrivalDate', label: '도착예정일', docType: 'transport_request', date: arr },
+    { field: 'lcDate', label: 'L/C 개설일', docType: 'invoice', date: parseDay(profile.lcDate) },
+  ];
+  for (const { field, label, docType, date } of rangeChecks) {
+    if (date && (date < rangeMin || date > rangeMax)) {
+      issues.push(mk('r21-date-out-of-range', docType, field,
+        `${label}(${fmt(date)})이 현재로부터 비현실적으로 먼 날짜입니다. 연도를 다시 확인하세요.`));
+    }
+  }
+
   // ── R3. Incoterms ↔ 항구 정합성 (error) ─────────────
   // 도착지 지칭 조건(CIF 등)은 도착항(⑥To) 명기 필수, 선적지 지칭(FOB 등)은 선적항(⑤From) 명기 필수.
   // 실제 버그였던 "CIF 광양(선적항)"은 terms 파생을 도착항으로 고쳐 방지하고, 여기서 항구 누락을 error로 잡는다.
@@ -202,6 +270,34 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
   } else if (lc && dc && lc === dc) {
     issues.push(mk('r5-same-country-ports', 'transport_request', 'loadPort',
       `선적항과 도착항이 같은 국가(${lc})로 보입니다(국내운송 의심). 보세운송·반송·FTZ 등 정상 사유이면 사유 입력 후 진행하세요.`));
+  }
+
+  // ── R20. 항구명 실존 확인 (warning) ─────────────────────
+  // UN/LOCODE 항구 사전에서 입력한 항구를 찾는다. 오타면 가장 비슷한 항구를 제안하고(fix 로 바로 반영 가능),
+  // 비슷한 것도 없으면 철자·국가명 확인을 안내한다. 사전을 못 불러온 환경에서는 판정을 보류한다.
+  const portChecks: Array<{ field: 'loadPort' | 'dischargePort'; label: string; value: string }> = [
+    { field: 'loadPort', label: '선적항', value: load },
+    { field: 'dischargePort', label: '도착항', value: disch },
+  ];
+  for (const { field, label, value } of portChecks) {
+    if (!value) continue;
+    const resolution = resolvePort(value);
+    if (resolution.status === 'unavailable') {
+      skipLog(`R20 ${label} 실존 확인 건너뜀 — UN/LOCODE 사전 미로드.`);
+      continue;
+    }
+    if (resolution.status === 'fuzzy' && resolution.match) {
+      const best = resolution.match;
+      const alternatives = resolution.suggestions.filter((s) => s.locode !== best.locode).map(formatPortLabel);
+      issues.push(mk('r20-port-typo', 'transport_request', field,
+        `${label} "${value}"은(는) UN/LOCODE 항구 목록에 없습니다. "${formatPortLabel(best)}"을(를) 뜻하신 건가요?`
+        + (alternatives.length ? ` 그 밖의 후보: ${alternatives.join(', ')}.` : '')
+        + ' 서류의 항구명은 정확한 영문 표기여야 통관·선적 서류가 맞아떨어집니다.',
+        { fix: { field, value: preferredPortValue(best), label: `${formatPortLabel(best)}(으)로 수정` } }));
+    } else if (resolution.status === 'unknown') {
+      issues.push(mk('r20-port-not-found', 'transport_request', field,
+        `${label} "${value}"을(를) UN/LOCODE 항구 목록(17,516개)에서 찾지 못했습니다. 철자를 확인하거나 국가명을 함께 적어 주세요. 예: "OSAKA, JAPAN".`));
+    }
   }
 
   // ── R6. HS 단위 (warning) ───────────────────────────

@@ -7,17 +7,7 @@
  * 운영 상태는 forwarderCaseService를 통해 workflow_data.forwarderCase에 저장한다.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  CheckCircle2,
-  CornerUpLeft,
-  Inbox,
-  MoreHorizontal,
-  RefreshCw,
-  Search,
-  Ship,
-} from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, CornerUpLeft, Download, Inbox, MoreHorizontal, RefreshCw, Search, Ship } from 'lucide-react';
 import {
   FORWARDER_STAGE_LABEL,
   FORWARDER_STAGE_ORDER,
@@ -25,7 +15,14 @@ import {
   type ForwarderCaseState,
   type ForwarderImportCase,
 } from '../../types/forwarderCase';
-import type { CargoTrackingResult, ImportDocumentMeta } from '../../types/importTrade';
+import type {
+  CargoTrackingResult,
+  DispatchSettlement,
+  DispatchVehicleType,
+  ImportDispatchRequest,
+  ImportDocumentMeta,
+} from '../../types/importTrade';
+import { downloadDispatchRequestDocx } from '../../services/importDispatchDocxService';
 import {
   deriveForwarderCase,
   listForwarderCases,
@@ -91,6 +88,9 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
   // 이슈 종결 시 확인 내용(판단 근거)을 함께 기록한다
   const [noteFormId, setNoteFormId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
+  const [dispatchBusy, setDispatchBusy] = useState(false);
+  /** 배차 의뢰 입력 — 저장 전까지 화면에만 두고, 생성 시 케이스에 기록한다. */
+  const [dispatchDraft, setDispatchDraft] = useState<Record<string, ImportDispatchRequest>>({});
   const [queueFilter, setQueueFilter] = useState<QueueFilter>('active');
 
   const load = useCallback(async () => {
@@ -220,6 +220,22 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
     const checks = selected.issues.filter((issue) => issue.severity === 'check');
     const infos = selected.issues.filter((issue) => issue.severity === 'info');
     const canFinishReview = selected.blockerCount === 0;
+    // 화주가 입력한 배송 요청 — 배차 의뢰서의 배송지 칸으로 그대로 넘어간다.
+    const deliveryRequest = selected.snapshot.deliveryRequest;
+    const dispatch: ImportDispatchRequest = dispatchDraft[selected.tradeId]
+      ?? (selected.trade.forwarderCase as ForwarderCaseState | null)?.dispatchRequest
+      ?? {
+        carrierCompany: '', attention: '', doNo: '', terminal: '',
+        pickupPlace: '', pickupAt: '', emptyReturnPlace: '', emptyReturnDue: '',
+        vehicleType: '', settlement: '', remarks: '',
+        vehicleNo: '', driverName: '', driverTel: '', issuedAt: '',
+      };
+    const patchDispatch = (patch: Partial<ImportDispatchRequest>) => {
+      setDispatchDraft((current) => ({
+        ...current,
+        [selected.tradeId]: { ...dispatch, ...patch },
+      }));
+    };
     const returnPending = Boolean(selected.returnRequest && !selected.returnRequest.resolvedAt);
 
     return (
@@ -641,6 +657,148 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', onDi
               )}
               notice="이 건의 B/L·선박·화물 정보로 도착통지서를 생성해 화주에게 전달하세요. 청구 금액란은 비워서 발행되며, 전달본은 아래에 첨부해 이력으로 보관할 수 있습니다."
             />
+
+            {/* 배차 의뢰서 — D/O를 받은 뒤 운송사에 보내는 서류.
+                상차지·공컨 반납지·차량은 포워더가 선사·터미널과 정하고,
+                배송지 관련 칸은 화주가 입력한 배송 요청에서 자동으로 채워진다. */}
+            <section className="form-card import-card">
+              <div className="import-card-heading">
+                <div><h2>배차 의뢰서</h2></div>
+                <p>D/O 수령 후 운송사에 보낼 배차 의뢰서를 작성합니다. 배송지 정보는 화주 요청에서 자동으로 들어갑니다.</p>
+              </div>
+
+              {deliveryRequest ? (
+                <div className="fwd-delivery-note">
+                  <strong>화주 배송 요청</strong>
+                  <p>
+                    {deliveryRequest.deliveryAddress || '(배송지 미입력)'}
+                    {deliveryRequest.deliveryAt ? ` · 희망 ${deliveryRequest.deliveryAt.replace('T', ' ').slice(0, 16)}` : ''}
+                  </p>
+                  {(deliveryRequest.contactName || deliveryRequest.contactTel) && (
+                    <p>수령 담당자 {deliveryRequest.contactName} {deliveryRequest.contactTel}</p>
+                  )}
+                  {deliveryRequest.remarks && <p>요청사항: {deliveryRequest.remarks}</p>}
+                </div>
+              ) : (
+                <div className="form-message info" role="status">
+                  화주가 아직 배송 요청을 입력하지 않았습니다. 배송지·희망일시는 직접 확인해 주세요.
+                </div>
+              )}
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-carrier">수신 운송사</label>
+                  <input id="dr-carrier" className="form-input" value={dispatch.carrierCompany}
+                    onChange={(e) => patchDispatch({ carrierCompany: e.target.value })} placeholder="운송사 상호" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-attn">참조 (담당자)</label>
+                  <input id="dr-attn" className="form-input" value={dispatch.attention}
+                    onChange={(e) => patchDispatch({ attention: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-do">D/O 번호</label>
+                  <input id="dr-do" className="form-input" value={dispatch.doNo}
+                    onChange={(e) => patchDispatch({ doNo: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-terminal">터미널 / 장치장</label>
+                  <input id="dr-terminal" className="form-input" value={dispatch.terminal}
+                    onChange={(e) => patchDispatch({ terminal: e.target.value })} placeholder="예: 부산신항 PNIT" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-pickup">상차지</label>
+                  <input id="dr-pickup" className="form-input" value={dispatch.pickupPlace}
+                    onChange={(e) => patchDispatch({ pickupPlace: e.target.value })} placeholder="비우면 터미널과 동일" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-pickup-at">상차 요청일시</label>
+                  <input id="dr-pickup-at" type="datetime-local" className="form-input" value={dispatch.pickupAt}
+                    onChange={(e) => patchDispatch({ pickupAt: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-empty">공컨테이너 반납지</label>
+                  <input id="dr-empty" className="form-input" value={dispatch.emptyReturnPlace}
+                    onChange={(e) => patchDispatch({ emptyReturnPlace: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-empty-due">반납기한</label>
+                  <input id="dr-empty-due" type="date" className="form-input" value={dispatch.emptyReturnDue}
+                    onChange={(e) => patchDispatch({ emptyReturnDue: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-vehicle">요청 차량</label>
+                  <select id="dr-vehicle" className="form-input" value={dispatch.vehicleType}
+                    onChange={(e) => patchDispatch({ vehicleType: e.target.value as DispatchVehicleType })}>
+                    <option value="">선택하세요</option>
+                    <option value="트랙터">트랙터</option>
+                    <option value="카고">카고</option>
+                    <option value="윙바디">윙바디</option>
+                    <option value="기타">기타</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-settle">운임 정산</label>
+                  <select id="dr-settle" className="form-input" value={dispatch.settlement}
+                    onChange={(e) => patchDispatch({ settlement: e.target.value as DispatchSettlement })}>
+                    <option value="">선택하세요</option>
+                    <option value="선불">선불</option>
+                    <option value="착불">착불</option>
+                    <option value="월마감">월마감</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label" htmlFor="dr-remarks">특이사항</label>
+                  <input id="dr-remarks" className="form-input" value={dispatch.remarks}
+                    onChange={(e) => patchDispatch({ remarks: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="import-card-heading" style={{ marginTop: 14 }}>
+                <div><h2 style={{ fontSize: 15 }}>배차 회신</h2></div>
+                <p>운송사에서 차량이 확정되면 여기에 기록해 두세요.</p>
+              </div>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-vno">차량번호</label>
+                  <input id="dr-vno" className="form-input" value={dispatch.vehicleNo}
+                    onChange={(e) => patchDispatch({ vehicleNo: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-driver">기사명</label>
+                  <input id="dr-driver" className="form-input" value={dispatch.driverName}
+                    onChange={(e) => patchDispatch({ driverName: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="dr-driver-tel">기사 연락처</label>
+                  <input id="dr-driver-tel" className="form-input" value={dispatch.driverTel}
+                    onChange={(e) => patchDispatch({ driverTel: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="document-preview-actions" style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={dispatchBusy || !dispatch.carrierCompany.trim()}
+                  onClick={() => {
+                    setDispatchBusy(true);
+                    void persist(selected, { dispatchRequest: { ...dispatch, issuedAt: new Date().toISOString() } })
+                      .then(() => downloadDispatchRequestDocx(selected, dispatch, deliveryRequest, issuerName))
+                      .catch((err) => {
+                        console.error('배차 의뢰서 생성 실패:', err);
+                        setError('배차 의뢰서를 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+                      })
+                      .finally(() => setDispatchBusy(false));
+                  }}
+                >
+                  <Download size={16} /> {dispatchBusy ? '생성 중…' : '배차 의뢰서 생성·다운로드'}
+                </button>
+                {!dispatch.carrierCompany.trim() && (
+                  <p className="fwd-action-hint">수신 운송사를 입력하면 생성할 수 있습니다.</p>
+                )}
+              </div>
+            </section>
           </>
         )}
 

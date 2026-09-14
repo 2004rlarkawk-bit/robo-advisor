@@ -1,3 +1,4 @@
+import { mapTransportRequestToSchema } from '../../services/transportRequestDocxService';
 import { describe, it, expect, vi } from 'vitest';
 // 수출신고서 FOB용 관세청 환율 호출은 결정론적으로 mock (네트워크 미접촉).
 // importActual로 customsApiService의 다른 export(calcDutiableValue 등)는 real 유지.
@@ -318,8 +319,13 @@ describe('DocumentAgent — 수출 화주 신규 문서 필드', () => {
     expect(tr).not.toHaveProperty('vesselName');
     expect(tr).not.toHaveProperty('blNo');
     expect(tr).not.toHaveProperty('containerNo');
-    expect(result.htmlTemplates?.transport_request).toContain('EXPORT TRANSPORT REQUEST');
-    expect(result.htmlTemplates?.transport_request).not.toContain('SHOULD-NOT-APPEAR');
+    // 운송의뢰서는 고정 서식 docx에서 생성하므로 HTML 템플릿을 만들지 않는다.
+    expect(result.htmlTemplates?.transport_request).toBeUndefined();
+    const si = mapTransportRequestToSchema(tr);
+    expect(si.exporter).toContain('KOREA EXPORT CO.');
+    expect(si.port_of_loading).toBe(tr.loadPort);
+    expect(si.type_of_shipment).toBe('LCL');
+    expect(JSON.stringify(si)).not.toContain('SHOULD-NOT-APPEAR');
   });
 
   it('영문 품명·기타 참조번호·Vessel·서명자를 C/I와 P/L에 함께 전달한다', async () => {

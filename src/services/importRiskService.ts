@@ -17,6 +17,7 @@ const DOC_LABEL: Record<ImportDocumentType, string> = {
   certificate_of_origin: 'Certificate of Origin',
   transport_request: 'Export Transport Request',
   export_declaration: 'Export Declaration',
+  insurance_policy: 'Insurance Policy',
   other: '기타서류',
   unknown: '기타서류',
 };
@@ -144,7 +145,7 @@ export function resolveImportRisks(
       level: result.severity === 'error' ? 'high' : 'medium',
       item: `${result.ruleId}. ${result.label}`,
       cause: result.evidence,
-      recommendation: 'C/I·P/L·B/L 원본을 대조하고 확인된 값으로 정정하세요.',
+      recommendation: 'C/I·P/L·B/L·C/O·보험증권 원본을 대조하고 확인된 값으로 정정하세요.',
       relatedDocuments: result.documents.map((document) => DOC_LABEL[document] ?? document),
       status: 'unresolved',
     }));

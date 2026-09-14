@@ -1,0 +1,287 @@
+/* 화주 → 포워더 의뢰 요청 기능 (회원 검색/내부 요청, 외부 이메일 발송, 알림) 전용 스타일. */
+
+.fwd-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.fwd-modal {
+  width: min(100%, 520px);
+  max-height: min(92vh, 720px);
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 24px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+}
+
+.fwd-modal h2 {
+  margin: 0 0 16px;
+  color: var(--text-dark);
+  font-size: 20px;
+}
+
+.fwd-modal-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.fwd-modal-tab {
+  padding: 10px 4px;
+  border: none;
+  background: none;
+  color: var(--text-light);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.fwd-modal-tab.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+
+.fwd-field {
+  margin-bottom: 14px;
+}
+
+.fwd-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.fwd-field input,
+.fwd-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.fwd-search-row {
+  display: flex;
+  gap: 8px;
+}
+
+.fwd-search-row input {
+  flex: 1;
+}
+
+.fwd-search-result {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--border-color-strong);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.fwd-search-result-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.fwd-search-result-row span:first-child {
+  color: var(--text-light);
+}
+
+.fwd-doc-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.fwd-doc-checklist label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dark);
+  cursor: pointer;
+}
+
+.fwd-doc-empty {
+  font-size: 13px;
+  color: var(--text-light);
+}
+
+.fwd-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.fwd-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fwd-status-pill.pending { background: #fef9c3; color: #854d0e; }
+.fwd-status-pill.accepted,
+.fwd-status-pill.sent { background: #f0fdf4; color: #15803d; }
+.fwd-status-pill.rejected,
+.fwd-status-pill.failed { background: #fef2f2; color: #b91c1c; }
+.fwd-status-pill.cancelled { background: #f1f5f9; color: #64748b; }
+
+.fwd-request-status-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fwd-request-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text-dark);
+}
+
+.fwd-request-status-row .fwd-request-date {
+  color: var(--text-light);
+  font-size: 12px;
+}
+
+/* 알림 벨 */
+.notif-bell-wrap { position: relative; }
+
+.notif-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(340px, 90vw);
+  max-height: 420px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.18);
+  z-index: 1500;
+}
+
+.notif-dropdown-head {
+  padding: 12px 14px;
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--text-dark);
+  border-bottom: 1px solid var(--border-color-subtle);
+}
+
+.notif-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: none;
+  background: none;
+  border-bottom: 1px solid var(--border-color-subtle);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-dark);
+  line-height: 1.5;
+}
+
+.notif-item:hover { background: #f8fafc; }
+.notif-item.unread { background: var(--primary-light); }
+
+.notif-item-time {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-light);
+}
+
+.notif-empty {
+  padding: 24px 14px;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 13px;
+}
+
+/* 포워더 수신함 */
+.incoming-request-card {
+  border: 1px solid var(--border-color-strong);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+
+.incoming-request-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.incoming-request-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.incoming-request-grid dt { color: var(--text-light); margin: 0; }
+.incoming-request-grid dd { margin: 2px 0 0; color: var(--text-dark); font-weight: 600; }
+
+.incoming-request-message {
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-dark);
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+}
+
+.incoming-request-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

@@ -1,12 +1,12 @@
 import { Agent, DocumentResult, HSCodeResult, AgentLog, createLog } from './types';
-import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, CustomsDeclarationData, Shipment, TransportRequestData } from '../types';
-import { tradeItemAmount } from '../utils/shipment';
+import { GeneratedDocuments, InvoiceData, PackingListData, CertificateOfOriginData, CustomsDeclarationData, Shipment, TransportRequestData, FreightTerms } from '../types';
+import { deriveFreightTerms } from '../utils/freightTerms';
+import { composeDetailedDescription, tradeItemAmount } from '../utils/shipment';
 import { determineRequiredDocuments } from '../harness/rulesEngine';
 import { autoFillDocumentFields } from '../services/claudeService';
 import { getCustomsExchangeRate } from '../services/customsApiService';
 import { isLcPayment } from './paymentTerms';
 import { renderCertificateOfOriginHTML } from './templates/co';
-import { renderTransportRequestHTML } from './templates/transportRequest';
 export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCodeResult; useLLM?: boolean; logs: AgentLog[] }, DocumentResult> {
   readonly name = 'Document Agent';
 
@@ -25,6 +25,8 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
       : profile.shipperItems?.length
         ? profile.shipperItems.map((item, index) => ({
             description: item.itemName || '',
+            detailedDescription: composeDetailedDescription(item.itemName, item.detail),
+            detail: (item.detail || '').trim() || undefined,
             hsCode: item.hsCode || '',
             quantity: Number(item.quantity) || 0,
             unit: item.unit || '',
@@ -126,9 +128,11 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
       logs.push(createLog(this.name, '상업송장(Invoice) 데이터 조립 중...', 'info'));
       
       // 다품목: 각 품목 금액을 계산(extractedAmount ?? 수량×단가)해 합산한다. amount는 저장 않고 계산.
+      // 상업송장은 색상·재질까지 적는 실무 관행을 따라 상세 품명을 쓴다.
+      // 포장명세서·선하증권은 기본 품명만 쓴다(아래 packingItems 참고).
       const invoiceItems = items.map((it, i) => ({
         no: i + 1,
-        description: it.description,
+        description: it.detailedDescription || it.description,
         hsCode: it.hsCode || hsResult.topCode || '',
         countryOfOrigin: profile.countryOfOrigin || '',
         quantity: it.quantity,
@@ -302,6 +306,7 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
           netWeight: item.netWeight,
           grossWeight: item.grossWeight,
           measurement: item.measurement || '',
+          marksAndNumbers: item.shippingMarks || profile.shippingMarks || '',
         })),
         incoterms: profile.incoterms || '',
         incotermsPlace: profile.shipperSupplemental?.incotermsPlace || '',
@@ -309,6 +314,11 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         invoiceNo: generatedDocs.invoice?.invoiceNo || profile.invoiceNo || '',
         loadPort: profile.loadPort || '',
         dischargePort: profile.dischargePort || '',
+        placeOfReceipt: profile.placeOfReceipt || '',
+        placeOfDelivery: profile.placeOfDelivery || profile.finalDestination || '',
+        // 화주가 명시하지 않았으면 Incoterms 원칙값을 제안값으로 채운다.
+        freightTerms: (profile.freightTerms as FreightTerms) || deriveFreightTerms(profile.incoterms || ''),
+        shippingMarks: profile.shippingMarks || '',
         requestedDepartureDate: profile.departureDate || '',
         loadingMode: profile.loadingMode || '',
       };
@@ -446,9 +456,8 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
     if (generatedDocs.certificateOfOrigin) {
       htmlTemplates.co = renderCertificateOfOriginHTML(generatedDocs.certificateOfOrigin);
     }
-    if (generatedDocs.transportRequest) {
-      htmlTemplates.transport_request = renderTransportRequestHTML(generatedDocs.transportRequest);
-    }
+    // 수출 운송의뢰서도 고정 docx 템플릿(transportRequestDocxService)에서 생성·미리보기하므로
+    // HTML을 만들지 않는다 — 미리보기와 다운로드가 같은 Blob을 쓴다.
     // 수출신고서(초안)는 고정 docx 템플릿(exportDeclarationDocxService)에서 생성·미리보기한다.
     // (미리보기 = 다운로드 docx 단일 소스. HTML은 만들지 않는다. customsDeclaration.ts는 @deprecated.)
     logs.push(createLog(this.name, '문서 생성 에이전트 작업 완료.', 'success'));

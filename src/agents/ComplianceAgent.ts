@@ -3,14 +3,30 @@ import { TradeProfile, DocumentStatus, ValidationIssue, GeneratedDocuments } fro
 import { validateTradeDocumentsAsync } from '../harness/validatorEngine';
 import { getRelatedLawForIssue } from '../services/lawService';
 import { runComplianceRules, checkPackingInvoiceConsistency, checkHsChapterMismatch } from './complianceRules';
+import { loadPortData } from '../services/portLocodeService';
+import { collectAnomalyFields, flagFieldAnomalies } from '../services/fieldAnomalyService';
 
-export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents: DocumentStatus[]; hsResult?: HSCodeResult; generatedDocs?: GeneratedDocuments; logs: AgentLog[] }, ComplianceResult> {
+interface ComplianceInput {
+  profile: TradeProfile;
+  documents: DocumentStatus[];
+  hsResult?: HSCodeResult;
+  generatedDocs?: GeneratedDocuments;
+  /** true 면 회사명·주소·품명 같은 자유 텍스트를 LLM 에 보내 이상치를 추가로 본다(실패해도 무시). */
+  useLLM?: boolean;
+  logs: AgentLog[];
+}
+
+export class ComplianceAgent implements Agent<ComplianceInput, ComplianceResult> {
   readonly name = 'Compliance Agent';
 
-  async run(input: { profile: TradeProfile; documents: DocumentStatus[]; hsResult?: HSCodeResult; generatedDocs?: GeneratedDocuments; logs: AgentLog[] }): Promise<ComplianceResult> {
-    const { profile, hsResult, generatedDocs, logs } = input;
+  async run(input: ComplianceInput): Promise<ComplianceResult> {
+    const { profile, hsResult, generatedDocs, useLLM = false, logs } = input;
 
     logs.push(createLog(this.name, '통관 서류 규정 및 필수 항목 검증 시작...', 'info'));
+
+    // UN/LOCODE 항구 사전을 먼저 준비한다(1회 fetch 후 캐시). 실패해도 룰은 정규식 폴백으로 진행.
+    const ports = await loadPortData();
+    if (ports.length) logs.push(createLog(this.name, `UN/LOCODE 항구 사전 ${ports.length.toLocaleString()}건 준비 — 항구명 실존·국가 대조에 사용`, 'info'));
 
     // 룰 기반 검증 엔진 실행 (공통 비즈니스 규칙 + 환율·사업자 공공 API 검증)
     const issues: ValidationIssue[] = await validateTradeDocumentsAsync(profile);
@@ -46,6 +62,33 @@ export class ComplianceAgent implements Agent<{ profile: TradeProfile; documents
           message: `통관신고서: HS CODE 검토 필요 (${hsResult.validationMessage || '특수 범위의 Chapter 코드입니다.'})`,
           field: 'hsCode'
         });
+      }
+    }
+
+    // LLM 보조 검증 — 룰이 못 보는 자유 텍스트(회사명·주소·품명)의 임시값·필드 뒤바뀜을 "AI 참고"로 안내한다.
+    // 생성을 막지 않는 warning 이며, API 실패·시간 초과 시 조용히 건너뛴다.
+    if (useLLM) {
+      const fields = collectAnomalyFields(profile);
+      if (fields.length) {
+        try {
+          const anomalies = await flagFieldAnomalies(fields);
+          logs.push(createLog(this.name, `AI 자유 텍스트 검토 ${fields.length}개 항목 — 이상 ${anomalies.length}건`, 'info'));
+          for (const anomaly of anomalies) {
+            const label = fields.find((entry) => entry.field === anomaly.field)?.label ?? anomaly.field;
+            const isItem = /itemName/.test(anomaly.field);
+            issues.push({
+              id: `llm-anomaly-${anomaly.field}`,
+              docType: 'invoice',
+              // 다품목 필드("shipperItems.1.itemName")는 폼 이동용으로 itemName 으로 묶는다.
+              field: isItem ? 'itemName' : anomaly.field,
+              severity: 'warning',
+              title: 'AI 참고',
+              message: `AI 참고 — ${label}: ${anomaly.reason}`,
+            });
+          }
+        } catch (error) {
+          logs.push(createLog(this.name, `AI 자유 텍스트 검토 건너뜀 — ${error instanceof Error ? error.message : String(error)}`, 'warning'));
+        }
       }
     }
 

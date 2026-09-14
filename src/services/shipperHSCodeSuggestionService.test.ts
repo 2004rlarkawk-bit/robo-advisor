@@ -3,11 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   searchMock,
   lookupMock,
+  prefixMock,
+  hierarchyMock,
+  titleSearchMock,
   discoverPrefixesMock,
   suggestFromCandidatesMock,
 } = vi.hoisted(() => ({
   searchMock: vi.fn(),
   lookupMock: vi.fn(),
+  prefixMock: vi.fn(),
+  hierarchyMock: vi.fn(),
+  titleSearchMock: vi.fn(),
   discoverPrefixesMock: vi.fn(),
   suggestFromCandidatesMock: vi.fn(),
 }));
@@ -15,6 +21,9 @@ const {
 vi.mock('./hsDataService', () => ({
   searchHSByKeyword: searchMock,
   lookupHSByCode: lookupMock,
+  findTenDigitHSKByPrefix: prefixMock,
+  lookupHSHierarchy: hierarchyMock,
+  searchHSHeadingsByKeyword: titleSearchMock,
   formatCode: (code: string) =>
     `${code.slice(0, 4)}.${code.slice(4, 6)}-${code.slice(6)}`,
 }));
@@ -25,6 +34,7 @@ vi.mock('./claudeService', () => ({
 }));
 
 import {
+  isSearchableItemName,
   normalizeHSKCode,
   recommendShipperHSCode,
 } from './shipperHSCodeSuggestionService';
@@ -43,6 +53,12 @@ const localTenDigit = {
 beforeEach(() => {
   searchMock.mockReset();
   lookupMock.mockReset();
+  prefixMock.mockReset();
+  prefixMock.mockResolvedValue([]);
+  hierarchyMock.mockReset();
+  hierarchyMock.mockResolvedValue({ heading: '', subheading: '' });
+  titleSearchMock.mockReset();
+  titleSearchMock.mockResolvedValue([]);
   discoverPrefixesMock.mockReset();
   discoverPrefixesMock.mockResolvedValue({
     suggestedPrefixes: [],
@@ -181,6 +197,110 @@ describe('수출 화주 HS Code 추천 서비스', () => {
     await expect(
       recommendShipperHSCode('농가 사육용 말')
     ).rejects.toThrow('network');
+  });
+
+  it('배낭은 사전 품명에 없어도 4202.9x 소호를 먼저 끌어와 소호 기준을 붙여 AI에 넘긴다', async () => {
+    const textileRucksack = {
+      ...localTenDigit,
+      code: '4202922000',
+      ko: '방직용 섬유재료로 만든 것',
+      en: 'Of textile materials',
+      category: '(직물제 가방)',
+      formattedCode: '4202.92-2000',
+    };
+    searchMock.mockResolvedValue([]);
+    prefixMock.mockImplementation(async (prefix: string) =>
+      prefix === '420292' ? [textileRucksack] : []
+    );
+    // AI가 4자리만 줘도 색인 소호가 앞에 와야 확장 상한에서 잘리지 않는다.
+    discoverPrefixesMock.mockResolvedValue({
+      suggestedPrefixes: ['4202'],
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+    suggestFromCandidatesMock.mockResolvedValue({
+      suggestions: [],
+      additionalInformationRequired: true,
+      requiredAdditionalInfo: ['외면 소재'],
+    });
+
+    await recommendShipperHSCode('backpack');
+
+    expect(prefixMock.mock.calls.map(([prefix]) => prefix))
+      .toEqual(['420292', '420291', '420299', '4202']);
+    const [, candidates] = suggestFromCandidatesMock.mock.calls[0];
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        code: '4202922000',
+        koreanName: expect.stringContaining('배낭'),
+      }),
+    ]);
+  });
+
+  it('넓은 호로 확장해도 뒤쪽 소호가 잘리지 않게 소호별로 번갈아 담는다', async () => {
+    const entry = (code: string) => ({
+      ...localTenDigit,
+      code,
+      ko: '기타',
+      en: 'Other',
+      category: '',
+      formattedCode: code,
+    });
+    // 앞쪽 소호 4202.11에만 40건, 맨 뒤 소호 4202.92는 1건 — 앞에서 자르면 4202.92가 빠진다.
+    const crowded = Array.from({ length: 40 }, (_, index) =>
+      entry(`420211${String(index).padStart(4, '0')}`)
+    );
+    searchMock.mockResolvedValue([]);
+    prefixMock.mockImplementation(async (prefix: string) =>
+      prefix === '4202' ? [...crowded, entry('4202921090')] : []
+    );
+    discoverPrefixesMock.mockResolvedValue({
+      suggestedPrefixes: ['4202'],
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+    suggestFromCandidatesMock.mockResolvedValue({
+      suggestions: [],
+      additionalInformationRequired: true,
+      requiredAdditionalInfo: [],
+    });
+
+    await recommendShipperHSCode('travel goods');
+
+    const [, candidates] = suggestFromCandidatesMock.mock.calls[0];
+    expect(candidates).toHaveLength(30);
+    expect(candidates.map((candidate: { code: string }) => candidate.code))
+      .toContain('4202921090');
+  });
+
+  it('AI에 넘기는 후보에만 호·소호 제목을 덧붙인다', async () => {
+    searchMock.mockResolvedValue([localTenDigit]);
+    hierarchyMock.mockResolvedValue({
+      heading: 'Horses, asses, mules and hinnies; live',
+      subheading: 'Horses; live, pure-bred breeding animals',
+    });
+    suggestFromCandidatesMock.mockResolvedValue({
+      suggestions: [],
+      additionalInformationRequired: true,
+      requiredAdditionalInfo: [],
+    });
+
+    await recommendShipperHSCode('농가 사육용 말');
+
+    const [, candidates] = suggestFromCandidatesMock.mock.calls[0];
+    expect(candidates[0].koreanName).toBe('농가 사육용');
+    expect(candidates[0].classificationName).toBe(
+      '(말) / HS 0101.21: Horses; live, pure-bred breeding animals / HS 0101: Horses, asses, mules and hinnies; live'
+    );
+    expect(candidates[0].classificationName.length).toBeLessThanOrEqual(300);
+  });
+
+  it('한글은 2글자부터, 영문은 3글자부터 검색 대상으로 본다', () => {
+    expect(isSearchableItemName('백팩')).toBe(true);
+    expect(isSearchableItemName('라면')).toBe(true);
+    expect(isSearchableItemName('팩')).toBe(false);
+    expect(isSearchableItemName('ab')).toBe(false);
+    expect(isSearchableItemName('bag')).toBe(true);
   });
 
   it('코드 정규화가 선행 0을 보존한다', () => {

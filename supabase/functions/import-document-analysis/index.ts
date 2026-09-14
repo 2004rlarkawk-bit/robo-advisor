@@ -9,6 +9,7 @@ const DOCUMENT_TYPES = [
   "certificate_of_origin",
   "transport_request",
   "export_declaration",
+  "insurance_policy",
   "other",
   "unknown",
 ] as const;
@@ -65,6 +66,7 @@ const legacyFields = [
   "shipmentDate", "estimatedArrivalDate", "totalPackageCount", "packageUnit",
   "grossWeightUnit", "netWeightUnit", "freight", "insurance", "otherAdditions",
   "exportDeclarationNo", "loadingMode", "measurement", "shippingMarks",
+  "insuredAmount", "insuredCurrency",
 ];
 const itemSchema = {
   type: "object",
@@ -332,10 +334,78 @@ async function fetchOpenAIWithRetry(
   throw new Error(`${label} 요청을 ${MAX_ATTEMPTS}회 시도했지만 실패했습니다.`);
 }
 
-async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
-  const model = Deno.env.get("OPENAI_IMPORT_DOCUMENT_MODEL")?.trim()
+
+/**
+ * 사용할 모델 목록(우선순위 순).
+ * 앞 모델이 용량 문제로 계속 실패하면 다음 모델로 내려간다.
+ * OPENAI_IMPORT_MODEL_FALLBACKS 에 쉼표로 구분해 지정한다.
+ *   예) OPENAI_IMPORT_MODEL_FALLBACKS="gpt-5.5,gpt-5.4"
+ */
+function resolveModelChain(primaryEnvKey: string): string[] {
+  const primary = Deno.env.get(primaryEnvKey)?.trim()
     || Deno.env.get("OPENAI_MODEL")?.trim()
     || "gpt-5.6";
+  const fallbacks = (Deno.env.get("OPENAI_IMPORT_MODEL_FALLBACKS") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  // 중복 제거 — 같은 모델을 두 번 시도하지 않는다.
+  return [...new Set([primary, ...fallbacks])];
+}
+
+/** 다음 모델로 넘어갈 만한 실패인지. 스키마·인증 오류는 모델을 바꿔도 같다. */
+function shouldFallbackToNextModel(status: number, detail: string): boolean {
+  if (RETRYABLE_STATUS.has(status)) return true;
+  // 모델 미존재·미권한은 그 모델만의 문제이므로 다음 모델을 시도한다.
+  return status === 404 || /model/i.test(detail) && /not (found|exist|available)|do not have access/i.test(detail);
+}
+
+/**
+ * 모델 체인을 따라가며 요청한다.
+ * 각 모델마다 재시도(fetchOpenAIWithRetry)를 먼저 소진하고, 그래도 안 되면 다음 모델로 내려간다.
+ */
+async function requestWithModelChain(
+  apiKey: string,
+  models: string[],
+  buildBody: (model: string) => Record<string, unknown>,
+  label: string,
+): Promise<{ response: Response; responseText: string; model: string }> {
+  let lastError = "";
+  let lastStatus = 0;
+  let lastResponse: { response: Response; responseText: string } | null = null;
+
+  for (let index = 0; index < models.length; index += 1) {
+    const model = models[index];
+    const { response, responseText } = await fetchOpenAIWithRetry(OPENAI_RESPONSES_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(buildBody(model)),
+    }, `${label}(${model})`);
+
+    if (response.ok) return { response, responseText, model };
+
+    lastResponse = { response, responseText };
+    lastStatus = response.status;
+    lastError = responseText.slice(0, 300);
+    const isLast = index === models.length - 1;
+    if (isLast || !shouldFallbackToNextModel(response.status, responseText)) {
+      return { response, responseText, model };
+    }
+    console.warn("[import-document-analysis] 모델 폴백", {
+      label,
+      from: model,
+      to: models[index + 1],
+      status: lastStatus,
+      detail: lastError,
+    });
+  }
+  // 도달하지 않지만 타입 안정성을 위해 마지막 응답을 돌려준다.
+  if (lastResponse) return { ...lastResponse, model: models[models.length - 1] };
+  throw new Error(`${label}: 사용할 모델이 없습니다.`);
+}
+
+async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
+  const models = resolveModelChain("OPENAI_IMPORT_DOCUMENT_MODEL");
   // 문서 판독은 추론보다 인식 작업이라 추론 강도를 낮춰 응답 시간을 줄인다.
   // 필요 시 OPENAI_IMPORT_REASONING_EFFORT로 조절(low/medium/high, "off"면 미전송).
   const reasoningEffort = Deno.env.get("OPENAI_IMPORT_REASONING_EFFORT")?.trim() || "low";
@@ -345,7 +415,8 @@ async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
       "첨부된 해상 무역 문서에 실제로 기재된 값만 추출하세요.",
       "문서에 없는 값은 추측하거나 생성하지 말고 빈 문자열 또는 빈 배열로 반환하세요.",
       "항공운송 문서나 필드를 만들지 마세요.",
-      "각 파일을 commercial_invoice, packing_list, bill_of_lading, certificate_of_origin, transport_request, export_declaration, other 중 하나로 분류하세요.",
+      "각 파일을 commercial_invoice, packing_list, bill_of_lading, certificate_of_origin, transport_request, export_declaration, insurance_policy, other 중 하나로 분류하세요.",
+      "적하보험증권·보험증권·보험증명서·INSURANCE POLICY·CERTIFICATE OF INSURANCE·CARGO INSURANCE는 insurance_policy로 분류하고, 보험금액(Amount Insured/Sum Insured/Insured Value)은 insuredAmount에 숫자 문자열로, 그 통화는 insuredCurrency에 넣으세요. 보험증권이 없으면 두 값은 빈 문자열입니다.",
       "문서 분류 근거의 우선순위는 ① 문서 내부의 명확한 제목 ② 파일명의 명확한 문서명 ③ 본문의 특징적인 필드 조합 ④ 사전 분류 힌트입니다.",
       "파일명과 문서 내부 제목이 다르면 반드시 문서 내부 제목을 우선하세요.",
       "내부 제목에서 상업송장·상업 송장·상업송장서·COMMERCIAL INVOICE는 commercial_invoice, 포장명세서·포장 명세서·포장내역서·포장 목록·PACKING LIST는 packing_list로 분류하세요.",
@@ -369,29 +440,26 @@ async function analyzeWithOpenAI(apiKey: string, documents: RequestDocument[]) {
       "문서에서 발견한 해외 HS Code는 documentHSCode에만 원문 표기대로 넣고 대한민국 HSK를 추천하거나 생성하지 마세요.",
       "품목분류 판단에 쓰일 수 있는 품명·한국어 품명·재질·성분비·직물/편물·제품 형태·가공 상태·성별·용도·모델명·규격·원산지를 문서에 있는 경우에만 추출하세요.",
       "금액은 통화기호 없이 숫자 문자열로, 단위는 별도 필드에 적으세요.",
-      "문서 간 품명, 수량/단위, Consignee, Invoice 번호, 포장, 중량, 통화, 원산지, 컨테이너, Seal 불일치를 비교하세요.",
+      "문서 간 품명, 수량/단위, Consignee, Invoice 번호, 포장, 중량, 통화, 원산지, 선적항(POL), 도착항(POD), 컨테이너, Seal 불일치를 비교하세요.",
+      "comparison 배열에는 최소한 품명·수량·원산지·선적항·도착항·Consignee 행을 넣고, 각 행의 invoice/packingList/billOfLading/certificateOfOrigin 칸에는 그 서류에 실제 기재된 값만 적으세요(없으면 빈 문자열).",
     ].join("\n"),
   }];
   for (const document of documents) {
     content.push({ type: "input_text", text: `파일 ID: ${document.id}\n파일명: ${document.fileName}\n파일명/사용자 사전 분류 힌트: ${document.documentType}` });
     content.push(document.mimeType === "application/pdf"
-      ? { type: "input_file", filename: document.fileName, file_data: document.dataUrl, detail: "high" }
-      : { type: "input_image", image_url: document.dataUrl, detail: "high" });
+      ? { type: "input_file", filename: document.fileName, file_data: document.dataUrl, detail: "low" }
+      : { type: "input_image", image_url: document.dataUrl, detail: "low" });
   }
   const openAiStartedAt = performance.now();
-  const { response, responseText } = await fetchOpenAIWithRetry(OPENAI_RESPONSES_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      instructions: "당신은 해상 수입 문서를 정확히 판독하는 전문가입니다. 첨부 원문에 근거한 정보만 구조화하세요.",
-      input: [{ role: "user", content }],
-      text: { format: { type: "json_schema", name: "import_document_analysis", strict: true, schema: analysisSchema } },
-      ...(reasoningEffort !== "off" ? { reasoning: { effort: reasoningEffort } } : {}),
-      max_output_tokens: 12000,
-      store: false,
-    }),
-  }, "문서 분석");
+  const { response, responseText, model } = await requestWithModelChain(apiKey, models, (candidate) => ({
+    model: candidate,
+    instructions: "당신은 해상 수입 문서를 정확히 판독하는 전문가입니다. 첨부 원문에 근거한 정보만 구조화하세요.",
+    input: [{ role: "user", content }],
+    text: { format: { type: "json_schema", name: "import_document_analysis", strict: true, schema: analysisSchema } },
+    ...(reasoningEffort !== "off" ? { reasoning: { effort: reasoningEffort } } : {}),
+    max_output_tokens: 8000,
+    store: false,
+  }), "문서 분석");
   const openAiMs = performance.now() - openAiStartedAt;
   debugLog("AI raw response", {
     httpStatus: response.status,
