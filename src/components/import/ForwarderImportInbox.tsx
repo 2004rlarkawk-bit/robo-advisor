@@ -14,6 +14,9 @@ interface Props {
   onOpen: (tradeId: string) => void;
 }
 
+/** 직접 등록(구 단건 위저드) 진입 버튼 노출 여부 — 시연 기간 숨김. */
+const DIRECT_UPLOAD_ENABLED = false;
+
 const FILTERS: { value: InboxFilter; label: string }[] = [
   { value: 'all', label: '전체' }, { value: 'new', label: '신규' },
   { value: 'progress', label: '진행 중' }, { value: 'reply', label: '보완 회신' }, { value: 'done', label: '완료' },
@@ -34,7 +37,11 @@ export default function ForwarderImportInbox({ cases, error, refreshing, onRefre
       <div className="fwd-inbox-panel-heading">
         <h2 id="fwd-inbox-title">받은 의뢰 <span>{cases === null ? '—' : `${cases.length}건`}</span></h2>
         <div className="fwd-inbox-heading-actions">
-          <button type="button" className="btn btn-secondary" onClick={onDirectUpload}><Plus size={17} aria-hidden="true" /> 직접 등록</button>
+          {/* 직접 등록은 개편 전 단건 위저드로 이동한다 — 새 워크스페이스와 화면이 달라
+              시연 중 혼선을 줄 수 있어 잠시 숨긴다. 복원: DIRECT_UPLOAD_ENABLED를 true로. */}
+          {DIRECT_UPLOAD_ENABLED && (
+            <button type="button" className="btn btn-secondary" onClick={onDirectUpload}><Plus size={17} aria-hidden="true" /> 직접 등록</button>
+          )}
           <button type="button" className="btn btn-secondary fwd-inbox-refresh" aria-label="의뢰 새로고침" title="새로고침" disabled={refreshing} onClick={onRefresh}><RefreshCw size={19} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" /></button>
         </div>
       </div>
