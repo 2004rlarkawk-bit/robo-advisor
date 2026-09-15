@@ -51,7 +51,6 @@ import OnboardingPage from './components/OnboardingPage';
 import ShipperWorkspaceForm, { SHIPPER_FIELD_SECTION } from './components/ShipperWorkspaceForm';
 import OnboardingTour from './components/OnboardingTour';
 import TradeDirectionSelector from './components/trade/TradeDirectionSelector';
-import TradeRoleSelector from './components/trade/TradeRoleSelector';
 import AppHeader from './components/layout/AppHeader';
 import AppSidebar, { navigationItemsForRole } from './components/layout/AppSidebar';
 import DocumentManagerReadOnlyAction from './components/DocumentManagerReadOnlyAction';
@@ -2857,17 +2856,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               <p className="page-subtitle">{tradeDirection === 'import' && workspaceRole === 'forwarder' ? '화주가 보낸 서류를 검토하고, 보완 요청과 후속 서류 작성을 진행합니다.' : 'AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.'}</p>
             </div>}
 
-            {/* 결과·후속 단계에서는 거래 유형/역할 선택 패널을 숨긴다 (수출 결과 화면과 동일 정책) */}
+            {/* 결과·후속 단계에서는 거래 유형 선택 패널을 숨긴다 (수출 결과 화면과 동일 정책).
+                사용자 역할 카드는 제거 — 역할 표시·전환은 헤더 칩이 담당한다. */}
             {!isDocumentManagerReadOnlyView
               && !(tradeDirection === 'export' && hasGenerated)
               && !(tradeDirection === 'import' && workspaceCurrentStep > 1)
-              && <div className="trade-selector-panel">
+              && <div className="trade-selector-panel trade-selector-panel--single">
               <TradeDirectionSelector value={tradeDirection} onChange={handleTradeDirectionChange} />
-              <TradeRoleSelector
-                value={workspaceRole}
-                allowedRoles={userProfile.service_role === 'integrated' ? ['shipper', 'forwarder'] : [workspaceRole]}
-                onChange={handleWorkspaceRoleChange}
-              />
             </div>}
 
             {tradeDirection === 'import' ? (

@@ -2549,6 +2549,8 @@ body {
 
 /* 수입/수출 거래 선택 및 수입 전용 워크플로 */
 .trade-selector-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px; }
+/* 역할 카드 제거 후 거래 유형 카드만 남은 경우 — 전체 폭 사용 */
+.trade-selector-panel--single { grid-template-columns: 1fr; }
 .trade-choice-section { padding: 18px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; }
 .trade-choice-section h2 { margin: 0 0 12px; font-size: 14px; color: var(--text-dark); }
 .trade-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
