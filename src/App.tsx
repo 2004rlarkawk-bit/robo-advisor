@@ -2902,6 +2902,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     issuerName={userProfile.company_name ?? ''}
                     senderContactName={userProfile.contact_name ?? ''}
                     onDirectUpload={() => setForwarderDirectUpload(true)}
+                    includeOwnShipperTrades={userProfile.service_role === 'integrated'}
                     initialTradeId={notificationTradeId}
                     onInitialTradeOpened={() => setNotificationTradeId(null)}
                   />
