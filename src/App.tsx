@@ -818,7 +818,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   };
 
   const goToFieldFix = (issue: ValidationIssue) => {
-    setHighlightHint(issue.message);
+    // 예전 저장본의 "AI 참고 — " 머리말과 [근거: …] 꼬리는 안내 문구에서 뗀다.
+    setHighlightHint(issue.message.replace(/^AI 참고 — /, '').replace(/\s*\[근거:[^\]]*\]\s*$/, ''));
     setHighlightField(issueToFieldKey(issue));
     setActiveFixIssue(issue);
     setHasGenerated(false);
@@ -2757,7 +2758,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     if (!activeFixIssue || isIssueLiveResolved(activeFixIssue)) return null;
     if (activeFixFieldKey === 'countryOfOrigin' && originNotKoreaIssue) return null;
     if (!(activeFixFieldKey in SHIPPER_FIELD_SECTION)) return null;
-    const rawMsg = activeFixIssue.message || '';
+    const rawMsg = (activeFixIssue.message || '').replace(/^AI 참고 — /, '');
     const basisMatch = rawMsg.match(/\s*\[근거:\s*([^\]]+)\]\s*$/);
     return {
       fieldKey: activeFixFieldKey,

@@ -77,7 +77,7 @@ const Req = () => <span className="req-badge">필수</span>;
 // 검증 이슈 필드 → 폼 섹션 번호 매핑 — [입력 수정] 클릭 시 해당 섹션 상단에 인라인 안내 카드를 띄운다.
 export const SHIPPER_FIELD_SECTION: Record<string, number> = {
   companyName: 1, companyAddress: 1, contact: 1, businessRegistrationNo: 1, signerName: 1,
-  partnerName: 2, partnerCountry: 2, partnerAddress: 2,
+  partnerName: 2, partnerCountry: 2, partnerAddress: 2, buyerName: 2, buyerAddress: 2,
   itemName: 3, hsCode: 3, quantity: 3, unitPrice: 3, totalAmount: 3, unit: 3, invoiceAmount: 3,
   incoterms: 4, paymentTerms: 4, currency: 4, invoiceNo: 4, invoiceDate: 4, lcNo: 4, lcDate: 4,
   weight: 5, netWeight: 5, grossWeight: 5, packageCount: 5, packageType: 5, eaPerBox: 5,
@@ -609,8 +609,8 @@ export default function ShipperWorkspaceForm({
           <label><input type="checkbox" checked={supplemental.consigneeMatchesNotifyParty} onChange={(event) => setConsigneeMatchesNotify(event.target.checked)} /> Consignee와 Notify Party 동일</label>
         </div>
         <div className="form-grid">
-          <div className="form-group"><label className="form-label">Buyer 회사명</label><input className="form-input" value={profile.buyerName ?? ''} onChange={(e) => patchParty('buyerName', e.target.value)} placeholder="Global Import LLC" /></div>
-          <div className="form-group"><label className="form-label">Buyer 영문 주소</label><input className="form-input" value={profile.buyerAddress ?? ''} onChange={(e) => patchParty('buyerAddress', e.target.value)} placeholder="250 Market Street, Los Angeles, CA, United States" /></div>
+          <div className="form-group" data-field="buyerName"><label className="form-label">Buyer 회사명</label><input className="form-input" value={profile.buyerName ?? ''} onChange={(e) => patchParty('buyerName', e.target.value)} placeholder="Global Import LLC" /></div>
+          <div className="form-group" data-field="buyerAddress"><label className="form-label">Buyer 영문 주소</label><input className="form-input" value={profile.buyerAddress ?? ''} onChange={(e) => patchParty('buyerAddress', e.target.value)} placeholder="250 Market Street, Los Angeles, CA, United States" /></div>
           <div className="form-group"><label className="form-label">Buyer 국가</label><CountrySelect className="form-input" value={profile.buyerCountry ?? ''} onChange={(value) => patchParty('buyerCountry', value)} /></div>
           <div className="form-group"><label className="form-label">구매자부호 (해외거래처부호) <span className="optional-label">(선택)</span></label><input className="form-input" value={declaration.buyerCustomsCode ?? ''} onChange={(e) => patchDeclaration({ buyerCustomsCode: e.target.value })} placeholder="관세청 해외거래처부호" /></div>
           <div className="form-group" data-field="partnerName"><label className="form-label">Consignee 회사명 <Req /></label><input className="form-input" value={profile.partnerName ?? ''} onChange={(e) => patchParty('partnerName', e.target.value)} placeholder="Global Import LLC" /></div>
