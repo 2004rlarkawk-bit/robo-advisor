@@ -31,15 +31,15 @@ describe('forwarder task tabs', () => {
 
   it('has three distinct task tabs and keeps comparison evidence with the issue', async () => {
     await open();
-    expect([...container.querySelectorAll('.fwd-tabs button')].map(b => b.textContent)).toEqual(['서류 검토', '요청·회신', '통관·도착']);
+    expect([...container.querySelectorAll('.fwd-tabs button')].map(b => b.textContent)).toEqual(['서류 검토', '요청·회신', '통관·운송']);
     expect(container.textContent).toContain('화주가 제출한 서류');
     await click('검토하기');
     expect(container.querySelector('.fwd-review-detail:not([hidden])')?.textContent).toContain('1,280 kg');
-    await click('통관·도착');
+    await click('통관·운송');
     expect(container.textContent).toContain('서류 검토를 완료하면 도착통지서와 배차 의뢰서를 작성할 수 있습니다.');
     expect(container.querySelectorAll('.fwd-document-lock')).toHaveLength(1);
-    expect(container.textContent).toContain('도착통지서 (A/N)');
-    expect(container.textContent).toContain('국내 운송 준비');
+    expect(container.textContent).toContain('도착 안내 · A/N');
+    expect(container.textContent).toContain('D/O · 배차');
     expect(button('A/N 생성·다운로드').disabled).toBe(true);
     expect(container.querySelector<HTMLInputElement>('.arrival-notice-picker input')?.disabled).toBe(true);
     expect(container.querySelector<HTMLFieldSetElement>('.fwd-dispatch-fields')?.disabled).toBe(true);
@@ -47,7 +47,7 @@ describe('forwarder task tabs', () => {
     await click('A/N 생성·다운로드');
     expect(saveForwarderCaseState).not.toHaveBeenCalled();
     expect(container.querySelector('.fwd-review-panel')).toBeNull();
-    expect(container.textContent).not.toContain('서류 업무 완료');
+    expect(container.textContent).not.toContain('포워더 업무 완료');
     expect(container.querySelector('.fwd-cargo-card')?.closest('[hidden]')).toBeNull();
     await click('요청·회신');
     expect(container.textContent).toContain('아직 보낸 요청이 없습니다.');
@@ -63,7 +63,7 @@ describe('forwarder task tabs', () => {
     expect(saveForwarderCaseState).not.toHaveBeenCalled();
     await click('권장 사항1');
     await act(async () => container.querySelector<HTMLInputElement>('.fwd-review-pick')!.click());
-    expect(button('전체 검토 완료 → 통관·도착').disabled).toBe(true);
+    expect(button('전체 검토 완료 → 통관·운송').disabled).toBe(true);
     await click('선택한 2건 보완 요청');
     expect(container.querySelector('.fwd-batch-composer')?.textContent).toContain('테스트회사 포워더 담당자 드림');
     expect(container.querySelector('.fwd-pick-list')).toBeNull();
@@ -86,30 +86,30 @@ describe('forwarder task tabs', () => {
   it('requires a reason for unresolved blockers, then saves completion atomically', async () => {
     await open();
     expect(button('서류 검토 시작')).toBeUndefined();
-    await click('전체 검토 완료 → 통관·도착');
+    await click('전체 검토 완료 → 통관·운송');
     expect(container.querySelector('.fwd-batch-toolbar')).toBeNull();
     expect(container.querySelector('.fwd-batch-outstanding')?.textContent).toContain('총중량 불일치');
     expect(container.querySelector('.fwd-batch-confirm')?.textContent).toContain(weight.detail);
     expect(container.querySelector('.fwd-batch-confirm')?.textContent).toContain('보완 없이 완료 처리하려면');
-    expect(button('검토 완료 · 통관·도착으로').disabled).toBe(true);
-    await click('검토 완료 · 통관·도착으로');
+    expect(button('검토 완료 · 통관·운송으로').disabled).toBe(true);
+    await click('검토 완료 · 통관·운송으로');
     expect(saveForwarderCaseState).not.toHaveBeenCalled();
     const input = container.querySelector<HTMLTextAreaElement>('[aria-label="전체 검토 근거"]')!;
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, '원문 및 선사 확인 결과 기재 기준 차이'); input.dispatchEvent(new Event('input', { bubbles: true })); });
-    await click('검토 완료 · 통관·도착으로');
+    await click('검토 완료 · 통관·운송으로');
     expect(saveForwarderCaseState).toHaveBeenCalledWith('case-1', expect.objectContaining({ stage: 'clearance', issueResolutions: { weight: true }, issueNotes: { weight: '원문 및 선사 확인 결과 기재 기준 차이' } }), expect.any(Array));
     expect(container.querySelector('.fwd-tabs .is-active')?.textContent).toBe('서류 검토');
     expect(input.value).toBe('원문 및 선사 확인 결과 기재 기준 차이');
     vi.mocked(saveForwarderCaseState).mockResolvedValue({} as never);
     vi.mocked(deriveForwarderCase).mockReturnValue(fixture({ stage: 'clearance', blockerCount: 0, issues: [{ ...weight, resolved: true }] }));
-    await click('검토 완료 · 통관·도착으로');
-    expect(container.querySelector('.fwd-tabs .is-active')?.textContent).toBe('통관·도착');
+    await click('검토 완료 · 통관·운송으로');
+    expect(container.querySelector('.fwd-tabs .is-active')?.textContent).toBe('통관·운송');
   });
 
   it('allows clean review to finish without a reason and blocks bulk actions while awaiting replies', async () => {
     await open(fixture({ issues: [], blockerCount: 0 }));
-    await click('전체 검토 완료 → 통관·도착');
-    expect(button('검토 완료 · 통관·도착으로').disabled).toBe(false);
+    await click('전체 검토 완료 → 통관·운송');
+    expect(button('검토 완료 · 통관·운송으로').disabled).toBe(false);
     await click('계속 검토');
     expect(saveForwarderCaseState).not.toHaveBeenCalled();
     await click('업무 목록');
@@ -161,16 +161,18 @@ describe('forwarder task tabs', () => {
 
   it('orders cargo lookup, arrival notice and delivery preparation, with document-only completion', async () => {
     await open(fixture({ stage: 'clearance', blockerCount: 0, issues: [] }));
-    await click('통관·도착');
+    await click('통관·운송');
     const text = container.textContent!;
-    expect(text.indexOf('통관·화물 진행 현황')).toBeLessThan(text.indexOf('도착통지서 (A/N)'));
-    expect(text.indexOf('도착통지서 (A/N)')).toBeLessThan(text.indexOf('국내 운송 준비'));
+    expect(text.indexOf('입항 확인')).toBeLessThan(text.indexOf('도착 안내 · A/N'));
+    expect(text.indexOf('도착 안내 · A/N')).toBeLessThan(text.indexOf('D/O · 배차'));
+    expect(text).toContain('수입신고 조회 전');
+    expect(text).toContain('관부가세 확인 필요');
     expect(button('진행 조회')).toBeTruthy();
     expect(button('A/N 생성·다운로드').disabled).toBe(false);
     expect(container.querySelector<HTMLInputElement>('.arrival-notice-picker input')?.disabled).toBe(false);
     expect(container.querySelector<HTMLFieldSetElement>('.fwd-dispatch-fields')?.disabled).toBe(false);
-    expect(button('서류 업무 완료')).toBeTruthy();
-    expect(text).toContain('서류 업무 완료는 실제 통관 완료와 별개입니다.');
+    expect(button('포워더 업무 완료')).toBeTruthy();
+    expect(text).toContain('실제 세관·반출 상태는 변경되지 않습니다.');
     expect(container.querySelector('.fwd-dispatch-reply')?.hasAttribute('open')).toBe(false);
   });
 });

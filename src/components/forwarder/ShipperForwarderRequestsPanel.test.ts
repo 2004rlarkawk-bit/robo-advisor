@@ -85,7 +85,7 @@ describe('deriveTradeRequestView', () => {
 
   it('수락 뒤 포워더 단계와 화주 보완 필요 상태를 우선 표시한다', () => {
     expect(deriveTradeRequestView({ ...trade, forwarderUserId: 'forwarder-1', forwarderCase: { stage: 'clearance', updatedAt: '2026-09-15T10:00:00.000Z' } }, internal('accepted'), null)).toMatchObject({
-      category: 'progress', statusLabel: '통관·도착',
+      category: 'progress', statusLabel: '통관·운송',
     });
     expect(deriveTradeRequestView({
       ...trade,

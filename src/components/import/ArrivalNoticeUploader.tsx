@@ -92,7 +92,7 @@ export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId
       <div className="import-card-heading">
         <div>
           {!workspaceMode && <span className="ai-badge">별도 첨부</span>}
-          <h2>{workspaceMode ? <><span className="fwd-section-number">2</span> 도착통지서 (A/N)</> : '도착통지서 (Arrival Notice)'}</h2>
+          <h2>{workspaceMode ? <><span className="fwd-section-number">2</span> 도착 안내 · A/N</> : '도착통지서 (Arrival Notice)'}</h2>
           {!workspaceMode && <p>도착통지서가 없으면 거래는 진행 중으로 저장됩니다.</p>}
         </div>
         {headerAction}

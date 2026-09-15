@@ -3,7 +3,7 @@ import { Search } from 'lucide-react';
 import { lookupImportCargo } from '../../services/cargoProgressService';
 import type { CargoTrackingResult } from '../../types/importTrade';
 
-export default function ForwarderCargoPanel({ initialBlNo }: { initialBlNo: string }) {
+export default function ForwarderCargoPanel({ initialBlNo, onStatusChange }: { initialBlNo: string; onStatusChange?: (status: string | null) => void }) {
   const [blNo, setBlNo] = useState(initialBlNo === '-' ? '' : initialBlNo);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -14,16 +14,22 @@ export default function ForwarderCargoPanel({ initialBlNo }: { initialBlNo: stri
     if (busy || !blNo.trim()) return;
     const id = ++requestId.current;
     const queriedBlNo = blNo.trim();
-    setBusy(true); setError(''); setResult(null);
+    setBusy(true); setError(''); setResult(null); onStatusChange?.(null);
     try {
       const cargo = await lookupImportCargo(queriedBlNo);
-      if (requestId.current === id) setResult({ cargo, blNo: queriedBlNo, at: new Date().toISOString() });
+      if (requestId.current === id) {
+        setResult({ cargo, blNo: queriedBlNo, at: new Date().toISOString() });
+        onStatusChange?.(cargo.status);
+      }
     } catch {
-      if (requestId.current === id) setError('조회하지 못했습니다. B/L 번호와 연결 상태를 확인한 뒤 다시 시도하세요.');
+      if (requestId.current === id) {
+        setError('조회하지 못했습니다. B/L 번호와 연결 상태를 확인한 뒤 다시 시도하세요.');
+        onStatusChange?.(null);
+      }
     } finally { if (requestId.current === id) setBusy(false); }
   };
   return <section className="form-card import-card fwd-cargo-card">
-    <div className="import-card-heading"><div><h2><span className="fwd-section-number">1</span> 통관·화물 진행 현황</h2></div><span className="fwd-cargo-state">{busy ? '조회 중' : error ? '조회 실패' : result ? '조회 결과' : '조회 전'}</span></div>
+    <div className="import-card-heading"><div><h2><span className="fwd-section-number">1</span> 입항 확인</h2></div><span className="fwd-cargo-state">{busy ? '조회 중' : error ? '조회 실패' : result ? '조회 결과' : '조회 전'}</span></div>
     <div className="cargo-query"><label className="form-group"><span className="form-label">M/H B/L 번호</span><input className="form-input" value={blNo} disabled={busy} onChange={event => setBlNo(event.target.value)} placeholder="B/L 번호 입력" /></label><button type="button" className="btn btn-primary" disabled={busy || !blNo.trim()} onClick={() => void lookup()}><Search size={16} />{busy ? '조회 중…' : '진행 조회'}</button></div>
     {error && <p className="form-message error" role="alert">{error}</p>}
     {result && <div className="cargo-result" role="status">

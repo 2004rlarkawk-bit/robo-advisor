@@ -3,7 +3,7 @@
  *
  * 화주의 3단계 위저드와 달리 진행 상태·다음 조치 중심으로 구성한다.
  *  - 목록: ETA·수입 건·상태·다음 조치
- *  - 상세: 서류 검토 / 요청·회신 / 후속 서류 (상태 변경 규칙은 유지)
+ *  - 상세: 서류 검토 / 요청·회신 / 통관·운송 (상태 변경 규칙은 유지)
  * 운영 상태는 forwarderCaseService를 통해 workflow_data.forwarderCase에 저장한다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -135,6 +135,8 @@ export default function ForwarderImportWorkspace({
   const [anBusy, setAnBusy] = useState(false);
   const [anFileBusy, setAnFileBusy] = useState(false);
   const [dispatchBusy, setDispatchBusy] = useState(false);
+  /** B/L 진행 조회에서 받은 현재 통관 상태 — 통관·운송 탭의 한 줄 요약에만 사용한다. */
+  const [customsLookupStatus, setCustomsLookupStatus] = useState('');
   /** 배차 의뢰 입력 — 저장 전까지 화면에만 두고, 생성 시 케이스에 기록한다. */
   const [dispatchDraft, setDispatchDraft] = useState<Record<string, ImportDispatchRequest>>({});
   const [refreshing, setRefreshing] = useState(false);
@@ -167,6 +169,10 @@ export default function ForwarderImportWorkspace({
     () => cases?.find((item) => item.tradeId === selectedId) ?? null,
     [cases, selectedId],
   );
+
+  useEffect(() => {
+    setCustomsLookupStatus('');
+  }, [selectedId]);
 
   // 저장된 운영 상태를 목록에 반영 — 전체 재조회 없이 해당 건만 다시 계산한다.
   const applyState = useCallback((tradeId: string, state: ForwarderCaseState) => {
@@ -208,8 +214,8 @@ export default function ForwarderImportWorkspace({
     const STAGE_ACTIVITY: Record<ForwarderCaseStage, string> = {
       received: '의뢰 접수 단계로 이동',
       review: '서류 검토 시작',
-      clearance: '통관·도착 관리 시작',
-      done: '서류 업무 완료',
+      clearance: '통관·운송 관리 시작',
+      done: '포워더 업무 완료',
     };
     if (await persist(caseItem, { stage }, [STAGE_ACTIVITY[stage]])) setDetailTab(nextTab);
   }, [persist]);
@@ -272,7 +278,7 @@ export default function ForwarderImportWorkspace({
     const arrivalNoticeNote = caseItem.arrivalNotice?.storagePath
       ? ''
       : '\n\n도착통지서(A/N)가 첨부되지 않았습니다.';
-    if (window.confirm(`이 건의 서류 업무를 완료 처리할까요?${arrivalNoticeNote}\n\n실제 통관 상태는 바뀌지 않습니다. 완료 후에는 업무 큐의 서류 완료 목록으로 이동합니다.`)) {
+    if (window.confirm(`이 건의 포워더 업무를 완료 처리할까요?${arrivalNoticeNote}\n\n이 처리는 실제 세관 신고·화물 반출 상태를 변경하지 않습니다. 완료 후에는 업무 큐의 업무 완료 목록으로 이동합니다.`)) {
       void moveToStage(caseItem, 'done', 'clearance');
     }
   };
@@ -306,6 +312,8 @@ export default function ForwarderImportWorkspace({
     const returnPending = Boolean(selected.returnRequest && !selected.returnRequest.resolvedAt);
     const documentsLocked = stageIndex < FORWARDER_STAGE_ORDER.indexOf('clearance') || returnPending;
     const documentLockReason = returnPending ? '화주 회신·재검토 후 사용 가능' : '서류 검토 후 사용 가능';
+    const declarationStatus = customsLookupStatus.replace(/^수입신고\s*/, '') || '조회 전';
+    const declarationCleared = /수리|통관완료|반출/.test(customsLookupStatus);
 
     return (
       <div className="fwd-workspace">
@@ -359,7 +367,7 @@ export default function ForwarderImportWorkspace({
         <nav className="fwd-tabs" aria-label="수입 업무 상세 탭">
           <button type="button" aria-current={detailTab === 'review' ? 'page' : undefined} className={detailTab === 'review' ? 'is-active' : ''} onClick={() => setDetailTab('review')}>서류 검토</button>
           <button type="button" aria-current={detailTab === 'messages' ? 'page' : undefined} className={detailTab === 'messages' ? 'is-active' : ''} onClick={() => setDetailTab('messages')}>요청·회신{selected.returnRequest?.resolvedAt && <span className="fwd-tab-notice">회신 도착</span>}</button>
-          <button type="button" aria-current={detailTab === 'clearance' ? 'page' : undefined} className={detailTab === 'clearance' ? 'is-active' : ''} onClick={() => setDetailTab('clearance')}>통관·도착</button>
+          <button type="button" aria-current={detailTab === 'clearance' ? 'page' : undefined} className={detailTab === 'clearance' ? 'is-active' : ''} onClick={() => setDetailTab('clearance')}>통관·운송</button>
         </nav>
 
         {detailTab === 'messages' && <div className="fwd-message-toolbar"><span>화주와 주고받은 보완 요청 및 회신</span><button type="button" className="btn btn-secondary" disabled={refreshing} onClick={() => void load()}>{refreshing ? '확인 중…' : '새 회신 확인'}</button></div>}
@@ -460,7 +468,7 @@ export default function ForwarderImportWorkspace({
               <span>{pickedIssues.length ? `보완 요청 ${pickedIssues.length}건 선택` : '보완이 필요한 항목만 체크하세요.'}</span>
               <div>
                 <button type="button" className={`btn ${pickedIssues.length ? 'btn-primary' : 'btn-secondary'}`} disabled={saving || pickedIssues.length === 0} onClick={() => { setReturnFormOpen(true); setFinishReviewOpen(false); setReturnFormFocusKey(current => current + 1); }}>선택한 {pickedIssues.length}건 보완 요청</button>
-                <button type="button" className="btn btn-primary" disabled={saving || pickedIssues.length > 0} onClick={() => { setFinishReviewOpen(true); setReturnFormOpen(false); }}>전체 검토 완료 → 통관·도착</button>
+                <button type="button" className="btn btn-primary" disabled={saving || pickedIssues.length > 0} onClick={() => { setFinishReviewOpen(true); setReturnFormOpen(false); }}>전체 검토 완료 → 통관·운송</button>
               </div>
             </div>}
             {returnFormOpen && (() => {
@@ -498,7 +506,7 @@ export default function ForwarderImportWorkspace({
                   if (await persist(selected, { stage: 'clearance', issueResolutions: Object.fromEntries(pendingIssues.map(issue => [issue.id, true])), ...(note ? { issueNotes: Object.fromEntries(pendingIssues.map(issue => [issue.id, [selected.issueNotes[issue.id], note].filter(Boolean).join('\n')])) } : {}) }, [`전체 서류 검토 완료${note ? ' — ' + note : ''}`])) {
                     setFinishReviewOpen(false); setFinishReviewReason(''); setDetailTab('clearance');
                   }
-                }}>검토 완료 · 통관·도착으로</button>
+                }}>검토 완료 · 통관·운송으로</button>
               </div>
             </div>}
           </section>
@@ -528,11 +536,16 @@ export default function ForwarderImportWorkspace({
           </section>
         )}
 
-        <div hidden={detailTab !== 'clearance'}><ForwarderCargoPanel key={selected.tradeId} initialBlNo={selected.blNo} /></div>
+        <div hidden={detailTab !== 'clearance'}><ForwarderCargoPanel key={selected.tradeId} initialBlNo={selected.blNo} onStatusChange={setCustomsLookupStatus} /></div>
 
         {detailTab === 'clearance' && (
           <>
             {documentsLocked && <div className="fwd-document-lock" role="status"><span>{returnPending ? '화주 회신을 재검토하면 도착통지서와 배차 의뢰서를 작성할 수 있습니다.' : '서류 검토를 완료하면 도착통지서와 배차 의뢰서를 작성할 수 있습니다.'}</span><button type="button" className="btn btn-secondary" onClick={() => setDetailTab('review')}>서류 검토로 이동</button></div>}
+            <div className="fwd-customs-status-strip" aria-label="수입 통관 상태">
+              <span className="fwd-customs-status-title">통관 상태</span>
+              <span>수입신고 <strong>{declarationStatus}</strong></span>
+              <span>관부가세 <strong>{declarationCleared ? '납부 확인' : '확인 필요'}</strong></span>
+            </div>
             <ArrivalNoticeUploader
               workspaceMode
               showDisabledReason={false}
@@ -571,7 +584,7 @@ export default function ForwarderImportWorkspace({
                 배송지 관련 칸은 화주가 입력한 배송 요청에서 자동으로 채워진다. */}
             <section className="form-card import-card">
               <div className="import-card-heading">
-                <div><h2><span className="fwd-section-number">3</span> 국내 운송 준비</h2></div>
+                <div><h2><span className="fwd-section-number">3</span> D/O · 배차</h2></div>
               </div>
 
               {deliveryRequest ? (
@@ -720,9 +733,9 @@ export default function ForwarderImportWorkspace({
           {detailTab === 'clearance' && !returnPending && selected.stage === 'clearance' && (
             <>
               <button type="button" className="btn btn-primary" disabled={saving} onClick={() => finishClearance(selected)}>
-                <CheckCircle2 size={15} /> 서류 업무 완료
+                <CheckCircle2 size={15} /> 포워더 업무 완료
               </button>
-              <p className="fwd-action-hint">서류 업무 완료는 실제 통관 완료와 별개입니다.</p>
+              <p className="fwd-action-hint">화물 조회·A/N·D/O·배차 확인 후 완료하세요. 실제 세관·반출 상태는 변경되지 않습니다.</p>
             </>
           )}
           {detailTab === 'clearance' && !returnPending && selected.stage === 'done' && (

@@ -11,7 +11,7 @@ import type { ImportDispatchRequest } from './importTrade';
 import type { ArrivalNoticeMeta, ImportTradeSnapshot } from './importTrade';
 import type { SavedTrade } from '../types';
 
-/** 업무 단계 — Pre-alert 접수 → 서류 대사·보완 → 통관·도착 관리 → 반출·완료 */
+/** 업무 단계 — 의뢰 접수 → 서류 대사·보완 → 통관·운송 → 업무 완료 */
 export type ForwarderCaseStage = 'received' | 'review' | 'clearance' | 'done';
 
 export const FORWARDER_STAGE_ORDER: ForwarderCaseStage[] = ['received', 'review', 'clearance', 'done'];
@@ -19,8 +19,8 @@ export const FORWARDER_STAGE_ORDER: ForwarderCaseStage[] = ['received', 'review'
 export const FORWARDER_STAGE_LABEL: Record<ForwarderCaseStage, string> = {
   received: '의뢰 접수',
   review: '서류 검토',
-  clearance: '통관·도착',
-  done: '서류 완료',
+  clearance: '통관·운송',
+  done: '업무 완료',
 };
 
 /** 유입 경로 — 화주가 전송한 의뢰가 1순위, 직접 등록은 fallback */
@@ -66,7 +66,7 @@ export interface ForwarderCaseState {
   arrivalNotice?: ArrivalNoticeMeta | null;
   returnRequest?: ForwarderReturnRequest | null;
   activity?: ForwarderCaseActivity[];
-  /** 포워더가 작성한 배차 의뢰 — 통관·도착 단계에서 운송사에 전달한다 */
+  /** 포워더가 작성한 배차 의뢰 — 통관·운송 단계에서 운송사에 전달한다 */
   dispatchRequest?: ImportDispatchRequest | null;
   updatedAt: string;
 }

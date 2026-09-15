@@ -11,7 +11,7 @@ export function getInboxImporterName(item: Pick<ForwarderImportCase, 'importer'>
 
 /** Mutually exclusive inbox groups; reviewing a reply clears returnRequest in the existing workflow. */
 export function getInboxState(item: ForwarderImportCase): { category: InboxCategory; label: string; next: string; tone: string } {
-  if (item.stage === 'done') return { category: 'done', label: '서류 완료', next: '최종 서류 보기', tone: 'done' };
+  if (item.stage === 'done') return { category: 'done', label: '업무 완료', next: '완료 내역 보기', tone: 'done' };
   if (item.returnRequest?.resolvedAt) return { category: 'reply', label: '보완 회신', next: '수정본 확인', tone: 'reply' };
   if (item.returnRequest) return { category: 'progress', label: item.shipperEditing ? '화주 수정 중' : '화주 회신 대기', next: '회신 대기', tone: 'waiting' };
   if (item.stage === 'received') return { category: 'new', label: '신규 의뢰', next: '서류 검토', tone: 'new' };
