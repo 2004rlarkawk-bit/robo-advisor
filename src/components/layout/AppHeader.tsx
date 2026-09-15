@@ -10,6 +10,7 @@ import type { AuthSessionUser } from '../../services/authService';
 import type { UserProfile } from '../../services/profileService';
 import type { AppMenu } from '../../services/workspaceSessionService';
 import type { WorkspaceRole } from '../../utils/workspaceRole';
+import type { NotificationRecord } from '../../types/forwarderRequest';
 import NotificationBell from '../NotificationBell';
 import '../../styles/forwarderPolish.css';
 
@@ -26,6 +27,7 @@ interface AppHeaderProps {
   notificationPollKey?: unknown;
   onToggleSidebar: () => void;
   onNavigate: (menu: AppMenu) => void;
+  onOpenNotification?: (notification: NotificationRecord, menu: AppMenu) => void;
   onLogout: () => void;
 }
 
@@ -39,6 +41,7 @@ export default function AppHeader({
   notificationPollKey,
   onToggleSidebar,
   onNavigate,
+  onOpenNotification,
   onLogout,
 }: AppHeaderProps) {
   // 헤더 인사는 사람 이름(담당자명) 우선. 담당자명이 비어 있을 때만 회사명·이메일로 폴백.
@@ -77,7 +80,13 @@ export default function AppHeader({
       </div>
 
       <div className="header-actions">
-        <NotificationBell userId={user.id} pollKey={notificationPollKey} onNavigate={onNavigate} />
+        <NotificationBell
+          userId={user.id}
+          role={forwarderMode ? 'forwarder' : 'shipper'}
+          pollKey={notificationPollKey}
+          onNavigate={onNavigate}
+          onOpenNotification={onOpenNotification}
+        />
         <button
           className="icon-btn"
           type="button"

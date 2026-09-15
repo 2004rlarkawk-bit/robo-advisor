@@ -37,7 +37,10 @@ export interface ExternalForwarderRequest {
 export type NotificationType =
   | 'trade_request_received'
   | 'trade_request_accepted'
-  | 'trade_request_rejected';
+  | 'trade_request_rejected'
+  | 'trade_return_requested'
+  | 'trade_return_replied'
+  | 'trade_forwarder_completed';
 
 export interface NotificationRecord {
   id: string;
