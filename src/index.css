@@ -4650,3 +4650,6 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .shipper-describe-row { display: flex; gap: 8px; align-items: stretch; }
 .shipper-describe-row .form-input { flex: 1; min-width: 0; }
 .shipper-describe-row .btn { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+
+/* 대사 불일치 시 튀는 값 강조 — 어느 서류의 값이 다른지 즉시 보이게 */
+.mismatch-value { color: #b91c1c; font-weight: 700; }

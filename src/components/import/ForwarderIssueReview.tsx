@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, Info } from 'lu
 import type { ForwarderCaseIssue } from '../../types/forwarderCase';
 import type { ImportComparisonRow, ImportDocumentMeta } from '../../types/importTrade';
 import { getIssueComparisons } from '../../utils/forwarderIssueComparisons';
+import { comparisonOutliers } from '../../utils/comparisonOutliers';
 import { getIssueDocuments } from '../../utils/forwarderIssueDocuments';
 import { IMPORT_DOCUMENT_TYPE_LABELS } from '../../services/importDocumentAnalysisService';
 
@@ -67,11 +68,18 @@ export default function ForwarderIssueReview({ issues, notes, saving, documents 
           </button>
         </div>
         <div className="fwd-review-detail" id={`fwd-review-${issue.id}`} hidden={expandedId !== issue.id}>
-          {getIssueComparisons(issue, comparisons).map((row) => <div className="fwd-issue-comparison" key={row.field}>
-            <h3>{row.field} · 서류별 비교값 <span className={`match-badge ${row.matches ? 'match' : 'mismatch'}`}>{row.matches ? '일치' : '불일치'}</span></h3>
-            <dl><div><dt>C/I · 상업송장</dt><dd>{row.invoice || '추출값 없음'}</dd></div><div><dt>P/L · 포장명세서</dt><dd>{row.packingList || '추출값 없음'}</dd></div><div><dt>B/L · 선하증권</dt><dd>{row.billOfLading || '추출값 없음'}</dd></div></dl>
-            {row.detail && <p>{row.detail}</p>}
-          </div>)}
+          {getIssueComparisons(issue, comparisons).map((row) => {
+            const outliers = comparisonOutliers(row);
+            return <div className="fwd-issue-comparison" key={row.field}>
+              <h3>{row.field} · 서류별 비교값 <span className={`match-badge ${row.matches ? 'match' : 'mismatch'}`}>{row.matches ? '일치' : '불일치'}</span></h3>
+              <dl>
+                <div><dt>C/I · 상업송장</dt><dd className={outliers.has('invoice') ? 'mismatch-value' : undefined}>{row.invoice || '추출값 없음'}</dd></div>
+                <div><dt>P/L · 포장명세서</dt><dd className={outliers.has('packingList') ? 'mismatch-value' : undefined}>{row.packingList || '추출값 없음'}</dd></div>
+                <div><dt>B/L · 선하증권</dt><dd className={outliers.has('billOfLading') ? 'mismatch-value' : undefined}>{row.billOfLading || '추출값 없음'}</dd></div>
+              </dl>
+              {row.detail && <p>{row.detail}</p>}
+            </div>;
+          })}
           <div className="fwd-review-evidence">
             <h3>{evidence.length ? '근거 서류' : '제출 서류'}</h3>
             {!evidence.length && <p className="fwd-review-source-hint">{documents.length ? '연결된 근거 서류가 지정되지 않았습니다. 제출 서류에서 직접 확인하세요.' : '등록된 원본 서류가 없습니다.'}</p>}
