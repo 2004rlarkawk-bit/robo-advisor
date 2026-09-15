@@ -2875,7 +2875,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             {/* Page Title & Subtitle — 결과 화면(수출: 생성 후 / 수입: 2단계 이후)에서는 결과에 집중하도록 제목을 숨긴다 */}
             {!(tradeDirection === 'export' && hasGenerated)
               && !(tradeDirection === 'import' && workspaceCurrentStep > 1)
-              && <div className={`page-heading${tradeDirection === 'import' && workspaceRole === 'forwarder' ? ' page-heading--import-forwarder' : ''}`}>
+              && <div className="page-heading">
               <h1 className="page-title">{workspaceRole === 'forwarder' ? (tradeDirection === 'import' ? '수입 서류 작업실' : '수출 서류 작업실') : '항만 수출입 문서 자동화 서비스'}</h1>
               <p className="page-subtitle">{workspaceRole === 'forwarder'
                 ? (tradeDirection === 'import'

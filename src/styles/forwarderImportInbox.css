@@ -1,12 +1,11 @@
 /* List-only styles: preserve the import detail workflow and all shared screens. */
 .fwd-inbox { width: 100%; min-width: 0; color: #16233b; }
-.fwd-inbox-titlebar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
-.fwd-inbox-titlebar h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.025em; }
 .fwd-inbox .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; min-height: 40px; border-radius: 8px; font-size: 14px; white-space: nowrap; }
 .fwd-inbox-panel { padding: 24px; background: #fff; border: 1px solid #dce4ef; border-radius: 12px; }
 .fwd-inbox-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
-.fwd-inbox-panel-heading h3 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 700; }
-.fwd-inbox-panel-heading h3 span { border-radius: 5px; background: #f0f4f9; color: #64748b; padding: 3px 9px; font-size: 13px; font-weight: 600; }
+.fwd-inbox-panel-heading h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.015em; }
+.fwd-inbox-panel-heading h2 span { border-radius: 5px; background: #f0f4f9; color: #64748b; padding: 3px 9px; font-size: 13px; font-weight: 600; }
+.fwd-inbox-heading-actions { display: flex; align-items: center; gap: 8px; }
 .fwd-inbox .fwd-inbox-refresh { width: 44px; padding: 10px; background: #fff; }
 .fwd-inbox-filters { display: flex; gap: 18px; overflow-x: auto; border-bottom: 1px solid #dce4ef; }
 .fwd-inbox-filters button { flex-shrink: 0; padding: 11px 12px; border: 0; border-bottom: 3px solid transparent; color: #64748b; background: transparent; cursor: pointer; font-size: 14px; font-weight: 650; }
@@ -51,11 +50,11 @@
 .fwd-inbox button:disabled { opacity: .55; cursor: not-allowed; }
 .fwd-inbox-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
 @media (max-width: 640px) {
-  .fwd-inbox-titlebar h2 { font-size: 24px; }
-  .fwd-inbox-titlebar { align-items: flex-start; }
   .fwd-inbox .btn { padding: 10px 12px; font-size: 14px; }
   .fwd-inbox-panel { padding: 16px; }
-  .fwd-inbox-panel-heading h3 { font-size: 20px; }
+  .fwd-inbox-panel-heading { align-items: flex-start; }
+  .fwd-inbox-panel-heading h2 { font-size: 19px; }
+  .fwd-inbox-heading-actions .btn:not(.fwd-inbox-refresh) { padding-inline: 10px; }
   .fwd-inbox-filters { gap: 6px; }
   .fwd-inbox-filters button { padding: 12px 9px; font-size: 14px; }
 }
