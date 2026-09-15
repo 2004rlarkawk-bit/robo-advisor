@@ -91,6 +91,7 @@ function mapTradeRow(row: TradeRow): SavedTrade {
     riskSummary: importSnapshot?.risks ?? [],
     customsProgress: importSnapshot?.cargo ?? {},
     forwarderCase: row.workflow_data?.forwarderCase ?? null,
+    exportForwarderCase: row.workflow_data?.exportForwarderCase ?? null,
     status: row.status,
     generatedAt: row.generated_at ?? null,
     submittedAt: row.submitted_at ?? null,
@@ -291,9 +292,19 @@ export async function createGeneratedTrade(data: GeneratedTradeData): Promise<Sa
 /** 필요서류 재생성: 본인의 아직 제출되지 않은 동일 행만 UPDATE한다. */
 export async function updateGeneratedTrade(tradeId: string, data: GeneratedTradeData): Promise<SavedTrade> {
   const userId = await getRequiredUserId();
+  const payload = generatedTradePayload(data);
+  // generatedTradePayload()는 workflow_data를 {}로 초기화하므로, 포워더 수출 워크스페이스가
+  // 저장해 둔 운영 상태(exportForwarderCase 등)가 입력값 재저장 시 지워지지 않도록 이월한다.
+  const { data: existingRow } = await supabase
+    .from('trades')
+    .select('workflow_data')
+    .eq('id', tradeId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (existingRow?.workflow_data) payload.workflow_data = existingRow.workflow_data as TradeWorkflowData;
   const { data: row, error } = await supabase
     .from('trades')
-    .update(generatedTradePayload(data))
+    .update(payload)
     .eq('id', tradeId)
     .eq('user_id', userId)
     .eq('status', 'generated')

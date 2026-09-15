@@ -24,6 +24,7 @@ const DOCUMENT_OPTIONS: Array<{ value: TradeAttachmentDocumentType; label: strin
   { value: 'export_declaration', label: '수출신고필증' },
   { value: 'certificate_of_origin', label: '원산지증명서' },
   { value: 'insurance_policy', label: '적하보험증권' },
+  { value: 'bill_of_lading', label: 'Master B/L' },
   { value: 'other', label: '기타서류' },
 ];
 const FIELD_LABELS: Partial<Record<keyof ForwarderFormState, string>> = {

@@ -261,3 +261,9 @@
 @media (max-width: 420px) {
   .fwd-workspace .fwd-doc-gallery { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* 헤더 역할 전환 칩 — 겸용 계정에서 칩 하나를 누르면 반대 역할로 전환 */
+.header-role-chip--toggle { display: inline-flex; align-items: center; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.header-role-swap { margin-left: 2px; opacity: 0.55; }
+.header--shipper .header-role-chip--toggle:hover { background: #dcebff; }
+.header--forwarder .header-role-chip--toggle:hover { background: #d8e4f2; }

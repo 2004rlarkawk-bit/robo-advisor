@@ -170,6 +170,15 @@ export function isEtaBeforeEtd(etd: string, eta: string): boolean {
   return Boolean(etd && eta && eta < etd);
 }
 
+/**
+ * Booking 완료 여부의 단일 기준 — Booking No.가 저장되어 있으면 완료로 본다.
+ * 2단계(Booking 저장)·3단계(진행상태 표시)·5단계(완료 체크리스트)가 모두 이 함수로 판정해야
+ * "TradeProfile.bookingNo는 있는데 workflow_data.progress.booking은 비어있는" 불일치가 생기지 않는다.
+ */
+export function isBookingRegistered(state: Pick<ForwarderFormState, 'bookingNo'>): boolean {
+  return state.bookingNo.trim().length > 0;
+}
+
 export function forwarderFormToTradeProfile(state: ForwarderFormState): TradeProfile {
   const hasArrayCargo = state.cargoItems.some((item) =>
     item.descriptionOfGoods || item.numberOfPackages !== '' || item.kindOfPackages
