@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Inbox } from 'lucide-react';
+import { ArrowRight, BellRing, Inbox } from 'lucide-react';
 import type { TradeRequest, TradeRequestPreview } from '../../types/forwarderRequest';
 import {
   acceptTradeRequest,
@@ -84,23 +84,38 @@ function RequestCard({ request, onDecided, onAccepted }: RequestCardProps) {
   }
 
   return (
-    <div className="incoming-request-card">
+    <div className="incoming-request-card incoming-request-card--unread">
       <div className="incoming-request-head">
-        <strong>{preview.requesterCompany || '알 수 없는 업체'}</strong>
-        <span className="fwd-request-date">{formatDate(preview.createdAt)}</span>
+        <div className="incoming-request-alert">
+          <span className="incoming-request-alert-icon"><BellRing size={19} /></span>
+          <div>
+            <strong>새 포워더 의뢰가 도착했습니다</strong>
+            <span>{preview.requesterCompany || '알 수 없는 업체'} · {formatDate(preview.createdAt)}</span>
+          </div>
+        </div>
+        <span className="incoming-request-unread"><span aria-hidden="true" />읽지 않음</span>
       </div>
-      <dl className="incoming-request-grid">
-        <div><dt>담당자</dt><dd>{preview.requesterContact || '-'}</dd></div>
-        <div><dt>수출/수입</dt><dd>{preview.direction === 'export' ? '수출' : '수입'}</dd></div>
-        <div><dt>출발항</dt><dd>{preview.loadPort || '-'}</dd></div>
-        <div><dt>도착항</dt><dd>{preview.dischargePort || '-'}</dd></div>
-        <div><dt>품목명</dt><dd>{preview.itemName || '-'}</dd></div>
-      </dl>
-      {preview.message && <div className="incoming-request-message">{preview.message}</div>}
-      {error && <div className="form-message error">{error}</div>}
-      <div className="incoming-request-actions">
-        <button type="button" className="btn btn-secondary" disabled={deciding} onClick={() => void handleReject()}>거절</button>
-        <button type="button" className="btn btn-primary" disabled={deciding} onClick={() => void handleAccept()}>수락</button>
+      <div className="incoming-request-content">
+        <div className="incoming-request-summary">
+          <div className="incoming-request-primary">
+            <span className={`incoming-request-direction incoming-request-direction--${preview.direction}`}>
+              {preview.direction === 'export' ? '수출' : '수입'}
+            </span>
+            <strong>{preview.itemName || '품목명 미입력'}</strong>
+          </div>
+          <div className="incoming-request-route">
+            <span>{preview.loadPort || '출발항 미입력'}</span>
+            <ArrowRight size={16} aria-hidden="true" />
+            <span>{preview.dischargePort || '도착항 미입력'}</span>
+          </div>
+          <span className="incoming-request-contact">요청 담당자 {preview.requesterContact || '-'}</span>
+          {preview.message && <div className="incoming-request-message">{preview.message}</div>}
+          {error && <div className="form-message error">{error}</div>}
+        </div>
+        <div className="incoming-request-actions">
+          <button type="button" className="btn btn-secondary" disabled={deciding} onClick={() => void handleReject()}>거절</button>
+          <button type="button" className="btn btn-primary" disabled={deciding} onClick={() => void handleAccept()}>의뢰 수락</button>
+        </div>
       </div>
     </div>
   );
