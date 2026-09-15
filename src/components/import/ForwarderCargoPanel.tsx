@@ -3,7 +3,7 @@ import { Search } from 'lucide-react';
 import { lookupImportCargo } from '../../services/cargoProgressService';
 import type { CargoTrackingResult } from '../../types/importTrade';
 
-export default function ForwarderCargoPanel({ initialBlNo, onStatusChange }: { initialBlNo: string; onStatusChange?: (status: string | null) => void }) {
+export default function ForwarderCargoPanel({ initialBlNo, onStatusChange }: { initialBlNo: string; onStatusChange?: (status: string) => void }) {
   const [blNo, setBlNo] = useState(initialBlNo === '-' ? '' : initialBlNo);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -14,7 +14,7 @@ export default function ForwarderCargoPanel({ initialBlNo, onStatusChange }: { i
     if (busy || !blNo.trim()) return;
     const id = ++requestId.current;
     const queriedBlNo = blNo.trim();
-    setBusy(true); setError(''); setResult(null); onStatusChange?.(null);
+    setBusy(true); setError(''); setResult(null); onStatusChange?.('');
     try {
       const cargo = await lookupImportCargo(queriedBlNo);
       if (requestId.current === id) {
@@ -24,7 +24,7 @@ export default function ForwarderCargoPanel({ initialBlNo, onStatusChange }: { i
     } catch {
       if (requestId.current === id) {
         setError('조회하지 못했습니다. B/L 번호와 연결 상태를 확인한 뒤 다시 시도하세요.');
-        onStatusChange?.(null);
+        onStatusChange?.('');
       }
     } finally { if (requestId.current === id) setBusy(false); }
   };
