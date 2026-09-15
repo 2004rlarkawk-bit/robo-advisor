@@ -2852,8 +2852,12 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             {!(tradeDirection === 'export' && hasGenerated)
               && !(tradeDirection === 'import' && workspaceCurrentStep > 1)
               && <div className={`page-heading${tradeDirection === 'import' && workspaceRole === 'forwarder' ? ' page-heading--import-forwarder' : ''}`}>
-              <h1 className="page-title">{tradeDirection === 'import' && workspaceRole === 'forwarder' ? '수입 서류 작업실' : '항만 수출입 문서 자동화 서비스'}</h1>
-              <p className="page-subtitle">{tradeDirection === 'import' && workspaceRole === 'forwarder' ? '화주가 보낸 서류를 검토하고, 보완 요청과 후속 서류 작성을 진행합니다.' : 'AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.'}</p>
+              <h1 className="page-title">{workspaceRole === 'forwarder' ? (tradeDirection === 'import' ? '수입 서류 작업실' : '수출 서류 작업실') : '항만 수출입 문서 자동화 서비스'}</h1>
+              <p className="page-subtitle">{workspaceRole === 'forwarder'
+                ? (tradeDirection === 'import'
+                  ? '화주가 보낸 서류를 검토하고, 보완 요청과 후속 서류 작성을 진행합니다.'
+                  : '화주가 보낸 운송의뢰를 접수하고, Booking부터 B/L 발급까지 진행합니다.')
+                : 'AI 기반 로보 어드바이저가 통관 및 선적에 필요한 문서를 자동으로 생성해 드립니다.'}</p>
             </div>}
 
             {/* 결과·후속 단계에서는 거래 유형 선택 패널을 숨긴다 (수출 결과 화면과 동일 정책).

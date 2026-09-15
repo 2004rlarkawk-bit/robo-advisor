@@ -120,7 +120,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(rendered.container.textContent).toContain('여러 파일 선택');
       expect(rendered.container.textContent).toContain('AI 분석 및 빈 필드 자동입력');
       // 받은 의뢰함은 직접 등록 여부와 무관하게 그대로 유지된다.
-      expect(rendered.container.textContent).toContain('화주 운송의뢰 수신함');
+      expect(rendered.container.textContent).toContain('받은 의뢰');
 
       const closeButton = Array.from(rendered.container.querySelectorAll('button'))
         .find((button) => button.textContent?.trim() === '닫기') as HTMLButtonElement;
