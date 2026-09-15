@@ -17,7 +17,7 @@ import {
   validateOfficialImportHSK,
 } from '../../services/importHSCodeSuggestionService';
 import { resolveImportRisks } from '../../services/importRiskService';
-import { applyChosenValue, applyRiskFix, choiceLabel, clearChosenValue, mergeEditedChoices } from '../../services/importValueChoiceService';
+import { applyChosenValue, applyRiskFix, clearChosenValue, mergeEditedChoices } from '../../services/importValueChoiceService';
 import { IMPORT_DEMO_SCENARIO } from '../../services/importReconciliationFixtures';
 import {
   buildImportDeclarationDocx,
@@ -962,9 +962,14 @@ export default function ImportTradeFlow({
   // 사용자가 값을 고칠 때마다 현재 입력값 기준으로 다시 계산한다.
   const liveRisks = useMemo(() => {
     if (!state.analysis) return [];
-    const statusById = new Map(state.risks.map((risk) => [risk.id, risk.status]));
+    const storedById = new Map(state.risks.map((risk) => [risk.id, risk]));
     return resolveImportRisks(state.documents, state.analysis, state.suggestions, state.dutyError, importerCompanyName, undefined, role)
-      .map((risk) => ({ ...risk, status: statusById.get(risk.id) ?? risk.status }));
+      .map((risk) => {
+        const stored = storedById.get(risk.id);
+        // 값을 고른 카드는 항상 해결됨. 고른 값을 되돌렸다면 저장된 '해결됨'도 따라가지 않는다.
+        if (risk.chosen || stored?.chosen) return risk;
+        return { ...risk, status: stored?.status ?? risk.status };
+      });
   }, [state.analysis, state.documents, state.suggestions, state.dutyError, state.risks, importerCompanyName, role]);
 
   // 재계산으로 목록이 바뀌어도 '확인 완료' 표시가 유실되지 않도록 파생 목록을 그대로 저장한다.
@@ -1002,9 +1007,6 @@ export default function ImportTradeFlow({
     ...current,
     analysis: clearChosenValue(current.analysis, key),
   } : current));
-  const chosenRiskValues = state.analysis
-    ? Object.entries(state.analysis.chosenValues ?? {}).map(([key, value]) => ({ key, value, label: choiceLabel(key, state.analysis!) }))
-    : [];
 
   const declarationData = useMemo(() => (state.analysis ? {
     fields: state.analysis.extracted,
@@ -1198,7 +1200,6 @@ export default function ImportTradeFlow({
             risks={liveRisks}
             onToggle={readOnly ? undefined : toggleRisk}
             onChoose={readOnly || role !== 'shipper' ? undefined : chooseRiskValue}
-            chosen={role === 'shipper' ? chosenRiskValues : []}
             onClearChoice={readOnly || role !== 'shipper' ? undefined : clearRiskValue}
             onFix={readOnly || role !== 'shipper' ? undefined : fixRiskValue}
             onGoHs={readOnly || role !== 'shipper' ? undefined : goToHsItem}
@@ -1226,7 +1227,7 @@ export default function ImportTradeFlow({
           {role === 'forwarder' ? <ImportDocumentComparison rows={state.analysis.comparison} /> : (
             <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
             <section className="form-card import-card">
-              <div className="import-card-heading">
+              <div className="import-card-heading import-hs-heading">
                 <div><span className="ai-badge">대한민국 공식 HSK</span><h2>G. 품목별 HSK 자동추천 및 확정</h2></div>
                 <p>해외 문서 코드는 참고용이며, 관세청 공식 HSK 후보를 선택하거나 검증된 10자리 코드를 직접 입력해야 합니다.</p>
               </div>
@@ -1498,13 +1499,19 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
   );
 }
 
-function RiskSummary({ risks, onToggle, onChoose, chosen = [], onClearChoice, onFix, onGoHs, onGoUpload }: {
+/** 고른 값과 서류 값이 같은지 — '4,631 KG'와 정규화된 '4631'도 같은 값으로 본다. */
+function sameChoiceValue(a: string, b: string): boolean {
+  if (a.trim() === b.trim()) return true;
+  const digits = (value: string) => value.replace(/[^\d.]/g, '');
+  return /\d/.test(a) && /^[\d.,\s]*[A-Za-z]*\s*$/.test(a.trim()) && /^[\d.,\s]*[A-Za-z]*\s*$/.test(b.trim()) && digits(a) === digits(b);
+}
+
+function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, onGoUpload }: {
   risks: ImportRisk[];
   onToggle?: (id: string) => void;
   /** 불일치 카드에서 맞는 값을 골랐을 때 */
   onChoose?: (key: string, value: string) => void;
-  /** 이미 고른 값 — 카드가 사라진 뒤에도 되돌릴 수 있게 목록으로 보여준다 */
-  chosen?: Array<{ key: string; label: string; value: string }>;
+  /** 고른 값 되돌리기 — 눌린 버튼을 다시 누르거나 [선택 취소] */
   onClearChoice?: (key: string) => void;
   /** 카드 안에서 값을 입력해 고쳤을 때 */
   onFix?: (target: ImportRiskFixTarget, value: string) => void;
@@ -1537,23 +1544,39 @@ function RiskSummary({ risks, onToggle, onChoose, chosen = [], onClearChoice, on
               ))}
             </div>
             <p className="fix-card__desc">{risk.cause}</p>
-            {onChoose && !resolved && risk.pickGroups?.map((group) => {
+            {onChoose && (!resolved || risk.chosen) && risk.pickGroups?.map((group) => {
               const customKey = `${risk.id}::${group.key}`;
               const custom = customValues[customKey] ?? '';
+              const selected = group.selected;
+              const selectedIsChoice = !!selected && group.choices.some((choice) => sameChoiceValue(selected, choice.value));
               return (
                 <div key={group.key} className="risk-pick">
                   <span className="risk-pick-label">맞는 {group.label} 고르기</span>
                   <div className="risk-pick-choices">
-                    {group.choices.map((choice) => (
+                    {group.choices.map((choice) => {
+                      const isSelected = !!selected && sameChoiceValue(selected, choice.value);
+                      return (
+                        <button
+                          key={`${choice.source}-${choice.value}`}
+                          type="button"
+                          className={`risk-pick-choice${isSelected ? ' is-selected' : ''}`}
+                          aria-pressed={isSelected}
+                          onClick={() => (isSelected ? onClearChoice?.(group.key) : onChoose(group.key, choice.value))}
+                        >
+                          <em>{choice.source}</em>{choice.value}
+                        </button>
+                      );
+                    })}
+                    {selected && !selectedIsChoice && (
                       <button
-                        key={`${choice.source}-${choice.value}`}
                         type="button"
-                        className="risk-pick-choice"
-                        onClick={() => onChoose(group.key, choice.value)}
+                        className="risk-pick-choice is-selected"
+                        aria-pressed
+                        onClick={() => onClearChoice?.(group.key)}
                       >
-                        <em>{choice.source}</em>{choice.value}
+                        <em>직접 입력</em>{selected}
                       </button>
-                    ))}
+                    )}
                   </div>
                   <div className="risk-pick-custom">
                     <input
@@ -1659,7 +1682,15 @@ function RiskSummary({ risks, onToggle, onChoose, chosen = [], onClearChoice, on
               </details>
             )}
           </div>
-          {onToggle ? (
+          {risk.chosen && onClearChoice ? (
+            <button
+              type="button"
+              className="risk-check-btn on"
+              onClick={() => risk.pickGroups?.forEach((group) => { if (group.selected) onClearChoice(group.key); })}
+            >
+              <RotateCcw size={14} /> 선택 취소
+            </button>
+          ) : onToggle ? (
             <button
               type="button"
               className={`risk-check-btn${resolved ? ' on' : ''}`}
@@ -1678,19 +1709,6 @@ function RiskSummary({ risks, onToggle, onChoose, chosen = [], onClearChoice, on
   return (
     <section className="form-card import-card">
       <div className="import-card-heading"><div><h2>AI 검증 결과</h2></div></div>
-      {chosen.length > 0 && (
-        <div className="risk-chosen">
-          <span className="risk-chosen-title">직접 고른 값</span>
-          {chosen.map((entry) => (
-            <span key={entry.key} className="risk-chosen-chip">
-              {entry.label}: <strong>{entry.value}</strong>
-              {onClearChoice && (
-                <button type="button" aria-label={`${entry.label} 고른 값 되돌리기`} onClick={() => onClearChoice(entry.key)}>되돌리기</button>
-              )}
-            </span>
-          ))}
-        </div>
-      )}
       {nothingFound ? (
         <div className="risk-pass">
           <CheckCircle2 size={20} />

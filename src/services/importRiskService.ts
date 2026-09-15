@@ -187,22 +187,42 @@ export function resolveImportRisks(
   role: UserTradeRole = 'shipper',
 ): ImportRisk[] {
   if (DEMO_FIXED_IMPORT_RISKS) return DEMO_IMPORT_RISKS.map((risk) => ({ ...risk }));
-  const input = reconciliationInput ?? buildReconciliationInput(analysis, documents.map((document) => document.type));
+  const presentTypes = documents.map((document) => document.type);
+  const input = reconciliationInput ?? buildReconciliationInput(analysis, presentTypes);
   const reconciliation = runImportReconciliation(input);
+  const chosen = analysis.chosenValues ?? {};
+  // 화주가 맞는 값을 고른 뒤에도 카드는 남긴다 — 고르기 전 원본 값으로 불일치를 찾고,
+  // 고른 값은 눌린 버튼으로 보여준다(해결된 카드로 취급).
+  const hasFieldChoice = !reconciliationInput && Object.keys(chosen).some((key) => key.startsWith('field:'));
+  const originalInput = hasFieldChoice
+    ? buildReconciliationInput({ ...analysis, chosenValues: undefined }, presentTypes)
+    : input;
+  const originalFails = new Map(hasFieldChoice
+    ? runImportReconciliation(originalInput).filter((result) => result.status === 'fail').map((result) => [result.ruleId, result] as const)
+    : []);
   const ruleRisks: ImportRisk[] = reconciliation
-    .filter((result) => result.status === 'fail')
-    .map((result) => {
+    .filter((result) => result.status === 'fail' || originalFails.has(result.ruleId))
+    .flatMap((current) => {
+      const stillFails = current.status === 'fail';
+      const result = stillFails ? current : originalFails.get(current.ruleId)!;
       // 서류마다 같아야 하는 값이면, 서류별 값을 보여주고 맞는 값을 고르게 한다.
       const pickGroups: ImportRiskPickGroup[] = (RULE_CHOICE_KEYS[result.ruleId] ?? [])
-        .map((key) => ({
-          key: fieldChoiceKey(key),
-          label: CHOICE_FIELD_LABEL[key],
-          choices: uniqueChoices(result.documents
-            .map((type) => ({ source: SHORT_DOC_LABEL[type] ?? type, value: (input[type]?.[key] ?? '').trim() }))
-            .filter((choice) => choice.value)),
-        }))
+        .map((key) => {
+          const selected = chosen[fieldChoiceKey(key)]?.trim();
+          return {
+            key: fieldChoiceKey(key),
+            label: CHOICE_FIELD_LABEL[key],
+            choices: uniqueChoices(result.documents
+              .map((type) => ({ source: SHORT_DOC_LABEL[type] ?? type, value: (originalInput[type]?.[key] ?? '').trim() }))
+              .filter((choice) => choice.value)),
+            ...(selected ? { selected } : {}),
+          };
+        })
         .filter((group) => group.choices.length >= 2);
-      return {
+      const isChosen = !stillFails && pickGroups.some((group) => group.selected);
+      // 고른 값 없이 다른 수정으로 해소된 규칙은 목록에서 뺀다.
+      if (!stillFails && !isChosen) return [];
+      return [{
         id: `reconcile-${result.ruleId}`,
         level: result.severity === 'error' ? 'high' : 'medium',
         // 규칙 번호(IR8 등)는 내부 기준이라 제목에 붙이지 않는다 — id에만 남긴다.
@@ -214,8 +234,9 @@ export function resolveImportRisks(
         relatedDocuments: result.documents.map((document) => DOC_LABEL[document] ?? document),
         ...(pickGroups.length ? { pickGroups } : {}),
         ...(pickGroups.length ? {} : (() => { const fixes = ruleFixes(result.ruleId, analysis); return fixes.length ? { fixes } : {}; })()),
-        status: 'unresolved' as const,
-      };
+        ...(isChosen ? { chosen: true } : {}),
+        status: isChosen ? 'resolved' as const : 'unresolved' as const,
+      }];
     });
   const existing = assessImportRisks(documents, analysis, suggestions, dutyError, importerCompanyName, role)
     .filter((risk) => risk.id !== 'reference');
@@ -242,18 +263,23 @@ export function assessImportRisks(
   // 품목 출처 서류 ID를 배지용 서류 이름으로 바꾼다(중복 제거).
   const sourceDocumentNames = (ids: string[]) => [...new Set(ids.map(docNameOf))];
 
-  // 화주가 이미 맞는 값을 고른 항목은 해결된 것으로 보고 목록에서 뺀다.
+  // 화주가 이미 맞는 값을 고른 항목은 해결된 것으로 보되, 카드는 남기고 고른 값을 눌린 버튼으로 보여준다.
+  const chosen = analysis.chosenValues ?? {};
   const risks: ImportRisk[] = analysis.validations
-    .filter((validation) => !isValidationChosen(analysis, validation))
-    .map((validation) => {
+    .flatMap((validation) => {
       const choices = uniqueChoices((validation.values ?? [])
         .map((entry) => ({ source: docNameOf(entry.documentId), value: (entry.value ?? '').trim() }))
         .filter((choice) => choice.value));
       const docKey = validationDocKey(validation.field);
+      const isChosen = isValidationChosen(analysis, validation);
+      const groupKey = choiceKeyForValidation(validation);
+      const selected = (chosen[groupKey] ?? chosen[`validation:${validation.id}`])?.trim();
       const pickGroups: ImportRiskPickGroup[] = choices.length >= 2
-        ? [{ key: choiceKeyForValidation(validation), label: docKey ? CHOICE_FIELD_LABEL[docKey] : titleForField(validation.field).replace(/\s*불일치$/, ''), choices }]
+        ? [{ key: groupKey, label: docKey ? CHOICE_FIELD_LABEL[docKey] : titleForField(validation.field).replace(/\s*불일치$/, ''), choices, ...(selected ? { selected } : {}) }]
         : [];
-      return {
+      // 고를 선택지가 없는데 해결된 항목은 보여줄 게 없으니 뺀다.
+      if (isChosen && !pickGroups.length) return [];
+      return [{
         id: validation.id,
         level: validation.severity === 'error' ? 'high' : 'medium',
         item: titleForField(validation.field),
@@ -262,8 +288,9 @@ export function assessImportRisks(
         relatedDocuments: validation.documents.map((document) => DOC_LABEL[document] ?? document),
         differentValues: validation.values?.map((entry) => `${docNameOf(entry.documentId)}: ${entry.value}`),
         ...(pickGroups.length ? { pickGroups } : {}),
-        status: 'unresolved' as const,
-      };
+        ...(isChosen ? { chosen: true } : {}),
+        status: isChosen ? 'resolved' as const : 'unresolved' as const,
+      }];
     });
   const add = (risk: ImportRisk) => {
     if (!risks.some((entry) => entry.id === risk.id)) risks.push(risk);

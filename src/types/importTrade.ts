@@ -313,6 +313,8 @@ export interface ImportRiskPickGroup {
   key: string;
   label: string;
   choices: Array<{ source: string; value: string }>;
+  /** 화주가 이미 고른 값 — 카드는 그대로 두고 이 값 버튼만 눌린 상태로 보여준다 */
+  selected?: string;
 }
 
 export interface ImportRisk {
@@ -325,6 +327,8 @@ export interface ImportRisk {
   differentValues?: string[];
   /** 값을 골라 해결할 수 있는 불일치일 때만 채운다. */
   pickGroups?: ImportRiskPickGroup[];
+  /** 맞는 값을 골라서 해결된 카드 — 목록에 남기되 해결된 것으로 본다 */
+  chosen?: boolean;
   /** 카드 안에서 바로 고칠 수 있는 방법 */
   fixes?: ImportRiskFix[];
   status: 'unresolved' | 'resolved';

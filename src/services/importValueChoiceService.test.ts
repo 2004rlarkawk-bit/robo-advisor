@@ -47,29 +47,35 @@ describe('수입 불일치 — 맞는 값 고르기', () => {
     expect(riskById(analysis, 'v-invoice')?.pickGroups?.[0].key).toBe('validation:v-invoice');
   });
 
-  it('값을 고르면 해당 경고가 사라지고 추출 결과에도 반영된다', () => {
+  it('값을 고르면 카드는 남아 해결됨으로 바뀌고, 고른 값이 표시되며 추출 결과에도 반영된다', () => {
     const chosen = applyChosenValue(baseAnalysis(), 'field:grossWeight', '4,631 KG');
-    expect(riskById(chosen, 'reconcile-IR3')).toBeUndefined();
+    const ir3 = riskById(chosen, 'reconcile-IR3');
+    expect(ir3).toMatchObject({ status: 'resolved', chosen: true });
+    // 선택지는 고르기 전 서류별 원본 값 그대로
+    expect(ir3?.pickGroups?.[0].choices).toEqual([{ source: 'P/L', value: '1,317 KG' }, { source: 'B/L', value: '4,631 KG' }]);
+    expect(ir3?.pickGroups?.[0].selected).toBeTruthy();
     expect(chosen.extracted.grossWeight).toBe('4631');
     expect(chosen.comparison[0].billOfLading).toBe('4,631 KG'); // 원본 비교표는 그대로
     expect(buildReconciliationInput(chosen, documents.map((d) => d.type)).packing_list?.grossWeight).toBe('4631');
 
     const invoice = applyChosenValue(chosen, 'validation:v-invoice', 'INV-002');
-    expect(riskById(invoice, 'v-invoice')).toBeUndefined();
+    expect(riskById(invoice, 'v-invoice')).toMatchObject({ status: 'resolved', chosen: true });
+    expect(riskById(invoice, 'v-invoice')?.pickGroups?.[0].selected).toBe('INV-002');
     expect(invoice.extracted.invoiceNo).toBe('INV-002');
   });
 
   it('되돌리면 경고가 다시 나타난다', () => {
     const chosen = applyChosenValue(baseAnalysis(), 'field:grossWeight', '4631');
-    expect(riskById(clearChosenValue(chosen, 'field:grossWeight'), 'reconcile-IR3')).toBeDefined();
+    expect(riskById(clearChosenValue(chosen, 'field:grossWeight'), 'reconcile-IR3')).toMatchObject({ status: 'unresolved' });
+    expect(riskById(clearChosenValue(chosen, 'field:grossWeight'), 'reconcile-IR3')?.chosen).toBeUndefined();
   });
 
   it('분석 결과 표에서 직접 고친 칸도 확인한 값으로 보고 다시 계산한다', () => {
     const analysis = baseAnalysis();
     const edited = mergeEditedChoices(analysis, { ...analysis.extracted, dischargePort: 'BOSTON, USA' });
     expect(edited.chosenValues).toEqual({ 'field:dischargePort': 'BOSTON, USA' });
-    expect(riskById(edited, 'reconcile-IR12')).toBeUndefined();
-    expect(riskById(edited, 'reconcile-IR3')).toBeDefined(); // 고치지 않은 항목은 그대로
+    expect(riskById(edited, 'reconcile-IR12')).toMatchObject({ status: 'resolved', chosen: true });
+    expect(riskById(edited, 'reconcile-IR3')).toMatchObject({ status: 'unresolved' }); // 고치지 않은 항목은 그대로
   });
 
   it('저장본을 다시 불러와도 고른 값이 유지된다', () => {
