@@ -13,7 +13,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 22px;
+  margin-bottom: 28px;
 }
 
 .shipper-requests-head h1 {
@@ -41,7 +41,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  margin-bottom: 18px;
+  margin-bottom: 24px;
   padding: 12px 16px;
   border: 1px solid #dbe4ef;
   border-radius: 11px;
