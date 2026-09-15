@@ -45,7 +45,8 @@ async function getRequiredUserId(): Promise<string> {
   return userId;
 }
 
-/** 이메일로 등록된 포워더 계정을 검색한다. 본인·화주 계정·존재하지 않는 이메일이면 null. */
+/** 이메일로 등록된 포워더 계정을 검색한다. 화주 전용 계정·존재하지 않는 이메일이면 null.
+ *  겸용(integrated) 계정은 본인 이메일도 검색된다 — 한 계정 시연에서 자기에게 의뢰하는 흐름용. */
 export async function searchForwarderByEmail(email: string): Promise<ForwarderLookupResult | null> {
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
