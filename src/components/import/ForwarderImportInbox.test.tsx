@@ -69,11 +69,12 @@ describe('ForwarderImportInbox', () => {
     expect(button('선택한 의뢰 열기').disabled).toBe(true);
     expect(container.querySelector('.fwd-inbox-selection')).toBeNull();
   });
-  it('preserves direct registration and refresh actions', async () => {
+  it('hides the direct registration entry (demo period) while keeping refresh working', async () => {
+    // 직접 등록은 구 위저드로 이동해 시연 기간 숨김 — DIRECT_UPLOAD_ENABLED로 복원한다.
     await render();
-    await act(async () => button('직접 등록').click());
+    expect(container.textContent).not.toContain('직접 등록');
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="의뢰 새로고침"]')!.click());
-    expect(onDirectUpload).toHaveBeenCalledOnce();
+    expect(onDirectUpload).not.toHaveBeenCalled();
     expect(onRefresh).toHaveBeenCalledOnce();
   });
   it('shows a single empty state, loading state and recoverable errors without opening stale cases', async () => {
