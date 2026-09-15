@@ -105,4 +105,18 @@ describe('NotificationBell', () => {
     expect(service.markAllNotificationsRead).toHaveBeenCalledWith('forwarder');
     expect(container.querySelector('.notif-badge')).toBeNull();
   });
+
+  it('알 수 없는 이전 알림 형식도 빈 카드 대신 기본 안내를 표시한다', async () => {
+    service.listNotifications.mockResolvedValue([{ ...received, type: 'legacy_event' }]);
+    await act(async () => {
+      root.render(<NotificationBell userId="forwarder-1" role="forwarder" onNavigate={vi.fn()} />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.notif-bell-button')?.click();
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain('새 업무 알림이 도착했습니다');
+    expect(container.textContent).toContain('인천테크 · 무선 이어폰');
+  });
 });

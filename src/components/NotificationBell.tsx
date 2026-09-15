@@ -77,6 +77,17 @@ const PRESENTATION: Record<NotificationType, NotificationPresentation> = {
   },
 };
 
+const DEFAULT_PRESENTATION: NotificationPresentation = {
+  title: '새 업무 알림이 도착했습니다',
+  fallbackDetail: '알림을 열어 관련 업무를 확인해 주세요.',
+  icon: Bell,
+  tone: 'info',
+};
+
+function getPresentation(type: NotificationType): NotificationPresentation {
+  return PRESENTATION[type] ?? DEFAULT_PRESENTATION;
+}
+
 function formatTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
@@ -97,7 +108,7 @@ function payloadText(payload: Record<string, unknown>, ...keys: string[]): strin
 }
 
 function notificationDetail(notification: NotificationRecord): string {
-  const presentation = PRESENTATION[notification.type];
+  const presentation = getPresentation(notification.type);
   const company = payloadText(
     notification.payload,
     'requester_company',
@@ -120,6 +131,8 @@ function notificationTarget(notification: NotificationRecord): AppMenu {
     case 'trade_return_requested':
     case 'trade_forwarder_completed':
       return 'docs';
+    default:
+      return 'dashboard';
   }
 }
 
@@ -255,7 +268,7 @@ export default function NotificationBell({
 
   if (!userId) return null;
 
-  const toastPresentation = toast ? PRESENTATION[toast.type] : null;
+  const toastPresentation = toast ? getPresentation(toast.type) : null;
   const ToastIcon = toastPresentation?.icon;
 
   return (
@@ -313,7 +326,7 @@ export default function NotificationBell({
               </div>
             ) : (
               notifications.map((notification) => {
-                const presentation = PRESENTATION[notification.type];
+                const presentation = getPresentation(notification.type);
                 const Icon = presentation.icon;
                 return (
                   <button
