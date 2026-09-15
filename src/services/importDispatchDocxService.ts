@@ -12,6 +12,7 @@ import {
 import { renderAsync } from 'docx-preview';
 import type { ImportDeliveryRequest, ImportDispatchRequest } from '../types/importTrade';
 import type { ForwarderImportCase } from '../types/forwarderCase';
+import { portaiFileName } from '../utils/documentFileName';
 
 /** 배차 의뢰서 템플릿 스키마 — 참고양식의 칸과 1:1 대응. */
 export interface ImportDispatchSchema {
@@ -381,7 +382,7 @@ export async function downloadDispatchRequestDocx(
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `DispatchRequest_${caseItem.blNo || caseItem.tradeId.slice(0, 8)}.docx`;
+  anchor.download = portaiFileName('dispatch_request', 'docx');
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();

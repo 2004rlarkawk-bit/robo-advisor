@@ -375,8 +375,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     expect(noAmtIssues.find(i => i.id === 'dutiable-value-info')).toBeUndefined();
   });
 
-  // 시연 플래그가 켜져 있으면 bizno-invalid 를 발행하지 않으므로 건너뛴다.
-  it.skipIf(DEMO_HIDE_EXTRA_EXPORT_ISSUES)('체크섬이 틀린 사업자등록번호는 error, 올바른 번호는 (키 미설정 시) 형식확인 info가 된다', async () => {
+  it('체크섬이 틀린 사업자등록번호는 확인 권장(warning), 올바른 번호는 (키 미설정 시) 형식확인 info가 된다', async () => {
     const businessSpy = vi.spyOn(
       customsApiService,
       'verifyBusinessRegistration'
@@ -396,7 +395,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
         source: 'simulation',
       });
 
-    // 123-45-67890: 체크섬 불일치 → error(반드시 수정 — 사유 입력 시 우회 가능)
+    // 123-45-67890: 체크섬 불일치 → warning(확인 권장 — 생성은 막지 않음)
     const badBizProfile: TradeProfile = {
       ...baseAsyncProfile,
       businessRegistrationNo: '123-45-67890',
@@ -406,8 +405,7 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     const badIssue = badIssues.find(i => i.id === 'bizno-invalid');
 
     expect(badIssue).toBeDefined();
-    expect(badIssue?.severity).toBe('error');
-    expect(badIssue?.overridable).toBe(true);
+    expect(badIssue?.severity).toBe('warning');
 
     // 124-81-00998: 체크섬 유효, 국세청 API 미사용 → 형식확인 info
     const okBizProfile: TradeProfile = {
@@ -423,6 +421,16 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
 
     expect(checksumInfo).toBeDefined();
     expect(checksumInfo?.severity).toBe('info');
+  });
+
+  it('수출 거래에서 사업자등록번호가 비어 있으면 확인 권장(warning)을 띄운다', async () => {
+    const emptyIssues = await validateTradeDocumentsAsync({ ...baseAsyncProfile, businessRegistrationNo: '' });
+    const missing = emptyIssues.find(i => i.id === 'bizno-missing');
+    expect(missing?.severity).toBe('warning');
+    expect(missing?.field).toBe('businessRegistrationNo');
+
+    const importIssues = await validateTradeDocumentsAsync({ ...baseAsyncProfile, tradeType: 'import', businessRegistrationNo: '' });
+    expect(importIssues.find(i => i.id === 'bizno-missing')).toBeUndefined();
   });
 
   // ===== 입력값 검증 모듈 (팀원 Python 스펙 포팅) =====

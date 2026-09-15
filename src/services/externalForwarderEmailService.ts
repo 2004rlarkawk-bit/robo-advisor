@@ -10,6 +10,7 @@ import { buildInvoiceDocx } from './invoiceDocxService';
 import { buildPackingListDocx } from './packingListDocxService';
 import { buildBillOfLadingDocx } from './billOfLadingDocxService';
 import { buildTransportRequestDocx } from './transportRequestDocxService';
+import { portaiFileName, type PortaiDocumentKey } from '../utils/documentFileName';
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -109,11 +110,12 @@ async function buildAttachment(
   return { document_type: type, file_name: fileName, mime_type: DOCX_MIME_TYPE, data_url: dataUrl };
 }
 
-const DOCUMENT_FILE_NAMES: Record<AttachableDocumentType, string> = {
-  transport_request: 'Shipping_Request.docx',
-  invoice: 'Commercial_Invoice.docx',
-  packing_list: 'Packing_List.docx',
-  bill_of_lading: 'Bill_of_Lading.docx',
+// 첨부 파일 이름도 다운로드와 같은 규칙(PortAI_문서명_월.일.docx)을 쓴다.
+const DOCUMENT_FILE_KEYS: Record<AttachableDocumentType, PortaiDocumentKey> = {
+  transport_request: 'transport_request',
+  invoice: 'invoice',
+  packing_list: 'packing_list',
+  bill_of_lading: 'bl',
 };
 
 export interface SendExternalForwarderEmailInput {
@@ -138,7 +140,7 @@ export async function sendExternalForwarderEmail(input: SendExternalForwarderEma
   }
 
   const documents = await Promise.all(
-    input.documentTypes.map((type) => buildAttachment(type, input.trade, DOCUMENT_FILE_NAMES[type])),
+    input.documentTypes.map((type) => buildAttachment(type, input.trade, portaiFileName(DOCUMENT_FILE_KEYS[type], 'docx'))),
   );
 
   const { data, error } = await supabase.functions.invoke<{ ok: boolean }>('send-forwarder-request-email', {

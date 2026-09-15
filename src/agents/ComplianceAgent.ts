@@ -40,8 +40,10 @@ export class ComplianceAgent implements Agent<ComplianceInput, ComplianceResult>
       issues.push(...checkPackingInvoiceConsistency(generatedDocs.invoice, generatedDocs.packingList, logs));
     }
 
-    // HSCodeAgent의 검증 결과를 통합
-    if (hsResult) {
+    // HSCodeAgent의 검증 결과를 통합.
+    // 수출은 화주 폼에서 HS Code 입력 시 추천·재추천·되묻기로 이미 안내하므로 결과 화면에서
+    // HS 항목(미입력·형식 검토·R17 류 불일치)을 다시 띄우지 않는다(2026-09-15 결정). 수입 경로는 그대로 둔다.
+    if (hsResult && profile.tradeType !== 'export') {
       // R17. 품명 기반 추천 분류와 입력 코드의 류(Chapter) 대조 — 복붙·앞자리 착각 검출
       issues.push(...checkHsChapterMismatch(profile, hsResult, logs));
 

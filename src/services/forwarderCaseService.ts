@@ -19,6 +19,7 @@ import {
   type ForwarderImportCase,
 } from '../types/forwarderCase';
 import { fetchSavedTrades } from './storageService';
+import { cleanRiskTitle } from '../utils/riskDisplay';
 
 // 검증 결과의 field는 영문 키(grossWeight 등)로 오는 경우가 있어 화면용 한글 라벨로 바꾼다.
 const ISSUE_FIELD_LABELS: Record<string, string> = {
@@ -65,7 +66,8 @@ function riskToIssue(risk: ImportRisk, resolutions: Record<string, boolean>): Fo
   return {
     id,
     severity: risk.level === 'high' ? 'blocker' : risk.level === 'info' ? 'info' : 'check',
-    title: risk.item,
+    // 옛 결과의 규칙 번호(IR8. 등)는 떼고 보여준다. 관련 서류(documents)는 id 매칭에 쓰이므로 그대로 둔다.
+    title: cleanRiskTitle(risk.item),
     detail: risk.cause,
     documents: risk.relatedDocuments,
     // 리스크 자체의 확인 상태(구 플로우)와 워크스페이스 체크를 모두 인정

@@ -24,6 +24,8 @@ import {
   printImportDeclarationAsPdf,
   renderImportDeclarationPreview,
 } from '../../services/importDeclarationService';
+import { cleanRiskTitle, displayRelatedDocuments } from '../../utils/riskDisplay';
+import { duplicateImportDocumentsMessage, findDuplicateImportDocuments } from '../../utils/importDocumentDuplicates';
 import { lookupImportCargo } from '../../services/cargoProgressService';
 import { saveShipperReturnReply } from '../../services/forwarderCaseService';
 import {
@@ -503,6 +505,9 @@ export default function ImportTradeFlow({
   const analyze = async () => {
     setMessage('');
     if (!state.documents.length) return setMessage('분석할 파일을 먼저 업로드해 주세요.');
+    // 같은 종류 서류가 2부 이상이면 서류끼리 대조할 수 없으므로 분석 전에 막는다.
+    const duplicateDocuments = findDuplicateImportDocuments(state.documents);
+    if (duplicateDocuments.length) return setMessage(duplicateImportDocumentsMessage(duplicateDocuments));
     if (role === 'shipper') {
       const required: ImportDocumentType[] = ['commercial_invoice', 'packing_list', 'bill_of_lading'];
       const missing = required.filter((type) => !state.documents.some((document) => document.type === type));
@@ -1469,8 +1474,8 @@ function RiskSummary({ risks, onToggle, description }: {
           </span>
           <div className="fix-card__text">
             <div className="fix-card__titlerow">
-              <span className="fix-card__title">{risk.item}</span>
-              {risk.relatedDocuments.slice(0, 3).map((doc) => (
+              <span className="fix-card__title">{cleanRiskTitle(risk.item)}</span>
+              {displayRelatedDocuments(risk.relatedDocuments).slice(0, 3).map((doc) => (
                 <span key={doc} className="fix-card__doc">{doc}</span>
               ))}
             </div>

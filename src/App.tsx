@@ -53,6 +53,7 @@ import OnboardingTour from './components/OnboardingTour';
 import TradeDirectionSelector from './components/trade/TradeDirectionSelector';
 import AppHeader from './components/layout/AppHeader';
 import type { TradeTypeCounts, TradeTypeFilter } from './utils/tradeTypeFilter';
+import { portaiFileName } from './utils/documentFileName';
 import AppSidebar, { navigationItemsForRole } from './components/layout/AppSidebar';
 import DocumentManagerReadOnlyAction from './components/DocumentManagerReadOnlyAction';
 import type { ImportTradeSnapshot, TradeDirection } from './types/importTrade';
@@ -115,6 +116,8 @@ import { normalizeGoodsDescription } from './services/goodsDescriptionService';
 import {
   EMPTY_SHIPPER_SUPPLEMENTAL_STATE,
   getGoodsDescriptionValidationMessage,
+  findMissingShipperRequiredInputs,
+  missingShipperInputsMessage,
   primaryShipperItemToTradeProfile,
   summarizeShipperItems,
   tradeProfileToPrimaryShipperItem,
@@ -1440,6 +1443,15 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     const itemsToValidate = validationProfile.shipperItems?.length
       ? validationProfile.shipperItems
       : [tradeProfileToPrimaryShipperItem(validationProfile)];
+    // 필수 입력이 비어 있으면 생성하지 않고 짧게 안내한 뒤 첫 빈 칸으로 이동한다.
+    const missingInputs = findMissingShipperRequiredInputs(validationProfile, itemsToValidate);
+    if (missingInputs.length > 0) {
+      const message = missingShipperInputsMessage(missingInputs);
+      alert(message);
+      setHighlightHint(message);
+      setHighlightField(missingInputs[0].field);
+      return false;
+    }
     const goodsDescriptionError = getGoodsDescriptionValidationMessage(itemsToValidate);
     if (goodsDescriptionError) {
       alert(goodsDescriptionError);
@@ -2020,24 +2032,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     await rerunAgents(updatedProfile);
   };
 
-  const getDocFileName = (docId: string) => {
-    const labels: Record<string, string> = {
-      invoice: 'Invoice',
-      packing_list: 'PackingList',
-      co: 'CO',
-      bl: 'BL',
-      transport_request: 'TransportRequest',
-      customs_dec: 'CustomsDeclaration',
-      insurance: 'InsurancePolicy',
-    };
-    const docTypeLabel = labels[docId] ?? docId;
-    const sourceProfile = tradeDirection === 'export' && workspaceRole === 'forwarder'
-      ? forwarderFormToTradeProfile(forwarderForm)
-      : profile;
-    const company = sourceProfile.companyName || 'ExportCo';
-    const dateStr = (sourceProfile.departureDate || new Date().toISOString().split('T')[0]).replace(/[-]/g, '');
-    return `${docTypeLabel}_${company}_${dateStr}.pdf`;
-  };
+  // 파일 이름 규칙 PortAI_문서명_월.일 — 호출부가 .pdf를 .docx로 바꿔 쓰므로 .pdf를 붙여 돌려준다.
+  const getDocFileName = (docId: string) =>
+    portaiFileName(docId === 'customs_dec' && tradeDirection === 'import' ? 'import_declaration' : docId, 'pdf');
 
   // 상업송장 docx Blob을 브라우저 인쇄로 PDF 저장 — 미리보기와 같은 docx-preview 렌더를 인쇄 iframe에 그려
   // 벡터(텍스트 선택·추출 가능) PDF로 뽑는다. (정적 호스팅이라 서버 soffice 변환은 불가 → 클라이언트 인쇄 사용.)

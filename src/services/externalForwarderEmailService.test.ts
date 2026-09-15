@@ -109,7 +109,7 @@ describe('sendExternalForwarderEmail', () => {
           trade_id: 'trade-1',
           recipient_email: 'forwarder@example.com',
           documents: [
-            expect.objectContaining({ document_type: 'invoice', file_name: 'Commercial_Invoice.docx' }),
+            expect.objectContaining({ document_type: 'invoice', file_name: expect.stringMatching(/^PortAI_commercial\.invoice_\d{2}\.\d{2}\.docx$/) }),
           ],
         }),
         headers: { Authorization: 'Bearer token-123' },

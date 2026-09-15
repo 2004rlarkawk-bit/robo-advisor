@@ -10,6 +10,15 @@ import type {
 import { reconcileFromAnalysis, runImportReconciliation } from './importReconciliationEngine';
 import { parseTradeNumber } from '../utils/number';
 
+/** 업로드 파일 id → 문서 이름(Commercial Invoice 등). 모르는 id는 빼고 중복은 합친다. */
+function documentLabelsFor(ids: string[], documents: ImportDocumentMeta[]): string[] {
+  const labels = ids
+    .map((id) => documents.find((document) => document.id === id || document.sourceId === id))
+    .filter((document): document is ImportDocumentMeta => Boolean(document))
+    .map((document) => DOC_LABEL[document.type] ?? document.type);
+  return [...new Set(labels)];
+}
+
 const DOC_LABEL: Record<ImportDocumentType, string> = {
   commercial_invoice: 'Commercial Invoice',
   packing_list: 'Packing List',
@@ -143,7 +152,8 @@ export function resolveImportRisks(
     .map((result) => ({
       id: `reconcile-${result.ruleId}`,
       level: result.severity === 'error' ? 'high' : 'medium',
-      item: `${result.ruleId}. ${result.label}`,
+      // 규칙 번호(IR8 등)는 내부 기준이라 제목에 붙이지 않는다 — id에만 남긴다.
+      item: result.label,
       cause: result.evidence,
       recommendation: 'C/I·P/L·B/L·C/O·보험증권 원본을 대조하고 확인된 값으로 정정하세요.',
       relatedDocuments: result.documents.map((document) => DOC_LABEL[document] ?? document),
@@ -237,10 +247,10 @@ export function assessImportRisks(
   }
   fields.items.forEach((item, index) => {
     if (!item.originCountry) add({ id: `origin-${item.id}`, level: 'high', item: `품목 ${index + 1} 원산지 누락`, cause: '첨부문서에서 품목 원산지가 확인되지 않았습니다.', recommendation: 'C/O, C/I, P/L 순으로 품목 원산지를 확인하세요.', relatedDocuments: ['Certificate of Origin', 'Commercial Invoice', 'Packing List'], status: 'unresolved' });
-    if (role === 'shipper' && !item.confirmedHSCode) add({ id: `hs-${item.id}`, level: 'high', item: `품목 ${index + 1} HS Code 미확정`, cause: item.documentHSCode ? '문서 HS Code가 있으나 사용자가 최종 확정하지 않았습니다.' : '문서 HS Code가 없고 추천 후보도 아직 확정되지 않았습니다.', recommendation: recommendationFor('hs'), relatedDocuments: item.sourceDocumentIds, status: 'unresolved' });
+    if (role === 'shipper' && !item.confirmedHSCode) add({ id: `hs-${item.id}`, level: 'high', item: `품목 ${index + 1} HS Code 미확정`, cause: item.documentHSCode ? '문서 HS Code가 있으나 사용자가 최종 확정하지 않았습니다.' : '문서 HS Code가 없고 추천 후보도 아직 확정되지 않았습니다.', recommendation: recommendationFor('hs'), relatedDocuments: documentLabelsFor(item.sourceDocumentIds, documents), status: 'unresolved' });
     const itemSuggestions = suggestions.filter((suggestion) => !suggestion.itemId || suggestion.itemId === item.id);
     if (itemSuggestions.length && Math.max(...itemSuggestions.map((suggestion) => suggestion.confidence)) < 0.7) {
-      add({ id: `hs-confidence-${item.id}`, level: 'medium', item: `품목 ${index + 1} HS Code 신뢰도 낮음`, cause: 'AI 추천 후보의 최고 신뢰도가 70% 미만입니다.', recommendation: '추천에 부족하다고 표시된 재질·용도·규격을 확인하고 관세사 검토를 받으세요.', relatedDocuments: item.sourceDocumentIds, status: 'unresolved' });
+      add({ id: `hs-confidence-${item.id}`, level: 'medium', item: `품목 ${index + 1} HS Code 신뢰도 낮음`, cause: 'AI 추천 후보의 최고 신뢰도가 70% 미만입니다.', recommendation: '추천에 부족하다고 표시된 재질·용도·규격을 확인하고 관세사 검토를 받으세요.', relatedDocuments: documentLabelsFor(item.sourceDocumentIds, documents), status: 'unresolved' });
     }
   });
   if (dutyError) {

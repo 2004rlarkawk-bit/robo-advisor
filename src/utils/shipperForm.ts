@@ -133,3 +133,35 @@ export function getGoodsDescriptionValidationMessage(items: ShipperItem[]): stri
   }
   return null;
 }
+
+export interface MissingShipperInput {
+  field: 'companyName' | 'contact' | 'partnerName' | 'itemName' | 'quantity' | 'unitPrice' | 'incoterms';
+  label: string;
+}
+
+/**
+ * 필요 서류 자동 생성 전에 비어 있으면 안 되는 핵심 입력(폼의 필수 배지 항목 중 생성에 꼭 필요한 것).
+ * 폼 위에서 아래 순서로 돌려준다 — 첫 항목으로 스크롤한다.
+ */
+export function findMissingShipperRequiredInputs(
+  profile: Pick<TradeProfile, 'companyName' | 'contact' | 'partnerName' | 'incoterms'>,
+  items: ShipperItem[],
+): MissingShipperInput[] {
+  const blank = (value: unknown) => value === undefined || value === null || String(value).trim() === '';
+  const missing: MissingShipperInput[] = [];
+  if (blank(profile.companyName)) missing.push({ field: 'companyName', label: '회사명' });
+  if (blank(profile.contact)) missing.push({ field: 'contact', label: '회사 연락처' });
+  if (blank(profile.partnerName)) missing.push({ field: 'partnerName', label: 'Consignee 회사명' });
+  if (items.length === 0 || items.some((item) => blank(item.itemName))) missing.push({ field: 'itemName', label: '영문 품명' });
+  if (items.length === 0 || items.some((item) => blank(item.quantity))) missing.push({ field: 'quantity', label: '수량' });
+  if (items.length === 0 || items.some((item) => blank(item.unitPrice))) missing.push({ field: 'unitPrice', label: '단가' });
+  if (blank(profile.incoterms)) missing.push({ field: 'incoterms', label: 'Incoterms' });
+  return missing;
+}
+
+/** 비어 있는 필수 항목 안내 한 줄 — 예) "회사명 외 6개 항목을 입력해 주세요." */
+export function missingShipperInputsMessage(missing: MissingShipperInput[]): string {
+  if (missing.length === 0) return '';
+  if (missing.length === 1) return `${missing[0].label} 항목을 입력해 주세요.`;
+  return `${missing[0].label} 외 ${missing.length - 1}개 항목을 입력해 주세요.`;
+}

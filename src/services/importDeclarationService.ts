@@ -10,6 +10,7 @@ import type {
 } from '../types/importTrade';
 // 고정 docx 템플릿(수입신고의뢰서) — 서식은 그대로 두고 {{placeholder}} 값만 주입한다.
 import templateUrl from '../../templates/import_declaration_request_template.docx?url';
+import { portaiFileName } from '../utils/documentFileName';
 
 export interface ImportDeclarationData {
   fields: ImportExtractedFields;
@@ -217,8 +218,9 @@ export async function renderImportDeclarationPreview(blob: Blob, container: HTML
   });
 }
 
-export function importDeclarationFileName(fields: ImportExtractedFields): string {
-  return `import_declaration_request_${text(fields.blNo).replace(/[^a-zA-Z0-9_-]/g, '_') || 'draft'}`;
+/** 파일 이름 규칙 PortAI_import.declaration.request_월.일 (확장자 제외) */
+export function importDeclarationFileName(_fields?: ImportExtractedFields): string {
+  return portaiFileName('import_declaration_request');
 }
 
 export async function downloadImportDeclarationDocx(data: ImportDeclarationData): Promise<void> {

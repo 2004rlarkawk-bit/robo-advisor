@@ -5,6 +5,7 @@ import {
 } from 'docx';
 import type { ForwarderImportCase } from '../types/forwarderCase';
 import type { ImportParty } from '../types/importTrade';
+import { portaiFileName } from '../utils/documentFileName';
 
 const text = (value: unknown): string => {
   const result = value == null ? '' : String(value).trim();
@@ -139,7 +140,7 @@ export async function downloadArrivalNoticeDocx(caseItem: ForwarderImportCase, i
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'ARRIVAL_NOTICE_' + (text(caseItem.blNo) || caseItem.tradeId).replace(/[\\/:*?"<>|]/g, '_') + '.docx';
+  link.download = portaiFileName('arrival_notice', 'docx');
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }

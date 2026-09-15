@@ -7,10 +7,10 @@ import { getRelatedLawForIssue } from '../services/lawService';
 
 /**
  * 영상 시연용 플래그.
- * 아래 세 이슈는 시연 시나리오에 불필요해 아예 발행하지 않는다.
+ * 아래 두 이슈는 시연 시나리오에 불필요해 아예 발행하지 않는다.
  *   co-required            원산지증명서 필요 여부
  *   insurance-needed-check 보험 필요 여부 확인
- *   bizno-invalid          사업자등록번호 국세청 미등록
+ * (사업자등록번호 형식·미등록 이슈는 2026-09-15부터 이 플래그와 무관하게 '확인 권장'으로 발행한다.)
  * 이슈 자체를 만들지 않으므로 목록·"확인 필요" 개수·초안 생성 모달 건수가 모두 함께 줄어든다.
  * 시연이 끝나면 false 로 바꾸면 원래 동작으로 즉시 복귀한다.
  */
@@ -563,6 +563,17 @@ export async function validateTradeDocumentsAsync(
     ''
   );
 
+  // 수출 화주는 사업자등록번호가 수출신고서 수출화주 칸에 들어가므로 비어 있으면 확인을 권한다(생성은 막지 않음).
+  if (bizNo.length === 0 && profile.tradeType === 'export') {
+    issues.push({
+      id: 'bizno-missing',
+      docType: 'customs_dec',
+      severity: 'warning',
+      message: '사업자등록번호가 입력되지 않았습니다. 수출신고서 수출화주 칸에 들어가는 값이니 확인해 주세요.',
+      field: 'businessRegistrationNo',
+    });
+  }
+
   if (bizNo.length > 0) {
     try {
       const biz = await withTimeout(
@@ -571,13 +582,12 @@ export async function validateTradeDocumentsAsync(
         '사업자번호 조회'
       );
 
-      if (!DEMO_HIDE_EXTRA_EXPORT_ISSUES && !biz.valid) {
+      if (!biz.valid) {
         issues.push({
           id: 'bizno-invalid',
           docType: 'customs_dec',
-          severity: 'error',
-          // 국세청 실조회 실패 시 사용자가 통제 불가 — 사유 기록 후 계속 진행 가능
-          overridable: true,
+          // 형식 오류·국세청 미등록은 '확인 권장' — 생성은 막지 않고 목록에 반드시 노출한다.
+          severity: 'warning',
           message: `사업자등록번호 확인 필요: ${biz.statusText} (통관 신고인 정보 불일치 시 세관 반려 사유가 됩니다.)`,
           field: 'businessRegistrationNo',
         });
