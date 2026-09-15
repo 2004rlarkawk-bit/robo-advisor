@@ -670,6 +670,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       : id === 'packing_list' ? !!packingListData
       : id === 'customs_dec' ? !!customsDeclarationData
       : id === 'transport_request' ? !!transportRequestData
+      : id === 'bl' ? !!billOfLadingData
       : !!htmlTemplates[id];
 
   // 미리보기 모달에서 상업송장은 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
@@ -1496,7 +1497,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
         setHasGenerated(true);
         blockedGenRef.current = { result, generationProfile, writeMode };
         // "제출 전 확인 필요" 건수 = 우측 패널에 뜨는 항목 수와 동일하게 계산한다.
-        // 반드시 수정(미override error) + 보완 권장(warning) 둘 다 포함(정보성 info·사실 카드 제외).
+        // 반드시 수정(미override error) + 확인 권장(warning) 둘 다 포함(정보성 info·사실 카드 제외).
         const noticeCount = issuesList.filter(
           (i) => !i.card && i.severity !== 'info' && !(i.severity === 'error' && overrides[issueKey(i)])
         ).length;
@@ -1970,7 +1971,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     const updatedProfile = { ...profile, coNeeded: answer };
     setProfile(updatedProfile);
     // 'yes'는 바로 재검증하지 않는다 — 같은 카드에서 원산지 선택·신청자료 정리를
-    // 이어서 보여주고, 다음 재검증부터는 답변됐으므로 보완 권장에 다시 뜨지 않는다.
+    // 이어서 보여주고, 다음 재검증부터는 답변됐으므로 확인 권장에 다시 뜨지 않는다.
     if (answer === 'no') {
       await rerunAgents(updatedProfile);
     }
@@ -2465,7 +2466,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   const completedDocsCount = documents.filter(d => d.status === 'completed').length;
   // 차단(제출/생성 게이트) = 미해결 error만.
   const blockingIssuesCount = unresolvedBlockers(issues, overrides).length;
-  // 결과 배너 표시용 = 반드시 수정(error) + 보완 권장(warning) 합산.
+  // 결과 배너 표시용 = 반드시 수정(error) + 확인 권장(warning) 합산.
   // 아래 확인 목록과 동일 기준: card 이슈 제외, 무시(override)된 error 제외 — 배너 숫자와 목록 개수가 일치한다.
   const bannerIssueCount = issues.filter(
     (i) => !i.card && i.severity !== 'info' && !(i.severity === 'error' && overrides[issueKey(i)]),
@@ -3876,7 +3877,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                             )}
                             {warningIssues.length > 0 && (
                               <details className="fixlist-group" open={errorIssues.length === 0}>
-                                <summary className="fixlist-group-head warn">보완 권장 {warningIssues.length}</summary>
+                                <summary className="fixlist-group-head warn">확인 권장 {warningIssues.length}</summary>
                                 <ul className="fixlist-items">{warningIssues.map(renderRow)}</ul>
                               </details>
                             )}
@@ -4276,7 +4277,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
 
                       <div className="mobile-fix-list">
                         {(() => {
-                          // 심각도별로 묶어 표시 — 오류(제출 차단) → 보완 권장 순.
+                          // 심각도별로 묶어 표시 — 오류(제출 차단) → 확인 권장 순.
                           // 성격이 다른 이슈를 문서 순서로 섞지 않고 그룹 헤더로 구분한다.
                           // info(참고)는 이 확인 목록에서 제외 — 요약 칩·사실 카드·확인 항목 3단 구성 유지,
                           // "확인 필요" 칩 숫자(needsCheck = error+warning)와 목록 개수가 일치한다.
@@ -4288,7 +4289,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           );
                           const sevMeta: Record<string, { label: string; hint: string; cls: string; icon: JSX.Element }> = {
                             error: { label: '반드시 수정', hint: '', cls: 'sev-error', icon: <OctagonAlert size={17} strokeWidth={2.4} /> },
-                            warning: { label: '보완 권장', hint: '', cls: 'sev-warning', icon: <AlertTriangle size={17} strokeWidth={2.4} /> },
+                            warning: { label: '확인 권장', hint: '', cls: 'sev-warning', icon: <AlertTriangle size={17} strokeWidth={2.4} /> },
                           };
                           const docLabelOf = (dt: string): string => (({
                             invoice: '상업송장', packing_list: '패킹리스트', bl: '선하증권 B/L', transport_request: '수출 운송의뢰서',
@@ -4318,7 +4319,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                             return null;
                           };
                           let lastSev: string | null = null;
-                          let warnSeq = 0; // 보완 권장 카드에 붙는 순번(1,2,3…)
+                          let warnSeq = 0; // 확인 권장 카드에 붙는 순번(1,2,3…)
                           return sorted.map((issue) => {
                             const showHeader = issue.severity !== lastSev;
                             lastSev = issue.severity;

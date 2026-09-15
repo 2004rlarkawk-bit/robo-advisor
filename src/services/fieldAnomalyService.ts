@@ -5,7 +5,7 @@
  * Edge Function(openai-assistant, action: flag-field-anomalies)에 값 목록을 보내
  * 임시값(test/asdf)·필드 뒤바뀜(회사명 칸에 주소)·잘린 값만 골라 받는다.
  *
- * 결과는 "AI 참고" 보완 권장으로만 쓴다 — 생성을 막지 않고, 실패하면 조용히 건너뛴다.
+ * 결과는 "AI 참고" 확인 권장으로만 쓴다 — 생성을 막지 않고, 실패하면 조용히 건너뛴다.
  */
 import { supabase } from '../lib/supabase';
 

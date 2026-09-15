@@ -285,3 +285,15 @@
   justify-content: flex-end;
   gap: 10px;
 }
+
+/* 전송 완료 화면 (요청·이메일·보완 요청 공통) */
+.fwd-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.fwd-modal-head h2 { margin-bottom: 16px; }
+.fwd-modal-close { display: inline-flex; padding: 4px; border: 0; border-radius: 8px; background: transparent; color: #64748b; cursor: pointer; }
+.fwd-modal-close:hover { background: #f1f5f9; color: #0f172a; }
+.sent-confirmation-body { display: flex; flex-direction: column; align-items: center; padding: 22px 8px 26px; text-align: center; }
+.sent-confirmation-icon { display: grid; place-items: center; width: 76px; height: 76px; margin-bottom: 18px; border-radius: 50%; background: #eef4ff; color: #0b57d0; }
+.sent-confirmation-body h3 { margin: 0 0 8px; color: #0f172a; font-size: 22px; font-weight: 800; }
+.sent-confirmation-body p { margin: 0; color: #334155; font-size: 15px; line-height: 1.6; }
+.sent-confirmation-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 18px; border-top: 1px solid var(--border-color, #e2e8f0); }
+.sent-confirmation-actions .btn { min-width: 96px; padding: 11px 20px; font-size: 14.5px; font-weight: 700; }

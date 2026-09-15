@@ -3,11 +3,9 @@ import {
   normalizeImportExtractedFields,
   syncLegacyImportFields,
 } from './importDocumentAnalysisService';
-import {
-  createImportDeclarationDocx,
-  generateImportDeclarationHtml,
-  generateImportDeclarationRequest,
-} from './importDeclarationService';
+import { readFileSync } from 'node:fs';
+import PizZip from 'pizzip';
+import { mapImportDeclarationToSchema } from './importDeclarationService';
 import { assessImportRisks } from './importRiskService';
 
 describe('수입 화주 문서 기반 흐름 서비스', () => {
@@ -51,7 +49,7 @@ describe('수입 화주 문서 기반 흐름 서비스', () => {
     expect(synced.items[0].confirmedHSCode).toBe('');
   });
 
-  it('웹 미리보기와 PDF 원본 HTML이 같은 확정 데이터를 사용하고 여러 품목을 출력한다', () => {
+  it('수입신고의뢰서 양식에 서류 값·품목 행·체크박스를 채운다', () => {
     const fields = normalizeImportExtractedFields({
       importerDetails: { name: 'ABC Korea' },
       exporterDetails: { name: 'ABC Trading' },
@@ -64,28 +62,56 @@ describe('수입 화주 문서 기반 흐름 서비스', () => {
         { id: '2', description: 'Kitchen tongs', confirmedHSCode: '8215999000', originCountry: 'China', quantity: '200', quantityUnit: 'PCS' },
       ],
     });
-    const html = generateImportDeclarationHtml({ fields, dutyError: '환율 API 조회 실패' });
-    const text = generateImportDeclarationRequest({ fields, dutyError: '환율 API 조회 실패' });
+    const schema = mapImportDeclarationToSchema({
+      fields,
+      dutyError: '환율 API 조회 실패',
+      requestDate: new Date(2026, 8, 15),
+      tradeId: 'trade-abc123',
+      documents: [
+        { id: 'd1', name: 'ci.pdf', size: 1, mimeType: 'application/pdf', type: 'commercial_invoice', status: 'analyzed' },
+        { id: 'd2', name: 'bl.pdf', size: 1, mimeType: 'application/pdf', type: 'bill_of_lading', status: 'analyzed' },
+      ],
+    });
 
-    for (const value of ['CI-001', 'Cotton T-shirts', 'Kitchen tongs', '6109100000', '8215999000']) {
-      expect(html).toContain(value);
-      expect(text).toContain(value);
-    }
-    expect(html).toContain('계산 불가');
-    expect(html).not.toContain('0원');
+    expect(schema.request_no).toBe('20260915-C123');
+    expect(schema.request_date).toBe('2026. 09. 15');
+    expect(schema.items.map((item) => item.name)).toEqual(['Cotton T-shirts', 'Kitchen tongs']);
+    expect(schema.items.map((item) => item.hs_code)).toEqual(['6109100000', '8215999000']);
+    expect(schema.cb_att_ci).toBe('■');
+    expect(schema.cb_att_bl).toBe('■');
+    expect(schema.cb_att_pl).toBe('□');
+    // 신고 구분·수입요건은 화주·관세사가 정하므로 체크하지 않는다.
+    expect(schema.cb_decl_general).toBe('□');
+    expect(schema.cb_req_none).toBe('□');
+    expect(JSON.stringify(schema)).not.toContain('0원');
   });
 
-  it('같은 의뢰서 데이터로 유효한 DOCX 다운로드 데이터를 만든다', async () => {
-    const fields = normalizeImportExtractedFields({
-      importerDetails: { name: 'ABC Korea' },
-      invoiceNo: 'CI-002',
-      items: [{ id: '1', description: 'Kitchen tongs', confirmedHSCode: '8215999000' }],
-    });
-    const docx = createImportDeclarationDocx({ fields });
-    const docxHeader = new Uint8Array(await docx.arrayBuffer()).slice(0, 2);
+  it('Incoterms는 FOB·CIF·CFR 외 조건을 기타로 표시하고 원산지증명서 유무로 FTA 칸을 고른다', () => {
+    const base = normalizeImportExtractedFields({ incoterms: 'EXW Shanghai', items: [] });
+    const exw = mapImportDeclarationToSchema({ fields: base });
+    expect(exw.cb_inco_other).toBe('■');
+    expect(exw.inco_other).toBe(' (EXW)');
+    expect(exw.cb_fta_check).toBe('■');
+    expect(exw.items).toHaveLength(1); // 품목이 없어도 빈 행 하나는 남긴다
 
-    expect(Array.from(docxHeader)).toEqual([0x50, 0x4b]);
-    expect(docx.type).toContain('wordprocessingml');
+    const cif = mapImportDeclarationToSchema({
+      fields: normalizeImportExtractedFields({ incoterms: 'CIF', items: [] }),
+      documents: [{ id: 'c', name: 'co.pdf', size: 1, mimeType: 'application/pdf', type: 'certificate_of_origin', status: 'analyzed' }],
+    });
+    expect(cif.cb_cif).toBe('■');
+    expect(cif.cb_inco_other).toBe('□');
+    expect(cif.cb_fta_apply).toBe('■');
+    expect(cif.cb_fta_check).toBe('□');
+  });
+
+  it('템플릿의 모든 칸이 스키마와 1:1로 맞는다', () => {
+    const xml = new PizZip(readFileSync('templates/import_declaration_request_template.docx')).file('word/document.xml')!.asText();
+    const tags = new Set((xml.match(/\{\{[#/]?([a-z_]+)\}\}/g) ?? []).map((tag) => tag.replace(/[{}#/]/g, '')));
+    const schema = mapImportDeclarationToSchema({ fields: normalizeImportExtractedFields({}) });
+    const keys = new Set([...Object.keys(schema), ...Object.keys(schema.items[0])]);
+    expect([...tags].filter((tag) => !keys.has(tag))).toEqual([]);
+    expect([...keys].filter((key) => !tags.has(key))).toEqual([]);
+    expect(xml).not.toContain('____');
   });
 
   it('필수 해상문서, 품목금액, 중량, HS 미확정과 API 실패를 구체적 리스크로 만든다', () => {

@@ -80,7 +80,7 @@ function recommendationFor(field: string): string {
 
 /**
  * 영상 시연용 고정 리스크.
- * 업로드한 파일 내용과 무관하게 항상 동일한 3건(반드시 수정 1 · 보완 권장 2)을 노출한다.
+ * 업로드한 파일 내용과 무관하게 항상 동일한 3건(반드시 수정 1 · 확인 권장 2)을 노출한다.
  * 시연이 끝나면 DEMO_FIXED_IMPORT_RISKS 를 false 로 바꾸면 실제 분석 결과가 그대로 표시된다.
  */
 export const DEMO_FIXED_IMPORT_RISKS = false;

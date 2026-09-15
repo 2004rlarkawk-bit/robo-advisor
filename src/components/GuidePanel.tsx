@@ -102,7 +102,7 @@ const EXPORT_DOC_GROUPS: DocGroup[] = [
 
 const LEGEND = [
   { tone: 'red', label: '반드시 수정', desc: '해결해야 전송할 수 있어요.' },
-  { tone: 'amber', label: '보완 권장', desc: '확인하면 좋지만 그대로 진행해도 돼요.' },
+  { tone: 'amber', label: '확인 권장', desc: '확인하면 좋지만 그대로 진행해도 돼요.' },
   { tone: 'green', label: '생성 완료', desc: '보기·다운로드할 수 있어요.' },
   { tone: 'gray', label: '발행 대기', desc: '다른 기관이 발급하는 서류예요.' },
 ];
@@ -157,7 +157,7 @@ const FAQ_GROUPS: { key: string; label: string; items: { q: string; a: string }[
       },
       {
         q: '경고를 그냥 넘기면 안 되나요?',
-        a: '[보완 권장]은 그대로 진행해도 되고, [반드시 수정]은 해결해야 최종 전송이 열려요. 부득이할 땐 사유를 남기고 생성할 수 있지만, 그 거래는 제출 보류로 표시됩니다.',
+        a: '[확인 권장]은 그대로 진행해도 되고, [반드시 수정]은 해결해야 최종 전송이 열려요. 부득이할 땐 사유를 남기고 생성할 수 있지만, 그 거래는 제출 보류로 표시됩니다.',
       },
     ],
   },

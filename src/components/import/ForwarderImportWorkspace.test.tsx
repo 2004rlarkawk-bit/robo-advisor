@@ -78,6 +78,9 @@ describe('forwarder task tabs', () => {
     await click('보완 요청 보내기 (2건)');
     expect(container.querySelector('.fwd-tabs .is-active')?.textContent).toBe('요청·회신');
     expect(container.querySelector('.fwd-return-banner')?.textContent).toContain('보낸 요청');
+    expect(container.querySelector('.sent-confirmation')?.textContent).toContain('보완 요청을 보냈어요');
+    await click('닫기');
+    expect(container.querySelector('.sent-confirmation')).toBeNull();
   });
 
   it('requires a reason for unresolved blockers, then saves completion atomically', async () => {

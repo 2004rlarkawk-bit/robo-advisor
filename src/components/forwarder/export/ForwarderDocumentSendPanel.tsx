@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Send } from 'lucide-react';
+import SentConfirmation from '../../common/SentConfirmation';
 import type { SavedTrade } from '../../../types';
 import { ATTACHABLE_DOCUMENT_LABELS, type AttachableDocumentType } from '../../../types/forwarderRequest';
 import { getAttachableDocumentTypes, sendExternalForwarderEmail } from '../../../services/externalForwarderEmailService';
@@ -84,7 +85,11 @@ export default function ForwarderDocumentSendPanel({
       <summary className="form-section-summary">{title}</summary>
       <p className="forwarder-step-description">{description}</p>
       {success ? (
-        <div className="form-message success">이메일을 전송했습니다.</div>
+        <SentConfirmation
+          title="이메일을 보냈어요"
+          message={`${recipientCompany.trim() || recipientEmail.trim()}에게 선택한 서류를 보냈어요.`}
+          actions={<button type="button" className="btn btn-secondary" onClick={() => setSuccess(false)}>다시 보내기</button>}
+        />
       ) : (
         <>
           <div className="form-grid">

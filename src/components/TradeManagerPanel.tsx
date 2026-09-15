@@ -51,7 +51,7 @@ function trayStatusOf(t: SavedTrade): { text: string; color: string; bg: string;
   const dl = deadlineInfo(t);
   if (errors > 0) return { text: `필수 오류 ${errors}건`, color: '#b91c1c', bg: '#fef2f2', accent: '#ef4444' };
   if (dl?.urgent) return { text: dl.label, color: '#b91c1c', bg: '#fef2f2', accent: '#ef4444' };
-  if (warns > 0) return { text: `보완 권장 ${warns}건`, color: '#b45309', bg: '#fffbeb', accent: '#f59e0b' };
+  if (warns > 0) return { text: `확인 권장 ${warns}건`, color: '#b45309', bg: '#fffbeb', accent: '#f59e0b' };
   if (t.status === 'in_progress') return { text: '입력 중', color: '#64748b', bg: '#f1f5f9', accent: '#cbd5e1' };
   return { text: '생성 준비 완료', color: '#15803d', bg: '#f0fdf4', accent: '#22c55e' };
 }

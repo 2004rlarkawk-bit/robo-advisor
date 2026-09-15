@@ -308,7 +308,7 @@ export default function DocumentManagerPanel({
               const ports = [p.loadPort, p.dischargePort].filter(Boolean).join(' → ');
               const route = [country, ports, p.incoterms].filter(Boolean).join(' · ');
               return (
-                <div key={trade.id} className="draft-tray-item dm-row">
+                <div key={trade.id} id={`dm-row-${trade.id}`} className="draft-tray-item dm-row">
                   <div className="draft-tray-info">
                     <div className="draft-tray-line1">
                       <span className={`trade-type-badge ${p.tradeType}`}>{p.tradeType === 'export' ? '수출' : '수입'}</span>
@@ -358,6 +358,11 @@ export default function DocumentManagerPanel({
           trade={requestModalTrade}
           onClose={() => setRequestModalTrade(null)}
           onSent={() => setStatusRefreshKey((key) => key + 1)}
+          onViewRequests={() => {
+            const tradeId = requestModalTrade.id;
+            setRequestModalTrade(null);
+            requestAnimationFrame(() => document.getElementById(`dm-row-${tradeId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+          }}
         />
       )}
     </section>

@@ -41,6 +41,8 @@ import ForwarderReturnRequestContent, { buildReturnRequestLetter } from './Forwa
 import ForwarderRequestMessages from './ForwarderRequestMessages';
 import { getInboxImporterName } from '../../utils/forwarderInbox';
 import '../../styles/forwarderPolish.css';
+import '../../styles/forwarderRequest.css';
+import SentConfirmation from '../common/SentConfirmation';
 
 interface Props {
   userId: string;
@@ -100,6 +102,8 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', send
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [returnFormOpen, setReturnFormOpen] = useState(false);
+  // 보완 요청 전송 완료 안내 — 요청·회신 탭으로 넘어간 뒤 그 위에 띄운다.
+  const [returnSentOpen, setReturnSentOpen] = useState(false);
   const returnFormRef = useRef<HTMLDivElement>(null);
   const [returnFormFocusKey, setReturnFormFocusKey] = useState(0);
   useEffect(() => {
@@ -455,7 +459,7 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', send
                   <button type="button" className="btn btn-primary" disabled={saving || pickedIssues.length === 0} onClick={async () => {
                     if (saving || pickedIssues.length === 0 || selected.returnRequest) return;
                     const saved = await persist(selected, { stage: 'review', returnRequest: { reason, issueTitles: pickedIssues.map(issue => issue.title), requestedAt: new Date().toISOString() } }, [`화주에게 보완 요청 (${pickedIssues.length}건: ${pickedIssues.map(issue => issue.title).join(', ')})`]);
-                    if (saved) { setReturnFormOpen(false); setReturnPicks({}); setReturnMemo(''); setDetailTab('messages'); }
+                    if (saved) { setReturnFormOpen(false); setReturnPicks({}); setReturnMemo(''); setDetailTab('messages'); setReturnSentOpen(true); }
                   }}><CornerUpLeft size={15} />{saving ? '보내는 중…' : `보완 요청 보내기 (${pickedIssues.length}건)`}</button>
                 </div>
               </div>;
@@ -707,6 +711,22 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', send
             </button>
           )}
         </div>
+        {returnSentOpen && (
+          <div className="fwd-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setReturnSentOpen(false); }}>
+            <div className="fwd-modal" role="dialog" aria-modal="true" aria-label="보완 요청 전송 완료">
+              <SentConfirmation
+                title="보완 요청을 보냈어요"
+                message="화주가 서류를 고쳐 회신하면 요청·회신 탭에 표시돼요."
+                actions={(
+                  <>
+                    <button type="button" className="btn btn-secondary" onClick={() => setReturnSentOpen(false)}>닫기</button>
+                    <button type="button" className="btn btn-primary" onClick={() => { setDetailTab('messages'); setReturnSentOpen(false); }}>요청·회신 보기</button>
+                  </>
+                )}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }

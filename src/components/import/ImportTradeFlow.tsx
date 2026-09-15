@@ -19,10 +19,11 @@ import {
 import { resolveImportRisks } from '../../services/importRiskService';
 import { IMPORT_DEMO_SCENARIO } from '../../services/importReconciliationFixtures';
 import {
-  downloadImportDeclarationRequest,
-  generateImportDeclarationHtml,
+  buildImportDeclarationDocx,
+  downloadImportDeclarationDocx,
+  printImportDeclarationAsPdf,
+  renderImportDeclarationPreview,
 } from '../../services/importDeclarationService';
-import type { ImportDeclarationDownloadFormat } from '../../services/importDeclarationService';
 import { lookupImportCargo } from '../../services/cargoProgressService';
 import { saveShipperReturnReply } from '../../services/forwarderCaseService';
 import {
@@ -389,7 +390,8 @@ export default function ImportTradeFlow({
   const skipNextLocalCacheWriteRef = useRef(false);
   const onWorkspaceStateChangeRef = useRef(onWorkspaceStateChange);
   onWorkspaceStateChangeRef.current = onWorkspaceStateChange;
-  const [downloadFormat, setDownloadFormat] = useState<ImportDeclarationDownloadFormat>('pdf');
+  const declarationPreviewRef = useRef<HTMLDivElement | null>(null);
+  const [declarationError, setDeclarationError] = useState('');
   // 포워더 보완 요청에 대한 화주 회신 메모 — 요청·회신이 같은 의뢰에 남는다
   const [reviseReply, setReviseReply] = useState('');
   const [reviseReplyBusy, setReviseReplyBusy] = useState(false);
@@ -963,12 +965,30 @@ export default function ImportTradeFlow({
       : risk)),
   }));
 
-  const declarationData = state.analysis ? {
+  const declarationData = useMemo(() => (state.analysis ? {
     fields: state.analysis.extracted,
     duty: state.duty ?? undefined,
     dutyError: state.dutyError,
     risks: state.risks,
-  } : null;
+    documents: state.documents,
+    importerCompanyName,
+    tradeId: state.tradeId,
+  } : null), [state.analysis, state.duty, state.dutyError, state.risks, state.documents, state.tradeId, importerCompanyName]);
+
+  // 보기를 누르면 다운로드와 같은 docx를 그대로 렌더한다.
+  useEffect(() => {
+    const container = declarationPreviewRef.current;
+    if (!preview || !declarationData || !container) return;
+    let cancelled = false;
+    setDeclarationError('');
+    void buildImportDeclarationDocx(declarationData)
+      .then((blob) => (cancelled ? undefined : renderImportDeclarationPreview(blob, container)))
+      .catch((error) => {
+        console.error('[수입신고의뢰서] 미리보기 실패:', error);
+        if (!cancelled) setDeclarationError('수입신고의뢰서를 만들지 못했습니다. 다시 시도해 주세요.');
+      });
+    return () => { cancelled = true; };
+  }, [preview, declarationData]);
 
   return (
     <div className="import-flow">
@@ -1135,10 +1155,13 @@ export default function ImportTradeFlow({
           <RiskSummary
             risks={liveRisks}
             onToggle={readOnly ? undefined : toggleRisk}
-            description={role === 'shipper'
-              ? '아래 분석 결과에서 값을 고치면 이 목록도 즉시 다시 계산됩니다. 서류 간 불일치처럼 어느 값이 맞는지 여기서 판단하기 어려운 항목은, 제출하면 포워더가 원본 서류와 대조해 검토·판단합니다.'
-              : '아래 분석 결과와 HSK 확정에서 값을 고치면 이 목록도 즉시 다시 계산됩니다.'}
           />
+          <div className="import-analysis-disclaimer">
+            <p>자동 분석 결과는 참고정보이며 최종 법률·통관 판단이 아닙니다.</p>
+            <p>{role === 'shipper'
+              ? '아래 분석 결과에서 값을 고치면 이 목록도 즉시 다시 계산됩니다. 서류 간 불일치처럼 어느 값이 맞는지 여기서 판단하기 어려운 항목은, 제출하면 포워더가 원본 서류와 대조해 검토·판단합니다.'
+              : '아래 분석 결과와 HSK 확정에서 값을 고치면 이 목록도 즉시 다시 계산됩니다.'}</p>
+          </div>
           <ImportAnalysisSummary
             analysis={state.analysis}
             importerCompanyName={role === 'shipper' ? importerCompanyName : undefined}
@@ -1246,25 +1269,24 @@ export default function ImportTradeFlow({
         <>
           <DutySummary duty={state.duty} error={state.dutyError} />
           <section className="form-card import-card">
-            <div className="import-card-heading"><div><h2>수입신고 의뢰서</h2></div><p>확정된 입력값과 예상세액 상태를 사용한 공식 신고 전 검토자료입니다.</p></div>
+            <div className="import-card-heading"><div><h2>수입신고 의뢰서</h2></div><p>서류에서 확인된 값을 수입신고의뢰서 양식에 채웠습니다. 관세사에게 보내기 전에 빈칸과 체크 항목을 확인하세요.</p></div>
             <div className="document-preview-actions">
-              <button className="btn btn-secondary" onClick={() => setPreview((value) => !value)}><Eye size={17} /> 보기</button>
-              <label className="document-format-select">
-                <select
-                  className="form-input"
-                  aria-label="다운로드 파일 형식"
-                  value={downloadFormat}
-                  onChange={(event) => setDownloadFormat(event.target.value as ImportDeclarationDownloadFormat)}
-                >
-                  <option value="pdf">PDF (.pdf)</option>
-                  <option value="docx">Word (.docx)</option>
-                </select>
-              </label>
-              <button className="btn btn-primary" onClick={() => void downloadImportDeclarationRequest(declarationData, downloadFormat)}>
-                <Download size={17} /> 선택 형식 다운로드
+              <button className="btn btn-secondary" onClick={() => setPreview((value) => !value)}><Eye size={17} /> {preview ? '닫기' : '보기'}</button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => void downloadImportDeclarationDocx(declarationData).catch(() => setDeclarationError('DOCX를 만들지 못했습니다. 다시 시도해 주세요.'))}
+              >
+                <Download size={17} /> DOCX 다운로드
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => void printImportDeclarationAsPdf(declarationData).catch(() => setDeclarationError('PDF 인쇄 창을 열지 못했습니다. 다시 시도해 주세요.'))}
+              >
+                <Download size={17} /> PDF 저장
               </button>
             </div>
-            {preview && <div className="declaration-preview" dangerouslySetInnerHTML={{ __html: generateImportDeclarationHtml(declarationData) }} />}
+            {declarationError && <p className="form-message error" role="alert">{declarationError}</p>}
+            {preview && <div className="declaration-preview" ref={declarationPreviewRef} />}
           </section>
 
           {/* 배송 요청 — 서류에 없고 화주만 아는 값이라 직접 입력받는다.
@@ -1430,7 +1452,7 @@ function RiskSummary({ risks, onToggle, description }: {
   onToggle?: (id: string) => void;
   description?: string;
 }) {
-  // 수출 결과 페이지의 확인 항목과 같은 문법: 반드시 수정(high) / 보완 권장(그 외) 두 그룹.
+  // 수출 결과 페이지의 확인 항목과 같은 문법: 반드시 수정(high) / 확인 권장(그 외) 두 그룹.
   const blockers = risks.filter((risk) => risk.level === 'high');
   const advisories = risks.filter((risk) => risk.level === 'medium' || risk.level === 'low');
   const nothingFound = blockers.length === 0 && advisories.length === 0;
@@ -1509,14 +1531,13 @@ function RiskSummary({ risks, onToggle, description }: {
           {advisories.length > 0 && (
             <div className="sev-section-header sev-warning">
               <span className="sev-section-icon"><AlertTriangle size={17} strokeWidth={2.4} /></span>
-              <span className="sev-section-label">보완 권장</span>
+              <span className="sev-section-label">확인 권장</span>
               <span className="sev-section-count">{advisories.length}</span>
             </div>
           )}
           {advisories.map(renderCard)}
         </div>
       )}
-      <p className="import-notice">자동 분석 결과는 참고정보이며 최종 법률·통관 판단이 아닙니다.</p>
     </section>
   );
 }

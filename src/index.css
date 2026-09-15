@@ -2599,7 +2599,8 @@ body {
 .import-delete { color: var(--error-color); }
 .import-empty { margin: 10px 0 0; padding: 18px; border-radius: 9px; background: #f8fafc; color: var(--text-light); text-align: center; font-size: 13px; }
 .import-card-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 18px; }
-.import-card-heading h2 { margin: 3px 0 0; font-size: 17px; }
+.import-card-heading > div:first-child { flex-shrink: 0; }
+.import-card-heading h2 { margin: 3px 0 0; font-size: 17px; white-space: nowrap; }
 .ai-badge, .source-badge { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: #ede9fe; color: #6d28d9; font-size: 10px; font-weight: 700; }
 .source-badge { background: #e0f2fe; color: #0369a1; }
 .import-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 24px; }
@@ -2655,12 +2656,15 @@ body {
 .document-format-select { min-width: 150px; }
 .document-format-select .form-input { height: 100%; min-height: 40px; }
 .declaration-preview { overflow: auto; margin: 16px 0 0; padding: 18px; border-radius: 9px; background: #f8fafc; font-family: inherit; font-size: 13px; }
-.declaration-preview .import-declaration-page { max-width: 100%; height: auto; min-height: 0 !important; margin: 0 auto 16px; box-shadow: 0 2px 12px rgba(15,23,42,.12); }
+.declaration-preview .docx-preview-wrapper { padding: 0; background: transparent; }
 .duty-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; padding: 1px; background: var(--border-color); }
 .duty-grid div { padding: 13px; background: #fff; }
 .duty-grid dt { color: var(--text-light); font-size: 11px; }
 .duty-grid dd { margin: 4px 0 0; font-weight: 700; }
 .import-notice { margin: 14px 0 0; padding: 11px; border-radius: 8px; background: #fffbeb; color: #92400e; font-size: 12px; line-height: 1.5; }
+.import-analysis-disclaimer { margin: -4px 6px 6px; color: var(--text-light); font-size: 12.5px; line-height: 1.5; }
+.import-analysis-disclaimer p { margin: 0; }
+.import-analysis-disclaimer p + p { margin-top: 4px; }
 .risk-complete { padding: 18px; border-radius: 9px; background: #ecfdf5; color: #065f46; }
 .risk-complete p { margin: 6px 0 0; line-height: 1.6; }
 .risk-list { display: grid; gap: 10px; }

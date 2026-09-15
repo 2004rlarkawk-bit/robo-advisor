@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
+import SentConfirmation from '../common/SentConfirmation';
 import type { SavedTrade } from '../../types';
 import { ATTACHABLE_DOCUMENT_LABELS, type AttachableDocumentType } from '../../types/forwarderRequest';
 import { searchForwarderByEmail, sendTradeRequest } from '../../services/forwarderRequestService';
@@ -11,11 +13,13 @@ interface Props {
   onClose: () => void;
   /** 요청 생성/이메일 발송 성공 시 호출 — 호출부에서 상태 목록을 새로고침한다. */
   onSent?: () => void;
+  /** 전송 완료 화면의 "요청 내역 보기" — 호출부에서 해당 거래의 요청 상태로 이동한다. */
+  onViewRequests?: () => void;
 }
 
 type Tab = 'internal' | 'external';
 
-export default function ForwarderRequestModal({ trade, onClose, onSent }: Props) {
+export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRequests }: Props) {
   const [tab, setTab] = useState<Tab>('internal');
 
   // 내부(회원) 검색 상태
@@ -105,6 +109,13 @@ export default function ForwarderRequestModal({ trade, onClose, onSent }: Props)
     }
   };
 
+  const sentActions = (
+    <>
+      <button type="button" className="btn btn-secondary" onClick={onClose}>닫기</button>
+      {onViewRequests && <button type="button" className="btn btn-primary" onClick={onViewRequests}>요청 내역 보기</button>}
+    </>
+  );
+
   return (
     <div
       className="fwd-modal-backdrop"
@@ -112,7 +123,10 @@ export default function ForwarderRequestModal({ trade, onClose, onSent }: Props)
       onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
       <div className="fwd-modal" role="dialog" aria-modal="true" aria-labelledby="fwd-modal-title">
-        <h2 id="fwd-modal-title">포워더에게 의뢰하기</h2>
+        <div className="fwd-modal-head">
+          <h2 id="fwd-modal-title">포워더에게 의뢰하기</h2>
+          <button type="button" className="fwd-modal-close" aria-label="닫기" onClick={onClose}><X size={22} /></button>
+        </div>
 
         <div className="fwd-modal-tabs">
           <button type="button" className={`fwd-modal-tab${tab === 'internal' ? ' active' : ''}`} onClick={() => setTab('internal')}>
@@ -125,7 +139,7 @@ export default function ForwarderRequestModal({ trade, onClose, onSent }: Props)
 
         {tab === 'internal' ? (
           internalSuccess ? (
-            <div className="form-message success">요청을 보냈습니다. 포워더가 수락하면 알려드릴게요.</div>
+            <SentConfirmation title="요청을 보냈어요" message="포워더가 수락하면 알려드릴게요." actions={sentActions} />
           ) : (
             <>
               <div className="fwd-field">
@@ -174,7 +188,11 @@ export default function ForwarderRequestModal({ trade, onClose, onSent }: Props)
             </>
           )
         ) : externalSuccess ? (
-          <div className="form-message success">이메일을 전송했습니다.</div>
+          <SentConfirmation
+            title="이메일을 보냈어요"
+            message={`${recipientCompany.trim() || recipientEmail.trim()}에게 의뢰 이메일을 보냈어요.`}
+            actions={sentActions}
+          />
         ) : (
           <>
             <div className="fwd-field">
