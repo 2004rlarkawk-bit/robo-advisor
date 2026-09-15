@@ -4703,18 +4703,31 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 /* 대사 불일치 시 튀는 값 강조 — 어느 서류의 값이 다른지 즉시 보이게 */
 .mismatch-value { color: #b91c1c; font-weight: 700; }
 
-/* 수입 AI 검증 결과 — 카드·헤더·고르기 박스·버튼 모서리를 각지게 (수출 결과 화면은 그대로) */
-.import-card .mobile-fix-list .sev-section-header { border-radius: 4px 4px 0 0; }
-.import-card .mobile-fix-list .mobile-fix-card { border-radius: 4px; }
-.import-card .mobile-fix-list .fix-card__marker--icon { border-radius: 4px; }
-.import-card .mobile-fix-list .fix-card__doc { border-radius: 3px; }
-.import-card .mobile-fix-list .risk-pick { border-radius: 4px; }
-.import-card .mobile-fix-list .risk-pick-choice,
-.import-card .mobile-fix-list .risk-pick-apply,
-.import-card .mobile-fix-list .risk-pick-custom .form-input,
-.import-card .mobile-fix-list .risk-fix-link,
-.import-card .mobile-fix-list .risk-check-btn,
-.import-card .mobile-fix-list .risk-detail summary,
-.import-card .mobile-fix-list .risk-detail-body { border-radius: 3px; }
-.import-card .risk-chosen-chip, .import-card .risk-chosen-chip button { border-radius: 3px; }
-.import-card .risk-pass { border-radius: 4px; }
+/* 확인 항목(수출·수입 결과 화면 공통) — 카드·헤더·고르기 박스·버튼 모서리를 각지게. 번호 동그라미·개수 배지는 원형 유지 */
+.mobile-fix-list .sev-section-header { border-radius: 4px 4px 0 0; }
+.mobile-fix-list .mobile-fix-card { border-radius: 4px; }
+.mobile-fix-list .fix-card__marker--icon { border-radius: 4px; }
+.mobile-fix-list .fix-card__doc { border-radius: 3px; }
+.mobile-fix-list .risk-pick { border-radius: 4px; }
+.mobile-fix-list .risk-pick-choice,
+.mobile-fix-list .risk-pick-apply,
+.mobile-fix-list .risk-pick-custom .form-input,
+.mobile-fix-list .risk-fix-link,
+.mobile-fix-list .risk-check-btn,
+.mobile-fix-list .risk-detail summary,
+.mobile-fix-list .risk-detail-body,
+.mobile-fix-list .fix-card__suggest,
+.mobile-fix-list .fix-card__amt,
+.mobile-fix-list .fix-card__action,
+.mobile-fix-list .mobile-fix-badge { border-radius: 3px; }
+.risk-chosen-chip, .risk-chosen-chip button { border-radius: 3px; }
+.risk-pass { border-radius: 4px; }
+/* 수출 결과 화면 전용 — 우측 고칠 항목 목록·입력 폼 인라인 안내 카드 */
+.fixlist-item { border-radius: 3px; }
+.inline-fix-card { border-radius: 4px; }
+.inline-fix-card .ifc-ic { border-radius: 4px; }
+.inline-fix-card .ifc-btn { border-radius: 3px; }
+.mobile-fix-list .mobile-btn,
+.mobile-fix-list .mobile-input { border-radius: 3px; }
+/* 수출 결과 화면 하단 — 전체 문서 전송·뒤로 가기(입력 수정) */
+.result-submit-actions .btn { border-radius: 3px; }

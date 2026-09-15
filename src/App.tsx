@@ -4783,7 +4783,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     {isDocumentManagerReadOnlyView ? (
                       <DocumentManagerReadOnlyAction onClose={handleCloseDocumentPreview} />
                     ) : (
-                      <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+                      <div className="result-submit-actions" style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
                         <>
                           <button
                             className="btn btn-primary"
