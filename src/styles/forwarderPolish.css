@@ -8,6 +8,8 @@
 .header--forwarder .header-title-sec { min-width: 0; flex-shrink: 0; gap: 12px; }
 .header--forwarder .header-product-name { color: #f8fafc; font-size: 20px; font-weight: 750; letter-spacing: -.5px; white-space: nowrap; }
 .header.header--forwarder .header-role-chip { border: 1px solid #b6c6d9; background: #e7eef6; color: #3c526d; border-radius: 7px; padding: 6px 9px; gap: 7px; font-size: 12px; font-weight: 600; }
+/* PortAI 글자와 역할 칩(화주 업무·포워더 업무) 사이를 조금 더 띄운다 — 사이드바 버튼 간격은 그대로 */
+.header--shipper .header-product-name, .header--forwarder .header-product-name { margin-right: 10px; }
 .header--forwarder .header-actions { min-width: 0; margin-left: auto; gap: 12px; }
 .header--forwarder .user-info-section { min-width: 0; gap: 10px; }
 .header--forwarder .user-profile { min-width: 0; padding: 5px 6px; }

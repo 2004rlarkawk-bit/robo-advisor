@@ -2665,6 +2665,8 @@ body {
 .import-analysis-disclaimer { margin: -4px 6px 6px; color: var(--text-light); font-size: 12.5px; line-height: 1.5; }
 .import-analysis-disclaimer p { margin: 0; }
 .import-analysis-disclaimer p + p { margin-top: 4px; }
+.import-info-note { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; color: #334155; font-size: 14px; line-height: 1.5; }
+.import-info-note svg { flex-shrink: 0; color: #1e40af; }
 .risk-complete { padding: 18px; border-radius: 9px; background: #ecfdf5; color: #065f46; }
 .risk-complete p { margin: 6px 0 0; line-height: 1.6; }
 .risk-list { display: grid; gap: 10px; }
@@ -4147,7 +4149,7 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
   .cargo-step-time, .cargo-step-meta { grid-column: 2 / -1; }
 }
 /* 통관 내역: 박스 없는 페이지 타이틀 + 목록 — 상단 바로 아래 배치 */
-.customs-page { flex: 1; min-width: 0; }
+.customs-page { flex: 1; min-width: 0; padding-top: 24px; }
 .content-body:has(.customs-page) { padding-top: 10px; }
 .customs-page-head { display: flex; align-items: center; gap: 14px; }
 .customs-body { display: flex; flex-direction: column; gap: 8px; }
@@ -4167,6 +4169,9 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 }
 /* 목록 정렬 한 줄 — 임시보관함·최종 제출된 거래 공통 */
 .list-sort-row { display: flex; justify-content: flex-end; margin-bottom: 2px; }
+/* 문서 관리 상단 수출/수입 필터 — 바로 아래 임시보관함·제출 거래 카드와 간격을 맞춘다 */
+.docs-type-toolbar { padding: 8px 2px 0; }
+.docs-type-toolbar + .draft-tray { margin-top: 16px; }
 .draft-tray-more {
   align-self: center; font-size: 13.5px; font-weight: 600; color: #475569;
   background: #fff; border: 1px solid #e2e8f0; border-radius: 9px; padding: 9px 18px;

@@ -52,6 +52,7 @@ import ShipperWorkspaceForm, { SHIPPER_FIELD_SECTION } from './components/Shippe
 import OnboardingTour from './components/OnboardingTour';
 import TradeDirectionSelector from './components/trade/TradeDirectionSelector';
 import AppHeader from './components/layout/AppHeader';
+import type { TradeTypeCounts, TradeTypeFilter } from './utils/tradeTypeFilter';
 import AppSidebar, { navigationItemsForRole } from './components/layout/AppSidebar';
 import DocumentManagerReadOnlyAction from './components/DocumentManagerReadOnlyAction';
 import type { ImportTradeSnapshot, TradeDirection } from './types/importTrade';
@@ -467,6 +468,10 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [isForwarderSaving, setIsForwarderSaving] = useState(false);
   /** 수신함에서 불러온 화주 운송의뢰의 거래 id — 목록에 '불러옴' 표시용 */
   const [appliedExportRequestId, setAppliedExportRequestId] = useState<string | null>(null);
+  // 문서 관리 수출/수입 필터 — 임시보관함·최종 제출 거래에 함께 적용한다(통관 내역과 같은 칩).
+  const [docsTypeFilter, setDocsTypeFilter] = useState<TradeTypeFilter>('all');
+  const [draftTypeCounts, setDraftTypeCounts] = useState<TradeTypeCounts>({ export: 0, import: 0 });
+  const [submittedTypeCounts, setSubmittedTypeCounts] = useState<TradeTypeCounts>({ export: 0, import: 0 });
   /** 수신함에서 불러온 의뢰의 화주 연락처 — 5단계 '화주에게 알림' 패널 기본값으로만 사용 */
   const [appliedExportRequestShipperContact, setAppliedExportRequestShipperContact] = useState<{ email: string; company: string } | null>(null);
   /** 수출 포워더 5단계 운영 상태(선적 진행단계·Master B/L 번호·전달 이력). trades.workflow_data.exportForwarderCase */
@@ -2844,10 +2849,36 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             )
             : activeMenu === 'docs' ? (
               <>
+                {(() => {
+                  const exportCount = draftTypeCounts.export + submittedTypeCounts.export;
+                  const importCount = draftTypeCounts.import + submittedTypeCounts.import;
+                  const chips: Array<{ key: TradeTypeFilter; label: string; count: number }> = [
+                    { key: 'all', label: '전체', count: exportCount + importCount },
+                    { key: 'export', label: '수출', count: exportCount },
+                    { key: 'import', label: '수입', count: importCount },
+                  ];
+                  return (
+                    <div className="customs-toolbar docs-type-toolbar">
+                      <div className="customs-filter-chips" role="group" aria-label="수출·수입 필터">
+                        {chips.map((chip) => (
+                          <button
+                            key={chip.key}
+                            type="button"
+                            className={`customs-filter-chip ${docsTypeFilter === chip.key ? 'active' : ''}`}
+                            aria-pressed={docsTypeFilter === chip.key}
+                            onClick={() => setDocsTypeFilter(chip.key)}
+                          >{chip.label} {chip.count}</button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* 임시보관함(작성 중 미제출 거래) — 문서 관리 탭 상단. 제출 완료 문서함과 한 곳에서 관리 */}
                 <TradeManagerPanel
                   embedded
                   roleFilter={workspaceRole}
+                  typeFilter={docsTypeFilter}
+                  onTypeCounts={setDraftTypeCounts}
                   onLoad={(trade) => void handleResumeSavedTradeFromDocumentManager(trade)}
                 />
                 <DocumentManagerPanel
@@ -2856,6 +2887,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   onRevise={(trade) => void handleReviseReturnedImportTrade(trade)}
                   roleFilter={workspaceRole}
                   onListReady={handleDocumentManagerListReady}
+                  typeFilter={docsTypeFilter}
+                  onTypeCounts={setSubmittedTypeCounts}
                 />
               </>
             )

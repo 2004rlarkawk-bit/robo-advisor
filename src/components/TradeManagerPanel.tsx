@@ -1,4 +1,5 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { countTradesByType, filterTradesByType, type TradeTypeCounts, type TradeTypeFilter } from '../utils/tradeTypeFilter';
 import { Layers, Trash2, FolderOpen, AlertTriangle, CheckCircle2, X, Clock, Search, StickyNote, ChevronDown } from 'lucide-react';
 import type { SavedTrade } from '../types';
 import { deleteSavedTrade, fetchTradeManagerTrades } from '../services/storageService';
@@ -11,6 +12,10 @@ interface Props {
   embedded?: boolean;
   /** 현재 선택된 역할의 거래만 표시 — 화주·포워더 거래가 섞여 보이지 않게 한다 */
   roleFilter?: 'shipper' | 'forwarder';
+  /** 문서 관리 상단 수출/수입 필터 */
+  typeFilter?: TradeTypeFilter;
+  /** 역할 필터가 적용된 거래의 수출/수입 건수 — 필터 칩 숫자에 쓴다 */
+  onTypeCounts?: (counts: TradeTypeCounts) => void;
 }
 
 const MEMO_KEY = 'portai_trade_memos_v1';
@@ -64,7 +69,7 @@ function fmtDate(iso: string) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export default function TradeManagerPanel({ onLoad, embedded, roleFilter }: Props) {
+export default function TradeManagerPanel({ onLoad, embedded, roleFilter, typeFilter = 'all', onTypeCounts }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -96,6 +101,13 @@ export default function TradeManagerPanel({ onLoad, embedded, roleFilter }: Prop
   }, [roleFilter]);
 
   useEffect(() => { void loadTrades(); }, [loadTrades]);
+
+  const typeCounts = countTradesByType(trades);
+  const onTypeCountsRef = useRef(onTypeCounts);
+  onTypeCountsRef.current = onTypeCounts;
+  useEffect(() => {
+    onTypeCountsRef.current?.({ export: typeCounts.export, import: typeCounts.import });
+  }, [typeCounts.export, typeCounts.import]);
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('이 거래를 삭제할까요? 되돌릴 수 없습니다.')) return;
@@ -150,8 +162,9 @@ export default function TradeManagerPanel({ onLoad, embedded, roleFilter }: Prop
 
   // 임시보관함(작업실 하단 임베드): 접힌 아코디언. 펼치면 최근 3건, [전체 보기]로 확장. 없으면 렌더하지 않는다.
   if (embedded) {
-    if (isLoading || trades.length === 0) return null;
-    const sorted = [...trades].sort((a, b) => {
+    const trayTrades = filterTradesByType(trades, typeFilter);
+    if (isLoading || trayTrades.length === 0) return null;
+    const sorted = [...trayTrades].sort((a, b) => {
       const ta = new Date(a.updatedAt ?? a.createdAt).getTime();
       const tb = new Date(b.updatedAt ?? b.createdAt).getTime();
       return traySort === 'oldest' ? ta - tb : tb - ta;
@@ -169,7 +182,7 @@ export default function TradeManagerPanel({ onLoad, embedded, roleFilter }: Prop
           <div className="draft-tray-head-main">
             <span className="draft-tray-title">
               임시보관함
-              <span className="draft-tray-count">{trades.length}건</span>
+              <span className="draft-tray-count">{trayTrades.length}건</span>
             </span>
             <span className="draft-tray-sub">작성 중인 거래를 이어서 작업할 수 있어요.</span>
           </div>
@@ -222,9 +235,9 @@ export default function TradeManagerPanel({ onLoad, embedded, roleFilter }: Prop
                 </div>
               );
             })}
-            {trades.length > 3 && (
+            {trayTrades.length > 3 && (
               <button type="button" className="draft-tray-more" onClick={() => setTrayShowAll((v) => !v)}>
-                {trayShowAll ? '최근 3건만 보기' : `전체 보기 (${trades.length}건)`}
+                {trayShowAll ? '최근 3건만 보기' : `전체 보기 (${trayTrades.length}건)`}
               </button>
             )}
           </div>

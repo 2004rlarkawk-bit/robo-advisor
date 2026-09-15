@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, Eye, FileText, OctagonAlert, RefreshCw, RotateCcw, Search, Terminal } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Eye, FileText, Info, OctagonAlert, RefreshCw, RotateCcw, Search, Terminal } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
 import ImportAnalysisSummary from './ImportAnalysisSummary';
@@ -1294,8 +1294,8 @@ export default function ImportTradeFlow({
           <section className="form-card import-card">
             <div className="import-card-heading">
               <div><h2>배송 요청</h2></div>
-              <p>화물을 어디로 언제 받을지 알려주시면, 포워더가 배차할 때 그대로 전달됩니다.</p>
             </div>
+            <p className="import-info-note"><Info size={17} aria-hidden="true" />배송 요청은 선택 항목입니다. 비워 두고 제출해도 되며, 배차 전 포워더가 다시 확인합니다.</p>
             <div className="form-grid">
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label className="form-label" htmlFor="dlv-address">배송지 주소</label>
@@ -1341,7 +1341,7 @@ export default function ImportTradeFlow({
                 />
               </div>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label" htmlFor="dlv-remarks">요청사항 (선택)</label>
+                <label className="form-label" htmlFor="dlv-remarks">요청사항 <span className="optional-label">(선택)</span></label>
                 <input
                   id="dlv-remarks"
                   className="form-input"
@@ -1352,7 +1352,6 @@ export default function ImportTradeFlow({
                 />
               </div>
             </div>
-            <p className="import-notice">비워 두고 제출해도 됩니다. 포워더가 배차 전에 따로 확인합니다.</p>
           </section>
           {readOnly && onClose ? <DocumentManagerReadOnlyAction
             onClose={onClose}
@@ -1364,10 +1363,9 @@ export default function ImportTradeFlow({
           /> : (
             <>
               {liveRisks.some((risk) => risk.status !== 'resolved') && (
-                <p className="import-notice">
-                  남아 있는 확인 항목 {liveRisks.filter((risk) => risk.status !== 'resolved').length}건은
-                  제출과 함께 포워더에게 전달되어, 포워더가 원본 서류를 대조해 확인·판단합니다.
-                  여기서 직접 고칠 수 있는 값이 아니라면 그대로 제출해도 됩니다.
+                <p className="import-info-note">
+                  <Info size={17} aria-hidden="true" />
+                  남은 확인 항목 {liveRisks.filter((risk) => risk.status !== 'resolved').length}건은 제출 후 포워더가 원본 서류와 대조합니다.
                 </p>
               )}
               <div className="import-actions">

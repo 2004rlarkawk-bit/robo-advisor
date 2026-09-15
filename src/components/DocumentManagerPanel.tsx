@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
+import { countTradesByType, filterTradesByType, type TradeTypeCounts, type TradeTypeFilter } from '../utils/tradeTypeFilter';
 import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown, Copy, CornerUpLeft, Mail, Send } from 'lucide-react';
 import type { SavedTrade } from '../types';
 import {
@@ -20,6 +21,10 @@ interface Props {
   /** 현재 선택된 역할의 거래만 표시 — 화주·포워더 거래가 섞여 보이지 않게 한다 */
   roleFilter?: 'shipper' | 'forwarder';
   onListReady?: () => void;
+  /** 문서 관리 상단 수출/수입 필터 */
+  typeFilter?: TradeTypeFilter;
+  /** 역할 필터가 적용된 제출 거래의 수출/수입 건수 */
+  onTypeCounts?: (counts: TradeTypeCounts) => void;
 }
 
 function formatMailDate(iso: string): string {
@@ -143,6 +148,8 @@ export default function DocumentManagerPanel({
   onRevise,
   roleFilter,
   onListReady,
+  typeFilter = 'all',
+  onTypeCounts,
 }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -208,7 +215,15 @@ export default function DocumentManagerPanel({
     return Number.isNaN(t) ? 0 : t;
   };
 
-  const sortedTrades = [...trades].sort((a, b) =>
+  const typeCounts = countTradesByType(trades);
+  const onTypeCountsRef = useRef(onTypeCounts);
+  onTypeCountsRef.current = onTypeCounts;
+  useEffect(() => {
+    onTypeCountsRef.current?.({ export: typeCounts.export, import: typeCounts.import });
+  }, [typeCounts.export, typeCounts.import]);
+
+  const visibleTrades = filterTradesByType(trades, typeFilter);
+  const sortedTrades = [...visibleTrades].sort((a, b) =>
     sortKey === 'oldest' ? tradeTime(a) - tradeTime(b) : tradeTime(b) - tradeTime(a)
   );
 
@@ -245,10 +260,10 @@ export default function DocumentManagerPanel({
           <span className="doc-panel-title">
             최종 제출된 거래
             <span className="doc-panel-count">
-              {trades.length}건
+              {visibleTrades.length}건
             </span>
-            {trades.some(hasActiveShipperReturnRequest) && (
-              <span className="doc-panel-alert">보완 요청 {trades.filter(hasActiveShipperReturnRequest).length}건</span>
+            {visibleTrades.some(hasActiveShipperReturnRequest) && (
+              <span className="doc-panel-alert">보완 요청 {visibleTrades.filter(hasActiveShipperReturnRequest).length}건</span>
             )}
           </span>
 
@@ -293,11 +308,13 @@ export default function DocumentManagerPanel({
             <div className="doc-empty">
               제출된 문서를 불러오는 중입니다.
             </div>
-          ) : trades.length === 0 ? (
+          ) : visibleTrades.length === 0 ? (
             <div className="doc-empty">
               <FolderOpen size={34} />
               <span>
-                아직 제출된 문서가 없습니다.
+                {trades.length > 0 && typeFilter !== 'all'
+                  ? `${typeFilter === 'export' ? '수출' : '수입'} 거래 중 최종 제출된 문서가 없습니다.`
+                  : '아직 제출된 문서가 없습니다.'}
               </span>
             </div>
           ) : (
