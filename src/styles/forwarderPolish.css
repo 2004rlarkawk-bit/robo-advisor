@@ -202,6 +202,26 @@
 .fwd-workspace .fwd-shipper-reply { margin: 0 24px 20px; padding: 14px 16px; border: 1px solid #dcece2; border-radius: 8px; background: #f6faf7; }
 .fwd-workspace .fwd-shipper-reply strong { color: #24805a; font-size: 13px; }
 .fwd-workspace .fwd-shipper-reply p { margin: 7px 0 0; white-space: pre-line; overflow-wrap: anywhere; font-size: 13px; line-height: 1.7; color: #46566b; }
+.fwd-workspace .fwd-return-banner.is-resolved .fwd-return-head { background: #edf7f1; color: #286b50; border-bottom-color: #d9e9df; }
+.fwd-workspace .fwd-return-banner.is-resolved .fwd-return-head > svg { background: #dcefe3; color: #286b50; }
+.fwd-workspace .fwd-received-envelope { border-bottom: 0; padding-bottom: 12px; }
+.fwd-workspace .fwd-received-body { margin: 0 24px 22px; padding: 16px 18px; border-radius: 8px; background: #f3f8f5; border: 1px solid #dfebe3; }
+.fwd-workspace .fwd-received-body p { margin: 0; color: #334b40; font-size: 14px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fwd-workspace .fwd-received-body.is-empty { padding: 0; background: transparent; border: 0; }
+.fwd-workspace .fwd-received-body.is-empty p, .fwd-workspace .fwd-reply-document-note { color: #738197; font-size: 12px; line-height: 1.6; }
+.fwd-workspace .fwd-reply-document-note { margin: 7px 0 0; }
+.fwd-workspace .fwd-reply-documents button { max-width: 100%; min-width: 0; text-align: left; }
+.fwd-workspace .fwd-reply-documents button svg { flex-shrink: 0; }
+.fwd-workspace .fwd-sent-history { border-top: 1px solid #e3eaf2; background: #fafbfd; }
+.fwd-workspace .fwd-sent-history > summary { padding: 16px 24px; color: #596d85; font-size: 13px; font-weight: 600; cursor: pointer; }
+.fwd-workspace .fwd-sent-history > summary:focus-visible { outline: 2px solid #4175c5; outline-offset: -4px; }
+.fwd-workspace .fwd-sent-history[open] > summary { border-bottom: 1px solid #e3eaf2; }
+.fwd-workspace .fwd-sent-history .fwd-return-envelope h3 { font-size: 15px; }
+@media (max-width: 640px) {
+  .fwd-workspace .fwd-received-body { margin-left: 16px; margin-right: 16px; }
+  .fwd-workspace .fwd-reply-documents { padding-left: 16px; padding-right: 16px; }
+  .fwd-workspace .fwd-sent-history > summary { padding: 16px; }
+}
 .fwd-workspace .fwd-action-hint { line-height: 1.6; font-size: 12px; }
 .fwd-workspace .fwd-activity-text { overflow-wrap: anywhere; }
 .fwd-workspace .fwd-review-filter:focus-visible, .fwd-workspace .fwd-review-toggle:focus-visible, .fwd-workspace .fwd-doc-thumb:focus-visible { outline: 3px solid #8eb4f0; outline-offset: 3px; }

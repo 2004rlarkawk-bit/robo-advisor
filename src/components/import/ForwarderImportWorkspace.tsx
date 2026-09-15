@@ -38,6 +38,7 @@ import ForwarderImportInbox from './ForwarderImportInbox';
 import ForwarderIssueReview from './ForwarderIssueReview';
 import ForwarderDocumentThumbnail from './ForwarderDocumentThumbnail';
 import ForwarderReturnRequestContent, { buildReturnRequestLetter } from './ForwarderReturnRequestContent';
+import ForwarderRequestMessages from './ForwarderRequestMessages';
 import { getInboxImporterName } from '../../utils/forwarderInbox';
 import '../../styles/forwarderPolish.css';
 
@@ -340,58 +341,15 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', send
         {detailTab === 'messages' && <div className="fwd-message-toolbar"><span>화주와 주고받은 보완 요청 및 회신</span><button type="button" className="btn btn-secondary" disabled={refreshing} onClick={() => void load()}>{refreshing ? '확인 중…' : '새 회신 확인'}</button></div>}
 
         {detailTab === 'messages' && selected.returnRequest && (
-          <section className={`fwd-return-banner${selected.returnRequest.resolvedAt ? ' is-resolved' : ''}`}>
-            <div className="fwd-return-head">
-              <Mail size={17} aria-hidden="true" />
-              <strong>보낸 요청</strong>
-              <span className="fwd-return-channel">서비스 내 메시지</span>
-              <span className={`fwd-return-status${selected.returnRequest.resolvedAt ? ' is-replied' : ''}`}>
-                {selected.returnRequest.resolvedAt
-                  ? '보완 회신 도착'
-                  : selected.shipperEditing
-                    ? '화주 수정 중'
-                    : '회신 대기'}
-              </span>
-            </div>
-            <div className="fwd-return-envelope">
-              <h3>수입 서류 보완 요청 <span>· B/L {selected.blNo || '번호 미입력'}</span></h3>
-              <dl>
-                <div><dt>받는 사람</dt><dd>{getInboxImporterName(selected) === '화주명 미입력' ? '화주 담당자 (상호 미입력)' : `${getInboxImporterName(selected)} 담당자`}</dd></div>
-                <div><dt>보낸 날짜</dt><dd><time dateTime={selected.returnRequest.requestedAt}>{selected.returnRequest.requestedAt.slice(0, 10)}</time></dd></div>
-              </dl>
-            </div>
-            <ForwarderReturnRequestContent reason={selected.returnRequest.reason} />
-            {selected.returnRequest.shipperReply && (
-              <div className="fwd-shipper-reply">
-                <strong>화주 회신</strong>
-                <p>{selected.returnRequest.shipperReply}</p>
-              </div>
-            )}
-            {selected.returnRequest.resolvedAt && <div className="fwd-reply-documents"><strong>현재 제출 서류</strong><div>{sourceDocs.map((doc) => <button type="button" key={doc.id} disabled={docBusyId !== null} onClick={() => void openSourceDocument(doc)}>{doc.name} <ExternalLink size={13} /></button>)}</div>{sourceDocs.length === 0 && <p>보관된 원본 파일이 없습니다.</p>}</div>}
-            <div className="fwd-return-actions">
-              {selected.returnRequest.resolvedAt ? (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={saving}
-                  onClick={async () => { if (await persist(selected, { returnRequest: null, stage: 'review' }, ['재검토 시작'])) setDetailTab('review'); }}
-                >
-                  수정본 검토 시작
-                </button>
-              ) : (
-                !selected.shipperEditing && (
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={saving}
-                    onClick={() => void persist(selected, { returnRequest: null }, ['보완 요청 취소'])}
-                  >
-                    요청 취소
-                  </button>
-                )
-              )}
-            </div>
-          </section>
+          <ForwarderRequestMessages
+            item={selected}
+            documents={sourceDocs}
+            documentBusy={docBusyId !== null}
+            saving={saving}
+            onOpenDocument={doc => void openSourceDocument(doc)}
+            onReview={async () => { if (await persist(selected, { returnRequest: null, stage: 'review' }, ['재검토 시작'])) setDetailTab('review'); }}
+            onCancel={() => void persist(selected, { returnRequest: null }, ['보완 요청 취소'])}
+          />
         )}
 
         {detailTab === 'messages' && !selected.returnRequest && (
@@ -483,8 +441,8 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', send
             </div>}
             {returnFormOpen && (() => {
               const sections = [
-                pickedIssues.filter(issue => issue.severity === 'blocker').length ? '[반드시 수정]\n' + pickedIssues.filter(issue => issue.severity === 'blocker').map(issue => `· ${issue.detail}`).join('\n') : '',
-                pickedIssues.filter(issue => issue.severity === 'check').length ? '[함께 확인 요청]\n' + pickedIssues.filter(issue => issue.severity === 'check').map(issue => `· ${issue.detail}`).join('\n') : '',
+                pickedIssues.filter(issue => issue.severity === 'blocker').length ? '[반드시 수정]\n' + pickedIssues.filter(issue => issue.severity === 'blocker').map(issue => `· ${issue.title} — ${issue.detail}`).join('\n') : '',
+                pickedIssues.filter(issue => issue.severity === 'check').length ? '[함께 확인 요청]\n' + pickedIssues.filter(issue => issue.severity === 'check').map(issue => `· ${issue.title} — ${issue.detail}`).join('\n') : '',
                 returnMemo.trim() ? '(추가 안내) ' + returnMemo.trim() : '',
               ].filter(Boolean);
               const reason = buildReturnRequestLetter(sections.join('\n\n'), issuerName, senderContactName);

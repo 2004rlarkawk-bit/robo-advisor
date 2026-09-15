@@ -124,8 +124,36 @@ describe('forwarder task tabs', () => {
     expect(container.querySelector('.fwd-return-banner')).toBeNull();
     await click('요청·회신회신 도착');
     expect(container.querySelector('.fwd-return-banner')?.textContent).toContain('수정본을 제출했습니다.');
-    expect(container.textContent).toContain('현재 제출 서류');
-    expect(button('수정본 검토 시작')).toBeTruthy();
+    expect(container.textContent).toContain('재제출 시점의 서류');
+    const history = container.querySelector<HTMLDetailsElement>('.fwd-sent-history')!;
+    expect(history.open).toBe(false);
+    expect(history.textContent).toContain('보완 요청 본문');
+    expect(container.querySelector('.fwd-received-body')?.textContent).toBe('수정본을 제출했습니다.');
+    expect(container.querySelector('.fwd-return-head')?.textContent).toContain('받은 회신');
+    expect(button('수정 서류 검토하기')).toBeTruthy();
+    vi.mocked(saveForwarderCaseState).mockResolvedValue({} as never);
+    vi.mocked(deriveForwarderCase).mockReturnValue(fixture({ stage: 'review' }));
+    await click('수정 서류 검토하기');
+    expect(container.querySelector('.fwd-tabs .is-active')?.textContent).toBe('서류 검토');
+    expect(saveForwarderCaseState).toHaveBeenCalledWith('case-1', expect.objectContaining({ stage: 'review', returnRequest: null }), expect.any(Array));
+  });
+
+  it('explains document-only resubmission without inventing a reply or file changes', async () => {
+    await open(fixture({ returnRequest: { reason: '기존 원문', issueTitles: ['품목 1 원산지 누락'], requestedAt: '2026-09-14', resolvedAt: '2026-09-15', shipperReply: '   ' } }));
+    await click('요청·회신회신 도착');
+    expect(container.textContent).toContain('화주가 서류를 다시 제출했습니다.');
+    expect(container.querySelector('.fwd-received-body')?.textContent).toContain('별도로 남긴 답변은 없습니다.');
+    expect(container.querySelector('.fwd-reply-documents')?.textContent).toContain('보관된 원본 파일이 없습니다.');
+    expect(container.querySelector('.fwd-sent-history')?.hasAttribute('open')).toBe(false);
+  });
+
+  it('includes issue titles when different items have the same request description', async () => {
+    const detail = '첨부문서에서 품목 원산지가 확인되지 않았습니다.';
+    await open(fixture({ issues: [{ ...weight, title: '품목 1 원산지 누락', detail }, { ...weight, id: 'origin-2', title: '품목 2 원산지 누락', detail }] }));
+    await act(async () => { container.querySelectorAll<HTMLInputElement>('.fwd-review-pick').forEach(input => input.click()); });
+    await click('선택한 2건 보완 요청');
+    expect(container.querySelector('.fwd-batch-composer')?.textContent).toContain(`품목 1 원산지 누락 — ${detail}`);
+    expect(container.querySelector('.fwd-batch-composer')?.textContent).toContain(`품목 2 원산지 누락 — ${detail}`);
   });
 
   it('orders cargo lookup, arrival notice and delivery preparation, with document-only completion', async () => {
