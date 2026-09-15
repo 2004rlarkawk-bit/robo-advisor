@@ -246,7 +246,7 @@ export default function DocumentManagerPanel({
           </span>
 
           <span className="doc-panel-sub">
-            최종 제출이 완료된 거래를 조회하고, 새로운 거래로 복사할 수 있어요.
+            완성된 문서를 조회하고 새 거래에 재사용합니다. 포워더 지정과 진행 확인은 ‘포워더 의뢰’에서 관리합니다.
           </span>
         </div>
 

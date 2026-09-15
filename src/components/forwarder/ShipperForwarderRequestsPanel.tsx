@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
-  Clock3,
   FileCheck2,
   FolderOpen,
   Plus,
@@ -241,12 +240,19 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
         </button>
       </header>
 
-      <div className="shipper-request-flow" aria-label="포워더 의뢰 흐름">
-        <div><FileCheck2 size={18} /><span><strong>1. 문서 완성</strong><small>AI 통관 작업실</small></span></div>
-        <ArrowRight size={16} />
-        <div className="is-current"><Send size={18} /><span><strong>2. 포워더 지정</strong><small>의뢰·문서 전달</small></span></div>
-        <ArrowRight size={16} />
-        <div><Clock3 size={18} /><span><strong>3. 업무 진행</strong><small>수락·보완·완료</small></span></div>
+      <div className="shipper-request-relationship" aria-label="화주와 포워더 업무 연결">
+        <div className="shipper-request-actor is-shipper">
+          <span className="shipper-request-actor-icon"><FileCheck2 size={20} /></span>
+          <span><small>보내는 쪽</small><strong>화주</strong><em>완성 서류와 운송 조건 전달</em></span>
+        </div>
+        <div className="shipper-request-handoff">
+          <span>PortAI로 의뢰</span>
+          <div><i /><ArrowRight size={18} /><i /></div>
+        </div>
+        <div className="shipper-request-actor is-forwarder">
+          <span className="shipper-request-actor-icon"><Ship size={20} /></span>
+          <span><small>처리하는 쪽</small><strong>지정 포워더</strong><em>수락 후 운송·통관 업무 진행</em></span>
+        </div>
       </div>
 
       <div className="shipper-requests-card">
