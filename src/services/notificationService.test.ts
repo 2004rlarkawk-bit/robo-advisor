@@ -7,7 +7,13 @@ vi.mock('../lib/supabase', () => ({
   isSupabaseConfigured: true,
 }));
 
-import { countUnreadNotifications, listNotifications, markNotificationRead } from './notificationService';
+import {
+  countUnreadNotifications,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  notificationBelongsToRole,
+} from './notificationService';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -24,6 +30,18 @@ describe('listNotifications', () => {
     await listNotifications(5);
     expect(query.order).toHaveBeenCalledWith('created_at', { ascending: false });
     expect(query.limit).toHaveBeenCalledWith(5);
+  });
+
+  it('현재 역할에 필요한 알림 유형만 조회한다', async () => {
+    const query = { select: vi.fn(), order: vi.fn(), in: vi.fn(), limit: vi.fn() };
+    query.select.mockReturnValue(query);
+    query.order.mockReturnValue(query);
+    query.in.mockReturnValue(query);
+    query.limit.mockResolvedValue({ data: [], error: null });
+    fromMock.mockReturnValue(query);
+
+    await listNotifications(20, 'forwarder');
+    expect(query.in).toHaveBeenCalledWith('type', ['trade_request_received', 'trade_return_replied']);
   });
 });
 
@@ -62,5 +80,29 @@ describe('markNotificationRead', () => {
     await markNotificationRead('notif-1');
     expect(query.eq).toHaveBeenCalledWith('id', 'notif-1');
     expect(query.is).toHaveBeenCalledWith('read_at', null);
+  });
+});
+
+describe('role notification policy', () => {
+  it('화주와 포워더 알림을 서로 섞지 않는다', () => {
+    expect(notificationBelongsToRole('trade_return_requested', 'shipper')).toBe(true);
+    expect(notificationBelongsToRole('trade_return_requested', 'forwarder')).toBe(false);
+    expect(notificationBelongsToRole('trade_return_replied', 'forwarder')).toBe(true);
+  });
+
+  it('모두 읽음은 현재 역할의 알림만 갱신한다', async () => {
+    const query = { update: vi.fn(), is: vi.fn(), in: vi.fn() };
+    query.update.mockReturnValue(query);
+    query.is.mockReturnValue(query);
+    query.in.mockResolvedValue({ data: null, error: null });
+    fromMock.mockReturnValue(query);
+
+    await markAllNotificationsRead('shipper');
+    expect(query.in).toHaveBeenCalledWith('type', [
+      'trade_request_accepted',
+      'trade_request_rejected',
+      'trade_return_requested',
+      'trade_forwarder_completed',
+    ]);
   });
 });

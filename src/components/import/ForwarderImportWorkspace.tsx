@@ -51,6 +51,11 @@ interface Props {
   senderContactName?: string;
   /** Pre-alert를 화주 의뢰 없이 직접 등록해야 할 때 기존 업로드 플로우로 전환 */
   onDirectUpload: () => void;
+  /** 겸용 계정이면 자기 화주 제출 건도 의뢰 없이 큐에 표시 (단일 계정 시연) */
+  includeOwnShipperTrades?: boolean;
+  /** 알림에서 들어온 경우 해당 의뢰 상세를 바로 연다. */
+  initialTradeId?: string | null;
+  onInitialTradeOpened?: () => void;
 }
 
 const STAGE_BADGE_CLASS: Record<ForwarderCaseStage, string> = {
@@ -96,7 +101,15 @@ function etaDday(eta: string): { label: string; tone: 'overdue' | 'imminent' | '
   return { label: `D-${days}`, tone: days <= 3 ? 'imminent' : 'normal' };
 }
 
-export default function ForwarderImportWorkspace({ userId, issuerName = '', senderContactName = '', onDirectUpload }: Props) {
+export default function ForwarderImportWorkspace({
+  userId,
+  issuerName = '',
+  senderContactName = '',
+  onDirectUpload,
+  includeOwnShipperTrades = false,
+  initialTradeId = null,
+  onInitialTradeOpened,
+}: Props) {
   const [cases, setCases] = useState<ForwarderImportCase[] | null>(null);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -130,18 +143,25 @@ export default function ForwarderImportWorkspace({ userId, issuerName = '', send
     setError('');
     setRefreshing(true);
     try {
-      setCases(await listForwarderCases());
+      setCases(await listForwarderCases({ includeOwnShipperTrades }));
     } catch (err) {
       console.error('포워더 업무 큐 조회 실패:', err);
       setError('업무 목록을 불러오지 못했습니다. 새로고침을 눌러 다시 시도해 주세요.');
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [includeOwnShipperTrades]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!initialTradeId || !cases?.some((item) => item.tradeId === initialTradeId)) return;
+    setSelectedId(initialTradeId);
+    setDetailTab('messages');
+    onInitialTradeOpened?.();
+  }, [cases, initialTradeId, onInitialTradeOpened]);
 
   const selected = useMemo(
     () => cases?.find((item) => item.tradeId === selectedId) ?? null,

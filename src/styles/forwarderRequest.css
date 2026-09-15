@@ -172,15 +172,18 @@
 /* 알림 벨 */
 .notif-bell-wrap { position: relative; }
 
+.notif-bell-button { overflow: visible; }
+.notif-bell-button.has-unread svg { color: currentColor; }
+
 .notif-badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
+  top: -4px;
+  right: -5px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
   border-radius: 999px;
-  background: #dc2626;
+  background: #e11d48;
   color: #fff;
   font-size: 10px;
   font-weight: 800;
@@ -188,62 +191,243 @@
   align-items: center;
   justify-content: center;
   line-height: 1;
+  border: 2px solid var(--surface, #fff);
+  box-shadow: 0 2px 5px rgba(190, 18, 60, 0.28);
 }
 
 .notif-dropdown {
   position: absolute;
-  top: calc(100% + 10px);
+  top: calc(100% + 12px);
   right: 0;
-  width: min(340px, 90vw);
-  max-height: 420px;
-  overflow-y: auto;
+  width: min(390px, calc(100vw - 24px));
   background: #fff;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.18);
+  border: 1px solid #dce4ef;
+  border-radius: 14px;
+  box-shadow: 0 22px 55px rgba(15, 23, 42, 0.2), 0 4px 12px rgba(15, 23, 42, 0.08);
   z-index: 1500;
+  overflow: hidden;
 }
 
 .notif-dropdown-head {
-  padding: 12px 14px;
-  font-weight: 800;
-  font-size: 14px;
+  min-height: 58px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   color: var(--text-dark);
-  border-bottom: 1px solid var(--border-color-subtle);
+  border-bottom: 1px solid #e7edf5;
+}
+
+.notif-dropdown-head > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notif-dropdown-head strong { font-size: 15px; font-weight: 800; }
+
+.notif-unread-summary {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.notif-read-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #52647d;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.notif-read-all:hover { background: #f1f5f9; color: #1e3a5f; }
+
+.notif-list {
+  max-height: 430px;
+  overflow-y: auto;
 }
 
 .notif-item {
-  display: block;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
   width: 100%;
   text-align: left;
-  padding: 12px 14px;
+  padding: 13px 15px;
   border: none;
   background: none;
-  border-bottom: 1px solid var(--border-color-subtle);
+  border-bottom: 1px solid #edf1f6;
   cursor: pointer;
-  font-size: 13px;
+  font: inherit;
   color: var(--text-dark);
-  line-height: 1.5;
+  transition: background 0.15s ease;
 }
 
 .notif-item:hover { background: #f8fafc; }
-.notif-item.unread { background: var(--primary-light); }
+.notif-item.unread {
+  background: #fff8f8;
+  box-shadow: inset 3px 0 #ef4444;
+}
+
+.notif-type-icon {
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: #eef5ff;
+  color: #2563eb;
+}
+
+.notif-type-icon.is-success { background: #ecfdf3; color: #16835c; }
+.notif-type-icon.is-warning { background: #fff7e8; color: #b45309; }
+.notif-type-icon.is-danger { background: #fff1f2; color: #dc2626; }
+
+.notif-item-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.notif-item-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.4;
+  color: #1e293b;
+}
+
+.notif-unread-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+
+.notif-item-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #64748b;
+  font-size: 11px;
+}
 
 .notif-item-time {
-  display: block;
-  margin-top: 3px;
-  font-size: 11px;
-  color: var(--text-light);
+  font-size: 10px;
+  color: #94a3b8;
 }
 
 .notif-empty {
-  padding: 24px 14px;
-  text-align: center;
+  min-height: 150px;
+  padding: 28px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   color: var(--text-light);
-  font-size: 13px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.notif-empty svg { color: #94a3b8; margin-bottom: 3px; }
+.notif-empty strong { color: #334155; font-size: 13px; }
+
+.notif-toast {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(365px, calc(100vw - 24px));
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 40px 13px 13px;
+  border: 1px solid #dce4ef;
+  border-radius: 12px;
+  background: #fff;
+  color: #1e293b;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.18);
+  text-align: left;
+  z-index: 1501;
+  animation: notif-toast-in 0.22s ease-out;
+}
+
+.notif-toast-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.notif-toast-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.notif-toast-copy strong { font-size: 12px; line-height: 1.45; }
+.notif-toast-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #64748b; font-size: 11px; }
+
+.notif-toast-close {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 25px;
+  height: 25px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.notif-toast-close:hover { background: #f1f5f9; color: #475569; }
+
+@keyframes notif-toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+  .notif-dropdown,
+  .notif-toast { position: fixed; top: 62px; right: 12px; left: 12px; width: auto; }
 }
 
 /* 포워더 수신함 */
+.incoming-request-panel--embedded {
+  margin-bottom: 24px;
+  border-color: #c9d9ef;
+  box-shadow: 0 8px 24px rgba(15, 50, 95, 0.06);
+}
+
+.incoming-request-panel--embedded .doc-panel-head {
+  background: linear-gradient(90deg, #f3f7ff 0%, #fbfdff 100%);
+}
+
 .incoming-request-card {
   border: 1px solid var(--border-color-strong);
   border-radius: 12px;

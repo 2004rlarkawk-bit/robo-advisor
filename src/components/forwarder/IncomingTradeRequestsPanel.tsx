@@ -7,6 +7,7 @@ import {
   listIncomingTradeRequests,
   rejectTradeRequest,
 } from '../../services/forwarderRequestService';
+import { subscribeToNotifications } from '../../services/notificationService';
 import '../../styles/forwarderRequest.css';
 
 function formatDate(iso: string): string {
@@ -18,9 +19,10 @@ function formatDate(iso: string): string {
 interface RequestCardProps {
   request: TradeRequest;
   onDecided: (requestId: string) => void;
+  onAccepted?: (direction: 'export' | 'import') => void;
 }
 
-function RequestCard({ request, onDecided }: RequestCardProps) {
+function RequestCard({ request, onDecided, onAccepted }: RequestCardProps) {
   const [preview, setPreview] = useState<TradeRequestPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -46,10 +48,13 @@ function RequestCard({ request, onDecided }: RequestCardProps) {
   }, [request.id]);
 
   const handleAccept = async () => {
+    if (!preview) return;
+    const acceptedDirection = preview.direction;
     setDeciding(true);
     setError('');
     try {
       await acceptTradeRequest(request.id);
+      onAccepted?.(acceptedDirection);
       onDecided(request.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : '요청 수락에 실패했습니다.');
@@ -101,14 +106,20 @@ function RequestCard({ request, onDecided }: RequestCardProps) {
   );
 }
 
+interface Props {
+  userId?: string;
+  embedded?: boolean;
+  onAccepted?: (direction: 'export' | 'import') => void;
+}
+
 /** 포워더 수신함 — 나에게 온 pending 의뢰 요청 목록. */
-export default function IncomingTradeRequestsPanel() {
+export default function IncomingTradeRequestsPanel({ userId, embedded = false, onAccepted }: Props) {
   const [requests, setRequests] = useState<TradeRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
     setError('');
     try {
       const all = await listIncomingTradeRequests();
@@ -125,17 +136,31 @@ export default function IncomingTradeRequestsPanel() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!userId) return;
+    const unsubscribe = subscribeToNotifications(userId, (notification) => {
+      if (notification.type === 'trade_request_received') void load(false);
+    });
+    const interval = window.setInterval(() => void load(false), 15_000);
+    return () => {
+      unsubscribe();
+      window.clearInterval(interval);
+    };
+  }, [load, userId]);
+
   const handleDecided = (requestId: string) => {
     setRequests((current) => current.filter((request) => request.id !== requestId));
   };
 
+  if (embedded && !isLoading && !error && requests.length === 0) return null;
+
   return (
-    <section className="doc-panel" style={{ display: 'block' }}>
+    <section className={`doc-panel incoming-request-panel${embedded ? ' incoming-request-panel--embedded' : ''}`} style={{ display: 'block' }}>
       <div className="doc-panel-head" style={{ cursor: 'default' }}>
         <span className="doc-panel-icon"><Inbox size={22} /></span>
         <div className="doc-panel-head-main">
-          <span className="doc-panel-title">받은 의뢰 요청<span className="doc-panel-count">{requests.length}건</span></span>
-          <span className="doc-panel-sub">화주가 보낸 포워딩 의뢰 요청을 확인하고 수락·거절할 수 있어요.</span>
+          <span className="doc-panel-title">신규 의뢰<span className="doc-panel-count">{requests.length}건</span></span>
+          <span className="doc-panel-sub">새로 도착한 의뢰를 확인한 뒤 수락하면 아래 업무 목록에 추가됩니다.</span>
         </div>
       </div>
       <div className="doc-panel-body">
@@ -149,7 +174,7 @@ export default function IncomingTradeRequestsPanel() {
           </div>
         ) : (
           requests.map((request) => (
-            <RequestCard key={request.id} request={request} onDecided={handleDecided} />
+            <RequestCard key={request.id} request={request} onDecided={handleDecided} onAccepted={onAccepted} />
           ))
         )}
       </div>

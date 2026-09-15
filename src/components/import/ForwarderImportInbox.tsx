@@ -30,14 +30,13 @@ export default function ForwarderImportInbox({ cases, error, refreshing, onRefre
   const documentTypes = [...new Set(documents.map((document) => document.type))];
 
   return <section className="fwd-inbox" aria-labelledby="fwd-inbox-title">
-    <header className="fwd-inbox-titlebar">
-      <h2 id="fwd-inbox-title">수입 포워더 업무</h2>
-      <button type="button" className="btn btn-secondary" onClick={onDirectUpload}><Plus size={18} aria-hidden="true" /> 직접 등록</button>
-    </header>
     <div className="fwd-inbox-panel" aria-busy={refreshing}>
       <div className="fwd-inbox-panel-heading">
-        <h3>받은 의뢰 <span>{cases === null ? '—' : `${cases.length}건`}</span></h3>
-        <button type="button" className="btn btn-secondary fwd-inbox-refresh" aria-label="의뢰 새로고침" title="새로고침" disabled={refreshing} onClick={onRefresh}><RefreshCw size={19} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" /></button>
+        <h2 id="fwd-inbox-title">받은 의뢰 <span>{cases === null ? '—' : `${cases.length}건`}</span></h2>
+        <div className="fwd-inbox-heading-actions">
+          <button type="button" className="btn btn-secondary" onClick={onDirectUpload}><Plus size={17} aria-hidden="true" /> 직접 등록</button>
+          <button type="button" className="btn btn-secondary fwd-inbox-refresh" aria-label="의뢰 새로고침" title="새로고침" disabled={refreshing} onClick={onRefresh}><RefreshCw size={19} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" /></button>
+        </div>
       </div>
       <div className="fwd-inbox-filters" role="group" aria-label="의뢰 상태 필터">
         {FILTERS.map(({ value, label }) => <button type="button" key={value} aria-pressed={filter === value} className={filter === value ? 'is-active' : ''} onClick={() => { setFilter(value); setPickedId(null); }}>

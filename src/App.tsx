@@ -100,6 +100,7 @@ import {
 import { decideGeneratedTradeWrite } from './services/tradePersistencePolicy';
 import { resolveWorkspaceRole, type WorkspaceRole } from './utils/workspaceRole';
 import { countShipperReturnRequests } from './services/forwarderCaseService';
+import type { NotificationRecord } from './types/forwarderRequest';
 import {
   applyMatchPatchToProfile,
   buildExportCrossChecks,
@@ -428,6 +429,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [forwarderForm, setForwarderForm] = useState<ForwarderFormState>(() => createEmptyForwarderFormState());
   // 포워더 수입 워크스페이스에서 [직접 등록]을 누르면 기존 업로드 플로우로 전환한다.
   const [forwarderDirectUpload, setForwarderDirectUpload] = useState(false);
+  const [notificationTradeId, setNotificationTradeId] = useState<string | null>(null);
   useEffect(() => {
     setForwarderDirectUpload(false);
   }, [tradeDirection, workspaceRole]);
@@ -1800,6 +1802,14 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     }
     setActiveMenu(menu);
   };
+  const handleOpenNotification = (notification: NotificationRecord, menu: AppMenu) => {
+    handleAppNavigate(menu);
+    if (notification.type === 'trade_return_replied' && notification.tradeId) {
+      setTradeDirection('import');
+      setForwarderDirectUpload(false);
+      setNotificationTradeId(notification.tradeId);
+    }
+  };
   loadSavedTradeRef.current = handleLoadSavedTrade;
 const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   handleLoadSavedTrade(trade);
@@ -2796,6 +2806,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
           notificationPollKey={activeMenu}
           onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
           onNavigate={handleAppNavigate}
+          onOpenNotification={handleOpenNotification}
           onLogout={() => void handleLogout()}
         />
 
@@ -2849,10 +2860,22 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               </>
             )
             : <>
+            {workspaceRole === 'forwarder' && !isDocumentManagerReadOnlyView && (
+              <IncomingTradeRequestsPanel
+                userId={user.id}
+                embedded
+                onAccepted={(direction) => {
+                  setTradeDirection(direction);
+                  setWorkspaceCurrentStep(1);
+                  setForwarderDirectUpload(false);
+                  setImportWorkspaceVersion((version) => version + 1);
+                }}
+              />
+            )}
             {/* Page Title & Subtitle — 결과 화면(수출: 생성 후 / 수입: 2단계 이후)에서는 결과에 집중하도록 제목을 숨긴다 */}
             {!(tradeDirection === 'export' && hasGenerated)
               && !(tradeDirection === 'import' && workspaceCurrentStep > 1)
-              && <div className={`page-heading${workspaceRole === 'forwarder' ? ' page-heading--import-forwarder' : ''}`}>
+              && <div className="page-heading">
               <h1 className="page-title">{workspaceRole === 'forwarder' ? (tradeDirection === 'import' ? '수입 서류 작업실' : '수출 서류 작업실') : '항만 수출입 문서 자동화 서비스'}</h1>
               <p className="page-subtitle">{workspaceRole === 'forwarder'
                 ? (tradeDirection === 'import'
@@ -2879,6 +2902,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     issuerName={userProfile.company_name ?? ''}
                     senderContactName={userProfile.contact_name ?? ''}
                     onDirectUpload={() => setForwarderDirectUpload(true)}
+                    includeOwnShipperTrades={userProfile.service_role === 'integrated'}
+                    initialTradeId={notificationTradeId}
+                    onInitialTradeOpened={() => setNotificationTradeId(null)}
                   />
                   : <ImportForwarderFlow
                     key={`import-forwarder-${user.id}-${importWorkspaceVersion}`}
@@ -2912,6 +2938,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 />
             ) : workspaceRole === 'forwarder' ? (
               <ForwarderWorkspaceForm
+                key={`export-forwarder-${user.id}-${importWorkspaceVersion}`}
                 state={forwarderForm}
                 onChange={setForwarderForm}
                 status={currentTradeStatus}

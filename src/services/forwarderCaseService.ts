@@ -194,11 +194,32 @@ export async function countShipperReturnRequests(): Promise<number> {
   }
 }
 
-/** 포워더 업무 큐 목록 조회 */
-export async function listForwarderCases(): Promise<ForwarderImportCase[]> {
+export interface ForwarderQueueOptions {
+  /**
+   * 겸용(integrated) 계정 예외 — 자기 계정의 화주 제출 건을 별도 의뢰·지정 없이
+   * 큐에 그대로 표시한다(한 계정으로 화주↔포워더를 오가는 시연용).
+   * 순수 포워더 계정은 false: 나에게 지정된 의뢰와 직접 등록 건만 보인다.
+   */
+  includeOwnShipperTrades?: boolean;
+}
+
+/**
+ * 포워더 업무 큐 목록 조회.
+ * RLS가 "내 거래 + forwarder_user_id가 나인 거래"를 돌려주므로, 여기서는
+ * 정식 진입 경로만 남긴다: ① 나에게 지정된 의뢰 ② 내가 직접 등록한 건
+ * ③ (겸용 계정 예외) 내 화주 제출 건.
+ */
+export async function listForwarderCases(options: ForwarderQueueOptions = {}): Promise<ForwarderImportCase[]> {
   if (!isSupabaseConfigured) return [];
+  const { data: userData } = await supabase.auth.getUser();
+  const myId = userData?.user?.id ?? null;
   const trades = await fetchSavedTrades();
-  const cases = trades
+  const visible = trades.filter((trade) => {
+    if (myId && trade.forwarderUserId === myId) return true;
+    if (trade.tradeRole === 'forwarder') return true;
+    return options.includeOwnShipperTrades ?? false;
+  });
+  const cases = visible
     .map(deriveForwarderCase)
     .filter((item): item is ForwarderImportCase => item !== null);
   return sortForwarderCases(cases);
