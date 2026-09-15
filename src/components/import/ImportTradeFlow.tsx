@@ -378,6 +378,8 @@ export default function ImportTradeFlow({
   }, [state.step]);
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState(false);
+  // 배송 요청 입력칸도 수입신고의뢰서처럼 '보기'를 눌러야 펼친다.
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   // 배송 요청 — 스냅샷에 저장되어 포워더 배차 의뢰서로 넘어간다.
   const delivery: ImportDeliveryRequest = state.deliveryRequest ?? {
     deliveryAddress: '', deliveryAt: '', contactName: '', contactTel: '', remarks: '', updatedAt: '',
@@ -1341,8 +1343,12 @@ export default function ImportTradeFlow({
           <section className="form-card import-card">
             <div className="import-card-heading">
               <div><h2>배송 요청</h2></div>
+              <p>배송 요청은 선택 항목입니다. 비워 두고 제출해도 되며, 배차 전 포워더가 다시 확인합니다.</p>
             </div>
-            <p className="import-info-note">배송 요청은 선택 항목입니다. 비워 두고 제출해도 되며, 배차 전 포워더가 다시 확인합니다.</p>
+            <div className="document-preview-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setDeliveryOpen((value) => !value)}><Eye size={17} /> {deliveryOpen ? '닫기' : '보기'}</button>
+            </div>
+            {deliveryOpen && (
             <div className="form-grid">
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label className="form-label" htmlFor="dlv-address">배송지 주소</label>
@@ -1399,6 +1405,7 @@ export default function ImportTradeFlow({
                 />
               </div>
             </div>
+            )}
           </section>
           {readOnly && onClose ? <DocumentManagerReadOnlyAction
             onClose={onClose}
