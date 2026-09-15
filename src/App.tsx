@@ -4362,11 +4362,12 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           const present = (i: ValidationIssue): { title: string; desc: string } | null => {
                             if (i.field === 'weight') return { title: '중량 입력', desc: '총 중량 또는 순중량 정보를 입력하세요.' };
                             if (i.id.startsWith('llm-anomaly-')) {
-                              // "AI 참고 — 라벨: 사유" 형식. 제목은 라벨까지, 설명은 사유.
-                              const m = /^AI 참고 — ([^:]+):\s*(.+)$/.exec(i.message.replace(/\s*\[근거:[^\]]*\]\s*$/, ''));
+                              // "라벨: 사유" 형식(예전 저장본은 앞에 "AI 참고 — "가 붙어 있음). 제목은 라벨까지, 설명은 사유.
+                              const plain = i.message.replace(/\s*\[근거:[^\]]*\]\s*$/, '').replace(/^AI 참고 — /, '');
+                              const m = /^([^:]+):\s*(.+)$/.exec(plain);
                               return m
-                                ? { title: `AI 참고 · ${m[1]} 값 확인`, desc: `${m[2]} (AI가 표기를 검토한 참고 의견이며, 실제 값이 맞다면 그대로 진행해도 됩니다.)` }
-                                : { title: 'AI 참고 · 입력값 확인', desc: i.message };
+                                ? { title: `${m[1]} 값 확인`, desc: `${m[2]} (실제 값이 맞다면 그대로 진행해도 됩니다.)` }
+                                : { title: '입력값 확인', desc: plain };
                             }
                             if (i.docType === 'co') return { title: '원산지증명서 필요 여부', desc: '구매자가 FTA 적용 또는 원산지증명서를 요청했는지 확인해 주세요.' };
                             if (i.id === 'r2-departure-missing' || i.field === 'departureDate') return { title: '선적일 확인', desc: '선적일이 비어 있습니다. 확정 시 입력을 권장합니다.' };

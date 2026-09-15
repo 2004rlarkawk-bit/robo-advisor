@@ -84,8 +84,8 @@ export class ComplianceAgent implements Agent<ComplianceInput, ComplianceResult>
               // 다품목 필드("shipperItems.1.itemName")는 폼 이동용으로 itemName 으로 묶는다.
               field: isItem ? 'itemName' : anomaly.field,
               severity: 'warning',
-              title: 'AI 참고',
-              message: `AI 참고 — ${label}: ${anomaly.reason}`,
+              title: '입력값 확인',
+              message: `${label}: ${anomaly.reason}`,
             });
           }
         } catch (error) {
