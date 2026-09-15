@@ -288,7 +288,16 @@ export function normalizeImportAnalysisResult(value: unknown): ImportAnalysisRes
     extracted: normalizeImportExtractedFields(raw.extracted),
     validations: Array.isArray(raw.validations) ? raw.validations as ImportAnalysisResult['validations'] : [],
     comparison: Array.isArray(raw.comparison) ? raw.comparison as ImportAnalysisResult['comparison'] : [],
+    ...(normalizeChosenValues(raw.chosenValues)),
   };
+}
+
+/** 화주가 고른 값(문자열 맵)만 남긴다 — 저장본에 없거나 형식이 틀리면 키를 두지 않는다. */
+function normalizeChosenValues(value: unknown): Pick<ImportAnalysisResult, 'chosenValues'> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].trim() !== '');
+  return entries.length ? { chosenValues: Object.fromEntries(entries) } : {};
 }
 
 export function syncLegacyImportFields(fields: ImportExtractedFields): ImportExtractedFields {

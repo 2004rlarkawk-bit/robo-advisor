@@ -96,6 +96,18 @@ export function buildReconciliationInput(
     assign(INS, 'insuredAmount', analysis.extracted.insuredAmount);
     assign(INS, 'insuredCurrency', analysis.extracted.insuredCurrency);
   }
+  // 화주가 불일치에서 맞는 값을 골랐다면(field:<키>), 그 필드는 서류마다 같은 값으로 본다.
+  // 원본 비교표(comparison)는 건드리지 않고 대사 입력에서만 덮어쓴다.
+  Object.entries(analysis.chosenValues ?? {}).forEach(([choiceKey, value]) => {
+    if (!choiceKey.startsWith('field:')) return;
+    const key = choiceKey.slice('field:'.length) as keyof ImportDocFields;
+    const normalized = meaningful(value);
+    if (normalized === undefined) return;
+    present.forEach((type) => {
+      const bucket = input[type] ?? (input[type] = {});
+      if (bucket[key] !== undefined) bucket[key] = normalized;
+    });
+  });
   return input;
 }
 

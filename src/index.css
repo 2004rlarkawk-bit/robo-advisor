@@ -2661,89 +2661,37 @@ body {
 .duty-grid div { padding: 13px; background: #fff; }
 .duty-grid dt { color: var(--text-light); font-size: 11px; }
 .duty-grid dd { margin: 4px 0 0; font-weight: 700; }
-.import-notice { margin: 14px 0 0; padding: 11px; border-radius: 8px; background: #fffbeb; color: #92400e; font-size: 12px; line-height: 1.5; }
-.import-analysis-disclaimer { margin: -4px 6px 6px; color: var(--text-light); font-size: 12.5px; line-height: 1.5; }
-.import-analysis-disclaimer p { margin: 0; }
-.import-analysis-disclaimer p + p { margin-top: 4px; }
-.import-info-note { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; color: #334155; font-size: 14px; line-height: 1.5; }
-.import-info-note svg { flex-shrink: 0; color: #1e40af; }
-.risk-complete { padding: 18px; border-radius: 9px; background: #ecfdf5; color: #065f46; }
-.risk-complete p { margin: 6px 0 0; line-height: 1.6; }
-.risk-list { display: grid; gap: 10px; }
-.risk-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  border: 1px solid #fed7aa;
-  border-left: 4px solid #f59e0b;
-  border-radius: 10px;
-  background: #fffaf0;
+/* 수입 불일치 카드 — 서류별 값 중 맞는 값을 고르거나 직접 입력 */
+.risk-pick { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.risk-pick + .risk-pick { margin-top: 8px; }
+.risk-pick-label { display: block; margin-bottom: 7px; font-size: 12.5px; font-weight: 700; color: #334155; }
+.risk-pick-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.risk-pick-choice {
+  display: inline-flex; align-items: baseline; gap: 7px; max-width: 100%; text-align: left;
+  padding: 7px 12px; border-radius: 8px; border: 1px solid #cbd5e1; background: #fff;
+  font-family: inherit; font-size: 13.5px; font-weight: 700; color: var(--text-dark);
+  cursor: pointer; word-break: break-word; transition: border-color .15s, background .15s;
 }
-.risk-item.high { border-color: #fecaca; border-left-color: #dc2626; background: #fff7f7; }
-.risk-item.low, .risk-item.info { border-color: #bae6fd; border-left-color: #0284c7; background: #f0f9ff; }
-.risk-item.resolved {
-  border-color: #bbf7d0;
-  border-left-color: #16a34a;
-  background: #f7fef9;
+.risk-pick-choice em { font-style: normal; font-size: 11.5px; font-weight: 700; color: #64748b; }
+.risk-pick-choice:hover { border-color: var(--primary-color); background: #f5f8ff; }
+.risk-pick-custom { display: flex; gap: 8px; margin-top: 8px; }
+.risk-pick-custom .form-input { flex: 1; min-width: 0; padding: 7px 10px; font-size: 13px; }
+.risk-pick-apply {
+  flex-shrink: 0; padding: 7px 14px; border-radius: 8px; border: 1px solid var(--primary-color);
+  background: var(--primary-color); color: #fff; font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
 }
-.risk-item-body { min-width: 0; }
-.risk-level-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 46px;
-  height: 26px;
-  padding: 0 9px;
-  border-radius: 999px;
-  background: #fff;
-  color: #92400e;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0;
+.risk-pick-apply:disabled { opacity: .45; cursor: not-allowed; }
+.risk-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
+.risk-chosen-title { font-size: 12.5px; font-weight: 700; color: #475569; }
+.risk-chosen-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 11px; border-radius: 999px;
+  background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; font-size: 12.5px;
 }
-.risk-item.high .risk-level-badge { color: #b91c1c; }
-.risk-item.low .risk-level-badge,
-.risk-item.info .risk-level-badge { color: #0369a1; }
-.risk-item.resolved .risk-level-badge { color: #15803d; }
-.risk-item-title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.risk-chosen-chip button {
+  border: none; background: #fff; color: #475569; border-radius: 999px; padding: 2px 8px;
+  font-family: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
 }
-.risk-item-title-row strong { font-size: 14px; color: var(--text-dark); }
-.risk-status-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-}
-.risk-status-badge.pending { background: #fff7ed; color: #c2410c; }
-.risk-status-badge.resolved { background: #dcfce7; color: #15803d; }
-.risk-item p { margin: 5px 0; font-size: 13px; line-height: 1.55; color: #475569; }
-.risk-item small { display: block; margin-top: 3px; color: var(--text-light); }
-
-/* 필수 입력 배지 — 미입력 시 문서 생성이 차단되는 항목의 라벨 옆에 표시 */
-.form-label .req-badge {
-  margin-left: 5px; padding: 1px 7px; border-radius: 999px; vertical-align: 1px;
-  background: #fef2f2; color: #dc2626; font-size: 10.5px; font-weight: 700;
-}
-
-/* 수입 종합 리스크 — 수출 확인 항목(fix-card)과 같은 문법의 부속 요소 */
-.risk-resolved { opacity: 0.55; }
-.risk-check-btn {
-  align-self: center; flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
-  padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border-color);
-  background: #fff; font-size: 12.5px; font-weight: 600; color: var(--text-dark);
-  cursor: pointer; transition: border-color 0.15s, background 0.15s;
-}
-.risk-check-btn:hover { border-color: #94a3b8; }
-.risk-check-btn.on { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+.risk-chosen-chip button:hover { color: var(--error-color, #dc2626); }
 .risk-detail { margin-top: 8px; }
 .risk-detail summary {
   display: inline-block; padding: 2px 10px; border-radius: 999px; cursor: pointer; list-style: none;

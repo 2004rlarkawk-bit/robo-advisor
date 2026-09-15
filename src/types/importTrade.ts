@@ -172,6 +172,11 @@ export interface ImportAnalysisResult {
   extracted: ImportExtractedFields;
   validations: ImportValidation[];
   comparison: ImportComparisonRow[];
+  /**
+   * 서류 간 불일치에서 화주가 확인해 고른 값. 원본 서류 값(comparison)은 그대로 두고 따로 보관한다.
+   * 키: "field:<서류 대사 필드>"(예: field:grossWeight) 또는 "validation:<검증 id>".
+   */
+  chosenValues?: Record<string, string>;
 }
 
 export interface ImportDocFields {
@@ -272,6 +277,14 @@ export interface ImportDutyEstimate {
   source: 'api';
 }
 
+/** 불일치 카드에서 "맞는 값 고르기" 한 줄 — 서류별 값을 보여주고 하나를 고르거나 직접 입력한다. */
+export interface ImportRiskPickGroup {
+  /** applyChosenValue 에 넘길 키 */
+  key: string;
+  label: string;
+  choices: Array<{ source: string; value: string }>;
+}
+
 export interface ImportRisk {
   id: string;
   level: RiskLevel;
@@ -280,6 +293,8 @@ export interface ImportRisk {
   recommendation: string;
   relatedDocuments: string[];
   differentValues?: string[];
+  /** 값을 골라 해결할 수 있는 불일치일 때만 채운다. */
+  pickGroups?: ImportRiskPickGroup[];
   status: 'unresolved' | 'resolved';
 }
 

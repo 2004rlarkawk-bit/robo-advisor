@@ -4,10 +4,19 @@ import type {
   ImportDocumentType,
   ImportHSCodeSuggestion,
   ImportRisk,
+  ImportRiskPickGroup,
   ImportReconciliationInput,
   UserTradeRole,
 } from '../types/importTrade';
-import { reconcileFromAnalysis, runImportReconciliation } from './importReconciliationEngine';
+import { buildReconciliationInput, runImportReconciliation } from './importReconciliationEngine';
+import {
+  CHOICE_FIELD_LABEL,
+  RULE_CHOICE_KEYS,
+  choiceKeyForValidation,
+  fieldChoiceKey,
+  isValidationChosen,
+  validationDocKey,
+} from './importValueChoiceService';
 import { parseTradeNumber } from '../utils/number';
 
 /** 업로드 파일 id → 문서 이름(Commercial Invoice 등). 모르는 id는 빼고 중복은 합친다. */
@@ -31,6 +40,22 @@ const DOC_LABEL: Record<ImportDocumentType, string> = {
   unknown: '기타서류',
 };
 const numberValue = (value: string): number => parseTradeNumber(value) ?? 0;
+const SHORT_DOC_LABEL: Partial<Record<ImportDocumentType, string>> = {
+  commercial_invoice: 'C/I', packing_list: 'P/L', bill_of_lading: 'B/L',
+  certificate_of_origin: 'C/O', insurance_policy: '보험증권',
+};
+
+/** 같은 값이 여러 서류에 적혀 있으면 한 번만 보여준다(표기만 같은 경우). */
+function uniqueChoices(choices: Array<{ source: string; value: string }>) {
+  const seen = new Map<string, { source: string; value: string }>();
+  choices.forEach((choice) => {
+    const key = choice.value.trim().toLowerCase();
+    const found = seen.get(key);
+    if (found) found.source = `${found.source}·${choice.source}`;
+    else seen.set(key, { ...choice });
+  });
+  return [...seen.values()];
+}
 
 /**
  * LLM 검증이 넘겨주는 영문 필드 키 → 사용자용 한글 제목.
@@ -144,21 +169,35 @@ export function resolveImportRisks(
   role: UserTradeRole = 'shipper',
 ): ImportRisk[] {
   if (DEMO_FIXED_IMPORT_RISKS) return DEMO_IMPORT_RISKS.map((risk) => ({ ...risk }));
-  const reconciliation = reconciliationInput
-    ? runImportReconciliation(reconciliationInput)
-    : reconcileFromAnalysis(analysis, documents.map((document) => document.type));
+  const input = reconciliationInput ?? buildReconciliationInput(analysis, documents.map((document) => document.type));
+  const reconciliation = runImportReconciliation(input);
   const ruleRisks: ImportRisk[] = reconciliation
     .filter((result) => result.status === 'fail')
-    .map((result) => ({
-      id: `reconcile-${result.ruleId}`,
-      level: result.severity === 'error' ? 'high' : 'medium',
-      // 규칙 번호(IR8 등)는 내부 기준이라 제목에 붙이지 않는다 — id에만 남긴다.
-      item: result.label,
-      cause: result.evidence,
-      recommendation: 'C/I·P/L·B/L·C/O·보험증권 원본을 대조하고 확인된 값으로 정정하세요.',
-      relatedDocuments: result.documents.map((document) => DOC_LABEL[document] ?? document),
-      status: 'unresolved',
-    }));
+    .map((result) => {
+      // 서류마다 같아야 하는 값이면, 서류별 값을 보여주고 맞는 값을 고르게 한다.
+      const pickGroups: ImportRiskPickGroup[] = (RULE_CHOICE_KEYS[result.ruleId] ?? [])
+        .map((key) => ({
+          key: fieldChoiceKey(key),
+          label: CHOICE_FIELD_LABEL[key],
+          choices: uniqueChoices(result.documents
+            .map((type) => ({ source: SHORT_DOC_LABEL[type] ?? type, value: (input[type]?.[key] ?? '').trim() }))
+            .filter((choice) => choice.value)),
+        }))
+        .filter((group) => group.choices.length >= 2);
+      return {
+        id: `reconcile-${result.ruleId}`,
+        level: result.severity === 'error' ? 'high' : 'medium',
+        // 규칙 번호(IR8 등)는 내부 기준이라 제목에 붙이지 않는다 — id에만 남긴다.
+        item: result.label,
+        cause: result.evidence,
+        recommendation: pickGroups.length
+          ? '원본 서류를 확인하고 맞는 값을 고르세요. 둘 다 틀렸다면 직접 입력하면 됩니다.'
+          : 'C/I·P/L·B/L·C/O·보험증권 원본을 대조하고 확인된 값으로 정정하세요.',
+        relatedDocuments: result.documents.map((document) => DOC_LABEL[document] ?? document),
+        ...(pickGroups.length ? { pickGroups } : {}),
+        status: 'unresolved' as const,
+      };
+    });
   const existing = assessImportRisks(documents, analysis, suggestions, dutyError, importerCompanyName, role)
     .filter((risk) => risk.id !== 'reference');
   return [...ruleRisks, ...existing.filter((risk) => !ruleRisks.some((ruleRisk) => ruleRisk.id === risk.id))];
@@ -181,16 +220,29 @@ export function assessImportRisks(
     return UUID_PATTERN.test(documentId) ? '첨부 문서' : documentId;
   };
 
-  const risks: ImportRisk[] = analysis.validations.map((validation) => ({
-    id: validation.id,
-    level: validation.severity === 'error' ? 'high' : 'medium',
-    item: titleForField(validation.field),
-    cause: validation.message,
-    recommendation: recommendationFor(validation.field),
-    relatedDocuments: validation.documents.map((document) => DOC_LABEL[document] ?? document),
-    differentValues: validation.values?.map((entry) => `${docNameOf(entry.documentId)}: ${entry.value}`),
-    status: 'unresolved',
-  }));
+  // 화주가 이미 맞는 값을 고른 항목은 해결된 것으로 보고 목록에서 뺀다.
+  const risks: ImportRisk[] = analysis.validations
+    .filter((validation) => !isValidationChosen(analysis, validation))
+    .map((validation) => {
+      const choices = uniqueChoices((validation.values ?? [])
+        .map((entry) => ({ source: docNameOf(entry.documentId), value: (entry.value ?? '').trim() }))
+        .filter((choice) => choice.value));
+      const docKey = validationDocKey(validation.field);
+      const pickGroups: ImportRiskPickGroup[] = choices.length >= 2
+        ? [{ key: choiceKeyForValidation(validation), label: docKey ? CHOICE_FIELD_LABEL[docKey] : titleForField(validation.field).replace(/\s*불일치$/, ''), choices }]
+        : [];
+      return {
+        id: validation.id,
+        level: validation.severity === 'error' ? 'high' : 'medium',
+        item: titleForField(validation.field),
+        cause: validation.message,
+        recommendation: recommendationFor(validation.field),
+        relatedDocuments: validation.documents.map((document) => DOC_LABEL[document] ?? document),
+        differentValues: validation.values?.map((entry) => `${docNameOf(entry.documentId)}: ${entry.value}`),
+        ...(pickGroups.length ? { pickGroups } : {}),
+        status: 'unresolved' as const,
+      };
+    });
   const add = (risk: ImportRisk) => {
     if (!risks.some((entry) => entry.id === risk.id)) risks.push(risk);
   };
