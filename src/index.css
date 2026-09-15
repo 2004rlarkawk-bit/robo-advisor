@@ -4702,3 +4702,19 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 
 /* 대사 불일치 시 튀는 값 강조 — 어느 서류의 값이 다른지 즉시 보이게 */
 .mismatch-value { color: #b91c1c; font-weight: 700; }
+
+/* 수입 AI 검증 결과 — 카드·헤더·고르기 박스·버튼 모서리를 각지게 (수출 결과 화면은 그대로) */
+.import-card .mobile-fix-list .sev-section-header { border-radius: 4px 4px 0 0; }
+.import-card .mobile-fix-list .mobile-fix-card { border-radius: 4px; }
+.import-card .mobile-fix-list .fix-card__marker--icon { border-radius: 4px; }
+.import-card .mobile-fix-list .fix-card__doc { border-radius: 3px; }
+.import-card .mobile-fix-list .risk-pick { border-radius: 4px; }
+.import-card .mobile-fix-list .risk-pick-choice,
+.import-card .mobile-fix-list .risk-pick-apply,
+.import-card .mobile-fix-list .risk-pick-custom .form-input,
+.import-card .mobile-fix-list .risk-fix-link,
+.import-card .mobile-fix-list .risk-check-btn,
+.import-card .mobile-fix-list .risk-detail summary,
+.import-card .mobile-fix-list .risk-detail-body { border-radius: 3px; }
+.import-card .risk-chosen-chip, .import-card .risk-chosen-chip button { border-radius: 3px; }
+.import-card .risk-pass { border-radius: 4px; }
