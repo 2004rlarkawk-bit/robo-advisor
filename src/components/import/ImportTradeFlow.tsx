@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, Eye, FileText, Info, OctagonAlert, RefreshCw, RotateCcw, Search, Terminal } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Eye, FileText, OctagonAlert, RefreshCw, RotateCcw, Search, Terminal } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
 import ImportAnalysisSummary from './ImportAnalysisSummary';
@@ -1342,7 +1342,7 @@ export default function ImportTradeFlow({
             <div className="import-card-heading">
               <div><h2>배송 요청</h2></div>
             </div>
-            <p className="import-info-note"><Info size={17} aria-hidden="true" />배송 요청은 선택 항목입니다. 비워 두고 제출해도 되며, 배차 전 포워더가 다시 확인합니다.</p>
+            <p className="import-info-note">배송 요청은 선택 항목입니다. 비워 두고 제출해도 되며, 배차 전 포워더가 다시 확인합니다.</p>
             <div className="form-grid">
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label className="form-label" htmlFor="dlv-address">배송지 주소</label>
@@ -1410,8 +1410,7 @@ export default function ImportTradeFlow({
           /> : (
             <>
               {liveRisks.some((risk) => risk.status !== 'resolved') && (
-                <p className="import-info-note">
-                  <Info size={17} aria-hidden="true" />
+                <p className="import-card-note">
                   남은 확인 항목 {liveRisks.filter((risk) => risk.status !== 'resolved').length}건은 제출 후 포워더가 원본 서류와 대조합니다.
                 </p>
               )}
