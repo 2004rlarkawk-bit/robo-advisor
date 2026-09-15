@@ -7,6 +7,7 @@
  *  - 같은 필드의 AI 검증 항목은 해결된 것으로 보며,
  *  - 추출 결과(extracted)에도 그 값을 넣어 세액·의뢰서가 같은 값을 쓰게 한다.
  */
+import { FTA_CHOICE_KEY } from '../types/importTrade';
 import type {
   ImportAnalysisResult,
   ImportExtractedFields,
@@ -119,6 +120,7 @@ export function isValidationChosen(analysis: ImportAnalysisResult, validation: {
 
 /** 사람이 읽는 라벨 — 카드 위 "직접 고른 값" 목록에 쓴다. */
 export function choiceLabel(key: string, analysis: ImportAnalysisResult): string {
+  if (key === FTA_CHOICE_KEY) return 'FTA 적용';
   if (key.startsWith(FIELD_PREFIX)) {
     return CHOICE_FIELD_LABEL[key.slice(FIELD_PREFIX.length) as ChoiceDocKey] ?? key;
   }
@@ -239,6 +241,9 @@ export function applyRiskFix(analysis: ImportAnalysisResult, target: ImportRiskF
     const docKey = key.startsWith(FIELD_PREFIX) ? key.slice(FIELD_PREFIX.length) : '';
     const stored = docKey === 'incoterms' || docKey === 'currency' ? value.toUpperCase() : value;
     return applyChosenValue(analysis, key, stored);
+  }
+  if (target.type === 'fta') {
+    return { ...analysis, chosenValues: { ...(analysis.chosenValues ?? {}), [FTA_CHOICE_KEY]: value } };
   }
   if (target.type === 'importer') {
     return {

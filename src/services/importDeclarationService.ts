@@ -24,6 +24,8 @@ export interface ImportDeclarationData {
   /** 의뢰번호 뒷자리에 쓰는 거래 id */
   tradeId?: string;
   requestDate?: Date;
+  /** C/O 없이 화주가 고른 FTA 적용 여부 */
+  ftaChoice?: string;
 }
 
 export interface ImportDeclarationItemSchema {
@@ -168,9 +170,9 @@ export function mapImportDeclarationToSchema(data: ImportDeclarationData): Impor
     cb_decl_bonded: UNCHECKED,
     cb_decl_other: UNCHECKED,
     // 원산지증명서가 있으면 협정세율 신청, 없으면 적용 가능 여부를 관세사와 확인한다.
-    cb_fta_apply: box(hasCertificateOfOrigin),
-    cb_fta_no: UNCHECKED,
-    cb_fta_check: box(!hasCertificateOfOrigin),
+    cb_fta_apply: box(hasCertificateOfOrigin || data.ftaChoice === 'FTA 적용 요청'),
+    cb_fta_no: box(!hasCertificateOfOrigin && data.ftaChoice === 'FTA 적용 안 함'),
+    cb_fta_check: box(!hasCertificateOfOrigin && data.ftaChoice !== 'FTA 적용 안 함' && data.ftaChoice !== 'FTA 적용 요청'),
     cb_req_none: UNCHECKED,
     cb_req_food: UNCHECKED,
     cb_req_elec: UNCHECKED,

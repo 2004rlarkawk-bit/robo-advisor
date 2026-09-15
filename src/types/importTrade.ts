@@ -281,7 +281,14 @@ export interface ImportDutyEstimate {
 export type ImportRiskFixTarget =
   | { type: 'choice'; key: string }
   | { type: 'importer' }
-  | { type: 'itemOrigin'; itemId: string };
+  | { type: 'itemOrigin'; itemId: string }
+  /** C/O 없음 카드의 FTA 적용 여부 선택 — chosenValues[FTA_CHOICE_KEY]에 저장 */
+  | { type: 'fta' };
+
+/** C/O 없이 FTA를 어떻게 할지 화주가 고른 값의 chosenValues 키 */
+export const FTA_CHOICE_KEY = 'fta:apply';
+export const FTA_CHOICES = ['FTA 적용 안 함', '적용 여부 미확인', 'FTA 적용 요청'] as const;
+export type FtaChoice = typeof FTA_CHOICES[number];
 
 /** 카드 안에서 바로 고치는 방법 — 값 입력, HS 확정 칸으로 이동, 서류 추가 업로드로 이동 */
 export type ImportRiskFix =
@@ -296,7 +303,9 @@ export type ImportRiskFix =
     choices?: Array<{ source: string; value: string }>;
   }
   | { kind: 'hs'; itemId: string }
-  | { kind: 'upload' };
+  | { kind: 'upload' }
+  /** FTA 적용 여부 3택 — 적용 안 함이면 정상, 요청이면 반드시 수정 */
+  | { kind: 'fta' };
 
 /** 불일치 카드에서 "맞는 값 고르기" 한 줄 — 서류별 값을 보여주고 하나를 고르거나 직접 입력한다. */
 export interface ImportRiskPickGroup {

@@ -59,6 +59,7 @@ import type {
   ImportTradeSnapshot,
   UserTradeRole,
 } from '../../types/importTrade';
+import { FTA_CHOICES, FTA_CHOICE_KEY } from '../../types/importTrade';
 import type { PersistedTradeStatus, SavedTrade, TradeProfile } from '../../types';
 import type { TradeFormDataV3 } from '../../types/tradeFormData';
 import type { TradeDraftRow } from '../../services/draftCacheService';
@@ -1011,6 +1012,7 @@ export default function ImportTradeFlow({
     documents: state.documents,
     importerCompanyName,
     tradeId: state.tradeId,
+    ftaChoice: state.analysis.chosenValues?.[FTA_CHOICE_KEY],
   } : null), [state.analysis, state.duty, state.dutyError, state.risks, state.documents, state.tradeId, importerCompanyName]);
 
   // 보기를 누르면 다운로드와 같은 docx를 그대로 렌더한다.
@@ -1573,6 +1575,18 @@ function RiskSummary({ risks, onToggle, onChoose, chosen = [], onClearChoice, on
                 return onGoHs ? (
                   <div key={`${risk.id}-hs`} className="risk-fix-actions">
                     <button type="button" className="risk-fix-link" onClick={() => onGoHs(fix.itemId)}>HS Code 확정하러 가기 →</button>
+                  </div>
+                ) : null;
+              }
+              if (fix.kind === 'fta') {
+                return onFix ? (
+                  <div key={`${risk.id}-fta`} className="risk-pick">
+                    <span className="risk-pick-label">FTA 협정세율을 적용할 건가요?</span>
+                    <div className="risk-pick-choices">
+                      {FTA_CHOICES.map((choice) => (
+                        <button key={choice} type="button" className="risk-pick-choice" onClick={() => onFix({ type: 'fta' }, choice)}>{choice}</button>
+                      ))}
+                    </div>
                   </div>
                 ) : null;
               }

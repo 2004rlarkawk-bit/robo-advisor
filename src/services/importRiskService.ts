@@ -1,3 +1,4 @@
+import { FTA_CHOICE_KEY } from '../types/importTrade';
 import type {
   ImportAnalysisResult,
   ImportDocumentMeta,
@@ -303,15 +304,22 @@ export function assessImportRisks(
       status: 'unresolved',
     });
   }
-  if (!documents.some((document) => document.type === 'certificate_of_origin')) {
+  // C/O 없음: FTA 적용 안 함 → 정상(카드 없음), 미확인 → 확인 권장, 적용 요청 → 반드시 수정. C/O가 있으면 대사 규칙이 다룬다.
+  const ftaChoice = analysis.chosenValues?.[FTA_CHOICE_KEY];
+  if (!documents.some((document) => document.type === 'certificate_of_origin') && ftaChoice !== 'FTA 적용 안 함') {
+    const requested = ftaChoice === 'FTA 적용 요청';
     add({
       id: 'missing-co',
-      level: 'medium',
-      item: '원산지증명서 누락',
-      cause: 'Certificate of Origin이 첨부되지 않아 협정세율 적용 여부를 확인할 수 없습니다.',
-      recommendation: 'FTA 적용을 검토하려면 협정 요건에 맞는 C/O를 수출자에게 요청하세요.',
+      level: requested ? 'high' : 'medium',
+      item: requested ? '원산지증명서 누락 (FTA 적용 요청)' : '원산지증명서 누락 (FTA 적용 여부 확인 필요)',
+      cause: requested
+        ? 'FTA 협정세율 적용을 요청했지만 Certificate of Origin이 없어 협정세율을 적용할 수 없습니다.'
+        : 'Certificate of Origin이 첨부되지 않아 협정세율 적용 여부를 확인할 수 없습니다. 적용하지 않을 거면 아래에서 "FTA 적용 안 함"을 고르세요.',
+      recommendation: requested
+        ? '협정 요건에 맞는 C/O를 수출자에게 받아 추가로 올리거나, 적용하지 않기로 하면 "FTA 적용 안 함"을 고르세요.'
+        : 'FTA 적용을 검토하려면 협정 요건에 맞는 C/O를 수출자에게 요청하세요.',
       relatedDocuments: ['Certificate of Origin'],
-      fixes: [{ kind: 'upload' }],
+      fixes: [{ kind: 'fta' }, { kind: 'upload' }],
       status: 'unresolved',
     });
   }
