@@ -92,6 +92,21 @@ describe('NotificationBell', () => {
     expect(container.textContent).toContain('새 포워딩 의뢰가 도착했습니다');
   });
 
+  it('화주의 수락·완료 알림은 새 포워더 의뢰 메뉴로 이동한다', async () => {
+    const onNavigate = vi.fn();
+    service.listNotifications.mockResolvedValue([{ ...received, type: 'trade_request_accepted' }]);
+    await act(async () => {
+      root.render(<NotificationBell userId="shipper-1" role="shipper" onNavigate={onNavigate} />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.notif-bell-button')?.click();
+      await Promise.resolve();
+    });
+    act(() => container.querySelector<HTMLButtonElement>('.notif-item')?.click());
+    expect(onNavigate).toHaveBeenCalledWith('requests');
+  });
+
   it('모두 읽음은 현재 역할 알림만 처리한다', async () => {
     await act(async () => {
       root.render(<NotificationBell userId="forwarder-1" role="forwarder" onNavigate={vi.fn()} />);

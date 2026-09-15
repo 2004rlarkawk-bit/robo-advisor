@@ -7,6 +7,7 @@ import {
   Inbox,
   LayoutDashboard,
   PhoneCall,
+  Send,
   UserRound,
   type LucideIcon,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ interface NavigationItem {
 const SHIPPER_ITEMS: NavigationItem[] = [
   { menu: 'about', label: '서비스 소개', icon: Anchor },
   { menu: 'dashboard', label: 'AI 통관 작업실', icon: LayoutDashboard },
+  { menu: 'requests', label: '포워더 의뢰', icon: Send },
   { menu: 'docs', label: '문서 관리', icon: FolderKanban },
   { menu: 'customs_history', label: '통관 내역', icon: FileCheck2 },
   { menu: 'analysis', label: '데이터 분석', icon: BarChart3 },

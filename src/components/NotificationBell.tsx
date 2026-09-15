@@ -128,9 +128,9 @@ function notificationTarget(notification: NotificationRecord): AppMenu {
     case 'trade_return_replied': return 'dashboard';
     case 'trade_request_accepted':
     case 'trade_request_rejected':
-    case 'trade_return_requested':
     case 'trade_forwarder_completed':
-      return 'docs';
+      return 'requests';
+    case 'trade_return_requested': return 'docs';
     default:
       return 'dashboard';
   }

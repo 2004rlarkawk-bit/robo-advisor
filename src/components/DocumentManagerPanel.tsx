@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { countTradesByType, filterTradesByType, type TradeTypeCounts, type TradeTypeFilter } from '../utils/tradeTypeFilter';
-import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown, Copy, CornerUpLeft, Mail, Send } from 'lucide-react';
+import { FileText, FolderOpen, Trash2, CheckCircle2, ChevronDown, Copy, CornerUpLeft, Mail } from 'lucide-react';
 import type { SavedTrade } from '../types';
-import {
-  FORWARDER_STAGE_LABEL,
-  FORWARDER_STAGE_ORDER,
-  type ForwarderCaseState,
-} from '../types/forwarderCase';
+import type { ForwarderCaseState } from '../types/forwarderCase';
 import { deleteSavedTrade, fetchSubmittedTrades } from '../services/storageService';
 import { filterDocumentManagerTrades } from '../services/tradeListPolicy';
 import { hasActiveShipperReturnRequest } from '../services/forwarderCaseService';
-import ForwarderRequestModal from './forwarder/ForwarderRequestModal';
-import TradeRequestStatusList from './forwarder/TradeRequestStatusList';
 
 interface Props {
   onLoad: (trade: SavedTrade) => void;
@@ -69,32 +63,19 @@ export function parseReturnReason(reason: string): ReturnReasonSection[] {
   return sections;
 }
 
-/** 화주가 제출한 수입 거래의 포워더 진행 상태 — 문서관리 행에 타임라인으로 보여준다. */
+/** 문서 수정이 필요한 보완 요청만 문서 관리에 남긴다. 포워더 진행 상태는 전용 메뉴에서 확인한다. */
 function ForwarderProgress({ trade, onRevise }: { trade: SavedTrade; onRevise?: (trade: SavedTrade) => void }) {
   if ((trade.tradeDirection ?? trade.profile.tradeType) !== 'import') return null;
   if (trade.tradeRole === 'forwarder') return null;
 
   const state = (trade.forwarderCase as ForwarderCaseState | null) ?? null;
-  const stage = state?.stage ?? 'received';
-  const stageIndex = FORWARDER_STAGE_ORDER.indexOf(stage);
   const returnRequest = state?.returnRequest;
   const returnPending = Boolean(returnRequest && !returnRequest.resolvedAt);
+  if (!returnPending || !returnRequest) return null;
 
   return (
     <div className="dm-fwd">
-      <div className="dm-fwd-line">
-        <span className="dm-fwd-label">포워더 진행</span>
-        {FORWARDER_STAGE_ORDER.map((item, index) => (
-          <span
-            key={item}
-            className={`dm-fwd-step${index === stageIndex ? ' is-current' : ''}${index < stageIndex ? ' is-done' : ''}`}
-          >
-            {FORWARDER_STAGE_LABEL[item]}
-          </span>
-        ))}
-      </div>
-      {returnPending && returnRequest && (
-        <div className="dm-mail">
+      <div className="dm-mail">
           <div className="dm-mail-head">
             <span className="dm-mail-title"><Mail size={17} /> 포워더 보완 요청</span>
             <span className="dm-mail-date">{formatMailDate(returnRequest.requestedAt)}</span>
@@ -136,8 +117,7 @@ function ForwarderProgress({ trade, onRevise }: { trade: SavedTrade; onRevise?: 
               )}
             </div>
           </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -157,8 +137,6 @@ export default function DocumentManagerPanel({
   // 문서 관리 탭 진입 시 임시보관함이 먼저 보이도록 기본 접힘
   const [open, setOpen] = useState(false);
   const [sortKey, setSortKey] = useState<'latest' | 'oldest'>('latest');
-  const [requestModalTrade, setRequestModalTrade] = useState<SavedTrade | null>(null);
-  const [statusRefreshKey, setStatusRefreshKey] = useState(0);
 
   const loadTrades = useCallback(async () => {
     setIsLoading(true);
@@ -344,11 +322,6 @@ export default function DocumentManagerPanel({
                     <button type="button" className="draft-tray-resume" onClick={() => onCopy(trade)}>
                       <Copy size={15} /> 새 거래로 복사
                     </button>
-                    {(trade.tradeRole ?? 'shipper') === 'shipper' && !trade.forwarderUserId && (
-                      <button type="button" className="draft-tray-resume" onClick={() => setRequestModalTrade(trade)}>
-                        <Send size={15} /> 포워더에게 의뢰하기
-                      </button>
-                    )}
                     <button
                       type="button"
                       className="draft-tray-delete"
@@ -358,29 +331,13 @@ export default function DocumentManagerPanel({
                       <Trash2 size={16} />
                     </button>
                   </div>
-                  {/* 포워더 진행·보완 요청은 행 전체 폭을 쓰도록 정보 칼럼 밖에 둔다 */}
+                  {/* 문서 수정과 직접 관련된 보완 요청만 문서 관리에 표시한다. */}
                   <ForwarderProgress trade={trade} onRevise={onRevise} />
-                  {(trade.tradeRole ?? 'shipper') === 'shipper' && (
-                    <TradeRequestStatusList tradeId={trade.id} refreshKey={statusRefreshKey} />
-                  )}
                 </div>
               );
             })
           )}
         </div>
-      )}
-
-      {requestModalTrade && (
-        <ForwarderRequestModal
-          trade={requestModalTrade}
-          onClose={() => setRequestModalTrade(null)}
-          onSent={() => setStatusRefreshKey((key) => key + 1)}
-          onViewRequests={() => {
-            const tradeId = requestModalTrade.id;
-            setRequestModalTrade(null);
-            requestAnimationFrame(() => document.getElementById(`dm-row-${tradeId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
-          }}
-        />
       )}
     </section>
   );
