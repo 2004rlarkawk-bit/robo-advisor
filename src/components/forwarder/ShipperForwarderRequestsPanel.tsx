@@ -21,7 +21,8 @@ import { filterDocumentManagerTrades } from '../../services/tradeListPolicy';
 import ForwarderRequestModal from './ForwarderRequestModal';
 import '../../styles/forwarderRequest.css';
 
-type RequestFilter = 'all' | 'ready' | 'waiting' | 'progress' | 'done';
+type RequestFilter = 'all' | 'ready' | 'active' | 'done';
+type RequestCategory = 'ready' | 'waiting' | 'progress' | 'done';
 type RequestTone = 'neutral' | 'warning' | 'info' | 'success' | 'danger';
 
 interface Props {
@@ -30,11 +31,10 @@ interface Props {
 }
 
 interface TradeRequestView {
-  category: Exclude<RequestFilter, 'all'>;
+  category: RequestCategory;
   statusLabel: string;
   statusTone: RequestTone;
   forwarderLabel: string;
-  nextAction: string;
   requestedAt: string | null;
   canRequest: boolean;
   needsRevision: boolean;
@@ -42,9 +42,8 @@ interface TradeRequestView {
 
 const FILTER_LABELS: Array<{ key: RequestFilter; label: string }> = [
   { key: 'all', label: '전체' },
-  { key: 'ready', label: '의뢰 전·재의뢰' },
-  { key: 'waiting', label: '수락 대기' },
-  { key: 'progress', label: '진행 중' },
+  { key: 'ready', label: '의뢰 전' },
+  { key: 'active', label: '처리 중' },
   { key: 'done', label: '완료' },
 ];
 
@@ -85,7 +84,6 @@ export function deriveTradeRequestView(
       statusLabel: '화주 보완 필요',
       statusTone: 'danger',
       forwarderLabel: '지정 포워더',
-      nextAction: '보완 요청 확인',
       requestedAt: latestInternal?.createdAt ?? latestExternal?.createdAt ?? null,
       canRequest: false,
       needsRevision: true,
@@ -109,7 +107,6 @@ export function deriveTradeRequestView(
       statusLabel,
       statusTone: completed ? 'success' : 'info',
       forwarderLabel: '지정 포워더',
-      nextAction: completed ? '완료 문서 확인' : '진행 상태 확인',
       requestedAt: latestInternal?.acceptedAt ?? latestInternal?.createdAt ?? null,
       canRequest: false,
       needsRevision: false,
@@ -122,7 +119,6 @@ export function deriveTradeRequestView(
       statusLabel: '수락 대기',
       statusTone: 'warning',
       forwarderLabel: '회원 포워더',
-      nextAction: '포워더 수락 대기',
       requestedAt: latestInternal.createdAt,
       canRequest: false,
       needsRevision: false,
@@ -135,7 +131,6 @@ export function deriveTradeRequestView(
       statusLabel: latestExternal.status === 'sent' ? '이메일 전송 완료' : '이메일 전송 중',
       statusTone: 'warning',
       forwarderLabel: latestExternal.recipientCompany || latestExternal.recipientEmail,
-      nextAction: '외부 포워더 회신 확인',
       requestedAt: latestExternal.sentAt ?? latestExternal.createdAt,
       canRequest: true,
       needsRevision: false,
@@ -152,7 +147,6 @@ export function deriveTradeRequestView(
     forwarderLabel: failed
       ? latestExternal?.recipientCompany || latestExternal?.recipientEmail || '이전 포워더'
       : '미지정',
-    nextAction: failed ? '다른 포워더 지정' : '포워더 지정',
     requestedAt: latestInternal?.createdAt ?? latestExternal?.createdAt ?? null,
     canRequest: true,
     needsRevision: false,
@@ -207,14 +201,15 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
   const counts = useMemo(() => ({
     all: rows.length,
     ready: rows.filter((row) => row.view.category === 'ready').length,
-    waiting: rows.filter((row) => row.view.category === 'waiting').length,
-    progress: rows.filter((row) => row.view.category === 'progress').length,
+    active: rows.filter((row) => row.view.category === 'waiting' || row.view.category === 'progress').length,
     done: rows.filter((row) => row.view.category === 'done').length,
   }), [rows]);
 
   const filteredRows = activeFilter === 'all'
     ? rows
-    : rows.filter((row) => row.view.category === activeFilter);
+    : activeFilter === 'active'
+      ? rows.filter((row) => row.view.category === 'waiting' || row.view.category === 'progress')
+      : rows.filter((row) => row.view.category === activeFilter);
   const requestableTrades = rows.filter((row) => row.view.canRequest).map((row) => row.trade);
 
   const openRequest = (trade: SavedTrade) => {
@@ -226,7 +221,6 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
     <section className="shipper-requests-page">
       <header className="shipper-requests-head">
         <div>
-          <span className="shipper-requests-eyebrow"><Ship size={15} /> SHIPPER TO FORWARDER</span>
           <h1>포워더 의뢰</h1>
           <p>완성된 문서를 지정 포워더에게 전달하고, 수락 이후 진행 상태를 확인합니다.</p>
         </div>
@@ -241,18 +235,12 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
       </header>
 
       <div className="shipper-request-relationship" aria-label="화주와 포워더 업무 연결">
-        <div className="shipper-request-actor is-shipper">
-          <span className="shipper-request-actor-icon"><FileCheck2 size={20} /></span>
-          <span><small>보내는 쪽</small><strong>화주</strong><em>완성 서류와 운송 조건 전달</em></span>
+        <div className="shipper-request-parties">
+          <span><FileCheck2 size={17} /><strong>화주</strong></span>
+          <ArrowRight size={17} />
+          <span className="is-forwarder"><Ship size={17} /><strong>지정 포워더</strong></span>
         </div>
-        <div className="shipper-request-handoff">
-          <span>PortAI로 의뢰</span>
-          <div><i /><ArrowRight size={18} /><i /></div>
-        </div>
-        <div className="shipper-request-actor is-forwarder">
-          <span className="shipper-request-actor-icon"><Ship size={20} /></span>
-          <span><small>처리하는 쪽</small><strong>지정 포워더</strong><em>수락 후 운송·통관 업무 진행</em></span>
-        </div>
+        <p>완성 서류 전달 · 포워더 수락 · 운송과 통관 진행</p>
       </div>
 
       <div className="shipper-requests-card">
@@ -290,7 +278,7 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
         ) : (
           <div className="shipper-request-table">
             <div className="shipper-request-table-head">
-              <span>거래·문서</span><span>포워더</span><span>상태</span><span>다음 할 일</span>
+              <span>거래·문서</span><span>포워더·상태</span><span>작업</span>
             </div>
             {filteredRows.map(({ trade, view }) => {
               const profile = trade.profile;
@@ -306,12 +294,10 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
                     <span>{reference} · 제출 {formatDate(trade.submittedAt ?? trade.createdAt)}</span>
                   </div>
                   <div className="shipper-request-forwarder">
-                    <strong>{view.forwarderLabel}</strong>
+                    <div><strong>{view.forwarderLabel}</strong><span className={`shipper-request-status is-${view.statusTone}`}>{view.statusLabel}</span></div>
                     {view.requestedAt && <span>의뢰 {formatDate(view.requestedAt)}</span>}
                   </div>
-                  <div><span className={`shipper-request-status is-${view.statusTone}`}>{view.statusLabel}</span></div>
                   <div className="shipper-request-next">
-                    <span>{view.nextAction}</span>
                     {view.needsRevision && onRevise ? (
                       <button type="button" className="shipper-request-action is-danger" onClick={() => onRevise(trade)}>
                         <RotateCcw size={15} /> 문서 수정

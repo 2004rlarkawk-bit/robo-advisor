@@ -16,17 +16,6 @@
   margin-bottom: 22px;
 }
 
-.shipper-requests-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 9px;
-  color: #2563eb;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
 .shipper-requests-head h1 {
   margin: 0;
   color: #17233a;
@@ -48,101 +37,34 @@
 }
 
 .shipper-request-relationship {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(150px, 0.55fr) minmax(240px, 1fr);
+  display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  gap: 18px;
   margin-bottom: 18px;
-  padding: 14px;
+  padding: 12px 16px;
   border: 1px solid #dbe4ef;
-  border-radius: 13px;
+  border-radius: 11px;
   background: #f8fafc;
 }
 
-.shipper-request-actor {
+.shipper-request-parties {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 78px;
-  padding: 13px 15px;
-  border: 1px solid #d8e2ee;
-  border-radius: 11px;
-  background: #fff;
-}
-
-.shipper-request-actor.is-forwarder {
-  border-color: #b9d2ff;
-  background: #f3f7ff;
-}
-
-.shipper-request-actor-icon {
-  display: inline-grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  border-radius: 10px;
-  background: #edf2f7;
+  gap: 9px;
   color: #52647d;
 }
 
-.shipper-request-actor.is-forwarder .shipper-request-actor-icon {
-  background: #dceaff;
-  color: #1759c9;
-}
-
-.shipper-request-actor > span:last-child {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.shipper-request-actor small {
-  color: #8492a6;
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 700;
-}
-
-.shipper-request-actor strong {
-  color: #1e293b;
-  font-size: 15px;
-}
-
-.shipper-request-actor em {
-  color: #64748b;
-  font-size: 11px;
-  font-style: normal;
-}
-
-.shipper-request-handoff {
-  display: flex;
-  flex-direction: column;
+.shipper-request-parties span {
+  display: inline-flex;
   align-items: center;
-  gap: 7px;
-  color: #2563eb;
-}
-
-.shipper-request-handoff > span {
-  padding: 4px 9px;
-  border-radius: 999px;
-  background: #eaf2ff;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.shipper-request-handoff > div {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  width: 100%;
   gap: 6px;
+  color: #334155;
+  font-size: 12px;
 }
 
-.shipper-request-handoff i {
-  height: 1px;
-  background: #aac7f7;
-}
+.shipper-request-parties .is-forwarder { color: #1759c9; }
+.shipper-request-relationship p { margin: 0; color: #6b7b91; font-size: 11.5px; }
 
 .shipper-requests-card {
   overflow: hidden;
@@ -219,9 +141,9 @@
 .shipper-request-table-head,
 .shipper-request-row {
   display: grid;
-  grid-template-columns: minmax(280px, 1.65fr) minmax(160px, 0.9fr) minmax(145px, 0.75fr) minmax(210px, 1fr);
+  grid-template-columns: minmax(300px, 1.65fr) minmax(260px, 1fr) auto;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
 }
 
 .shipper-request-table-head {
@@ -234,8 +156,8 @@
 }
 
 .shipper-request-row {
-  min-height: 92px;
-  padding: 15px 20px;
+  min-height: 82px;
+  padding: 13px 20px;
   border-top: 1px solid #edf1f5;
 }
 
@@ -254,6 +176,13 @@
   display: flex;
   align-items: center;
   gap: 9px;
+  min-width: 0;
+}
+
+.shipper-request-forwarder > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -295,14 +224,8 @@
 .shipper-request-next {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
-}
-
-.shipper-request-next > span {
-  color: #475569;
-  font-size: 12px;
-  font-weight: 650;
 }
 
 .shipper-request-action {
@@ -380,9 +303,7 @@
 @media (max-width: 640px) {
   .shipper-requests-head { align-items: flex-start; flex-direction: column; }
   .shipper-requests-new { width: 100%; }
-  .shipper-request-relationship { grid-template-columns: 1fr; }
-  .shipper-request-handoff { flex-direction: row; justify-content: center; }
-  .shipper-request-handoff > div { width: 100px; }
+  .shipper-request-relationship { align-items: flex-start; flex-direction: column; gap: 7px; }
   .shipper-request-row { grid-template-columns: 1fr; gap: 11px; }
   .shipper-requests-toolbar { align-items: flex-start; padding: 12px; }
 }
