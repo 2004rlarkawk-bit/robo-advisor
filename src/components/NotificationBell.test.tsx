@@ -121,6 +121,34 @@ describe('NotificationBell', () => {
     expect(container.querySelector('.notif-badge')).toBeNull();
   });
 
+  it('전체 알림 보기는 100개까지 불러오고 안 읽음 탭으로 거를 수 있다', async () => {
+    const read: NotificationRecord = { ...received, id: 'notification-2', type: 'trade_request_accepted', readAt: '2026-09-15T07:00:00.000Z' };
+    await act(async () => {
+      root.render(<NotificationBell userId="forwarder-1" role="forwarder" onNavigate={vi.fn()} />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.notif-bell-button')?.click();
+      await Promise.resolve();
+    });
+    service.listNotifications.mockResolvedValue([received, read]);
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.notif-dropdown-foot')?.click();
+      await Promise.resolve();
+    });
+    expect(service.listNotifications).toHaveBeenLastCalledWith(100, 'forwarder');
+    const modal = document.body.querySelector('.notif-all-modal');
+    expect(modal).not.toBeNull();
+    expect(modal!.querySelectorAll('.notif-item')).toHaveLength(2);
+
+    const unreadTab = [...modal!.querySelectorAll<HTMLButtonElement>('.notif-all-tab')].find((tab) => tab.textContent?.includes('안 읽음'));
+    act(() => unreadTab?.click());
+    expect(modal!.querySelectorAll('.notif-item')).toHaveLength(1);
+
+    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+    expect(document.body.querySelector('.notif-all-modal')).toBeNull();
+  });
+
   it('알 수 없는 이전 알림 형식도 빈 카드 대신 기본 안내를 표시한다', async () => {
     service.listNotifications.mockResolvedValue([{ ...received, type: 'legacy_event' }]);
     await act(async () => {

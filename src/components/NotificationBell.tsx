@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bell,
   CheckCheck,
@@ -84,6 +85,9 @@ const DEFAULT_PRESENTATION: NotificationPresentation = {
   tone: 'info',
 };
 
+/** 전체 알림 보기에서 한 번에 불러오는 개수 */
+const ALL_NOTIFICATIONS_LIMIT = 100;
+
 function getPresentation(type: NotificationType): NotificationPresentation {
   return PRESENTATION[type] ?? DEFAULT_PRESENTATION;
 }
@@ -148,6 +152,12 @@ export default function NotificationBell({
   const [loading, setLoading] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [toast, setToast] = useState<NotificationRecord | null>(null);
+  // 전체 알림 보기 창
+  const [allOpen, setAllOpen] = useState(false);
+  const [allLoading, setAllLoading] = useState(false);
+  const [allError, setAllError] = useState('');
+  const [allNotifications, setAllNotifications] = useState<NotificationRecord[]>([]);
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const knownIdsRef = useRef<Set<string>>(new Set());
   const hydratedRef = useRef(false);
@@ -223,7 +233,10 @@ export default function NotificationBell({
       if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false);
     }
     function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') {
+        setOpen(false);
+        setAllOpen(false);
+      }
     }
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
@@ -245,11 +258,14 @@ export default function NotificationBell({
 
   const handleItemClick = (notification: NotificationRecord) => {
     setOpen(false);
+    setAllOpen(false);
     if (!notification.readAt) {
       const readAt = new Date().toISOString();
-      setNotifications((current) => current.map((item) => (
+      const markOne = (current: NotificationRecord[]) => current.map((item) => (
         item.id === notification.id ? { ...item, readAt } : item
-      )));
+      ));
+      setNotifications(markOne);
+      setAllNotifications(markOne);
       setUnreadCount((count) => Math.max(0, count - 1));
       void markNotificationRead(notification.id).catch(() => void refresh(false));
     }
@@ -261,15 +277,57 @@ export default function NotificationBell({
   const handleMarkAllRead = () => {
     if (unreadCount === 0) return;
     const readAt = new Date().toISOString();
-    setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? readAt })));
+    const markAll = (current: NotificationRecord[]) => current.map((item) => ({ ...item, readAt: item.readAt ?? readAt }));
+    setNotifications(markAll);
+    setAllNotifications(markAll);
     setUnreadCount(0);
     void markAllNotificationsRead(role).catch(() => void refresh(false));
+  };
+
+  const openAllNotifications = async () => {
+    setOpen(false);
+    setAllOpen(true);
+    setAllLoading(true);
+    setAllError('');
+    try {
+      setAllNotifications(await listNotifications(ALL_NOTIFICATIONS_LIMIT, role));
+    } catch (error) {
+      console.warn('전체 알림 조회 실패:', error);
+      setAllError('알림을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setAllLoading(false);
+    }
   };
 
   if (!userId) return null;
 
   const toastPresentation = toast ? getPresentation(toast.type) : null;
   const ToastIcon = toastPresentation?.icon;
+  const allUnreadCount = allNotifications.filter((item) => !item.readAt).length;
+  const visibleAll = unreadOnly ? allNotifications.filter((item) => !item.readAt) : allNotifications;
+
+  const renderItem = (notification: NotificationRecord) => {
+    const presentation = getPresentation(notification.type);
+    const Icon = presentation.icon;
+    return (
+      <button
+        key={notification.id}
+        type="button"
+        className={`notif-item${notification.readAt ? '' : ' unread'}`}
+        onClick={() => handleItemClick(notification)}
+      >
+        <span className={`notif-type-icon is-${presentation.tone}`}><Icon size={16} /></span>
+        <span className="notif-item-copy">
+          <span className="notif-item-title">
+            {!notification.readAt && <span className="notif-unread-dot" aria-label="읽지 않음" />}
+            {presentation.title}
+          </span>
+          <span className="notif-item-detail">{notificationDetail(notification)}</span>
+          <span className="notif-item-time">{formatTime(notification.createdAt)}</span>
+        </span>
+      </button>
+    );
+  };
 
   return (
     <div className="notif-bell-wrap" ref={wrapRef}>
@@ -325,31 +383,57 @@ export default function NotificationBell({
                 <span>새로운 업무 소식이 여기에 표시됩니다.</span>
               </div>
             ) : (
-              notifications.map((notification) => {
-                const presentation = getPresentation(notification.type);
-                const Icon = presentation.icon;
-                return (
-                  <button
-                    key={notification.id}
-                    type="button"
-                    className={`notif-item${notification.readAt ? '' : ' unread'}`}
-                    onClick={() => handleItemClick(notification)}
-                  >
-                    <span className={`notif-type-icon is-${presentation.tone}`}><Icon size={16} /></span>
-                    <span className="notif-item-copy">
-                      <span className="notif-item-title">
-                        {!notification.readAt && <span className="notif-unread-dot" aria-label="읽지 않음" />}
-                        {presentation.title}
-                      </span>
-                      <span className="notif-item-detail">{notificationDetail(notification)}</span>
-                      <span className="notif-item-time">{formatTime(notification.createdAt)}</span>
-                    </span>
-                  </button>
-                );
-              })
+              notifications.map(renderItem)
             )}
           </div>
+          <button type="button" className="notif-dropdown-foot" onClick={() => void openAllNotifications()}>
+            전체 알림 보기
+          </button>
         </section>
+      )}
+
+      {allOpen && createPortal(
+        <div
+          className="notif-all-overlay"
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setAllOpen(false); }}
+        >
+          <section className="notif-all-modal" role="dialog" aria-modal="true" aria-label="전체 알림">
+            <div className="notif-dropdown-head">
+              <div><strong>전체 알림</strong></div>
+              <button type="button" className="notif-toast-close notif-all-close" aria-label="닫기" onClick={() => setAllOpen(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="notif-all-toolbar">
+              <div className="notif-all-tabs" role="group" aria-label="알림 분류">
+                <button type="button" className={`notif-all-tab${unreadOnly ? '' : ' active'}`} aria-pressed={!unreadOnly} onClick={() => setUnreadOnly(false)}>
+                  전체 {allNotifications.length}
+                </button>
+                <button type="button" className={`notif-all-tab${unreadOnly ? ' active' : ''}`} aria-pressed={unreadOnly} onClick={() => setUnreadOnly(true)}>
+                  안 읽음 {allUnreadCount}
+                </button>
+              </div>
+              <button type="button" className="notif-read-all" disabled={allUnreadCount === 0 && unreadCount === 0} onClick={handleMarkAllRead}>
+                <CheckCheck size={14} /> 모두 읽음
+              </button>
+            </div>
+            {allError && <div className="form-message error" role="alert">{allError}</div>}
+            <div className="notif-list notif-all-list">
+              {allLoading ? (
+                <div className="notif-empty">알림을 불러오는 중…</div>
+              ) : visibleAll.length === 0 ? (
+                <div className="notif-empty">
+                  <Bell size={22} />
+                  <strong>{unreadOnly ? '읽지 않은 알림이 없습니다' : '도착한 알림이 없습니다'}</strong>
+                </div>
+              ) : (
+                visibleAll.map(renderItem)
+              )}
+            </div>
+          </section>
+        </div>,
+        document.body,
       )}
     </div>
   );

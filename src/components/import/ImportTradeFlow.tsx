@@ -1349,7 +1349,7 @@ export default function ImportTradeFlow({
               <button type="button" className="btn btn-secondary" onClick={() => setDeliveryOpen((value) => !value)}><Eye size={17} /> {deliveryOpen ? '닫기' : '보기'}</button>
             </div>
             {deliveryOpen && (
-            <div className="form-grid">
+            <div className="form-grid" style={{ marginTop: 20 }}>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                 <label className="form-label" htmlFor="dlv-address">배송지 주소</label>
                 <input
