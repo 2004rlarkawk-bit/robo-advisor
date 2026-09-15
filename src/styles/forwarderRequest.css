@@ -418,13 +418,34 @@
   margin-bottom: 14px;
 }
 
+/* 보낼 문서 — 한 줄에 체크박스 + 문서명이 왼쪽부터 붙어 나오는 카드 행.
+   .fwd-field input { width: 100% } 가 체크박스에도 걸려 체크박스가 폭을 다 먹고 글자가 오른쪽에 찌그러지던 문제를 막는다. */
 .fwd-doc-checklist label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  margin: 0;
+  padding: 11px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #fff;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-dark);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.fwd-doc-checklist label:hover { border-color: #94a3b8; background: #f8fafc; }
+.fwd-doc-checklist label:has(input:checked) { border-color: #bfdbfe; background: #f5f9ff; }
+
+.fwd-field .fwd-doc-checklist input[type='checkbox'] {
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--primary-color);
   cursor: pointer;
 }
 
