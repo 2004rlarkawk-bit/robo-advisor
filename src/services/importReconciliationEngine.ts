@@ -42,6 +42,7 @@ const BL: ImportDocumentType = 'bill_of_lading';
 const CO: ImportDocumentType = 'certificate_of_origin';
 const INS: ImportDocumentType = 'insurance_policy';
 const RECONCILED_TYPES = new Set<ImportDocumentType>([CI, PL, BL, CO, INS]);
+const CI_OWNED_KEYS = new Set<keyof ImportDocFields>(['currency', 'incoterms', 'totalAmount']);
 // 순서가 중요하다 — "선적항"이 '품명'류 패턴에 먼저 걸리지 않도록 구체적인 항목을 앞에 둔다.
 const FIELD_ALIASES: Array<[keyof ImportDocFields, RegExp]> = [
   ['originCountry', /(원산지|origin)/i],
@@ -105,7 +106,8 @@ export function buildReconciliationInput(
     if (normalized === undefined) return;
     present.forEach((type) => {
       const bucket = input[type] ?? (input[type] = {});
-      if (bucket[key] !== undefined) bucket[key] = normalized;
+      // 통화·Incoterms·총액은 C/I에 적는 값 — C/I에 없던 값을 화주가 채웠다면 C/I 값으로 넣는다.
+      if (bucket[key] !== undefined || (type === CI && CI_OWNED_KEYS.has(key))) bucket[key] = normalized;
     });
   });
   return input;

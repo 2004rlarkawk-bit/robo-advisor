@@ -2681,6 +2681,15 @@ body {
   background: var(--primary-color); color: #fff; font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
 }
 .risk-pick-apply:disabled { opacity: .45; cursor: not-allowed; }
+/* 카드 안 이동 버튼 — HS 확정·서류 추가 */
+.risk-fix-actions { margin-top: 10px; }
+.risk-fix-link {
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 8px;
+  border: 1px solid #c7d7f5; background: #f5f8ff; color: var(--primary-color);
+  font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: background .15s;
+}
+.risk-fix-link:hover { background: #e8f0ff; }
+.import-hs-item--focus { outline: 2px solid var(--primary-color); outline-offset: 4px; border-radius: 10px; transition: outline-color .3s; }
 .risk-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 14px; }
 .risk-chosen-title { font-size: 12.5px; font-weight: 700; color: #475569; }
 .risk-chosen-chip {

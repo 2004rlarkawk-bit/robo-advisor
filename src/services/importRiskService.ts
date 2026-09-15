@@ -4,11 +4,13 @@ import type {
   ImportDocumentType,
   ImportHSCodeSuggestion,
   ImportRisk,
+  ImportRiskFix,
   ImportRiskPickGroup,
   ImportReconciliationInput,
   UserTradeRole,
 } from '../types/importTrade';
 import { buildReconciliationInput, runImportReconciliation } from './importReconciliationEngine';
+import { STANDARD_INCOTERMS } from './importReconciliationRules';
 import {
   CHOICE_FIELD_LABEL,
   RULE_CHOICE_KEYS,
@@ -18,15 +20,6 @@ import {
   validationDocKey,
 } from './importValueChoiceService';
 import { parseTradeNumber } from '../utils/number';
-
-/** 업로드 파일 id → 문서 이름(Commercial Invoice 등). 모르는 id는 빼고 중복은 합친다. */
-function documentLabelsFor(ids: string[], documents: ImportDocumentMeta[]): string[] {
-  const labels = ids
-    .map((id) => documents.find((document) => document.id === id || document.sourceId === id))
-    .filter((document): document is ImportDocumentMeta => Boolean(document))
-    .map((document) => DOC_LABEL[document.type] ?? document.type);
-  return [...new Set(labels)];
-}
 
 const DOC_LABEL: Record<ImportDocumentType, string> = {
   commercial_invoice: 'Commercial Invoice',
@@ -44,6 +37,30 @@ const SHORT_DOC_LABEL: Partial<Record<ImportDocumentType, string>> = {
   commercial_invoice: 'C/I', packing_list: 'P/L', bill_of_lading: 'B/L',
   certificate_of_origin: 'C/O', insurance_policy: '보험증권',
 };
+
+const INCOTERMS_OPTIONS = [...STANDARD_INCOTERMS];
+const incotermsFix: ImportRiskFix = { kind: 'value', label: 'Incoterms 고르기', target: { type: 'choice', key: fieldChoiceKey('incoterms') }, options: INCOTERMS_OPTIONS };
+const totalAmountFix = (choices?: Array<{ source: string; value: string }>): ImportRiskFix => ({
+  kind: 'value', label: 'Invoice 총금액 입력', target: { type: 'choice', key: fieldChoiceKey('totalAmount') }, placeholder: '숫자만', ...(choices?.length ? { choices } : {}),
+});
+const weightFixes: ImportRiskFix[] = [
+  { kind: 'value', label: '순중량(kg) 입력', target: { type: 'choice', key: fieldChoiceKey('netWeight') }, placeholder: '숫자만' },
+  { kind: 'value', label: '총중량(kg) 입력', target: { type: 'choice', key: fieldChoiceKey('grossWeight') }, placeholder: '숫자만' },
+];
+
+/** 서류 대사 규칙별로 카드 안에서 고칠 방법 */
+function ruleFixes(ruleId: string, analysis: ImportAnalysisResult): ImportRiskFix[] {
+  const firstItemId = analysis.extracted.items[0]?.id;
+  switch (ruleId) {
+    case 'IR4': return weightFixes;
+    case 'IR6': return [totalAmountFix()];
+    case 'IR7': return [{ kind: 'value', label: '통화 입력', target: { type: 'choice', key: fieldChoiceKey('currency') }, placeholder: 'USD' }];
+    case 'IR8': return firstItemId ? [{ kind: 'hs', itemId: firstItemId }] : [];
+    case 'IR9': return [incotermsFix];
+    case 'IR10': return [{ kind: 'upload' }];
+    default: return [];
+  }
+}
 
 /** 같은 값이 여러 서류에 적혀 있으면 한 번만 보여준다(표기만 같은 경우). */
 function uniqueChoices(choices: Array<{ source: string; value: string }>) {
@@ -195,6 +212,7 @@ export function resolveImportRisks(
           : 'C/I·P/L·B/L·C/O·보험증권 원본을 대조하고 확인된 값으로 정정하세요.',
         relatedDocuments: result.documents.map((document) => DOC_LABEL[document] ?? document),
         ...(pickGroups.length ? { pickGroups } : {}),
+        ...(pickGroups.length ? {} : (() => { const fixes = ruleFixes(result.ruleId, analysis); return fixes.length ? { fixes } : {}; })()),
         status: 'unresolved' as const,
       };
     });
@@ -219,6 +237,9 @@ export function assessImportRisks(
     if (doc) return DOC_LABEL[doc.type] ?? doc.name;
     return UUID_PATTERN.test(documentId) ? '첨부 문서' : documentId;
   };
+
+  // 품목 출처 서류 ID를 배지용 서류 이름으로 바꾼다(중복 제거).
+  const sourceDocumentNames = (ids: string[]) => [...new Set(ids.map(docNameOf))];
 
   // 화주가 이미 맞는 값을 고른 항목은 해결된 것으로 보고 목록에서 뺀다.
   const risks: ImportRisk[] = analysis.validations
@@ -256,6 +277,7 @@ export function assessImportRisks(
         cause: '해상 수입 분석에 필요한 기본서류가 첨부되지 않았습니다.',
         recommendation: `${DOC_LABEL[type]} 원본을 해외 수출자 또는 운송인에게 요청해 첨부하세요.`,
         relatedDocuments: [DOC_LABEL[type]],
+        fixes: [{ kind: 'upload' }],
         status: 'unresolved',
       });
     }
@@ -272,6 +294,12 @@ export function assessImportRisks(
       recommendation: '문서가 해당 회사의 거래인지 확인하세요. 문서값은 자동으로 덮어쓰지 않습니다.',
       relatedDocuments: ['Commercial Invoice', 'Bill of Lading', '회원프로필'],
       differentValues: [fields.importerDetails.name, importerCompanyName],
+      fixes: [{
+        kind: 'value',
+        label: '맞는 Importer 고르기',
+        target: { type: 'importer' },
+        choices: [{ source: '서류', value: fields.importerDetails.name }, { source: '회원 프로필', value: importerCompanyName }],
+      }],
       status: 'unresolved',
     });
   }
@@ -283,26 +311,27 @@ export function assessImportRisks(
       cause: 'Certificate of Origin이 첨부되지 않아 협정세율 적용 여부를 확인할 수 없습니다.',
       recommendation: 'FTA 적용을 검토하려면 협정 요건에 맞는 C/O를 수출자에게 요청하세요.',
       relatedDocuments: ['Certificate of Origin'],
+      fixes: [{ kind: 'upload' }],
       status: 'unresolved',
     });
   }
   if (!fields.incoterms) {
-    add({ id: 'missing-incoterms', level: 'medium', item: 'Incoterms 누락', cause: '운임·보험료 부담 주체와 과세가격 가산 범위를 확인할 수 없습니다.', recommendation: 'Commercial Invoice 또는 계약서에서 Incoterms와 장소를 확인하세요.', relatedDocuments: ['Commercial Invoice'], status: 'unresolved' });
+    add({ id: 'missing-incoterms', level: 'medium', item: 'Incoterms 누락', cause: '운임·보험료 부담 주체와 과세가격 가산 범위를 확인할 수 없습니다.', recommendation: 'Commercial Invoice 또는 계약서에서 Incoterms와 장소를 확인하세요.', relatedDocuments: ['Commercial Invoice'], fixes: [incotermsFix], status: 'unresolved' });
   }
   if (numberValue(fields.netWeight) > 0 && numberValue(fields.grossWeight) > 0 && numberValue(fields.netWeight) > numberValue(fields.grossWeight)) {
-    add({ id: 'net-over-gross', level: 'high', item: '순중량 오류', cause: '순중량이 총중량보다 큽니다.', recommendation: 'Packing List의 순중량과 총중량 열이 바뀌어 추출되지 않았는지 확인하세요.', relatedDocuments: ['Packing List', 'Bill of Lading'], differentValues: [fields.netWeight, fields.grossWeight], status: 'unresolved' });
+    add({ id: 'net-over-gross', level: 'high', item: '순중량 오류', cause: '순중량이 총중량보다 큽니다.', recommendation: 'Packing List의 순중량과 총중량 열이 바뀌어 추출되지 않았는지 확인하세요.', relatedDocuments: ['Packing List', 'Bill of Lading'], differentValues: [fields.netWeight, fields.grossWeight], fixes: weightFixes, status: 'unresolved' });
   }
   const itemSum = fields.items.reduce((sum, item) => sum + numberValue(item.amount), 0);
   const invoiceTotal = numberValue(fields.totalAmount);
   if (itemSum > 0 && invoiceTotal > 0 && Math.abs(itemSum - invoiceTotal) > 0.01) {
-    add({ id: 'item-total-mismatch', level: 'high', item: '품목 금액 합계 불일치', cause: '품목별 금액 합계와 Invoice 총금액이 다릅니다.', recommendation: '할인·운임 등 별도 행이 있는지 확인하고 각 품목 금액 또는 Invoice 총액을 수정하세요.', relatedDocuments: ['Commercial Invoice'], differentValues: [`품목 합계 ${itemSum}`, `Invoice ${invoiceTotal}`], status: 'unresolved' });
+    add({ id: 'item-total-mismatch', level: 'high', item: '품목 금액 합계 불일치', cause: '품목별 금액 합계와 Invoice 총금액이 다릅니다.', recommendation: '할인·운임 등 별도 행이 있는지 확인하고 각 품목 금액 또는 Invoice 총액을 수정하세요.', relatedDocuments: ['Commercial Invoice'], differentValues: [`품목 합계 ${itemSum}`, `Invoice ${invoiceTotal}`], fixes: [totalAmountFix([{ source: '품목 합계', value: String(itemSum) }])], status: 'unresolved' });
   }
   fields.items.forEach((item, index) => {
-    if (!item.originCountry) add({ id: `origin-${item.id}`, level: 'high', item: `품목 ${index + 1} 원산지 누락`, cause: '첨부문서에서 품목 원산지가 확인되지 않았습니다.', recommendation: 'C/O, C/I, P/L 순으로 품목 원산지를 확인하세요.', relatedDocuments: ['Certificate of Origin', 'Commercial Invoice', 'Packing List'], status: 'unresolved' });
-    if (role === 'shipper' && !item.confirmedHSCode) add({ id: `hs-${item.id}`, level: 'high', item: `품목 ${index + 1} HS Code 미확정`, cause: item.documentHSCode ? '문서 HS Code가 있으나 사용자가 최종 확정하지 않았습니다.' : '문서 HS Code가 없고 추천 후보도 아직 확정되지 않았습니다.', recommendation: recommendationFor('hs'), relatedDocuments: documentLabelsFor(item.sourceDocumentIds, documents), status: 'unresolved' });
+    if (!item.originCountry) add({ id: `origin-${item.id}`, level: 'high', item: `품목 ${index + 1} 원산지 누락`, cause: '첨부문서에서 품목 원산지가 확인되지 않았습니다.', recommendation: 'C/O, C/I, P/L 순으로 품목 원산지를 확인하세요.', relatedDocuments: ['Certificate of Origin', 'Commercial Invoice', 'Packing List'], fixes: [{ kind: 'value', label: '원산지 입력', target: { type: 'itemOrigin', itemId: item.id }, placeholder: 'VIETNAM' }], status: 'unresolved' });
+    if (role === 'shipper' && !item.confirmedHSCode) add({ id: `hs-${item.id}`, level: 'high', item: `품목 ${index + 1} HS Code 미확정`, cause: item.documentHSCode ? '문서 HS Code가 있으나 사용자가 최종 확정하지 않았습니다.' : '문서 HS Code가 없고 추천 후보도 아직 확정되지 않았습니다.', recommendation: recommendationFor('hs'), relatedDocuments: sourceDocumentNames(item.sourceDocumentIds), fixes: [{ kind: 'hs', itemId: item.id }], status: 'unresolved' });
     const itemSuggestions = suggestions.filter((suggestion) => !suggestion.itemId || suggestion.itemId === item.id);
     if (itemSuggestions.length && Math.max(...itemSuggestions.map((suggestion) => suggestion.confidence)) < 0.7) {
-      add({ id: `hs-confidence-${item.id}`, level: 'medium', item: `품목 ${index + 1} HS Code 신뢰도 낮음`, cause: 'AI 추천 후보의 최고 신뢰도가 70% 미만입니다.', recommendation: '추천에 부족하다고 표시된 재질·용도·규격을 확인하고 관세사 검토를 받으세요.', relatedDocuments: documentLabelsFor(item.sourceDocumentIds, documents), status: 'unresolved' });
+      add({ id: `hs-confidence-${item.id}`, level: 'medium', item: `품목 ${index + 1} HS Code 신뢰도 낮음`, cause: 'AI 추천 후보의 최고 신뢰도가 70% 미만입니다.', recommendation: '추천에 부족하다고 표시된 재질·용도·규격을 확인하고 관세사 검토를 받으세요.', relatedDocuments: sourceDocumentNames(item.sourceDocumentIds), fixes: [{ kind: 'hs', itemId: item.id }], status: 'unresolved' });
     }
   });
   if (dutyError) {

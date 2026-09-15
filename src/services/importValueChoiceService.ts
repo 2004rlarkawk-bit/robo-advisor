@@ -10,13 +10,15 @@
 import type {
   ImportAnalysisResult,
   ImportExtractedFields,
+  ImportRiskFixTarget,
 } from '../types/importTrade';
 import { syncLegacyImportFields } from './importDocumentAnalysisService';
 import { parseTradeNumber } from '../utils/number';
 
 export type ChoiceDocKey =
   | 'productDescription' | 'quantity' | 'packageCount' | 'grossWeight' | 'netWeight'
-  | 'originCountry' | 'loadPort' | 'dischargePort' | 'consignee';
+  | 'originCountry' | 'loadPort' | 'dischargePort' | 'consignee'
+  | 'incoterms' | 'currency' | 'totalAmount';
 
 const FIELD_PREFIX = 'field:';
 const VALIDATION_PREFIX = 'validation:';
@@ -31,9 +33,12 @@ export const CHOICE_FIELD_LABEL: Record<ChoiceDocKey, string> = {
   loadPort: '선적항',
   dischargePort: '도착항',
   consignee: 'Consignee',
+  incoterms: 'Incoterms',
+  currency: '통화',
+  totalAmount: 'Invoice 총금액',
 };
 
-const NUMERIC_KEYS = new Set<ChoiceDocKey>(['quantity', 'packageCount', 'grossWeight', 'netWeight']);
+const NUMERIC_KEYS = new Set<ChoiceDocKey>(['quantity', 'packageCount', 'grossWeight', 'netWeight', 'totalAmount']);
 
 /** 서류 간 같은 값이어야 하는 규칙만 "맞는 값 고르기"를 제공한다. */
 export const RULE_CHOICE_KEYS: Record<string, ChoiceDocKey[]> = {
@@ -135,6 +140,9 @@ export function docFieldsFromExtracted(extracted: ImportExtractedFields): Record
     loadPort: extracted.loadPort ?? '',
     dischargePort: extracted.dischargePort ?? '',
     consignee: extracted.consigneeDetails?.name ?? '',
+    incoterms: extracted.incoterms ?? '',
+    currency: extracted.currency ?? '',
+    totalAmount: extracted.totalAmount ?? '',
   };
 }
 
@@ -167,6 +175,9 @@ function applyDocFieldToExtracted(extracted: ImportExtractedFields, key: ChoiceD
     case 'loadPort': next.loadPort = value; break;
     case 'dischargePort': next.dischargePort = value; break;
     case 'consignee': next.consigneeDetails = { ...next.consigneeDetails, name: value }; break;
+    case 'incoterms': next.incoterms = value.toUpperCase(); break;
+    case 'currency': next.currency = value.toUpperCase(); break;
+    case 'totalAmount': next.totalAmount = value; break;
   }
   return syncLegacyImportFields(next);
 }
@@ -219,3 +230,30 @@ export function mergeEditedChoices(
   return { ...analysis, extracted: nextExtracted, chosenValues };
 }
 
+/** 카드 안에서 고친 값을 분석 결과에 반영한다 — 반영되면 경고 목록이 다시 계산된다. */
+export function applyRiskFix(analysis: ImportAnalysisResult, target: ImportRiskFixTarget, rawValue: string): ImportAnalysisResult {
+  const value = rawValue.trim();
+  if (!value) return analysis;
+  if (target.type === 'choice') {
+    const key = target.key;
+    const docKey = key.startsWith(FIELD_PREFIX) ? key.slice(FIELD_PREFIX.length) : '';
+    const stored = docKey === 'incoterms' || docKey === 'currency' ? value.toUpperCase() : value;
+    return applyChosenValue(analysis, key, stored);
+  }
+  if (target.type === 'importer') {
+    return {
+      ...analysis,
+      extracted: syncLegacyImportFields({
+        ...analysis.extracted,
+        importerDetails: { ...analysis.extracted.importerDetails, name: value },
+      }),
+    };
+  }
+  return {
+    ...analysis,
+    extracted: syncLegacyImportFields({
+      ...analysis.extracted,
+      items: analysis.extracted.items.map((item) => (item.id === target.itemId ? { ...item, originCountry: value } : item)),
+    }),
+  };
+}

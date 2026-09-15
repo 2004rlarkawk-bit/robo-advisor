@@ -17,7 +17,7 @@ import {
   validateOfficialImportHSK,
 } from '../../services/importHSCodeSuggestionService';
 import { resolveImportRisks } from '../../services/importRiskService';
-import { applyChosenValue, choiceLabel, clearChosenValue, mergeEditedChoices } from '../../services/importValueChoiceService';
+import { applyChosenValue, applyRiskFix, choiceLabel, clearChosenValue, mergeEditedChoices } from '../../services/importValueChoiceService';
 import { IMPORT_DEMO_SCENARIO } from '../../services/importReconciliationFixtures';
 import {
   buildImportDeclarationDocx,
@@ -55,6 +55,7 @@ import type {
   ImportDeliveryRequest,
   ImportHSCodeSuggestion,
   ImportRisk,
+  ImportRiskFixTarget,
   ImportTradeSnapshot,
   UserTradeRole,
 } from '../../types/importTrade';
@@ -978,6 +979,22 @@ export default function ImportTradeFlow({
     duty: null,
     dutyError: '',
   } : current));
+  // 카드 안에서 값을 입력해 고치면 분석 결과에 반영하고 세액은 다시 계산하게 비운다.
+  const fixRiskValue = (target: ImportRiskFixTarget, value: string) => setState((current) => (current.analysis ? {
+    ...current,
+    analysis: applyRiskFix(current.analysis, target, value),
+    duty: null,
+    dutyError: '',
+  } : current));
+  // HS 미확정 카드 → 아래 G. HSK 확정 칸의 해당 품목으로 이동
+  const goToHsItem = (itemId: string) => {
+    const target = document.getElementById(`import-hs-item-${itemId}`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target?.classList.add('import-hs-item--focus');
+    window.setTimeout(() => target?.classList.remove('import-hs-item--focus'), 2400);
+  };
+  // 서류 누락 카드 → 1단계(서류 업로드)로 돌아가 추가 업로드
+  const goToUploadStep = () => setState((current) => ({ ...current, step: 1 }));
   const clearRiskValue = (key: string) => setState((current) => (current.analysis ? {
     ...current,
     analysis: clearChosenValue(current.analysis, key),
@@ -1179,6 +1196,9 @@ export default function ImportTradeFlow({
             onChoose={readOnly || role !== 'shipper' ? undefined : chooseRiskValue}
             chosen={role === 'shipper' ? chosenRiskValues : []}
             onClearChoice={readOnly || role !== 'shipper' ? undefined : clearRiskValue}
+            onFix={readOnly || role !== 'shipper' ? undefined : fixRiskValue}
+            onGoHs={readOnly || role !== 'shipper' ? undefined : goToHsItem}
+            onGoUpload={readOnly || role !== 'shipper' ? undefined : goToUploadStep}
           />
           <div className="import-analysis-disclaimer">
             <p>자동 분석 결과는 참고정보이며 최종 법률·통관 판단이 아닙니다.</p>
@@ -1213,7 +1233,7 @@ export default function ImportTradeFlow({
                 ));
                 const manualValue = manualHsInputs[item.id] ?? item.confirmedHSCode;
                 return (
-                  <div className="import-hs-item" key={item.id}>
+                  <div className="import-hs-item" id={`import-hs-item-${item.id}`} key={item.id}>
                     <h3>품목 {index + 1}: {item.description || '품명 미확인'}</h3>
                     <div className="import-hs-reference">
                       <span className="form-label">해외 문서 HS Code</span>
@@ -1470,7 +1490,7 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
   );
 }
 
-function RiskSummary({ risks, onToggle, onChoose, chosen = [], onClearChoice }: {
+function RiskSummary({ risks, onToggle, onChoose, chosen = [], onClearChoice, onFix, onGoHs, onGoUpload }: {
   risks: ImportRisk[];
   onToggle?: (id: string) => void;
   /** 불일치 카드에서 맞는 값을 골랐을 때 */
@@ -1478,6 +1498,10 @@ function RiskSummary({ risks, onToggle, onChoose, chosen = [], onClearChoice }: 
   /** 이미 고른 값 — 카드가 사라진 뒤에도 되돌릴 수 있게 목록으로 보여준다 */
   chosen?: Array<{ key: string; label: string; value: string }>;
   onClearChoice?: (key: string) => void;
+  /** 카드 안에서 값을 입력해 고쳤을 때 */
+  onFix?: (target: ImportRiskFixTarget, value: string) => void;
+  onGoHs?: (itemId: string) => void;
+  onGoUpload?: () => void;
 }) {
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   // 수출 결과 페이지의 확인 항목과 같은 문법: 반드시 수정(high) / 확인 권장(그 외) 두 그룹.
@@ -1540,6 +1564,63 @@ function RiskSummary({ risks, onToggle, onChoose, chosen = [], onClearChoice }: 
                     <button type="button" className="risk-pick-apply" disabled={!custom.trim()} onClick={() => onChoose(group.key, custom)}>
                       적용
                     </button>
+                  </div>
+                </div>
+              );
+            })}
+            {!resolved && risk.fixes?.map((fix, fixIndex) => {
+              if (fix.kind === 'hs') {
+                return onGoHs ? (
+                  <div key={`${risk.id}-hs`} className="risk-fix-actions">
+                    <button type="button" className="risk-fix-link" onClick={() => onGoHs(fix.itemId)}>HS Code 확정하러 가기 →</button>
+                  </div>
+                ) : null;
+              }
+              if (fix.kind === 'upload') {
+                return onGoUpload ? (
+                  <div key={`${risk.id}-upload`} className="risk-fix-actions">
+                    <button type="button" className="risk-fix-link" onClick={onGoUpload}>서류 추가하러 가기 →</button>
+                  </div>
+                ) : null;
+              }
+              if (!onFix) return null;
+              const fixKey = `${risk.id}::fix${fixIndex}`;
+              const draft = customValues[fixKey] ?? '';
+              const setDraft = (value: string) => setCustomValues((current) => ({ ...current, [fixKey]: value }));
+              return (
+                <div key={fixKey} className="risk-pick">
+                  <span className="risk-pick-label">{fix.label}</span>
+                  {!!fix.choices?.length && (
+                    <div className="risk-pick-choices">
+                      {fix.choices.map((choice) => (
+                        <button key={`${choice.source}-${choice.value}`} type="button" className="risk-pick-choice" onClick={() => onFix(fix.target, choice.value)}>
+                          <em>{choice.source}</em>{choice.value}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="risk-pick-custom">
+                    {fix.options ? (
+                      <select className="form-input" value={draft} aria-label={fix.label} onChange={(event) => setDraft(event.target.value)}>
+                        <option value="">선택하세요</option>
+                        {fix.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        className="form-input"
+                        value={draft}
+                        placeholder={fix.placeholder ?? '값 입력'}
+                        aria-label={fix.label}
+                        onChange={(event) => setDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && !event.nativeEvent.isComposing && draft.trim()) {
+                            event.preventDefault();
+                            onFix(fix.target, draft);
+                          }
+                        }}
+                      />
+                    )}
+                    <button type="button" className="risk-pick-apply" disabled={!draft.trim()} onClick={() => onFix(fix.target, draft)}>적용</button>
                   </div>
                 </div>
               );

@@ -277,6 +277,27 @@ export interface ImportDutyEstimate {
   source: 'api';
 }
 
+/** 카드에서 값을 고치면 어디에 반영할지 */
+export type ImportRiskFixTarget =
+  | { type: 'choice'; key: string }
+  | { type: 'importer' }
+  | { type: 'itemOrigin'; itemId: string };
+
+/** 카드 안에서 바로 고치는 방법 — 값 입력, HS 확정 칸으로 이동, 서류 추가 업로드로 이동 */
+export type ImportRiskFix =
+  | {
+    kind: 'value';
+    label: string;
+    target: ImportRiskFixTarget;
+    placeholder?: string;
+    /** 정해진 값 중에서 고르는 항목(예: Incoterms 11종) */
+    options?: string[];
+    /** 눌러서 바로 채울 후보 값 */
+    choices?: Array<{ source: string; value: string }>;
+  }
+  | { kind: 'hs'; itemId: string }
+  | { kind: 'upload' };
+
 /** 불일치 카드에서 "맞는 값 고르기" 한 줄 — 서류별 값을 보여주고 하나를 고르거나 직접 입력한다. */
 export interface ImportRiskPickGroup {
   /** applyChosenValue 에 넘길 키 */
@@ -295,6 +316,8 @@ export interface ImportRisk {
   differentValues?: string[];
   /** 값을 골라 해결할 수 있는 불일치일 때만 채운다. */
   pickGroups?: ImportRiskPickGroup[];
+  /** 카드 안에서 바로 고칠 수 있는 방법 */
+  fixes?: ImportRiskFix[];
   status: 'unresolved' | 'resolved';
 }
 

@@ -25,7 +25,7 @@ describe('확인 항목 표시 정리', () => {
     });
     const documents = [doc('34f7f52e-8a83-4194-b334-2a2d72f61a98', 'commercial_invoice'), doc('a00d7e48-086e-45de-bd46-06d878ff3773', 'packing_list')];
     const fields = normalizeImportExtractedFields({
-      items: [{ id: 'item-1', description: 'Coat', originCountry: 'China', confirmedHSCode: '', sourceDocumentIds: documents.map((d) => d.id).concat('unknown-id') }],
+      items: [{ id: 'item-1', description: 'Coat', originCountry: 'China', confirmedHSCode: '', sourceDocumentIds: documents.map((d) => d.id) }],
     });
     const analysis = { extracted: fields, validations: [], comparison: [] } as unknown as ImportAnalysisResult;
 
