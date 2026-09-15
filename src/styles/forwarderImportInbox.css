@@ -59,3 +59,13 @@
   .fwd-inbox-filters { gap: 6px; }
   .fwd-inbox-filters button { padding: 12px 9px; font-size: 14px; }
 }
+
+/* 수출 포워더 '받은 의뢰' — 수입 표와 달리 첫 칸이 라디오가 아니라 화주/품목이므로 폭을 따로 준다. */
+.fwd-export-inbox-table th:first-child { width: 34%; }
+.fwd-export-inbox-table th:nth-child(2) { width: 30%; }
+.fwd-export-inbox-table th:nth-child(3) { width: 14%; }
+.fwd-export-inbox-table th:nth-child(4) { width: 9%; }
+.fwd-export-inbox-table th:nth-child(5) { width: 150px; }
+.fwd-export-inbox-table th, .fwd-export-inbox-table .fwd-inbox-eta, .fwd-export-inbox-table .fwd-inbox-badge { white-space: nowrap; }
+.fwd-export-inbox-table td { overflow-wrap: break-word; }
+.fwd-export-inbox-table td:last-child { text-align: right; }

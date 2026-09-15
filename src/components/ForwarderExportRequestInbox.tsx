@@ -72,7 +72,7 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId }:
         </p>
       ) : (
         <div className="fwd-inbox-table-scroll">
-          <table className="fwd-inbox-table">
+          <table className="fwd-inbox-table fwd-export-inbox-table">
             <thead>
               <tr>
                 <th>화주 / 품목</th>
