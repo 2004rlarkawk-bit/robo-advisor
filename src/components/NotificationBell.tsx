@@ -134,7 +134,8 @@ function notificationTarget(notification: NotificationRecord): AppMenu {
     case 'trade_request_rejected':
     case 'trade_forwarder_completed':
       return 'requests';
-    case 'trade_return_requested': return 'docs';
+    // 보완 요청도 포워더 의뢰로 — '화주 보완 필요' 상태와 [문서 수정] 버튼이 그 화면에 있다.
+    case 'trade_return_requested': return 'requests';
     default:
       return 'dashboard';
   }
