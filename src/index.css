@@ -595,6 +595,26 @@ body {
 .forwarder-completion-checklist li { display: flex; align-items: center; gap: 8px; color: var(--text-light); font-size: 14px; }
 .forwarder-completion-checklist li svg { flex-shrink: 0; }
 .forwarder-completion-checklist li.is-done { color: #15803d; }
+/* 수출 포워더 단계 카드 — 접이식 섹션 안 내용이 카드 왼쪽 테두리에 닿지 않게 summary와 같은 좌우 18px을 준다. */
+.forwarder-workspace-form .form-section > .import-document-list,
+.forwarder-workspace-form .form-section > .fwd-progress,
+.forwarder-workspace-form .form-section > .form-help,
+.forwarder-workspace-form .form-section > .forwarder-document-slot,
+.forwarder-workspace-form .form-section > .forwarder-completion-checklist { margin-left: 18px; margin-right: 18px; }
+.forwarder-workspace-form .form-section > .workspace-readonly-fieldset { padding: 0 18px; }
+.forwarder-workspace-form .form-section > :last-child:not(summary) { margin-bottom: 18px; }
+.forwarder-workspace-form .form-section > .form-actions {
+  justify-content: flex-start; align-items: center; flex-wrap: wrap; gap: 12px;
+  margin: 16px 18px 18px; padding-top: 16px;
+}
+.forwarder-workspace-form .form-section > .form-actions .btn { white-space: nowrap; flex-shrink: 0; }
+.forwarder-workspace-form .form-section > .form-actions .fwd-action-hint { flex: 1 1 240px; margin: 0; }
+/* 포워더 단계의 문서·진행 행은 앞 아이콘 칸이 없다 — 기본 24px 아이콘 칸에 제목이 들어가 한 글자씩 세로로 깨지던 문제. */
+.forwarder-workspace-form .import-document-row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+@media (max-width: 760px) {
+  .forwarder-workspace-form .import-document-row { grid-template-columns: minmax(0, 1fr); }
+  .forwarder-workspace-form .import-document-actions { grid-column: 1; }
+}
 @media (max-width: 760px) {
   .forwarder-generated-document-card { align-items: stretch; flex-direction: column; }
   .forwarder-bl-document-actions .btn,
