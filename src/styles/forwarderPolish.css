@@ -48,6 +48,10 @@
 .fwd-workspace .fwd-cargo-card .cargo-query { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; }
 .fwd-workspace .fwd-cargo-card .cargo-query .form-group { margin: 0; }
 .fwd-workspace .fwd-cargo-card .cargo-query .btn { width: auto; grid-column: auto; white-space: nowrap; }
+.fwd-workspace .fwd-customs-status-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; margin: 0 0 14px; padding: 11px 15px; border: 1px solid #cfe0f6; border-radius: 8px; background: #f3f7fd; color: #50647f; font-size: 13px; }
+.fwd-workspace .fwd-customs-status-strip span:not(.fwd-customs-status-title) { display: inline-flex; align-items: center; gap: 5px; }
+.fwd-workspace .fwd-customs-status-strip strong { color: #1f569a; font-weight: 700; }
+.fwd-workspace .fwd-customs-status-title { color: #213550; font-weight: 800; }
 .fwd-workspace .fwd-cargo-state { padding: 5px 9px; border-radius: 6px; background: #f0f4f9; color: #5d728e; font-size: 12px; }
 .fwd-workspace .fwd-cargo-hint { margin: 12px 0 0; color: #71839b; font-size: 13px; line-height: 1.7; }
 .fwd-workspace .fwd-cargo-result-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: #284d7f; }
