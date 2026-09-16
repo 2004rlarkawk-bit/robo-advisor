@@ -331,6 +331,8 @@ export interface ImportRisk {
   chosen?: boolean;
   /** 카드 안에서 바로 고칠 수 있는 방법 */
   fixes?: ImportRiskFix[];
+  /** C/O 없음 카드에서 화주가 고른 FTA 적용 여부 — 고른 버튼을 눌린 상태로 보여준다 */
+  ftaChoice?: string;
   status: 'unresolved' | 'resolved';
 }
 

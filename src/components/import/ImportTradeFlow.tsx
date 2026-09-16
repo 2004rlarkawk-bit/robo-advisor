@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, Eye, FileText, OctagonAlert, RefreshCw, RotateCcw, Search, Terminal } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, Download, Eye, FileText, OctagonAlert, RefreshCw, RotateCcw, Search, Terminal } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
 import ImportAnalysisSummary from './ImportAnalysisSummary';
@@ -1204,6 +1204,7 @@ export default function ImportTradeFlow({
             onFix={readOnly || role !== 'shipper' ? undefined : fixRiskValue}
             onGoHs={readOnly || role !== 'shipper' ? undefined : goToHsItem}
             onGoUpload={readOnly || role !== 'shipper' ? undefined : goToUploadStep}
+            collapseAdvisories={role === 'shipper'}
           />
           <div className="import-analysis-disclaimer">
             <p>자동 분석 결과는 참고정보이며 최종 법률·통관 판단이 아닙니다.</p>
@@ -1251,7 +1252,7 @@ export default function ImportTradeFlow({
                         <label key={`${item.id}-${suggestion.code}`} className={`hs-suggestion ${item.confirmedHSCode === suggestion.code ? 'selected' : ''}`}>
                           <input type="radio" name={`import-hs-${item.id}`} checked={item.confirmedHSCode === suggestion.code} disabled={readOnly} onChange={() => selectRecommendedHS(item.id, suggestion.code)} />
                           <span>
-                            <strong>{suggestion.code} · {suggestion.description}</strong>
+                            <strong title={`${suggestion.code} · ${suggestion.description}`}>{suggestion.code} · {suggestion.description}</strong>
                             <small>추천 신뢰도 {Math.round(suggestion.confidence * 100)}%</small>
                             <small>{suggestion.reasoning}</small>
                           </span>
@@ -1506,8 +1507,10 @@ function sameChoiceValue(a: string, b: string): boolean {
   return /\d/.test(a) && /^[\d.,\s]*[A-Za-z]*\s*$/.test(a.trim()) && /^[\d.,\s]*[A-Za-z]*\s*$/.test(b.trim()) && digits(a) === digits(b);
 }
 
-function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, onGoUpload }: {
+function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, onGoUpload, collapseAdvisories = false }: {
   risks: ImportRisk[];
+  /** 화주 수입: '확인 권장' 목록을 처음엔 접어 두고 헤더를 눌러 펼친다 */
+  collapseAdvisories?: boolean;
   onToggle?: (id: string) => void;
   /** 불일치 카드에서 맞는 값을 골랐을 때 */
   onChoose?: (key: string, value: string) => void;
@@ -1519,6 +1522,7 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
   onGoUpload?: () => void;
 }) {
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
+  const [advisoriesOpen, setAdvisoriesOpen] = useState(!collapseAdvisories);
   // 수출 결과 페이지의 확인 항목과 같은 문법: 반드시 수정(high) / 확인 권장(그 외) 두 그룹.
   const blockers = risks.filter((risk) => risk.level === 'high');
   const advisories = risks.filter((risk) => risk.level === 'medium' || risk.level === 'low');
@@ -1599,7 +1603,9 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
                 </div>
               );
             })}
-            {!resolved && risk.fixes?.map((fix, fixIndex) => {
+            {(!resolved || risk.chosen) && risk.fixes?.map((fix, fixIndex) => {
+              // 해결된 카드에서는 고른 선택(FTA)만 다시 바꿀 수 있게 남긴다.
+              if (resolved && fix.kind !== 'fta') return null;
               if (fix.kind === 'hs') {
                 return onGoHs ? (
                   <div key={`${risk.id}-hs`} className="risk-fix-actions">
@@ -1612,9 +1618,20 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
                   <div key={`${risk.id}-fta`} className="risk-pick">
                     <span className="risk-pick-label">FTA 협정세율을 적용할 건가요?</span>
                     <div className="risk-pick-choices">
-                      {FTA_CHOICES.map((choice) => (
-                        <button key={choice} type="button" className="risk-pick-choice" onClick={() => onFix({ type: 'fta' }, choice)}>{choice}</button>
-                      ))}
+                      {FTA_CHOICES.map((choice) => {
+                        const isSelected = risk.ftaChoice === choice;
+                        return (
+                          <button
+                            key={choice}
+                            type="button"
+                            className={`risk-pick-choice${isSelected ? ' is-selected' : ''}`}
+                            aria-pressed={isSelected}
+                            onClick={() => (isSelected ? onClearChoice?.(FTA_CHOICE_KEY) : onFix({ type: 'fta' }, choice))}
+                          >
+                            {choice}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null;
@@ -1686,7 +1703,10 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
             <button
               type="button"
               className="risk-check-btn on"
-              onClick={() => risk.pickGroups?.forEach((group) => { if (group.selected) onClearChoice(group.key); })}
+              onClick={() => {
+                if (risk.ftaChoice) onClearChoice(FTA_CHOICE_KEY);
+                risk.pickGroups?.forEach((group) => { if (group.selected) onClearChoice(group.key); });
+              }}
             >
               <RotateCcw size={14} /> 선택 취소
             </button>
@@ -1727,14 +1747,26 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
             </div>
           )}
           {blockers.map(renderCard)}
-          {advisories.length > 0 && (
+          {advisories.length > 0 && (collapseAdvisories ? (
+            <button
+              type="button"
+              className={`sev-section-header sev-warning sev-section-toggle${advisoriesOpen ? ' is-open' : ''}`}
+              aria-expanded={advisoriesOpen}
+              onClick={() => setAdvisoriesOpen((open) => !open)}
+            >
+              <span className="sev-section-icon"><AlertTriangle size={17} strokeWidth={2.4} /></span>
+              <span className="sev-section-label">확인 권장</span>
+              <span className="sev-section-count">{advisories.length}</span>
+              <span className="sev-section-toggle-hint">{advisoriesOpen ? '접기' : '펼쳐 보기'}<ChevronDown size={16} /></span>
+            </button>
+          ) : (
             <div className="sev-section-header sev-warning">
               <span className="sev-section-icon"><AlertTriangle size={17} strokeWidth={2.4} /></span>
               <span className="sev-section-label">확인 권장</span>
               <span className="sev-section-count">{advisories.length}</span>
             </div>
-          )}
-          {advisories.map(renderCard)}
+          ))}
+          {advisoriesOpen && advisories.map(renderCard)}
         </div>
       )}
     </section>

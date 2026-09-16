@@ -222,12 +222,18 @@ export function resolveImportRisks(
       const isChosen = !stillFails && pickGroups.some((group) => group.selected);
       // 고른 값 없이 다른 수정으로 해소된 규칙은 목록에서 뺀다.
       if (!stillFails && !isChosen) return [];
+      // 서류에 HS CODE가 없어도(IR8) G 섹션에서 모든 품목의 HSK를 확정했으면 해결된 카드로 남긴다.
+      const confirmedCodes = result.ruleId === 'IR8'
+        ? analysis.extracted.items.map((item) => item.confirmedHSCode?.trim()).filter(Boolean)
+        : [];
+      const hsConfirmed = confirmedCodes.length > 0 && confirmedCodes.length === analysis.extracted.items.length;
+      const resolved = isChosen || hsConfirmed;
       return [{
         id: `reconcile-${result.ruleId}`,
         level: result.severity === 'error' ? 'high' : 'medium',
         // 규칙 번호(IR8 등)는 내부 기준이라 제목에 붙이지 않는다 — id에만 남긴다.
         item: result.label,
-        cause: result.evidence,
+        cause: hsConfirmed ? `대한민국 HSK 확정: ${[...new Set(confirmedCodes)].join(', ')}` : result.evidence,
         recommendation: pickGroups.length
           ? '원본 서류를 확인하고 맞는 값을 고르세요. 둘 다 틀렸다면 직접 입력하면 됩니다.'
           : 'C/I·P/L·B/L·C/O·보험증권 원본을 대조하고 확인된 값으로 정정하세요.',
@@ -235,7 +241,7 @@ export function resolveImportRisks(
         ...(pickGroups.length ? { pickGroups } : {}),
         ...(pickGroups.length ? {} : (() => { const fixes = ruleFixes(result.ruleId, analysis); return fixes.length ? { fixes } : {}; })()),
         ...(isChosen ? { chosen: true } : {}),
-        status: isChosen ? 'resolved' as const : 'unresolved' as const,
+        status: resolved ? 'resolved' as const : 'unresolved' as const,
       }];
     });
   const existing = assessImportRisks(documents, analysis, suggestions, dutyError, importerCompanyName, role)
@@ -331,24 +337,55 @@ export function assessImportRisks(
       status: 'unresolved',
     });
   }
-  // C/O 없음: FTA 적용 안 함 → 정상(카드 없음), 미확인 → 확인 권장, 적용 요청 → 반드시 수정. C/O가 있으면 대사 규칙이 다룬다.
+  // C/O 없음: 화주가 고른 FTA 적용 여부에 따라 안내가 달라진다. C/O가 있으면 대사 규칙이 다룬다.
+  //  - FTA 적용 안 함 → 기본 관세율로 진행, 카드는 남기되 해결됨(연한 회색·검토 완료)
+  //  - 적용 여부 미확인 → 확인 권장: 적용 여부를 확인해 달라고 안내
+  //  - FTA 적용 요청 → 반드시 수정: 원산지증명서 제출 안내
   const ftaChoice = analysis.chosenValues?.[FTA_CHOICE_KEY];
-  if (!documents.some((document) => document.type === 'certificate_of_origin') && ftaChoice !== 'FTA 적용 안 함') {
-    const requested = ftaChoice === 'FTA 적용 요청';
-    add({
-      id: 'missing-co',
-      level: requested ? 'high' : 'medium',
-      item: requested ? '원산지증명서 누락 (FTA 적용 요청)' : '원산지증명서 누락 (FTA 적용 여부 확인 필요)',
-      cause: requested
-        ? 'FTA 협정세율 적용을 요청했지만 Certificate of Origin이 없어 협정세율을 적용할 수 없습니다.'
-        : 'Certificate of Origin이 첨부되지 않아 협정세율 적용 여부를 확인할 수 없습니다. 적용하지 않을 거면 아래에서 "FTA 적용 안 함"을 고르세요.',
-      recommendation: requested
-        ? '협정 요건에 맞는 C/O를 수출자에게 받아 추가로 올리거나, 적용하지 않기로 하면 "FTA 적용 안 함"을 고르세요.'
-        : 'FTA 적용을 검토하려면 협정 요건에 맞는 C/O를 수출자에게 요청하세요.',
-      relatedDocuments: ['Certificate of Origin'],
-      fixes: [{ kind: 'fta' }, { kind: 'upload' }],
-      status: 'unresolved',
-    });
+  if (!documents.some((document) => document.type === 'certificate_of_origin')) {
+    const base = { id: 'missing-co', relatedDocuments: ['Certificate of Origin'], ...(ftaChoice ? { ftaChoice } : {}) };
+    if (ftaChoice === 'FTA 적용 안 함') {
+      add({
+        ...base,
+        level: 'medium',
+        item: '원산지증명서 없음 (FTA 적용 안 함)',
+        cause: 'FTA 협정세율을 적용하지 않고 기본 관세율로 진행합니다. 원산지증명서는 제출하지 않아도 됩니다.',
+        recommendation: '나중에 FTA를 적용하려면 협정 요건에 맞는 원산지증명서를 받아 올리고 "FTA 적용 요청"으로 바꾸세요.',
+        fixes: [{ kind: 'fta' }],
+        chosen: true,
+        status: 'resolved',
+      });
+    } else if (ftaChoice === 'FTA 적용 요청') {
+      add({
+        ...base,
+        level: 'high',
+        item: '원산지증명서 필요 (FTA 적용 요청)',
+        cause: '원산지증명서가 필요합니다. FTA 협정세율을 적용하려면 원산지증명서(Certificate of Origin)를 제출해 주세요.',
+        recommendation: '수출자에게 협정 요건에 맞는 원산지증명서를 받아 서류로 추가하세요. 제출이 어렵다면 "FTA 적용 안 함"을 고르면 기본 관세율로 진행합니다.',
+        fixes: [{ kind: 'fta' }, { kind: 'upload' }],
+        status: 'unresolved',
+      });
+    } else if (ftaChoice === '적용 여부 미확인') {
+      add({
+        ...base,
+        level: 'medium',
+        item: '원산지증명서 누락 (FTA 적용 여부 확인 필요)',
+        cause: 'FTA 적용 여부를 확인해 주세요. 수출자에게 원산지증명서 발급이 가능한지 확인한 뒤, 적용할지 아래에서 다시 골라 주세요.',
+        recommendation: '협정세율을 적용하면 관세를 줄일 수 있습니다. 원산지증명서를 받을 수 있으면 "FTA 적용 요청", 아니면 "FTA 적용 안 함"을 고르세요.',
+        fixes: [{ kind: 'fta' }, { kind: 'upload' }],
+        status: 'unresolved',
+      });
+    } else {
+      add({
+        ...base,
+        level: 'medium',
+        item: '원산지증명서 누락 (FTA 적용 여부 확인 필요)',
+        cause: 'Certificate of Origin이 첨부되지 않아 협정세율 적용 여부를 확인할 수 없습니다. FTA를 적용할지 아래에서 골라 주세요.',
+        recommendation: 'FTA 적용을 검토하려면 협정 요건에 맞는 C/O를 수출자에게 요청하세요.',
+        fixes: [{ kind: 'fta' }, { kind: 'upload' }],
+        status: 'unresolved',
+      });
+    }
   }
   if (!fields.incoterms) {
     add({ id: 'missing-incoterms', level: 'medium', item: 'Incoterms 누락', cause: '운임·보험료 부담 주체와 과세가격 가산 범위를 확인할 수 없습니다.', recommendation: 'Commercial Invoice 또는 계약서에서 Incoterms와 장소를 확인하세요.', relatedDocuments: ['Commercial Invoice'], fixes: [incotermsFix], status: 'unresolved' });

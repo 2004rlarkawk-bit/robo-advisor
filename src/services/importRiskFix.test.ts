@@ -31,13 +31,15 @@ describe('수입 경고 카드 — 카드 안에서 고치기', () => {
     expect(byId(list, 'missing-co')).toMatchObject({ level: 'medium', item: '원산지증명서 누락 (FTA 적용 여부 확인 필요)' });
   });
 
-  it('C/O 없음 카드의 FTA 선택: 적용 안 함이면 카드가 사라지고, 적용 요청이면 반드시 수정이 된다', () => {
+  it('C/O 없음 카드의 FTA 선택: 적용 안 함은 해결(회색), 미확인은 확인 안내, 적용 요청은 C/O 제출 안내(반드시 수정)', () => {
     const none = risks(applyRiskFix(analysis(), { type: 'fta' }, 'FTA 적용 안 함'));
-    expect(byId(none, 'missing-co')).toBeUndefined();
+    expect(byId(none, 'missing-co')).toMatchObject({ status: 'resolved', chosen: true, ftaChoice: 'FTA 적용 안 함' });
     const requested = risks(applyRiskFix(analysis(), { type: 'fta' }, 'FTA 적용 요청'));
-    expect(byId(requested, 'missing-co')).toMatchObject({ level: 'high', item: '원산지증명서 누락 (FTA 적용 요청)' });
+    expect(byId(requested, 'missing-co')).toMatchObject({ level: 'high', status: 'unresolved', ftaChoice: 'FTA 적용 요청' });
+    expect(byId(requested, 'missing-co')?.cause).toContain('원산지증명서가 필요합니다');
     const unknown = risks(applyRiskFix(analysis(), { type: 'fta' }, '적용 여부 미확인'));
-    expect(byId(unknown, 'missing-co')?.level).toBe('medium');
+    expect(byId(unknown, 'missing-co')).toMatchObject({ level: 'medium', status: 'unresolved' });
+    expect(byId(unknown, 'missing-co')?.cause).toContain('FTA 적용 여부를 확인해 주세요');
   });
 
   it('카드에서 값을 고치면 해당 경고가 사라진다', () => {
@@ -49,6 +51,14 @@ describe('수입 경고 카드 — 카드 안에서 고치기', () => {
     expect(byId(list, 'reconcile-IR9')).toBeUndefined();
     expect(byId(list, 'importer-profile-mismatch')).toBeUndefined();
     expect(byId(list, 'origin-i1')).toBeUndefined();
+  });
+
+  it('서류에 HS CODE가 없어도 HSK를 확정하면 HS CODE 카드가 회색(해결)으로 남는다', () => {
+    const before = byId(risks(), 'reconcile-IR8');
+    expect(before?.status).toBe('unresolved');
+    const base = analysis();
+    const confirmed = { ...base, extracted: { ...base.extracted, items: base.extracted.items.map((item) => ({ ...item, confirmedHSCode: '8518301000' })) } };
+    expect(byId(risks(confirmed), 'reconcile-IR8')).toMatchObject({ status: 'resolved', cause: '대한민국 HSK 확정: 8518301000' });
   });
 
   it('C/I에 없던 통화를 채우면 통화 표기 경고가 사라진다', () => {

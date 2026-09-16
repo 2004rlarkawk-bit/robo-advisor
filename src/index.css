@@ -1543,6 +1543,28 @@ body {
   font-size: 17px;
   font-weight: 800;
 }
+.sev-section-toggle {
+  width: 100%;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sev-section-toggle:not(.is-open) { border-radius: 14px; }
+.sev-section-toggle:focus-visible { outline: 2px solid #0b5bd3; outline-offset: 2px; }
+.sev-section-toggle-hint {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+.sev-section-toggle-hint svg { transition: transform 0.15s; }
+.sev-section-toggle.is-open .sev-section-toggle-hint svg { transform: rotate(180deg); }
 .sev-section-header:first-child {
   margin-top: 4px;
 }
@@ -2667,6 +2689,9 @@ body {
 .hs-suggestion { display: flex; gap: 10px; padding: 13px; border: 1px solid var(--border-color); border-radius: 9px; cursor: pointer; }
 .hs-suggestion.selected { border-color: var(--primary-color); background: var(--primary-light); }
 .hs-suggestion span, .hs-suggestion small { display: block; }
+.hs-suggestion > span { min-width: 0; }
+/* 공식 분류명이 길어 '의/류'처럼 끊기지 않게 한 줄로 — 좁은 화면에선 말줄임, 전체는 마우스를 올리면 보인다 */
+.hs-suggestion strong { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hs-suggestion small { margin-top: 5px; color: var(--text-light); line-height: 1.5; }
 .import-table-wrap { overflow-x: auto; }
 .import-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -4761,3 +4786,4 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .mobile-fix-list .mobile-input { border-radius: 3px; }
 /* 수출 결과 화면 하단 — 전체 문서 전송·뒤로 가기(입력 수정) */
 .result-submit-actions .btn { border-radius: 3px; }
+
