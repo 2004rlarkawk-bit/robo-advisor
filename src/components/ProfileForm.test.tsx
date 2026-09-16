@@ -150,13 +150,13 @@ describe('ProfileForm 서비스 이용 목적 선택', () => {
     const rendered = renderForm();
     const selected = rendered.container.querySelector<HTMLButtonElement>('[role="radio"][aria-checked="true"]');
 
-    expect(selected?.textContent).toContain('화주·포워더 통합');
+    expect(selected?.textContent).toContain('관리자');
   });
 
   it('프로필 설정에서 변경한 역할을 저장 값으로 전달한다', async () => {
     const rendered = renderForm();
     const forwarder = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('[role="radio"]'))
-      .find((button) => button.textContent?.includes('포워더') && !button.textContent.includes('통합'));
+      .find((button) => button.textContent?.includes('포워더') && !button.textContent.includes('관리자'));
     const form = rendered.container.querySelector('form');
 
     await act(async () => forwarder?.click());

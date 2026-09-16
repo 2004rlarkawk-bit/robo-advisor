@@ -25,7 +25,7 @@ const SERVICE_ROLE_OPTIONS: { value: ServiceRole; label: string; description: st
   },
   {
     value: 'integrated',
-    label: '화주·포워더 통합',
+    label: '관리자',
     description: '화주용 작업과 포워더용 작업을 모두 사용할 수 있습니다.',
   },
 ];
