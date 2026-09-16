@@ -193,6 +193,20 @@ describe('R10 — 패킹리스트 ↔ 상업송장 교차 대조', () => {
     expect(checkPackingInvoiceConsistency(invoice, packing).map(i => i.id))
       .not.toContain('r10-packing-desc-mismatch');
   });
+
+  it('한쪽 품명에 색상 등 상세가 덧붙어 있으면 일치로 본다', () => {
+    const invoice = inv([{ description: 'Cotton Shirt, Light Green', quantity: 50 }]);
+    const packing = pl([{ description: 'Cotton Shirt', boxes: 5, eaPerBox: 10 }]);
+    expect(checkPackingInvoiceConsistency(invoice, packing).map(i => i.id))
+      .not.toContain('r10-packing-desc-mismatch');
+  });
+
+  it('글자만 겹치고 단어가 다르면 불일치로 본다', () => {
+    const invoice = inv([{ description: 'CAPACITOR', quantity: 50 }]);
+    const packing = pl([{ description: 'CAP', boxes: 5, eaPerBox: 10 }]);
+    expect(checkPackingInvoiceConsistency(invoice, packing).map(i => i.id))
+      .toContain('r10-packing-desc-mismatch');
+  });
 });
 
 describe('R11 — 결제조건 ↔ L/C 필드 정합성', () => {
