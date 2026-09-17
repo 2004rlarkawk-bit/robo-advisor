@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FileSignature, FileText, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import PortLocodeHint from './trade/PortLocodeHint';
 import {
@@ -61,6 +61,21 @@ interface Props {
 }
 
 const INCOTERMS_OPTIONS: Exclude<Incoterms, ''>[] = ['FOB', 'CFR', 'CIF', 'FAS', 'FCA'];
+
+type IncotermsPlaceSource = 'loadPort' | 'dischargePort';
+/**
+ * Incoterms별 지정 장소 — 규칙상 FOB·FAS는 선적항, CFR·CIF는 도착항이 곧 지정 장소라 자동으로 연결한다.
+ * FCA는 내륙 인도장소일 수 있어 자동 연결하지 않는다.
+ */
+const INCOTERMS_PLACE: Record<string, { label: string; placeholder: string; source: IncotermsPlaceSource | null; options: IncotermsPlaceSource[] }> = {
+  FOB: { label: '지정 선적항', placeholder: 'Busan Port', source: 'loadPort', options: ['loadPort'] },
+  FAS: { label: '지정 선적항', placeholder: 'Busan Port', source: 'loadPort', options: ['loadPort'] },
+  CFR: { label: '지정 도착항', placeholder: 'Los Angeles Port', source: 'dischargePort', options: ['dischargePort'] },
+  CIF: { label: '지정 도착항', placeholder: 'Los Angeles Port', source: 'dischargePort', options: ['dischargePort'] },
+  FCA: { label: '지정 인도장소', placeholder: '운송인에게 인도하는 장소 (예: Busan CY)', source: null, options: ['loadPort'] },
+};
+const DEFAULT_INCOTERMS_PLACE = { label: 'Incoterms 지정 장소 또는 항만', placeholder: 'Busan Port', source: null, options: ['loadPort', 'dischargePort'] as IncotermsPlaceSource[] };
+const incotermsPlaceRule = (incoterms: string) => INCOTERMS_PLACE[incoterms] ?? DEFAULT_INCOTERMS_PLACE;
 const PAYMENT_TERM_OPTIONS = [
   { value: 'T/T', label: 'T/T (전신송금)' },
   { value: 'L/C', label: 'L/C (신용장)' },
@@ -479,6 +494,26 @@ export default function ShipperWorkspaceForm({
     }
   };
 
+  // Incoterms를 고르면 규칙상 같은 항만(FOB·FAS→선적항, CFR·CIF→도착항)에 자동 연결한다. 사용자는 체크를 풀고 직접 입력할 수 있다.
+  const placeRule = incotermsPlaceRule(profile.incoterms);
+  const previousIncotermsRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousIncotermsRef.current;
+    previousIncotermsRef.current = profile.incoterms;
+    if (previous === profile.incoterms) return;
+    const rule = incotermsPlaceRule(profile.incoterms);
+    if (previous === null) {
+      // 첫 표시(임시저장 복원 포함): 직접 적어 둔 장소는 덮어쓰지 않는다.
+      if (!rule.source) return;
+      const linked = rule.source === 'loadPort' ? normalizedLoadPort : normalizedDischargePort;
+      const place = supplemental.incotermsPlace.trim();
+      if (!place || place === linked) toggleIncotermsPlaceSource(rule.source, true);
+      return;
+    }
+    if (rule.source) toggleIncotermsPlaceSource(rule.source, true);
+    else if (incotermsPlaceSource && !rule.options.includes(incotermsPlaceSource)) setIncotermsPlaceSource(null);
+  }, [profile.incoterms]);
+
   const patchParty = (field: keyof TradeProfile, value: string) => {
     const patch: Record<string, string> = { [field]: value };
     const buyerToConsignee: Partial<Record<keyof TradeProfile, keyof TradeProfile>> = {
@@ -846,7 +881,7 @@ export default function ShipperWorkspaceForm({
         <div className="form-grid">
           <div className="form-group" data-field="incoterms"><label className="form-label">Incoterms <Req /></label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
           <div className="form-group"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-          <div className="form-group shipper-incoterms-place"><label className="form-label">Incoterms 지정 장소 또는 항만</label><input className="form-input" value={supplemental.incotermsPlace} readOnly={incotermsPlaceSource !== null} onChange={(e) => onSupplementalChange({ ...supplemental, incotermsPlace: e.target.value })} placeholder="Busan Port" /><div className="shipper-inline-options"><label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'loadPort'} onChange={(e) => toggleIncotermsPlaceSource('loadPort', e.target.checked)} /> 선적항과 동일</label><label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'dischargePort'} onChange={(e) => toggleIncotermsPlaceSource('dischargePort', e.target.checked)} /> 도착항과 동일</label></div></div>
+          <div className="form-group shipper-incoterms-place"><label className="form-label">{placeRule.label}</label><input className="form-input" value={supplemental.incotermsPlace} readOnly={incotermsPlaceSource !== null} onChange={(e) => onSupplementalChange({ ...supplemental, incotermsPlace: e.target.value })} placeholder={placeRule.placeholder} /><div className="shipper-inline-options">{placeRule.options.includes('loadPort') && <label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'loadPort'} onChange={(e) => toggleIncotermsPlaceSource('loadPort', e.target.checked)} /> 선적항과 동일</label>}{placeRule.options.includes('dischargePort') && <label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'dischargePort'} onChange={(e) => toggleIncotermsPlaceSource('dischargePort', e.target.checked)} /> 도착항과 동일</label>}</div></div>
           {profile.paymentTerms === 'L/C' && <>
             <div className="form-group"><label className="form-label">L/C No.</label><input className="form-input" value={profile.lcNo ?? ''} onChange={(e) => onProfilePatch({ lcNo: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">L/C Date</label><input type="date" className="form-input" value={profile.lcDate ?? ''} onChange={(e) => onProfilePatch({ lcDate: e.target.value })} /></div>
