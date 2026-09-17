@@ -1,0 +1,16 @@
+{
+  "runId": "",
+  "datasetVersion": "",
+  "datasetSplit": "",
+  "model": "",
+  "reasoningEffort": "",
+  "promptVersion": "",
+  "promptHash": "",
+  "normalizationVersion": "norm-v1",
+  "ruleVersion": "",
+  "codeCommit": "",
+  "edgeFunctionCommit": "",
+  "measuredAt": "",
+  "repeatIndex": null,
+  "notes": ""
+}

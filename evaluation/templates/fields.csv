@@ -1,0 +1,5 @@
+document_id,field_key,expected_value,expected_unit,evaluation_mode,is_applicable,notes
+trade:EX-T-001,invoiceNo,EX-INV-0001,,strict,true,가상 예시
+trade:EX-T-001,exporter,"EXAMPLE TRADING CO., LTD.",,company_relaxed,true,가상 회사명
+trade:EX-T-001,grossWeight,550,KG,numeric_with_unit,true,가상 예시
+EX-D-002,invoiceDate,,,date,false,P/L에는 Invoice Date 없음 - 분모 제외

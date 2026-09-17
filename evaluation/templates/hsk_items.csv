@@ -1,0 +1,3 @@
+item_id,trade_id,description,material,composition,intended_use,reference_hsk,reference_source,dataset_split,notes
+EX-I-001,EX-T-001,EXAMPLE STAINLESS VACUUM FLASK 500ML,stainless steel,,household drinking bottle,9617001000,team_reference,dev,가상 예시 - 참조 HSK(팀 검토)
+EX-I-002,EX-T-001,EXAMPLE WOMEN COTTON T-SHIRT,cotton,COTTON 100%,apparel,6109100000,team_reference,dev,가상 예시 - 참조 HSK(팀 검토)
