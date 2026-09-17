@@ -1,0 +1,8 @@
+document_id,trade_id,file_name,expected_type,dataset_split,source_kind,document_quality,notes
+EX-D-101,EX-T-001,sample_a1.pdf,commercial_invoice,dev,synthetic-normal,original,가상
+EX-D-102,EX-T-001,sample_a2.pdf,packing_list,dev,synthetic-normal,original,가상
+EX-D-103,EX-T-001,sample_a3.pdf,bill_of_lading,dev,synthetic-normal,original,가상
+EX-D-201,EX-T-002,sample_b1.pdf,commercial_invoice,test,synthetic-error,original,가상 - 오류 삽입 거래
+EX-D-202,EX-T-002,sample_b2.pdf,packing_list,test,synthetic-error,original,가상 - 오류 삽입 거래
+EX-D-203,EX-T-002,sample_b3.pdf,bill_of_lading,test,synthetic-error,scan-100dpi,가상 - 100dpi 변환본
+EX-D-204,EX-T-002,sample_b4.pdf,certificate_of_origin,test,synthetic-error,original,가상

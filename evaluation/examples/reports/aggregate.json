@@ -1,0 +1,345 @@
+{
+  "generatedAt": "2026-09-17T16:41:24.959Z",
+  "scorers": {
+    "document-classification": {
+      "runCount": 3,
+      "metrics": {
+        "classificationAccuracy": {
+          "mean": 0.9047619047619048,
+          "min": 0.8571428571428571,
+          "max": 1,
+          "runsWithValue": 3,
+          "runs": [
+            {
+              "runId": "example-run-1",
+              "source": "evaluation\\examples\\reports\\summary\\run-1.document-classification.json",
+              "numerator": 7,
+              "denominator": 7,
+              "value": 1
+            },
+            {
+              "runId": "example-run-2",
+              "source": "evaluation\\examples\\reports\\summary\\run-2.document-classification.json",
+              "numerator": 6,
+              "denominator": 7,
+              "value": 0.8571428571428571
+            },
+            {
+              "runId": "example-run-3",
+              "source": "evaluation\\examples\\reports\\summary\\run-3.document-classification.json",
+              "numerator": 6,
+              "denominator": 7,
+              "value": 0.8571428571428571
+            }
+          ]
+        },
+        "processingSuccessRate": {
+          "mean": 0.9523809523809524,
+          "min": 0.8571428571428571,
+          "max": 1,
+          "runsWithValue": 3,
+          "runs": [
+            {
+              "runId": "example-run-1",
+              "source": "evaluation\\examples\\reports\\summary\\run-1.document-classification.json",
+              "numerator": 7,
+              "denominator": 7,
+              "value": 1
+            },
+            {
+              "runId": "example-run-2",
+              "source": "evaluation\\examples\\reports\\summary\\run-2.document-classification.json",
+              "numerator": 7,
+              "denominator": 7,
+              "value": 1
+            },
+            {
+              "runId": "example-run-3",
+              "source": "evaluation\\examples\\reports\\summary\\run-3.document-classification.json",
+              "numerator": 6,
+              "denominator": 7,
+              "value": 0.8571428571428571
+            }
+          ]
+        }
+      }
+    },
+    "field-extraction": {
+      "runCount": 3,
+      "metrics": {
+        "strictFieldAccuracy": {
+          "mean": 0.24561403508771928,
+          "min": 0.21052631578947367,
+          "max": 0.2631578947368421,
+          "runsWithValue": 3,
+          "runs": [
+            {
+              "runId": "example-run-1",
+              "source": "evaluation\\examples\\reports\\summary\\run-1.field-extraction.json",
+              "numerator": 5,
+              "denominator": 19,
+              "value": 0.2631578947368421
+            },
+            {
+              "runId": "example-run-2",
+              "source": "evaluation\\examples\\reports\\summary\\run-2.field-extraction.json",
+              "numerator": 5,
+              "denominator": 19,
+              "value": 0.2631578947368421
+            },
+            {
+              "runId": "example-run-3",
+              "source": "evaluation\\examples\\reports\\summary\\run-3.field-extraction.json",
+              "numerator": 4,
+              "denominator": 19,
+              "value": 0.21052631578947367
+            }
+          ]
+        },
+        "normalizedFieldAccuracy": {
+          "mean": 0.912280701754386,
+          "min": 0.8947368421052632,
+          "max": 0.9473684210526315,
+          "runsWithValue": 3,
+          "runs": [
+            {
+              "runId": "example-run-1",
+              "source": "evaluation\\examples\\reports\\summary\\run-1.field-extraction.json",
+              "numerator": 18,
+              "denominator": 19,
+              "value": 0.9473684210526315
+            },
+            {
+              "runId": "example-run-2",
+              "source": "evaluation\\examples\\reports\\summary\\run-2.field-extraction.json",
+              "numerator": 17,
+              "denominator": 19,
+              "value": 0.8947368421052632
+            },
+            {
+              "runId": "example-run-3",
+              "source": "evaluation\\examples\\reports\\summary\\run-3.field-extraction.json",
+              "numerator": 17,
+              "denominator": 19,
+              "value": 0.8947368421052632
+            }
+          ]
+        },
+        "missingRate": {
+          "mean": 0.017543859649122806,
+          "min": 0,
+          "max": 0.05263157894736842,
+          "runsWithValue": 3,
+          "runs": [
+            {
+              "runId": "example-run-1",
+              "source": "evaluation\\examples\\reports\\summary\\run-1.field-extraction.json",
+              "numerator": 0,
+              "denominator": 19,
+              "value": 0
+            },
+            {
+              "runId": "example-run-2",
+              "source": "evaluation\\examples\\reports\\summary\\run-2.field-extraction.json",
+              "numerator": 0,
+              "denominator": 19,
+              "value": 0
+            },
+            {
+              "runId": "example-run-3",
+              "source": "evaluation\\examples\\reports\\summary\\run-3.field-extraction.json",
+              "numerator": 1,
+              "denominator": 19,
+              "value": 0.05263157894736842
+            }
+          ]
+        },
+        "wrongExtractionRate": {
+          "mean": 0.07017543859649122,
+          "min": 0.05263157894736842,
+          "max": 0.10526315789473684,
+          "runsWithValue": 3,
+          "runs": [
+            {
+              "runId": "example-run-1",
+              "source": "evaluation\\examples\\reports\\summary\\run-1.field-extraction.json",
+              "numerator": 1,
+              "denominator": 19,
+              "value": 0.05263157894736842
+            },
+            {
+              "runId": "example-run-2",
+              "source": "evaluation\\examples\\reports\\summary\\run-2.field-extraction.json",
+              "numerator": 2,
+              "denominator": 19,
+              "value": 0.10526315789473684
+            },
+            {
+              "runId": "example-run-3",
+              "source": "evaluation\\examples\\reports\\summary\\run-3.field-extraction.json",
+              "numerator": 1,
+              "denominator": 19,
+              "value": 0.05263157894736842
+            }
+          ]
+        }
+      }
+    },
+    "comparison": {
+      "runCount": 3,
+      "metrics": {
+        "precision": {
+          "mean": 0.9166666666666666,
+          "min": 0.75,
+          "max": 1,
+          "runsWithValue": 3,
+          "runs": [
+            {
+              "runId": "example-run-1",
+              "source": "evaluation\\examples\\reports\\summary\\run-1.comparison.json",
+              "numerator": 3,
+              "denominator": 4,
+              "value": 0.75
+            },
+            {
+              "runId": "example-run-2",
+              "source": "evaluation\\examples\\reports\\summary\\run-2.comparison.json",
+              "numerator": 2,
+              "denominator": 2,
+              "value": 1
+            },
+            {
+              "runId": "example-run-3",
+              "source": "evaluation\\examples\\reports\\summary\\run-3.comparison.json",
+              "numerator": 3,
+              "denominator": 3,
+              "value": 1
+            }
+          ]
+        },
+        "recall": {
+          "mean": 0.8888888888888888,
+          "min": 0.6666666666666666,
+          "max": 1,
+          "runsWithValue": 3,
+          "runs": [
+            {
+              "runId": "example-run-1",
+              "source": "evaluation\\examples\\reports\\summary\\run-1.comparison.json",
+              "numerator": 3,
+              "denominator": 3,
+              "value": 1
+            },
+            {
+              "runId": "example-run-2",
+              "source": "evaluation\\examples\\reports\\summary\\run-2.comparison.json",
+              "numerator": 2,
+              "denominator": 3,
+              "value": 0.6666666666666666
+            },
+            {
+              "runId": "example-run-3",
+              "source": "evaluation\\examples\\reports\\summary\\run-3.comparison.json",
+              "numerator": 3,
+              "denominator": 3,
+              "value": 1
+            }
+          ]
+        },
+        "f1": {
+          "mean": 0.8857142857142857,
+          "min": 0.8,
+          "max": 1,
+          "runsWithValue": 3,
+          "runs": [
+            {
+              "runId": "example-run-1",
+              "source": "evaluation\\examples\\reports\\summary\\run-1.comparison.json",
+              "numerator": null,
+              "denominator": null,
+              "value": 0.8571428571428571
+            },
+            {
+              "runId": "example-run-2",
+              "source": "evaluation\\examples\\reports\\summary\\run-2.comparison.json",
+              "numerator": null,
+              "denominator": null,
+              "value": 0.8
+            },
+            {
+              "runId": "example-run-3",
+              "source": "evaluation\\examples\\reports\\summary\\run-3.comparison.json",
+              "numerator": null,
+              "denominator": null,
+              "value": 1
+            }
+          ]
+        }
+      }
+    },
+    "hsk": {
+      "runCount": 3,
+      "metrics": {
+        "top1": {
+          "mean": 0.5555555555555555,
+          "min": 0.3333333333333333,
+          "max": 0.6666666666666666,
+          "runsWithValue": 3,
+          "runs": [
+            {
+              "runId": "example-run-1",
+              "source": "evaluation\\examples\\reports\\summary\\run-1.hsk.json",
+              "numerator": 2,
+              "denominator": 3,
+              "value": 0.6666666666666666
+            },
+            {
+              "runId": "example-run-2",
+              "source": "evaluation\\examples\\reports\\summary\\run-2.hsk.json",
+              "numerator": 1,
+              "denominator": 3,
+              "value": 0.3333333333333333
+            },
+            {
+              "runId": "example-run-3",
+              "source": "evaluation\\examples\\reports\\summary\\run-3.hsk.json",
+              "numerator": 2,
+              "denominator": 3,
+              "value": 0.6666666666666666
+            }
+          ]
+        },
+        "top3": {
+          "mean": 1,
+          "min": 1,
+          "max": 1,
+          "runsWithValue": 3,
+          "runs": [
+            {
+              "runId": "example-run-1",
+              "source": "evaluation\\examples\\reports\\summary\\run-1.hsk.json",
+              "numerator": 3,
+              "denominator": 3,
+              "value": 1
+            },
+            {
+              "runId": "example-run-2",
+              "source": "evaluation\\examples\\reports\\summary\\run-2.hsk.json",
+              "numerator": 3,
+              "denominator": 3,
+              "value": 1
+            },
+            {
+              "runId": "example-run-3",
+              "source": "evaluation\\examples\\reports\\summary\\run-3.hsk.json",
+              "numerator": 3,
+              "denominator": 3,
+              "value": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  "failedRuns": []
+}

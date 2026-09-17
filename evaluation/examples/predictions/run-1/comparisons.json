@@ -1,0 +1,60 @@
+{
+  "runId": "example-run-1",
+  "comparisons": [
+    {
+      "trade_id": "EX-T-001",
+      "field_key": "productDescription",
+      "predicted_result": "match"
+    },
+    {
+      "trade_id": "EX-T-001",
+      "field_key": "quantity",
+      "predicted_result": "match"
+    },
+    {
+      "trade_id": "EX-T-001",
+      "field_key": "grossWeight",
+      "predicted_result": "mismatch"
+    },
+    {
+      "trade_id": "EX-T-001",
+      "field_key": "packageCount",
+      "predicted_result": "match"
+    },
+    {
+      "trade_id": "EX-T-001",
+      "field_key": "originCountry",
+      "predicted_result": "not_comparable"
+    },
+    {
+      "trade_id": "EX-T-002",
+      "field_key": "productDescription",
+      "predicted_result": "match"
+    },
+    {
+      "trade_id": "EX-T-002",
+      "field_key": "quantity",
+      "predicted_result": "mismatch"
+    },
+    {
+      "trade_id": "EX-T-002",
+      "field_key": "grossWeight",
+      "predicted_result": "mismatch"
+    },
+    {
+      "trade_id": "EX-T-002",
+      "field_key": "packageCount",
+      "predicted_result": "match"
+    },
+    {
+      "trade_id": "EX-T-002",
+      "field_key": "originCountry",
+      "predicted_result": "mismatch"
+    },
+    {
+      "trade_id": "EX-T-002",
+      "field_key": "insuredAmount",
+      "predicted_result": "not_comparable"
+    }
+  ]
+}
