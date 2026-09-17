@@ -1248,6 +1248,7 @@ export default function ImportTradeFlow({
           </div>
           <ImportAnalysisSummary
             analysis={state.analysis}
+            documents={state.documents}
             importerCompanyName={role === 'shipper' ? importerCompanyName : undefined}
             hasCertificateOfOriginDocument={state.documents.some((document) => document.type === 'certificate_of_origin')}
             readOnly={readOnly}
@@ -1282,17 +1283,20 @@ export default function ImportTradeFlow({
                     </div>
                     <h4 className="import-hs-subheading">대한민국 HSK 자동추천</h4>
                     <div className="hs-suggestion-list">
-                      {candidates.length === 0 ? <p className="import-empty">추천 근거가 부족하거나 후보가 없습니다. 직접 확인해 주세요.</p> : candidates.map((suggestion) => (
+                      {candidates.length === 0 ? <p className="import-empty">추천 근거가 부족하거나 후보가 없습니다. 직접 확인해 주세요.</p> : candidates.map((suggestion, rank) => (
                         <label key={`${item.id}-${suggestion.code}`} className={`hs-suggestion ${item.confirmedHSCode === suggestion.code ? 'selected' : ''}`}>
                           <input type="radio" name={`import-hs-${item.id}`} checked={item.confirmedHSCode === suggestion.code} disabled={readOnly} onChange={() => selectRecommendedHS(item.id, suggestion.code)} />
                           <span>
                             <strong title={`${suggestion.code} · ${suggestion.description}`}>{suggestion.code} · {suggestion.description}</strong>
-                            <small>추천 신뢰도 {Math.round(suggestion.confidence * 100)}%</small>
+                            <small>추천 {rank + 1}순위</small>
                             <small>{suggestion.reasoning}</small>
                           </span>
                         </label>
                       ))}
                     </div>
+                    {candidates.length > 0 && (
+                      <small className="import-hs-rank-note">관세청 HSK 공식 후보 중 입력된 품목정보와의 관련성을 기준으로 정렬한 결과입니다. 최종 품목분류는 사용자 또는 전문가의 확인이 필요합니다.</small>
+                    )}
                     {additionalInformation.length > 0 && (
                       <div className="import-hs-additional">
                         <strong>추가 확인 정보</strong>
