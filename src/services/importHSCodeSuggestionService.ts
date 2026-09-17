@@ -233,8 +233,17 @@ export async function recommendImportHSK(item: ImportItem): Promise<ImportHSKRec
   return verifiedSuggestions(item, candidates);
 }
 
-export async function recommendImportHSKForItems(items: ImportItem[]): Promise<ImportHSCodeSuggestion[]> {
-  const results = await Promise.all(items.map((item) => recommendImportHSK(item)));
+export async function recommendImportHSKForItems(
+  items: ImportItem[],
+  /** 품목 하나의 추천이 끝날 때마다 (끝난 수, 전체 수)로 알려준다 — 진행 표시용 */
+  onProgress?: (done: number, total: number) => void,
+): Promise<ImportHSCodeSuggestion[]> {
+  let done = 0;
+  onProgress?.(0, items.length);
+  const results = await Promise.all(items.map((item) => recommendImportHSK(item).finally(() => {
+    done += 1;
+    onProgress?.(done, items.length);
+  })));
   return results.flatMap(({ suggestions }) => suggestions);
 }
 

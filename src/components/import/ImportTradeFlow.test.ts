@@ -8,6 +8,7 @@ import {
   ImportFileResolutionError,
   importDraftFormData,
   resolveImportAnalysisFiles,
+  sameChoiceValue,
   type CachedState,
 } from './ImportTradeFlow';
 
@@ -458,5 +459,14 @@ describe('수입 초안 attachment hydration', () => {
       documentType: document.type,
     });
     expect(afterRefresh[0].dataUrl).toMatch(/^data:application\/pdf;base64,/);
+  });
+});
+
+describe('고른 값 비교', () => {
+  it('소수점·단위·쉼표만 다른 숫자는 같은 값으로 본다', () => {
+    expect(sameChoiceValue('550', '550.00 KG')).toBe(true);
+    expect(sameChoiceValue('4631', '4,631 KG')).toBe(true);
+    expect(sameChoiceValue('500', '550.00 KG')).toBe(false);
+    expect(sameChoiceValue('ABC TRADING', 'ABC TRADING CO')).toBe(false);
   });
 });

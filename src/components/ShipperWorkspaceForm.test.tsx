@@ -375,34 +375,43 @@ describe('화주용 통관 입력 폼', () => {
     expect(rendered.container.textContent).toContain('Open Account (외상거래)');
   });
 
-  it('Incoterms 장소 연결은 상호 배타적이며 연결된 항만 변경을 반영한다', () => {
+  it('Incoterms에 맞춰 지정 장소 칸 이름·체크박스가 바뀌고 해당 항만에 자동 연결된다', () => {
     const rendered = renderForm();
-    const sourceLabels = Array.from(rendered.container.querySelectorAll('label'))
-      .filter((label) => label.textContent?.includes('항과 동일'));
-    const loadCheckbox = sourceLabels.find((label) => label.textContent?.includes('선적항'))
-      ?.querySelector<HTMLInputElement>('input');
-    const dischargeCheckbox = sourceLabels.find((label) => label.textContent?.includes('도착항'))
-      ?.querySelector<HTMLInputElement>('input');
+    const placeGroup = () => rendered.container.querySelector('.shipper-incoterms-place');
+    const checkbox = (text: string) => Array.from(placeGroup()?.querySelectorAll('label') ?? [])
+      .find((label) => label.textContent?.includes(text))?.querySelector<HTMLInputElement>('input');
 
-    act(() => loadCheckbox?.click());
-    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({
-      incotermsPlace: 'Incheon Port',
-    }));
+    // FOB: 지정 선적항 — 선적항과 동일만 보이고 자동으로 체크된다.
+    expect(placeGroup()?.textContent).toContain('지정 선적항');
+    expect(checkbox('선적항과 동일')?.checked).toBe(true);
+    expect(checkbox('도착항과 동일')).toBeUndefined();
+    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({ incotermsPlace: 'Incheon Port' }));
 
-    act(() => dischargeCheckbox?.click());
-    expect(loadCheckbox?.checked).toBe(false);
-    expect(dischargeCheckbox?.checked).toBe(true);
+    // CIF로 바꾸면 지정 도착항에 연결되고, 도착항 변경도 따라간다.
+    rendered.rerenderProfile({ incoterms: 'CIF', dischargePort: 'TOKYO' });
+    expect(placeGroup()?.textContent).toContain('지정 도착항');
+    expect(checkbox('도착항과 동일')?.checked).toBe(true);
+    expect(checkbox('선적항과 동일')).toBeUndefined();
+    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({ incotermsPlace: 'Tokyo Port' }));
 
+    // 체크를 풀면 직접 입력할 수 있고, 장소를 비우지는 않는다.
     rendered.onSupplementalChange.mockClear();
-    rendered.rerenderProfile({ dischargePort: 'TOKYO' });
-    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({
-      incotermsPlace: 'Tokyo Port',
-    }));
+    act(() => checkbox('도착항과 동일')?.click());
+    expect(checkbox('도착항과 동일')?.checked).toBe(false);
+    expect(rendered.onSupplementalChange).not.toHaveBeenCalledWith(expect.objectContaining({ incotermsPlace: '' }));
 
-    act(() => dischargeCheckbox?.click());
-    expect(rendered.onSupplementalChange).not.toHaveBeenCalledWith(expect.objectContaining({
-      incotermsPlace: '',
-    }));
+    // FCA는 내륙 인도장소일 수 있어 자동 연결하지 않는다.
+    rendered.rerenderProfile({ incoterms: 'FCA' });
+    expect(placeGroup()?.textContent).toContain('지정 인도장소');
+    expect(checkbox('선적항과 동일')?.checked).toBe(false);
+  });
+
+  it('임시저장에서 직접 적어 둔 지정 장소는 자동 연결로 덮어쓰지 않는다', () => {
+    const rendered = renderForm([firstItem], false, {}, { incotermsPlace: 'Pyeongtaek Port' });
+    const loadCheckbox = Array.from(rendered.container.querySelectorAll('.shipper-incoterms-place label'))
+      .find((label) => label.textContent?.includes('선적항과 동일'))?.querySelector<HTMLInputElement>('input');
+    expect(loadCheckbox?.checked).toBe(false);
+    expect(rendered.onSupplementalChange).not.toHaveBeenCalledWith(expect.objectContaining({ incotermsPlace: 'Incheon Port' }));
   });
 
   it('수출 전용 항만과 기타 직접입력을 제공하고 영문 실제값을 전달한다', () => {
