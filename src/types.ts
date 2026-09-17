@@ -331,7 +331,10 @@ export interface FeedbackBasis {
 export interface FeedbackFactCard {
   id: string;
   title: string;             // 예: 과세가격 환산
-  value: string;             // 예: 약 36,961,000원
+  value?: string;            // 예: 약 36,961,000원 — 아직 계산할 수 없으면 비우고 notice로 안내
+  valueLabel?: string;       // 예: FOB 기준 환산액 — 값이 있을 때 값 위에 작게
+  notice?: string;           // 값 대신 보여줄 안내
+  action?: { label: string; field: string; hint: string }; // 안내 아래 입력칸 이동 버튼
   formula?: string;          // 예: USD 25,000 × 1,478.44원
   meta?: string;             // 예: 여성 캐시미어 코트 · 관세청 주간환율 · 적용일 2026-07-26
   basis?: FeedbackBasis;     // 예: 근거 · 관세법 제30조

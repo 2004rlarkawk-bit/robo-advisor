@@ -71,4 +71,13 @@ describe('buildFeedbackReport — 검증 이슈 → 리포트 틀', () => {
     expect(r.narrative).toBe('요약');
     expect(r.facts).toHaveLength(0);
   });
+
+  it('참고값 카드(수출 FOB 기준 환산액)는 검토 완료·확인 필요 건수에 넣지 않는다', () => {
+    const r = buildFeedbackReport([
+      { id: 'export-fob-value-info', docType: 'customs_dec', severity: 'info', message: 'FOB', field: 'invoiceAmount', card: { id: 'export-fob-value', title: '수출신고 금액 환산(참고)', notice: '국제운임을 입력하면 FOB 기준 환산액을 확인할 수 있어요.' } },
+      { id: 'x', docType: 'invoice', severity: 'warning', message: '확인', field: 'itemName' },
+    ]);
+    expect(r.summary).toEqual({ reviewed: 1, needsCheck: 1 });
+    expect(r.facts.map((f) => f.id)).toEqual(['export-fob-value']);
+  });
 });

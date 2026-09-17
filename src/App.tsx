@@ -1,3 +1,4 @@
+import { exportDeclarationFobNotice } from './utils/exportDeclarationFob';
 import {
   Fragment,
   Suspense,
@@ -796,6 +797,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [highlightHint, setHighlightHint] = useState<string>('');
   // [입력 수정]으로 진입한 이슈 — 폼 섹션 상단 인라인 안내 카드용 (토스트 5초 타이머와 별개로 유지)
   const [activeFixIssue, setActiveFixIssue] = useState<ValidationIssue | null>(null);
+  // 오른쪽 고칠 항목을 누를 때마다 늘어나는 번호 — 닫았던 안내 카드(원산지 전용 카드 포함)를 다시 열 때 쓴다.
+  const [fixRevealKey, setFixRevealKey] = useState(0);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearFieldHighlight = () => {
@@ -822,6 +825,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setHighlightHint(issue.message.replace(/^AI 참고 — /, '').replace(/\s*\[근거:[^\]]*\]\s*$/, ''));
     setHighlightField(issueToFieldKey(issue));
     setActiveFixIssue(issue);
+    setFixRevealKey((key) => key + 1);
     setHasGenerated(false);
   };
 
@@ -3035,6 +3039,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   }}
                   fixNotice={shipperFixNotice}
                   onDismissFixNotice={clearFieldHighlight}
+                  fixRevealKey={fixRevealKey}
                   toolbar={IS_DEV_TEST_ENABLED ? (
                     <div className="dev-test-actions">
                       <span className="dev-badge">DEV</span>
@@ -3381,7 +3386,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           <input
                             type="number"
                             className="form-input"
-                            placeholder="외화 입력 시 과세가격 자동 환산"
+                            placeholder="외화 입력 시 원화 자동 환산"
                             value={profile.invoiceAmount ?? ''}
                             onChange={(e) => handleInputChange('invoiceAmount', e.target.value ? Number(e.target.value) : '')}
                           />
@@ -4331,8 +4336,19 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   </span>
                                 )}
                               </div>
-                              <div className="fact-card-value">{f.value}</div>
+                              {f.value && f.valueLabel && <div className="fact-card-value-label">{f.valueLabel}</div>}
+                              {f.value && <div className="fact-card-value">{f.value}</div>}
                               {f.formula && <div className="fact-card-formula">{f.formula}</div>}
+                              {f.notice && <p className="fact-card-notice">{f.notice}</p>}
+                              {f.action && !isDocumentManagerReadOnlyView && (
+                                <button
+                                  type="button"
+                                  className="fact-card-action"
+                                  onClick={() => goToFieldFix({ id: `${f.id}-input`, docType: 'customs_dec', severity: 'info', message: f.action!.hint, field: f.action!.field })}
+                                >
+                                  {f.action.label} →
+                                </button>
+                              )}
                               {f.meta && <div className="fact-card-meta">{f.meta}</div>}
                             </div>
                           ))}
@@ -4460,9 +4476,17 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                         const qm = issue.qtyMismatch;
                                         return (
                                           <div className="qty-mismatch">
-                                            <div className="qm-chips">
-                                              <span className="qm-chip qm-chip--pl">패킹리스트 총수량 <b>{qm.plTotal.toLocaleString()}개</b></span>
-                                              <span className="qm-chip qm-chip--inv">상업송장 수량 <b>{qm.invQty.toLocaleString()}개</b></span>
+                                            {/* 수입 '반드시 수정' 카드와 같은 비교형 — 두 서류 값을 ≠로 나란히 */}
+                                            <div className="qm-compare">
+                                              <div className="qm-compare__side">
+                                                <span className="qm-compare__doc">Packing List (PL) · 총수량</span>
+                                                <strong className="qm-compare__value">{qm.plTotal.toLocaleString()}개</strong>
+                                              </div>
+                                              <span className="qm-compare__neq" aria-label="다름">≠</span>
+                                              <div className="qm-compare__side">
+                                                <span className="qm-compare__doc">Commercial Invoice (CI) · 수량</span>
+                                                <strong className="qm-compare__value">{qm.invQty.toLocaleString()}개</strong>
+                                              </div>
                                             </div>
                                             <p className="qm-guide">실제 포장 수량을 기준으로 하나를 수정해 주세요.</p>
                                             <div className="qm-options">
@@ -4973,6 +4997,16 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   }}>
                     <b>초안 생성</b> — 세관 제출본이 아닙니다. 신고번호·세관기재란 등은 <b>신고 후 확정</b>되며, 실제 신고는 관세사 또는 UNI-PASS를 통해 진행하세요.
                   </div>
+                  {customsDeclarationData && exportDeclarationFobNotice(customsDeclarationData.incoterms) && (
+                    // 신고가격(FOB) 숫자 칸은 비워 두고, 이유는 문서 위 주석으로만 알린다.
+                    <div role="note" style={{
+                      marginBottom: '12px', padding: '10px 14px', borderRadius: '8px',
+                      background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155',
+                      fontSize: '13px', lineHeight: 1.5,
+                    }}>
+                      <b>신고가격(FOB) 빈칸</b> — {customsDeclarationData.incoterms || 'Incoterms 미선택'} 조건: {exportDeclarationFobNotice(customsDeclarationData.incoterms)}
+                    </div>
+                  )}
                   <div ref={customsDocxPreviewRef} style={{ width: '100%' }} />
                 </div>
               ) : (

@@ -35,6 +35,9 @@ export function buildFeedbackReport(
   opts?: { reviewed?: number; narrative?: string },
 ): FeedbackReport {
   const facts = issues.filter((i) => i.card).map((i) => i.card!);
+  // 참고값 카드(수출 FOB 기준 환산액)는 검증 항목이 아니므로 '검토 완료' 건수에 넣지 않는다.
+  const REFERENCE_CARD_IDS = new Set(['export-fob-value']);
+  const evaluatedCount = issues.filter((i) => !(i.card && REFERENCE_CARD_IDS.has(i.card.id))).length;
 
   const checks: FeedbackCheckItem[] = issues
     .filter((i) => !i.card)
@@ -56,7 +59,7 @@ export function buildFeedbackReport(
   return {
     // reviewed 기본값 = 이번 검증에서 평가된 전체 항목 수(사실 카드 + 확인 항목).
     // UI 요약 칩 "검토 완료 N"이 실제 평가 개수와 일치하도록 한다.
-    summary: { reviewed: opts?.reviewed ?? issues.length, needsCheck },
+    summary: { reviewed: opts?.reviewed ?? evaluatedCount, needsCheck },
     facts,
     checks,
     narrative: opts?.narrative,

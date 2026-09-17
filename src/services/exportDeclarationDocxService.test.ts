@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapExportDeclarationToDocxSchema, paymentMethodCode, transportTypeCode } from './exportDeclarationDocxService';
+import { exportDeclarationFobNotice, mapExportDeclarationToDocxSchema, paymentMethodCode, transportTypeCode } from './exportDeclarationDocxService';
 import type { CustomsDeclarationData, TradeItem } from '../types';
 
 const item = (o: Partial<TradeItem> = {}): TradeItem => ({
@@ -138,6 +138,50 @@ describe('mapExportDeclarationToDocxSchema — 갑지/을지 + A/B/C 그룹', ()
 
     const noRate = mapExportDeclarationToDocxSchema(base({ currency: 'USD', fobRate: null, items: [item({ quantity: 1, unitPrice: 25 })] }));
     expect(noRate.firstItem.fob_price).toBe(''); // 외화인데 환율 없음 → 공란
+  });
+
+  it('신고가격(FOB): USD FOB는 송장금액 × 환율, KRW FOB는 금액 그대로', () => {
+    const usd = mapExportDeclarationToDocxSchema(base({ incoterms: 'FOB', currency: 'USD', invoiceAmount: 10000, fobRate: 1300, items: [item({ quantity: 100, unitPrice: 100 })] }));
+    expect(usd.firstItem.fob_price).toBe('₩13,000,000');
+    expect(usd.total_fob_krw).toBe('₩ 13,000,000');
+    expect(usd.total_fob_usd).toBe('$ 10,000');
+
+    const krw = mapExportDeclarationToDocxSchema(base({ incoterms: 'FOB', currency: 'KRW', invoiceAmount: 13000000, fobRate: null, items: [item({ quantity: 1, unitPrice: 13000000 })] }));
+    expect(krw.firstItem.fob_price).toBe('₩13,000,000');
+    expect(krw.total_fob_krw).toBe('₩ 13,000,000');
+  });
+
+  it('신고가격(FOB): CFR·CIF·FCA·FAS는 숫자를 넣지 않고 빈칸, 안내 문구는 별도', () => {
+    for (const incoterms of ['CFR', 'CIF', 'FCA', 'FAS']) {
+      const s = mapExportDeclarationToDocxSchema(base({ incoterms, currency: 'USD', invoiceAmount: 10000, fobRate: 1300 }));
+      expect(s.firstItem.fob_price).toBe('');
+      expect(s.total_fob_krw).toBe('');
+      expect(s.total_fob_usd).toBe('');
+      // 안내는 숫자 칸이 아니라 화면 주석으로만 — 결제금액 등 다른 값은 그대로
+      expect(s.payment_amount).toBe('USD 10,000');
+    }
+    expect(exportDeclarationFobNotice('CFR')).toBe('거래조건에 따른 FOB 환산 확인 필요');
+    expect(exportDeclarationFobNotice('cif')).toBe('거래조건에 따른 FOB 환산 확인 필요');
+    expect(exportDeclarationFobNotice('FCA')).toBe('FOB 기준 가격 별도 확인 필요');
+    expect(exportDeclarationFobNotice('FAS')).toBe('FOB 기준 가격 별도 확인 필요');
+    expect(exportDeclarationFobNotice('FOB')).toBeNull();
+  });
+
+  it('신고가격(FOB): 환율 누락·잘못된 송장금액이면 빈칸 (0원·NaN 금지)', () => {
+    const noRate = mapExportDeclarationToDocxSchema(base({ incoterms: 'FOB', currency: 'USD', invoiceAmount: 10000, fobRate: null }));
+    expect(noRate.total_fob_krw).toBe('');
+    expect(noRate.firstItem.fob_price).toBe('');
+
+    const badRate = mapExportDeclarationToDocxSchema(base({ incoterms: 'FOB', currency: 'USD', invoiceAmount: 10000, fobRate: Number.NaN }));
+    expect(badRate.total_fob_krw).toBe('');
+
+    for (const invoiceAmount of [0, -5, Number.NaN, '' as unknown as number]) {
+      const s = mapExportDeclarationToDocxSchema(base({ incoterms: 'FOB', currency: 'USD', invoiceAmount, fobRate: 1300, items: [item({ quantity: '' as unknown as number, unitPrice: '' as unknown as number })] }));
+      expect(s.total_fob_krw).toBe('');
+      expect(s.total_fob_usd).toBe('');
+      expect(s.firstItem.fob_price).toBe('');
+      expect(JSON.stringify(s)).not.toMatch(/₩ ?0\b|NaN/);
+    }
   });
 
   it('순중량 0이면 "0 KG" 아니라 공란(junk 방지)', () => {
