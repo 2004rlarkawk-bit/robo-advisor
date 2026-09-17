@@ -259,7 +259,7 @@ const isCheckingCargo = checkingTradeId === trade.id;
                           <span className="cargo-summary-v">{cargoProgress.lastProcessedAt || '-'}</span>
                         </div>
                       </div>
-                      <div className="cargo-steps">
+                      <div className="cargo-event-list">
                         {cargoProgress.events.map((ev, idx) => {
                           const isCurrent = idx === cargoProgress.events.length - 1;
                           return (
