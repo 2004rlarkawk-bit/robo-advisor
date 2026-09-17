@@ -19,6 +19,9 @@ interface Props {
 
 type Tab = 'internal' | 'external';
 
+/** 외부 포워더 이메일 전송 탭 노출 여부 — 이메일 발송 인프라 검증 후 켠다. */
+const EXTERNAL_EMAIL_ENABLED = false;
+
 export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRequests }: Props) {
   const [tab, setTab] = useState<Tab>('internal');
 
@@ -132,9 +135,13 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
           <button type="button" className={`fwd-modal-tab${tab === 'internal' ? ' active' : ''}`} onClick={() => setTab('internal')}>
             서비스 회원에게 요청
           </button>
-          <button type="button" className={`fwd-modal-tab${tab === 'external' ? ' active' : ''}`} onClick={() => setTab('external')}>
-            외부 포워더에게 이메일 전송
-          </button>
+          {/* 외부 포워더 이메일 전송은 발송 함수·발신 설정 검증 전까지 숨긴다 — 시연 중 미배포 상태에서 누르면 에러가 난다.
+              복원: EXTERNAL_EMAIL_ENABLED를 true로. */}
+          {EXTERNAL_EMAIL_ENABLED && (
+            <button type="button" className={`fwd-modal-tab${tab === 'external' ? ' active' : ''}`} onClick={() => setTab('external')}>
+              외부 포워더에게 이메일 전송
+            </button>
+          )}
         </div>
 
         {tab === 'internal' ? (

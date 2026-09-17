@@ -295,7 +295,8 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
                   </div>
                   <div className="shipper-request-forwarder">
                     <div><strong>{view.forwarderLabel}</strong><span className={`shipper-request-status is-${view.statusTone}`}>{view.statusLabel}</span></div>
-                    {view.requestedAt && <span>의뢰 {formatDate(view.requestedAt)}</span>}
+                    {/* 의뢰일이 없어도 줄을 유지해 행마다 라벨 높이가 어긋나지 않게 한다 */}
+                    <span>{view.requestedAt ? `의뢰 ${formatDate(view.requestedAt)}` : ' '}</span>
                   </div>
                   <div className="shipper-request-next">
                     {view.needsRevision && onRevise ? (
