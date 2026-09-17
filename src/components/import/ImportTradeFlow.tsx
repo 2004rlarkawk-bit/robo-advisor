@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, Download, Eye, FileText, OctagonAlert, RefreshCw, RotateCcw, Search, Terminal } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Download, PenLine, Eye, FileText, OctagonAlert, RefreshCw, RotateCcw, Search, Terminal } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
 import ImportAnalysisSummary from './ImportAnalysisSummary';
@@ -56,6 +56,7 @@ import type {
   ImportHSCodeSuggestion,
   ImportRisk,
   ImportRiskFixTarget,
+  ImportRiskPickGroup,
   ImportTradeSnapshot,
   UserTradeRole,
 } from '../../types/importTrade';
@@ -358,6 +359,16 @@ export default function ImportTradeFlow({
   const [showAnalysisConsole, setShowAnalysisConsole] = useState(false);
   const analysisTickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const analysisLogEndRef = useRef<HTMLDivElement | null>(null);
+  // 서류 분석 진행 표시 — 실제 단계와 경과 시간(초), HS 추천은 끝난 품목 수까지 보여준다.
+  const [analysisPhase, setAnalysisPhase] = useState<{ label: string; startedAt: number; done?: number; total?: number } | null>(null);
+  const [phaseNow, setPhaseNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!analysisPhase) return;
+    setPhaseNow(Date.now());
+    const timer = setInterval(() => setPhaseNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [analysisPhase]);
+  const elapsedSeconds = (startedAt: number) => Math.max(0, Math.round((Date.now() - startedAt) / 1000));
 
   const pushAnalysisLog = useCallback((agent: string, message: string, level: 'info' | 'success' = 'info') => {
     const time = new Date().toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
@@ -555,24 +566,12 @@ export default function ImportTradeFlow({
         throw new ImportFileResolutionError(failures);
       }
       setSourceFiles(resolvedFiles);
-      pushAnalysisLog('Document Agent', `파일 ${analyzableDocuments.length}건 로드 완료 — 텍스트 추출 시작`, 'success');
-      {
-        const stages = [
-          '문서 텍스트 추출 중...',
-          '핵심 필드 매핑 중 (Invoice · B/L · P/L)...',
-          '문서 간 값 대조·불일치 점검 중...',
-          '분석 결과 정규화 중...',
-        ];
-        let stageIndex = 0;
-        if (analysisTickerRef.current) clearInterval(analysisTickerRef.current);
-        analysisTickerRef.current = setInterval(() => {
-          if (stageIndex < stages.length) pushAnalysisLog('Analysis Agent', stages[stageIndex++]);
-        }, 1100);
-      }
+      pushAnalysisLog('Document Agent', `파일 ${analyzableDocuments.length}건 로드 완료`, 'success');
+      pushAnalysisLog('Analysis Agent', `AI가 서류 ${analyzableDocuments.length}건을 읽고 서로 대조하는 중이에요.`);
+      const analysisStartedAt = Date.now();
+      setAnalysisPhase({ label: '서류 분석 중', startedAt: analysisStartedAt });
       const result = await analyzeImportDocuments(analyzableDocuments, resolvedFiles);
-      if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
-      pushAnalysisLog('Orchestrator Agent', '분석 완료 — 추출값을 분석 결과 폼에 반영했습니다.', 'success');
-      setTimeout(() => setShowAnalysisConsole(false), 900);
+      pushAnalysisLog('Analysis Agent', `서류 분석 완료 (${elapsedSeconds(analysisStartedAt)}초)`, 'success');
       const failedIds = new Set(failures.map((failure) => failure.documentId));
       const documents = state.documents.map((document) => {
           if (failedIds.has(document.id)) {
@@ -601,9 +600,19 @@ export default function ImportTradeFlow({
           certificateOfOriginAvailable: documents.some((document) => document.type === 'certificate_of_origin'),
         },
       };
-      const suggestions = role === 'shipper'
-        ? await recommendImportHSKForItems(analysis.extracted.items)
-        : [];
+      let suggestions: ImportHSCodeSuggestion[] = [];
+      if (role === 'shipper' && analysis.extracted.items.length > 0) {
+        const hsStartedAt = Date.now();
+        pushAnalysisLog('HSCode Agent', `품목 ${analysis.extracted.items.length}건의 대한민국 HS 코드를 추천하는 중이에요.`);
+        setAnalysisPhase({ label: 'HS 코드 추천 중', startedAt: hsStartedAt, done: 0, total: analysis.extracted.items.length });
+        suggestions = await recommendImportHSKForItems(analysis.extracted.items, (done, total) => {
+          setAnalysisPhase((current) => (current ? { ...current, done, total } : current));
+        });
+        pushAnalysisLog('HSCode Agent', `HS 코드 추천 완료 (${elapsedSeconds(hsStartedAt)}초)`, 'success');
+      }
+      setAnalysisPhase(null);
+      pushAnalysisLog('Orchestrator Agent', '분석 완료 — 추출값을 분석 결과 폼에 반영했습니다.', 'success');
+      setTimeout(() => setShowAnalysisConsole(false), 900);
       setManualHsInputs({});
       setManualHsErrors({});
       setState((current) => {
@@ -669,6 +678,7 @@ export default function ImportTradeFlow({
       }));
       setMessage(errorMessage);
       if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
+      setAnalysisPhase(null);
       pushAnalysisLog('Orchestrator Agent', '분석 실패 — 오류 내용을 확인해 주세요.');
       setTimeout(() => setShowAnalysisConsole(false), 900);
     } finally {
@@ -859,10 +869,28 @@ export default function ImportTradeFlow({
     };
   });
 
+  const returnAfterHsConfirm = (itemId: string) => {
+    const fromRiskId = hsReturnRiskRef.current;
+    if (!fromRiskId) return;
+    const nextItem = state.analysis?.extracted.items.find((item) => item.id !== itemId && !item.confirmedHSCode);
+    window.setTimeout(() => {
+      if (nextItem) {
+        goToHsItem(nextItem.id, fromRiskId);
+        return;
+      }
+      hsReturnRiskRef.current = null;
+      const card = document.getElementById(`import-risk-${fromRiskId}`) ?? document.getElementById('import-risk-summary');
+      card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card?.classList.add('import-risk--flash');
+      window.setTimeout(() => card?.classList.remove('import-risk--flash'), 2000);
+    }, 350);
+  };
+
   const selectRecommendedHS = (itemId: string, code: string) => {
     setManualHsInputs((current) => ({ ...current, [itemId]: code }));
     setManualHsErrors((current) => ({ ...current, [itemId]: '' }));
     updateConfirmedHS(itemId, code);
+    returnAfterHsConfirm(itemId);
   };
 
   const confirmManualHS = async (itemId: string, currentCode: string) => {
@@ -876,6 +904,7 @@ export default function ImportTradeFlow({
     setManualHsInputs((current) => ({ ...current, [itemId]: result.normalizedCode }));
     setManualHsErrors((current) => ({ ...current, [itemId]: '' }));
     updateConfirmedHS(itemId, result.normalizedCode);
+    returnAfterHsConfirm(itemId);
   };
 
   const lookupCargo = async () => {
@@ -967,7 +996,7 @@ export default function ImportTradeFlow({
       .map((risk) => {
         const stored = storedById.get(risk.id);
         // 값을 고른 카드는 항상 해결됨. 고른 값을 되돌렸다면 저장된 '해결됨'도 따라가지 않는다.
-        if (risk.chosen || stored?.chosen) return risk;
+        if (risk.chosen || risk.autoResolved || stored?.chosen) return risk;
         return { ...risk, status: stored?.status ?? risk.status };
       });
   }, [state.analysis, state.documents, state.suggestions, state.dutyError, state.risks, importerCompanyName, role]);
@@ -995,7 +1024,10 @@ export default function ImportTradeFlow({
     dutyError: '',
   } : current));
   // HS 미확정 카드 → 아래 G. HSK 확정 칸의 해당 품목으로 이동
-  const goToHsItem = (itemId: string) => {
+  // 경고 카드에서 HS 확정하러 내려간 경우, 확정 후 그 카드로 다시 올라간다.
+  const hsReturnRiskRef = useRef<string | null>(null);
+  const goToHsItem = (itemId: string, fromRiskId?: string) => {
+    hsReturnRiskRef.current = fromRiskId ?? null;
     const target = document.getElementById(`import-hs-item-${itemId}`);
     target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     target?.classList.add('import-hs-item--focus');
@@ -1081,7 +1113,9 @@ export default function ImportTradeFlow({
                   <span className="log-time">⏳</span>
                   <span className="log-agent" style={{ color: '#fb7185' }}>Pipeline:</span>
                   <span className="log-text-content" style={{ color: '#fb7185', fontStyle: 'italic' }}>
-                    수입 문서 AI 분석 처리 중...
+                    {analysisPhase
+                      ? `${analysisPhase.label}${analysisPhase.total ? ` (품목 ${analysisPhase.done ?? 0}/${analysisPhase.total})` : ''} · 경과 ${Math.max(0, Math.round((phaseNow - analysisPhase.startedAt) / 1000))}초`
+                      : '수입 문서 AI 분석 처리 중...'}
                   </span>
                 </div>
               )}
@@ -1500,11 +1534,127 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
   );
 }
 
-/** 고른 값과 서류 값이 같은지 — '4,631 KG'와 정규화된 '4631'도 같은 값으로 본다. */
-function sameChoiceValue(a: string, b: string): boolean {
+/** 고른 값과 서류 값이 같은지 — '4,631 KG'와 '4631', '550.00 KG'와 '550'도 같은 값으로 본다. */
+export function sameChoiceValue(a: string, b: string): boolean {
   if (a.trim() === b.trim()) return true;
-  const digits = (value: string) => value.replace(/[^\d.]/g, '');
-  return /\d/.test(a) && /^[\d.,\s]*[A-Za-z]*\s*$/.test(a.trim()) && /^[\d.,\s]*[A-Za-z]*\s*$/.test(b.trim()) && digits(a) === digits(b);
+  const numeric = (value: string) => /\d/.test(value) && /^[\d.,\s]*[A-Za-z]*\s*$/.test(value.trim());
+  // 글자로 비교하면 '550.00'과 '550'이 달라 보이므로 숫자 값으로 비교한다.
+  const amount = (value: string) => Number(value.replace(/[^\d.]/g, ''));
+  return numeric(a) && numeric(b) && amount(a) === amount(b);
+}
+
+const FULL_DOC_LABEL: Record<string, string> = {
+  'C/I': 'Commercial Invoice (CI)', 'Commercial Invoice': 'Commercial Invoice (CI)',
+  'P/L': 'Packing List (PL)', 'Packing List': 'Packing List (PL)',
+  'B/L': 'Bill of Lading (B/L)', 'Bill of Lading': 'Bill of Lading (B/L)',
+  'C/O': 'Certificate of Origin (C/O)', 'Certificate of Origin': 'Certificate of Origin (C/O)',
+};
+const fullDocLabel = (source: string) => FULL_DOC_LABEL[source] ?? source;
+
+/** 수입 '반드시 수정' — 두 서류 값을 ≠로 나란히 보여주고 [수정하기]로 맞는 값을 고른다. */
+function BlockerCompareCard({ risk, num, group, onChoose, onClearChoice }: {
+  risk: ImportRisk;
+  num: number;
+  group: ImportRiskPickGroup;
+  onChoose: (key: string, value: string) => void;
+  onClearChoice?: (key: string) => void;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [custom, setCustom] = useState('');
+  const resolved = risk.status === 'resolved';
+  const [left, right] = group.choices;
+  const selected = group.selected;
+  const isPicked = (value: string) => !!selected && sameChoiceValue(selected, value);
+  const customPicked = !!selected && !group.choices.some((choice) => sameChoiceValue(selected, choice.value));
+  const pick = (value: string) => {
+    if (isPicked(value)) onClearChoice?.(group.key);
+    else onChoose(group.key, value);
+    setEditing(false);
+  };
+  const applyCustom = () => {
+    if (!custom.trim()) return;
+    onChoose(group.key, custom.trim());
+    setCustom('');
+    setEditing(false);
+  };
+  const side = (choice: { source: string; value: string }) => (
+    <button
+      type="button"
+      className={`risk-compare__side${isPicked(choice.value) ? ' is-selected' : ''}`}
+      aria-pressed={isPicked(choice.value)}
+      disabled={!editing}
+      onClick={() => pick(choice.value)}
+    >
+      <span className="risk-compare__doc">{fullDocLabel(choice.source)}</span>
+      <strong className="risk-compare__value">{choice.value}</strong>
+      {isPicked(choice.value) && <span className="risk-compare__picked"><CheckCircle2 size={13} /> 이 값으로 통일</span>}
+    </button>
+  );
+  return (
+    <div className={`mobile-fix-card fix-card risk-compare-card sev-error${resolved ? ' risk-resolved' : ''}`}>
+      <div className="risk-compare__head">
+        <span className="fix-card__marker fix-card__marker--num">{num}</span>
+        <div className="risk-compare__titles">
+          <span className="fix-card__title">{cleanRiskTitle(risk.item)}</span>
+          <p className="fix-card__desc">{group.label} 정보가 서류 간에 일치하지 않습니다.</p>
+        </div>
+        <button
+          type="button"
+          className="risk-compare__collapse"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? '펼치기' : '접기'}
+          onClick={() => setCollapsed((value) => !value)}
+        >
+          {collapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+        </button>
+      </div>
+      {!collapsed && (
+        <>
+          <div className="risk-compare__row">
+            <div className="risk-compare">
+              {side(left)}
+              <span className="risk-compare__neq" aria-label="다름">≠</span>
+              {side(right)}
+            </div>
+            {selected ? (
+              <button type="button" className="risk-compare__action is-done" onClick={() => onClearChoice?.(group.key)}>
+                <RotateCcw size={14} /> 선택 취소
+              </button>
+            ) : (
+              <button type="button" className="risk-compare__action" aria-expanded={editing} onClick={() => setEditing((value) => !value)}>
+                {editing ? '닫기' : <><PenLine size={14} /> 수정하기</>}
+              </button>
+            )}
+          </div>
+          {customPicked && (
+            <p className="risk-compare__custom-picked"><CheckCircle2 size={13} /> 직접 입력한 값으로 통일: <strong>{selected}</strong></p>
+          )}
+          {editing && !selected && (
+            <div className="risk-compare__edit">
+              <p>맞는 쪽 값을 누르면 그 값으로 통일돼요. 둘 다 틀렸다면 직접 입력하세요.</p>
+              <div className="risk-pick-custom">
+                <input
+                  className="form-input"
+                  value={custom}
+                  placeholder="둘 다 틀렸다면 직접 입력"
+                  aria-label={`${group.label} 직접 입력`}
+                  onChange={(event) => setCustom(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                      event.preventDefault();
+                      applyCustom();
+                    }
+                  }}
+                />
+                <button type="button" className="risk-pick-apply" disabled={!custom.trim()} onClick={applyCustom}>적용</button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, onGoUpload, collapseAdvisories = false }: {
@@ -1518,7 +1668,7 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
   onClearChoice?: (key: string) => void;
   /** 카드 안에서 값을 입력해 고쳤을 때 */
   onFix?: (target: ImportRiskFixTarget, value: string) => void;
-  onGoHs?: (itemId: string) => void;
+  onGoHs?: (itemId: string, fromRiskId?: string) => void;
   onGoUpload?: () => void;
 }) {
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -1529,13 +1679,32 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
   const nothingFound = blockers.length === 0 && advisories.length === 0;
 
   let advisorySeq = 0;
+  let blockerSeq = 0;
   const renderCard = (risk: ImportRisk) => {
     const isBlocker = risk.level === 'high';
     const resolved = risk.status === 'resolved';
-    const num = isBlocker ? 0 : ++advisorySeq;
+    const num = isBlocker ? ++blockerSeq : ++advisorySeq;
     const hasDetail = !!risk.differentValues?.length || !!risk.recommendation;
+    // FTA 적용 안 함을 고른 카드는 흐리게 — 검토 완료는 화주가 직접 누른다.
+    const dimmed = !resolved && risk.ftaChoice === 'FTA 적용 안 함';
+    // 반드시 수정 중 서류 두 곳의 값이 다른 카드는 두 값을 나란히(≠) 보여주는 비교형으로 그린다.
+    const compareGroup = isBlocker && onChoose && risk.pickGroups?.length === 1 && risk.pickGroups[0].choices.length === 2
+      ? risk.pickGroups[0]
+      : undefined;
+    if (compareGroup && onChoose) {
+      return (
+        <BlockerCompareCard
+          key={risk.id}
+          risk={risk}
+          num={num}
+          group={compareGroup}
+          onChoose={onChoose}
+          onClearChoice={onClearChoice}
+        />
+      );
+    }
     return (
-      <div key={risk.id} className={`mobile-fix-card fix-card ${isBlocker ? 'sev-error' : 'sev-warning'}${resolved ? ' risk-resolved' : ''}`}>
+      <div key={risk.id} id={`import-risk-${risk.id}`} className={`mobile-fix-card fix-card ${isBlocker ? 'sev-error' : 'sev-warning'}${resolved ? ' risk-resolved' : ''}${dimmed ? ' risk-dimmed' : ''}`}>
         <div className="fix-card__head">
           <span className={`fix-card__marker fix-card__marker--${isBlocker ? 'icon' : 'num'}`}>
             {isBlocker ? <FileText size={17} /> : num}
@@ -1609,7 +1778,7 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
               if (fix.kind === 'hs') {
                 return onGoHs ? (
                   <div key={`${risk.id}-hs`} className="risk-fix-actions">
-                    <button type="button" className="risk-fix-link" onClick={() => onGoHs(fix.itemId)}>HS Code 확정하러 가기 →</button>
+                    <button type="button" className="risk-fix-link" onClick={() => onGoHs(fix.itemId, risk.id)}>HS Code 확정하러 가기 →</button>
                   </div>
                 ) : null;
               }
@@ -1637,6 +1806,17 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
                 ) : null;
               }
               if (fix.kind === 'upload') {
+                if (risk.ftaChoice === 'FTA 적용 요청') {
+                  return (
+                    <div key={`${risk.id}-upload`} className="risk-co-required" role="status">
+                      <strong><AlertTriangle size={15} /> 원산지증명서(C/O)가 필요합니다</strong>
+                      <span>FTA 협정세율을 적용하려면 원산지증명서를 서류로 추가해 주세요. 올리면 이 카드는 서류 대조 결과로 바뀝니다.</span>
+                      {onGoUpload && (
+                        <button type="button" className="btn btn-primary risk-co-required__btn" onClick={onGoUpload}>원산지증명서 올리러 가기 →</button>
+                      )}
+                    </div>
+                  );
+                }
                 return onGoUpload ? (
                   <div key={`${risk.id}-upload`} className="risk-fix-actions">
                     <button type="button" className="risk-fix-link" onClick={onGoUpload}>서류 추가하러 가기 →</button>
@@ -1699,7 +1879,9 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
               </details>
             )}
           </div>
-          {risk.chosen && onClearChoice ? (
+          {risk.autoResolved ? (
+            <span className="risk-check-btn on"><CheckCircle2 size={14} /> 확정됨</span>
+          ) : risk.chosen && onClearChoice ? (
             <button
               type="button"
               className="risk-check-btn on"
@@ -1727,7 +1909,7 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
   };
 
   return (
-    <section className="form-card import-card">
+    <section className="form-card import-card" id="import-risk-summary">
       <div className="import-card-heading"><div><h2>AI 검증 결과</h2></div></div>
       {nothingFound ? (
         <div className="risk-pass">

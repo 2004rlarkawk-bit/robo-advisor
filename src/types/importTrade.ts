@@ -333,6 +333,8 @@ export interface ImportRisk {
   fixes?: ImportRiskFix[];
   /** C/O 없음 카드에서 화주가 고른 FTA 적용 여부 — 고른 버튼을 눌린 상태로 보여준다 */
   ftaChoice?: string;
+  /** 다른 입력(HSK 확정 등)으로 자동 해결된 카드 — 저장된 '검토 전' 상태로 되돌리지 않는다 */
+  autoResolved?: boolean;
   status: 'unresolved' | 'resolved';
 }
 

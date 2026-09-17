@@ -241,6 +241,7 @@ export function resolveImportRisks(
         ...(pickGroups.length ? { pickGroups } : {}),
         ...(pickGroups.length ? {} : (() => { const fixes = ruleFixes(result.ruleId, analysis); return fixes.length ? { fixes } : {}; })()),
         ...(isChosen ? { chosen: true } : {}),
+        ...(hsConfirmed ? { autoResolved: true } : {}),
         status: resolved ? 'resolved' as const : 'unresolved' as const,
       }];
     });
@@ -338,7 +339,7 @@ export function assessImportRisks(
     });
   }
   // C/O 없음: 화주가 고른 FTA 적용 여부에 따라 안내가 달라진다. C/O가 있으면 대사 규칙이 다룬다.
-  //  - FTA 적용 안 함 → 기본 관세율로 진행, 카드는 남기되 해결됨(연한 회색·검토 완료)
+  //  - FTA 적용 안 함 → 기본 관세율로 진행, 카드는 흐리게 남기고 검토 완료는 화주가 직접 누른다
   //  - 적용 여부 미확인 → 확인 권장: 적용 여부를 확인해 달라고 안내
   //  - FTA 적용 요청 → 반드시 수정: 원산지증명서 제출 안내
   const ftaChoice = analysis.chosenValues?.[FTA_CHOICE_KEY];
@@ -352,13 +353,13 @@ export function assessImportRisks(
         cause: 'FTA 협정세율을 적용하지 않고 기본 관세율로 진행합니다. 원산지증명서는 제출하지 않아도 됩니다.',
         recommendation: '나중에 FTA를 적용하려면 협정 요건에 맞는 원산지증명서를 받아 올리고 "FTA 적용 요청"으로 바꾸세요.',
         fixes: [{ kind: 'fta' }],
-        chosen: true,
-        status: 'resolved',
+        status: 'unresolved',
       });
     } else if (ftaChoice === 'FTA 적용 요청') {
+      // 반드시 수정으로 옮기면 카드가 목록에서 사라진 것처럼 보여, 같은 자리에서 C/O 제출을 안내한다.
       add({
         ...base,
-        level: 'high',
+        level: 'medium',
         item: '원산지증명서 필요 (FTA 적용 요청)',
         cause: '원산지증명서가 필요합니다. FTA 협정세율을 적용하려면 원산지증명서(Certificate of Origin)를 제출해 주세요.',
         recommendation: '수출자에게 협정 요건에 맞는 원산지증명서를 받아 서류로 추가하세요. 제출이 어렵다면 "FTA 적용 안 함"을 고르면 기본 관세율로 진행합니다.',

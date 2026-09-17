@@ -2643,6 +2643,12 @@ body {
 .import-card-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 18px; }
 .import-card-heading > div:first-child { flex-shrink: 0; }
 .import-card-heading h2 { margin: 3px 0 0; font-size: 17px; white-space: nowrap; }
+.import-card-toggle { width: 100%; padding: 0; border: 0; background: none; font-family: inherit; color: inherit; text-align: left; cursor: pointer; }
+.import-card-toggle:not(.is-open) { margin-bottom: 0; }
+.import-card-toggle:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 4px; border-radius: 6px; }
+.import-card-toggle-hint { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--text-light); }
+.import-card-toggle-hint svg { transition: transform .15s; }
+.import-card-toggle.is-open .import-card-toggle-hint svg { transform: rotate(180deg); }
 .ai-badge, .source-badge { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: #ede9fe; color: #6d28d9; font-size: 10px; font-weight: 700; }
 .source-badge { background: #e0f2fe; color: #0369a1; }
 .import-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 24px; }
@@ -4786,4 +4792,66 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .mobile-fix-list .mobile-input { border-radius: 3px; }
 /* 수출 결과 화면 하단 — 전체 문서 전송·뒤로 가기(입력 수정) */
 .result-submit-actions .btn { border-radius: 3px; }
+
+/* FTA 적용 안 함을 고른 카드 — 흐리게, 고른 버튼과 검토 완료는 또렷하게 */
+.risk-dimmed .fix-card__marker,
+.risk-dimmed .fix-card__titlerow,
+.risk-dimmed .fix-card__desc,
+.risk-dimmed .risk-pick-label,
+.risk-dimmed .risk-pick-choice:not(.is-selected),
+.risk-dimmed .risk-detail { opacity: 0.5; }
+
+/* 수입 '반드시 수정' — 두 서류 값 비교형 카드 */
+.risk-compare-card { display: flex; flex-direction: column; gap: 12px; }
+.risk-compare-card .fix-card__marker--num { background: var(--error-bg); color: var(--error-color); border: 0; }
+.risk-compare__head { display: flex; align-items: flex-start; gap: 12px; }
+.risk-compare__titles { flex: 1; min-width: 0; }
+.risk-compare__collapse { display: inline-flex; padding: 4px; border: 0; background: none; color: #475569; cursor: pointer; border-radius: 6px; }
+.risk-compare__collapse:hover { background: #f1f5f9; }
+.risk-compare__row { display: flex; align-items: center; gap: 16px; padding-left: 42px; }
+.risk-compare { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: 16px; }
+.risk-compare__side {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0;
+  padding: 14px 18px; border: 1.5px solid transparent; border-radius: 10px; background: #f1f4f8;
+  font-family: inherit; text-align: left; color: inherit; transition: border-color .15s, background .15s;
+}
+.risk-compare__side:disabled { cursor: default; opacity: 1; }
+.risk-compare__side:not(:disabled) { cursor: pointer; border-color: #c7d2e0; background: #fff; }
+.risk-compare__side:not(:disabled):hover { border-color: var(--primary-color); }
+.risk-compare__side.is-selected { border-color: var(--primary-color); background: var(--primary-light); }
+.risk-compare__side:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.risk-compare__doc { font-size: 12.5px; color: #64748b; }
+.risk-compare__value { font-size: 15px; font-weight: 800; color: var(--text-dark); overflow-wrap: anywhere; }
+.risk-compare__neq { align-self: center; font-size: 26px; color: var(--error-color); line-height: 1; }
+.risk-compare__picked, .risk-compare__custom-picked { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--primary-color); }
+.risk-compare__custom-picked { margin: 0; padding-left: 42px; }
+.risk-compare__action {
+  flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 132px;
+  padding: 13px 20px; border: 0; border-radius: 8px; background: var(--primary-color); color: #fff;
+  font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.risk-compare__action:hover { filter: brightness(0.95); }
+.risk-compare__action.is-done { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+.risk-compare__edit { margin-left: 42px; padding: 12px 14px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.risk-compare__edit p { margin: 0 0 8px; font-size: 12.5px; color: #475569; }
+@media (max-width: 640px) {
+  .risk-compare__row { flex-direction: column; align-items: stretch; padding-left: 0; }
+  .risk-compare { grid-template-columns: 1fr; gap: 6px; }
+  .risk-compare__neq { justify-self: center; }
+  .risk-compare__edit, .risk-compare__custom-picked { margin-left: 0; padding-left: 0; }
+}
+.risk-dimmed .risk-pick-choice.is-selected,
+.risk-dimmed .risk-pick-choice.is-selected:hover { border-color: var(--primary-color); background: var(--primary-light); color: var(--primary-color); font-weight: 800; }
+.risk-dimmed .risk-pick-choice.is-selected::before { content: '✓ '; }
+
+/* HS 확정 후 돌아온 경고 카드 강조 */
+.import-risk--flash { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35); transition: box-shadow .3s; }
+/* FTA 적용 요청인데 C/O가 없을 때 카드 안 안내 */
+.risk-co-required { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 10px; padding: 12px 14px; border-radius: 10px; background: var(--error-bg); border: 1px solid #f5c2c7; }
+.risk-co-required strong { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--error-color); }
+.risk-co-required span { font-size: 12.5px; color: #7f1d1d; line-height: 1.5; }
+.risk-co-required__btn { margin-top: 4px; padding: 8px 14px; font-size: 13px; }
+.risk-pick-choice.is-selected[aria-pressed="true"],
+.risk-pick-choice.is-selected[aria-pressed="true"]:hover { border-color: var(--primary-color); background: var(--primary-light); color: var(--primary-color); font-weight: 800; }
+.risk-pick-choice.is-selected[aria-pressed="true"]::before { content: '✓ '; }
 
