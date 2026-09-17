@@ -625,3 +625,57 @@ describe('화주용 통관 입력 폼', () => {
     ).toBe(true);
   });
 });
+
+describe('원산지 안내 카드 다시 열기', () => {
+  it('확인으로 닫은 원산지 안내 카드는 고칠 항목을 다시 누르면(fixRevealKey 변경) 다시 보인다', () => {
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    const renderWithKey = (fixRevealKey: number) => act(() => {
+      root?.render(
+        <ShipperWorkspaceForm
+          profile={{ ...profile, countryOfOrigin: 'South Korea' }}
+          items={[firstItem]}
+          supplemental={EMPTY_SHIPPER_SUPPLEMENTAL_STATE}
+          isProcessing={false}
+          onProfilePatch={vi.fn()}
+          onItemsChange={vi.fn()}
+          onSupplementalChange={vi.fn()}
+          onReset={vi.fn()}
+          onGenerate={vi.fn()}
+          originIssueActive
+          fixRevealKey={fixRevealKey}
+        />,
+      );
+    });
+    const originCard = () => Array.from(container!.querySelectorAll('.inline-fix-card'))
+      .find((card) => card.textContent?.includes('대외무역법'));
+
+    renderWithKey(1);
+    expect(originCard()).toBeDefined();
+    const confirm = Array.from(originCard()!.querySelectorAll('button')).find((button) => button.textContent === '확인');
+    act(() => confirm?.click());
+    expect(originCard()).toBeUndefined();
+
+    renderWithKey(2);
+    expect(originCard()).toBeDefined();
+  });
+});
+
+describe('결제조건과 맞지 않게 남은 L/C 정보', () => {
+  it('D/A인데 L/C Date가 남아 있으면 그 칸을 보여주고 [L/C 정보 지우기]로 비운다', () => {
+    const rendered = renderForm([firstItem], false, { paymentTerms: 'D/A', lcDate: '2026-09-25' });
+    const lcDate = rendered.container.querySelector('[data-field="lcDate"]');
+    expect(lcDate?.className).toContain('lc-leftover');
+    expect(rendered.container.querySelector('[data-field="lcNo"]')?.className).not.toContain('lc-leftover');
+    const clear = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === 'L/C 정보 지우기');
+    act(() => clear?.click());
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ lcNo: '', lcDate: '', lcBank: '' });
+  });
+
+  it('L/C 값이 없고 L/C 결제도 아니면 L/C 칸을 보이지 않는다', () => {
+    const rendered = renderForm([firstItem], false, { paymentTerms: 'T/T', lcNo: '', lcDate: '' });
+    expect(rendered.container.querySelector('[data-field="lcDate"]')).toBeNull();
+    expect(rendered.container.textContent).not.toContain('L/C 정보 지우기');
+  });
+});

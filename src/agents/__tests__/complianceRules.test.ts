@@ -217,6 +217,13 @@ describe('R11 — 결제조건 ↔ L/C 필드 정합성', () => {
     expect(issue.overridable).toBe(true);
   });
 
+  it('모순 메시지는 남아 있는 L/C 칸 이름과 값, 해결 방법을 알려준다', () => {
+    const issue = find({ paymentTerms: 'D/A', lcDate: '2026-09-25' }, 'r11-payment-lc-conflict')!;
+    expect(issue.message).toContain('L/C Date(2026-09-25)');
+    expect(issue.message).toContain('[L/C 정보 지우기]');
+    expect(issue.message).not.toContain('L/C No.');
+  });
+
   it('L/C 은행/일자만 있어도(번호 없이) T/T와 함께면 모순으로 잡는다', () => {
     expect(ids({ paymentTerms: 'T/T 30 DAYS', lcBank: 'KEB HANA BANK' }))
       .toContain('r11-payment-lc-conflict');

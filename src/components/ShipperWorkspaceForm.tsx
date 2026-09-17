@@ -58,6 +58,8 @@ interface Props {
   /** [입력 수정]으로 진입한 이슈 — 해당 섹션 상단에 인라인 안내 카드 표시 */
   fixNotice?: ShipperFixNotice | null;
   onDismissFixNotice?: () => void;
+  /** 고칠 항목을 다시 누르면 바뀌는 값 — 닫았던 원산지 안내 카드를 다시 연다 */
+  fixRevealKey?: number;
 }
 
 const INCOTERMS_OPTIONS: Exclude<Incoterms, ''>[] = ['FOB', 'CFR', 'CIF', 'FAS', 'FCA'];
@@ -153,12 +155,13 @@ export default function ShipperWorkspaceForm({
   onOriginOverrideRequest,
   fixNotice = null,
   onDismissFixNotice,
+  fixRevealKey = 0,
 }: Props) {
   // 인라인 수정 안내 카드 — fixNotice가 가리키는 섹션에만 렌더.
   // 카드를 닫아도 섹션이 접히지 않도록 details의 open은 이펙트로만 켠다(제어 안 함).
   const fixSection = fixNotice ? SHIPPER_FIELD_SECTION[fixNotice.fieldKey] : undefined;
   const [originDismissed, setOriginDismissed] = useState(false);
-  useEffect(() => { if (originIssueActive) setOriginDismissed(false); }, [originIssueActive]);
+  useEffect(() => { if (originIssueActive) setOriginDismissed(false); }, [originIssueActive, fixRevealKey]);
   const showOriginCard = originIssueActive && !originDismissed;
 
   useEffect(() => {
@@ -496,6 +499,8 @@ export default function ShipperWorkspaceForm({
 
   // Incoterms를 고르면 규칙상 같은 항만(FOB·FAS→선적항, CFR·CIF→도착항)에 자동 연결한다. 사용자는 체크를 풀고 직접 입력할 수 있다.
   const placeRule = incotermsPlaceRule(profile.incoterms);
+  const isLcPaymentTerms = profile.paymentTerms === 'L/C';
+  const hasLeftoverLc = !isLcPaymentTerms && [profile.lcNo, profile.lcDate, profile.lcBank].some((value) => (value ?? '').trim());
   const previousIncotermsRef = useRef<string | null>(null);
   useEffect(() => {
     const previous = previousIncotermsRef.current;
@@ -880,16 +885,32 @@ export default function ShipperWorkspaceForm({
         {fixNoticeCard(4)}
         <div className="form-grid">
           <div className="form-group" data-field="incoterms"><label className="form-label">Incoterms <Req /></label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+          <div className="form-group" data-field="paymentTerms"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
           <div className="form-group shipper-incoterms-place"><label className="form-label">{placeRule.label}</label><input className="form-input" value={supplemental.incotermsPlace} readOnly={incotermsPlaceSource !== null} onChange={(e) => onSupplementalChange({ ...supplemental, incotermsPlace: e.target.value })} placeholder={placeRule.placeholder} /><div className="shipper-inline-options">{placeRule.options.includes('loadPort') && <label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'loadPort'} onChange={(e) => toggleIncotermsPlaceSource('loadPort', e.target.checked)} /> 선적항과 동일</label>}{placeRule.options.includes('dischargePort') && <label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'dischargePort'} onChange={(e) => toggleIncotermsPlaceSource('dischargePort', e.target.checked)} /> 도착항과 동일</label>}</div></div>
-          {profile.paymentTerms === 'L/C' && <>
-            <div className="form-group"><label className="form-label">L/C No.</label><input className="form-input" value={profile.lcNo ?? ''} onChange={(e) => onProfilePatch({ lcNo: e.target.value })} /></div>
-            <div className="form-group"><label className="form-label">L/C Date</label><input type="date" className="form-input" value={profile.lcDate ?? ''} onChange={(e) => onProfilePatch({ lcDate: e.target.value })} /></div>
-            <div className="form-group"><label className="form-label">L/C 종류</label><select className="form-input" value={declaration.lcPaymentType ?? ''} onChange={(e) => patchDeclaration({ lcPaymentType: e.target.value as ExportDeclarationInfo['lcPaymentType'] })}><option value="">선택하세요</option><option value="SIGHT">일람출급 (At Sight)</option><option value="USANCE">기한부 (Usance)</option></select></div>
+          {/* 결제조건이 L/C가 아닌데 예전에 적어 둔 L/C 값이 남아 있으면 칸을 보여주고 주황색으로 표시해, 무엇을 지워야 하는지 바로 알게 한다. */}
+          {!isLcPaymentTerms && hasLeftoverLc && (
+            <div className="lc-leftover-note">
+              <span>결제조건이 <b>{profile.paymentTerms || '미선택'}</b>인데 아래 L/C 정보가 남아 있어요. {profile.paymentTerms ? `${profile.paymentTerms}가 맞다면 지워 주세요.` : ''}</span>
+              <button
+                type="button"
+                className="lc-leftover-clear"
+                onClick={() => {
+                  onProfilePatch({ lcNo: '', lcDate: '', lcBank: '' });
+                  patchDeclaration({ lcPaymentType: '' });
+                }}
+              >
+                L/C 정보 지우기
+              </button>
+            </div>
+          )}
+          {(isLcPaymentTerms || hasLeftoverLc) && <>
+            <div className={`form-group${!isLcPaymentTerms && (profile.lcNo ?? '').trim() ? ' lc-leftover' : ''}`} data-field="lcNo"><label className="form-label">L/C No.</label><input className="form-input" value={profile.lcNo ?? ''} onChange={(e) => onProfilePatch({ lcNo: e.target.value })} /></div>
+            <div className={`form-group${!isLcPaymentTerms && (profile.lcDate ?? '').trim() ? ' lc-leftover' : ''}`} data-field="lcDate"><label className="form-label">L/C Date</label><input type="date" className="form-input" value={profile.lcDate ?? ''} onChange={(e) => onProfilePatch({ lcDate: e.target.value })} /></div>
+            {isLcPaymentTerms && (<div className="form-group"><label className="form-label">L/C 종류</label><select className="form-input" value={declaration.lcPaymentType ?? ''} onChange={(e) => patchDeclaration({ lcPaymentType: e.target.value as ExportDeclarationInfo['lcPaymentType'] })}><option value="">선택하세요</option><option value="SIGHT">일람출급 (At Sight)</option><option value="USANCE">기한부 (Usance)</option></select></div>)}
           </>}
           <div className="form-group"><label className="form-label">수출 거래 형태</label><select className="form-input" value={declaration.tradeKind ?? ''} onChange={(e) => patchDeclaration({ tradeKind: e.target.value as ExportDeclarationInfo['tradeKind'] })}><option value="">선택 안 함 (관세사 확인)</option><option value="GENERAL">일반 수출 (유상 매매)</option></select><small className="form-help">무상 견본품·위탁가공 등은 선택하지 않으면 관세사가 확인합니다.</small></div>
-          <div className="form-group"><label className="form-label">운임 (원) <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={declaration.freightKrw ?? ''} onChange={(e) => patchDeclaration({ freightKrw: e.target.value === '' ? '' : Number(e.target.value) })} /></div>
-          <div className="form-group"><label className="form-label">보험료 (원) <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={declaration.insuranceKrw ?? ''} onChange={(e) => patchDeclaration({ insuranceKrw: e.target.value === '' ? '' : Number(e.target.value) })} /></div>
+          <div className="form-group" data-field="freightKrw"><label className="form-label">국제운임(원) <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={declaration.freightKrw ?? ''} onChange={(e) => patchDeclaration({ freightKrw: e.target.value === '' ? '' : Number(e.target.value) })} /></div>
+          <div className="form-group" data-field="insuranceKrw"><label className="form-label">보험료(원) <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={declaration.insuranceKrw ?? ''} onChange={(e) => patchDeclaration({ insuranceKrw: e.target.value === '' ? '' : Number(e.target.value) })} /></div>
           <div className="form-group"><label className="form-label">기타 참조번호 Other References <span className="optional-label">(선택)</span></label><input className="form-input" value={profile.otherReferences ?? ''} onChange={(e) => onProfilePatch({ otherReferences: e.target.value })} placeholder="P/O No., Contract No. 등" /></div>
         </div>
       </details>
@@ -983,7 +1004,6 @@ export default function ShipperWorkspaceForm({
         )}
         <div className="form-grid">
           <div className="form-group" data-field="countryOfOrigin"><label className="form-label">원산지 국가 <Req /></label><CountrySelect className="form-input" value={profile.countryOfOrigin ?? ''} onChange={(value) => onProfilePatch({ countryOfOrigin: value })} /></div>
-          <div className="form-group"><label className="form-label">원산지 결정기준</label><select className="form-input" value={supplemental.originCriterion} onChange={(e) => onSupplementalChange({ ...supplemental, originCriterion: e.target.value as ShipperSupplementalState['originCriterion'] })}><option value="">선택하세요</option><option value="세번변경기준">세번변경기준</option><option value="부가가치기준">부가가치기준</option><option value="완전생산기준">완전생산기준</option></select></div>
           <div className="form-group"><label className="form-label">제조자 구분</label><select className="form-input" value={declaration.exporterType ?? ''} onChange={(e) => patchDeclaration({ exporterType: e.target.value as ExportDeclarationInfo['exporterType'] })}><option value="">선택 안 함</option><option value="A">직접 제조해서 수출</option><option value="C">다른 회사 완제품을 받아 수출</option></select></div>
           {declaration.exporterType === 'C' && <>
             <div className="form-group"><label className="form-label">제조자 상호</label><input className="form-input" value={declaration.makerName ?? ''} onChange={(e) => patchDeclaration({ makerName: e.target.value })} /></div>

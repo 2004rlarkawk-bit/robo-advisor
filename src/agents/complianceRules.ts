@@ -349,10 +349,14 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
   // ── R11. 결제조건 ↔ L/C 필드 정합성 ─────────────────
   // 비신용장(T/T 등) 결제인데 L/C 정보가 있으면 모순 → error(차단, 사유 override 가능).
   // 반대로 L/C 결제인데 L/C 번호가 없으면 → warning.
-  const lcVals = [profile.lcNo, profile.lcBank, profile.lcDate].map(v => (v || '').trim()).filter(Boolean);
+  const lcVals = [
+    ['L/C No.', profile.lcNo],
+    ['L/C 은행', profile.lcBank],
+    ['L/C Date', profile.lcDate],
+  ].map(([label, v]) => [label, (v || '').trim()] as const).filter(([, v]) => v);
   if (isNonLcPayment(profile.paymentTerms) && lcVals.length > 0) {
     issues.push(mk('r11-payment-lc-conflict', 'invoice', 'paymentTerms',
-      `결제조건이 비신용장("${profile.paymentTerms}")인데 L/C 정보(${lcVals.join(', ')})가 입력되어 있습니다. 서로 모순이므로 결제조건 또는 L/C 필드를 정정하세요.`));
+      `결제조건이 비신용장("${profile.paymentTerms}")인데 ${lcVals.map(([label, v]) => `${label}(${v})`).join(', ')}이 남아 있습니다. ${profile.paymentTerms}가 맞다면 [L/C 정보 지우기]를 누르고, 신용장 거래라면 결제조건을 L/C로 바꾸세요.`));
   } else if (isLcPayment(profile.paymentTerms) && !(profile.lcNo || '').trim()) {
     issues.push(mk('r11-lc-missing', 'invoice', 'lcNo',
       `결제조건이 L/C인데 L/C 번호가 비어 있습니다. 신용장 번호(예: LC-2026-0001)를 입력하세요.`));
