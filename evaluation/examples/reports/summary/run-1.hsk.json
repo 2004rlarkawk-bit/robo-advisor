@@ -1,7 +1,7 @@
 {
   "scorer": "hsk",
   "runId": "example-run-1",
-  "generatedAt": "2026-09-17T16:41:24.921Z",
+  "generatedAt": "2026-09-18T03:02:07.929Z",
   "split": null,
   "metrics": {
     "top1": {

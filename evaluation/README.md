@@ -101,6 +101,10 @@ AI 응답은 같은 입력에도 조금씩 달라집니다.
 - 같은 테스트 세트를 **3회** 실행합니다 (`repeatIndex` 1~3).
 - 보고: **평균, 최소, 최대, 실행별 분자/분모**, 실패한 실행 수.
 - 실행마다 `manifest.json`을 남깁니다: 모델명(응답의 `model`), 추론 설정, 프롬프트 해시, 정규화 버전, 규칙 버전, 코드 커밋, Edge Function 커밋, 측정일.
+- 버전 표기는 코드를 기준으로 합니다(사람이 임의로 적지 않습니다).
+  - `normalizationVersion`: `scripts/evaluation/normalize.ts`의 `NORMALIZATION_VERSION` — 현재 `norm-v1`
+  - `ruleVersion`: `src/services/importReconciliationRules.ts`의 규칙 id 범위 — 현재 `IR1-IR14` (규칙 14개)
+  - 두 값이 코드와 어긋나면 `npm run eval:test`의 버전 일치 테스트가 실패합니다.
 - **확인하지 못한 값은 빈 문자열**로 둡니다. 추측한 모델 버전을 적지 않습니다.
 - v1과 v2 차이가 3회 범위(최소~최대) 안이면 "개선"이라고 말하지 않습니다.
 

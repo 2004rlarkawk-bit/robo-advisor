@@ -2,7 +2,7 @@
   "scorer": "field-extraction",
   "runId": "example-run-2",
   "normalizationVersion": "norm-v1",
-  "generatedAt": "2026-09-17T16:41:24.930Z",
+  "generatedAt": "2026-09-18T03:02:07.945Z",
   "metrics": {
     "strictFieldAccuracy": {
       "numerator": 5,

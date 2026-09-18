@@ -15,7 +15,7 @@
 | promptVersion | (미기록) |
 | promptHash | (미기록) |
 | normalizationVersion | norm-v1 |
-| ruleVersion | (미기록) |
+| ruleVersion | IR1-IR14 |
 | codeCommit | (미기록) |
 | edgeFunctionCommit | (미기록) |
 | measuredAt | (미기록) |

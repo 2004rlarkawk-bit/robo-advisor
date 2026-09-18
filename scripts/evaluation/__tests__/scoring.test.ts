@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { IMPORT_RECONCILIATION_RULES } from '../../../src/services/importReconciliationRules';
+import { portKey } from '../../../src/services/portLocodeService';
 import { aggregateRuns } from '../aggregate-runs';
 import { buildReport, SYNTHETIC_EXAMPLE_NOTICE } from '../generate-report';
 import { f1Score, formatPercent, formatRatio, parseCsv, ratio } from '../lib';
@@ -6,6 +9,7 @@ import { scoreComparison } from '../score-comparison';
 import { scoreDocumentClassification } from '../score-document-classification';
 import { scoreFieldExtraction } from '../score-field-extraction';
 import { scoreHsk } from '../score-hsk';
+import { NORMALIZATION_VERSION } from '../normalize';
 
 describe('CSV·지표 유틸', () => {
   it('따옴표 안 쉼표와 "" 이스케이프를 읽는다', () => {
@@ -182,5 +186,66 @@ describe('집계·보고서', () => {
     for (const line of SYNTHETIC_EXAMPLE_NOTICE.split('\n')) expect(report).toContain(line);
     expect(report.indexOf('주의')).toBeLessThan(report.indexOf('## 채점 결과'));
     expect(report).not.toContain('NaN');
+  });
+});
+
+describe('port_locode 채점 연결', () => {
+  // 앱의 항구 사전(public/data/unlocodePorts.json)과 같은 형식의 최소 사전.
+  const ports = [
+    { locode: 'KRPUS', country: 'KR', name: 'Busan', key: portKey('Busan') },
+    { locode: 'KRPUS', country: 'KR', name: 'Busan Port', key: portKey('Busan Port') },
+    { locode: 'USLAX', country: 'US', name: 'Los Angeles', key: portKey('Los Angeles') },
+  ];
+  const goldRow = (expected: string) => ([{
+    document_id: 'trade:T1', field_key: 'portOfLoading', expected_value: expected,
+    expected_unit: '', evaluation_mode: 'port_locode', is_applicable: 'true',
+  }]);
+  const score = (expected: string, predicted: string) => scoreFieldExtraction(
+    goldRow(expected),
+    { fields: [{ document_id: 'trade:T1', field_key: 'portOfLoading', predicted_value: predicted }] },
+    { ports },
+  );
+
+  it('Busan · Busan Port · KRPUS 는 같은 항구로 정답 처리한다', () => {
+    for (const [expected, predicted] of [
+      ['Busan', 'Busan Port'], ['Busan Port', 'KRPUS'], ['KRPUS', 'Busan'], ['Busan', 'KRPUS'],
+    ]) {
+      const summary = score(expected, predicted);
+      expect(`${expected} → ${predicted}: ${summary.metrics.normalizedFieldAccuracy.value}`)
+        .toBe(`${expected} → ${predicted}: 1`);
+    }
+  });
+
+  it('표기가 달라 strict 로는 틀리지만 정규화 후에는 맞는다', () => {
+    const summary = score('Busan', 'KRPUS');
+    expect(summary.metrics.strictFieldAccuracy.value).toBe(0);
+    expect(summary.byMode.port_locode.normalized.value).toBe(1);
+  });
+
+  it('다른 항구는 정규화해도 오답이고, 사전이 없으면 정확히 같은 문자열만 맞는다', () => {
+    expect(score('Busan', 'Los Angeles').metrics.normalizedFieldAccuracy.value).toBe(0);
+
+    const noDictionary = scoreFieldExtraction(
+      goldRow('Busan'),
+      { fields: [{ document_id: 'trade:T1', field_key: 'portOfLoading', predicted_value: 'KRPUS' }] },
+      { ports: null },
+    );
+    expect(noDictionary.metrics.normalizedFieldAccuracy.value).toBe(0);
+    expect(noDictionary.counts.wrongExtraction).toBe(1);
+  });
+});
+
+describe('버전 표기 일치', () => {
+  it('manifest 템플릿의 버전이 실제 코드와 같다', () => {
+    const manifest = JSON.parse(readFileSync('evaluation/templates/manifest.json', 'utf8')) as {
+      normalizationVersion: string; ruleVersion: string;
+    };
+    expect(manifest.normalizationVersion).toBe(NORMALIZATION_VERSION);
+
+    // 배열 순서가 아니라 규칙 번호의 최소·최대로 범위를 만든다(코드에서는 IR10 뒤에 IR11~IR14가 오지 않는다).
+    const numbers = IMPORT_RECONCILIATION_RULES.map((rule) => Number(rule.id.replace('IR', ''))).sort((a, b) => a - b);
+    expect(manifest.ruleVersion).toBe(`IR${numbers[0]}-IR${numbers[numbers.length - 1]}`);
+    expect(numbers).toHaveLength(14);
+    expect(new Set(numbers).size).toBe(14);
   });
 });
