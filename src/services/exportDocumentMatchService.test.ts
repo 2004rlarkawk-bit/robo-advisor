@@ -126,6 +126,37 @@ describe('matchUploadedExportDocuments', () => {
     expect(result.rows.find((row) => row.label === '용적(CBM)')?.status).toBe('match');
   });
 
+  it('CBM은 서류에 적힌 자릿수로 반올림해 비교한다 — P/L 0.35 vs 계산값 0.369는 불일치', async () => {
+    const [result] = await matchUploadedExportDocuments({
+      attachments: [attachment({ documentType: 'packing_list' })],
+      profile: { ...profile, measurement: '0.369' } as TradeProfile,
+      items,
+      dependencies: deps(extracted({ measurement: '0.350' })),
+    });
+    expect(result.rows.find((row) => row.label === '용적(CBM)')?.status).toBe('mismatch');
+  });
+
+  it('서류가 소수 1자리(0.4)로만 적혀 있으면 계산값 0.369는 일치로 본다', async () => {
+    const [result] = await matchUploadedExportDocuments({
+      attachments: [attachment({ documentType: 'packing_list' })],
+      profile: { ...profile, measurement: '0.369' } as TradeProfile,
+      items,
+      dependencies: deps(extracted({ measurement: '0.4 CBM' })),
+    });
+    expect(result.rows.find((row) => row.label === '용적(CBM)')?.status).toBe('match');
+  });
+
+  it('CBM은 계산값이라 업로드 서류 값으로 덮어쓸 수 없다(computed)', async () => {
+    const [result] = await matchUploadedExportDocuments({
+      attachments: [attachment({ documentType: 'packing_list' })],
+      profile: { ...profile, measurement: '0.369' } as TradeProfile,
+      items,
+      dependencies: deps(extracted({ measurement: '0.350' })),
+    });
+    expect(result.rows.find((row) => row.label === '용적(CBM)')?.computed).toBe(true);
+    expect(result.rows.find((row) => row.label === '순중량')?.computed).toBeUndefined();
+  });
+
   it('서류의 N/A·대시·미기재 표기는 불일치가 아니라 확인 불가로 둔다', async () => {
     const [result] = await matchUploadedExportDocuments({
       attachments: [attachment()],

@@ -8,8 +8,17 @@ import {
   OTHER_FOREIGN_PORT_VALUE,
   normalizeExportPortValue,
 } from '../constants/ports';
-import type { ExportDeclarationInfo, FreightTerms, Incoterms, NumericInput, ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
+import type { ExportDeclarationInfo, FreightTerms, Incoterms, NumericInput, PackageDimension, PackageDimensionUnit, ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
 import { deriveFreightTerms, isFreightTermsUnusual, FREIGHT_TERMS_LABEL } from '../utils/freightTerms';
+import {
+  createPackageDimension,
+  DEFAULT_PACKAGE_DIMENSION_UNIT,
+  formatCbm,
+  PACKAGE_DIMENSION_UNIT_OPTIONS,
+  packageDimensionCbm,
+  totalPackageBoxes,
+  totalPackageCbm,
+} from '../utils/packageCbm';
 import type { TradeAttachment } from '../types/tradeFormData';
 import CountrySelect from './CountrySelect';
 import TradeAttachmentUploader from './TradeAttachmentUploader';
@@ -327,6 +336,38 @@ export default function ShipperWorkspaceForm({
     ? OTHER_PACKAGE_TYPE_VALUE
     : knownPackageType ?? '';
 
+  // 포장 규격 → CBM 자동 계산. 규격 줄이 없으면 첫 줄을 빈 줄로 보여준다.
+  const dimensionUnit = profile.packageDimensionUnit ?? DEFAULT_PACKAGE_DIMENSION_UNIT;
+  const dimensionRows = profile.packageDimensions?.length
+    ? profile.packageDimensions
+    : [createPackageDimension('package-dimension-1')];
+  const computedCbm = totalPackageCbm(dimensionRows, dimensionUnit);
+  const computedBoxes = totalPackageBoxes(dimensionRows);
+
+  /**
+   * 규격이 바뀌면 CBM(measurement)과 포장 수량(박스 수)을 함께 다시 계산한다.
+   * 박스 수는 규격 줄 합계로 채우므로 같은 값을 두 번 입력할 일이 없다.
+   */
+  const patchDimensions = (rows: PackageDimension[], unit: PackageDimensionUnit = dimensionUnit) => {
+    const cbm = totalPackageCbm(rows, unit);
+    const boxes = totalPackageBoxes(rows);
+    onProfilePatch({
+      packageDimensions: rows,
+      packageDimensionUnit: unit,
+      measurement: cbm === null ? '' : formatCbm(cbm),
+      ...(boxes === null ? {} : { packageCount: boxes }),
+    });
+  };
+  const updateDimension = (id: string, patch: Partial<PackageDimension>) => {
+    patchDimensions(dimensionRows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  };
+  const addDimension = () => {
+    patchDimensions([...dimensionRows, createPackageDimension(`package-dimension-${crypto.randomUUID()}`)]);
+  };
+  const removeDimension = (id: string) => {
+    patchDimensions(dimensionRows.filter((row) => row.id !== id));
+  };
+
   useEffect(() => {
     let active = true;
     if (!userId) {
@@ -446,7 +487,7 @@ export default function ShipperWorkspaceForm({
       onSupplementalChange({ ...supplemental, incotermsPlace: '' });
     },
     5: () => {
-      onProfilePatch({ packageCount: '', eaPerBox: '', packageType: '', grossWeight: '', netWeight: '', weight: '', measurement: '', shippingMarks: '' });
+      onProfilePatch({ packageCount: '', eaPerBox: '', packageType: '', grossWeight: '', netWeight: '', weight: '', measurement: '', shippingMarks: '', packageDimensions: [], packageDimensionUnit: DEFAULT_PACKAGE_DIMENSION_UNIT });
       setForceCustomPackageType(false);
       onSupplementalChange({ ...supplemental, hasNoShippingMarks: false, shippingMarksBeforeNoMarks: '' });
     },
@@ -919,12 +960,55 @@ export default function ShipperWorkspaceForm({
         <summary className="form-section-summary"><span>5. 포장 정보</span>{sectionResetButton(5)}</summary>
         {fixNoticeCard(5)}
         <div className="form-grid">
-          <div className="form-group"><label className="form-label">포장 수량 (박스 수)</label><input type="number" min="0" className="form-input" value={profile.packageCount ?? ''} onChange={(e) => onProfilePatch({ packageCount: numericValue(e.target.value) })} /></div>
+          <div className="form-group"><label className="form-label">포장 수량 (박스 수)</label><input type="number" min="0" className="form-input" readOnly={computedBoxes !== null} value={computedBoxes ?? profile.packageCount ?? ''} onChange={(e) => onProfilePatch({ packageCount: numericValue(e.target.value) })} />{computedBoxes !== null && <small className="form-help">화물 크기의 박스 수를 모두 더한 값입니다.</small>}</div>
           <div className="form-group"><label className="form-label">박스당 수량 <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={profile.eaPerBox ?? ''} onChange={(e) => onProfilePatch({ eaPerBox: numericValue(e.target.value) })} placeholder="예: 20" /></div>
           <div className="form-group"><label className="form-label">포장 종류</label><select className="form-input" value={packageTypeSelection} onChange={(e) => { if (e.target.value === OTHER_PACKAGE_TYPE_VALUE) setForceCustomPackageType(true); else { setForceCustomPackageType(false); onProfilePatch({ packageType: e.target.value }); } }}><option value="">선택하세요</option>{SHIPPER_PACKAGE_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}<option value={OTHER_PACKAGE_TYPE_VALUE}>기타</option></select>{packageTypeSelection === OTHER_PACKAGE_TYPE_VALUE && <input className="form-input shipper-custom-package-input" aria-label="기타 포장종류 직접 입력" value={profile.packageType ?? ''} maxLength={24} onChange={(e) => onProfilePatch({ packageType: e.target.value.toUpperCase().replace(/[^A-Z0-9 ./-]/g, '') })} placeholder="영문 포장종류 직접 입력 (예: SACK)" />}</div>
+          <div className="form-group shipper-dimension-block">
+            <div className="shipper-dimension-head">
+              <label className="form-label">화물 크기</label>
+              <select
+                className="form-input shipper-dimension-unit"
+                aria-label="화물 크기 단위"
+                value={dimensionUnit}
+                onChange={(e) => patchDimensions(dimensionRows, e.target.value as PackageDimensionUnit)}
+              >
+                {PACKAGE_DIMENSION_UNIT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+            <small className="form-help">최종 포장 후 화물의 외부 크기를 입력해 주세요.</small>
+            {dimensionRows.map((row, index) => {
+              const rowCbm = packageDimensionCbm(row, dimensionUnit);
+              return (
+                <div className="shipper-dimension-row" key={row.id}>
+                  <input type="number" min="0" step="any" className="form-input" aria-label={`규격 ${index + 1} 가로`} placeholder="가로" value={row.width} onChange={(e) => updateDimension(row.id, { width: numericValue(e.target.value) })} />
+                  <span className="shipper-dimension-times">×</span>
+                  <input type="number" min="0" step="any" className="form-input" aria-label={`규격 ${index + 1} 세로`} placeholder="세로" value={row.length} onChange={(e) => updateDimension(row.id, { length: numericValue(e.target.value) })} />
+                  <span className="shipper-dimension-times">×</span>
+                  <input type="number" min="0" step="any" className="form-input" aria-label={`규격 ${index + 1} 높이`} placeholder="높이" value={row.height} onChange={(e) => updateDimension(row.id, { height: numericValue(e.target.value) })} />
+                  <span className="shipper-dimension-times">×</span>
+                  <input type="number" min="0" className="form-input" aria-label={`규격 ${index + 1} 박스 수`} placeholder="박스 수" value={row.boxes} onChange={(e) => updateDimension(row.id, { boxes: numericValue(e.target.value) })} />
+                  <span className="shipper-dimension-cbm">{rowCbm === null ? '' : `${formatCbm(rowCbm)} m³`}</span>
+                  <button type="button" className="btn btn-secondary btn-sm" disabled={dimensionRows.length === 1} aria-label={`규격 ${index + 1} 삭제`} onClick={() => removeDimension(row.id)}><Trash2 size={14} /></button>
+                </div>
+              );
+            })}
+          </div>
           <div className="form-group" data-field="weight"><label className="form-label">총중량 G.W. (kg)</label><input type="number" min="0" step="any" className="form-input" value={profile.grossWeight ?? ''} onChange={(e) => onProfilePatch({ grossWeight: numericValue(e.target.value), weight: numericValue(e.target.value) })} /></div>
           <div className="form-group"><label className="form-label">순중량 N.W. (kg)</label><input type="number" min="0" step="any" className="form-input" value={profile.netWeight ?? ''} onChange={(e) => onProfilePatch({ netWeight: numericValue(e.target.value) })} /></div>
-          <div className="form-group"><label className="form-label">CBM</label><input className="form-input" value={profile.measurement ?? ''} onChange={(e) => onProfilePatch({ measurement: e.target.value })} /></div>
+          <div className="form-group shipper-cbm-result" data-field="measurement">
+            <label className="form-label">CBM</label>
+            <output className="shipper-cbm-value">
+              {computedCbm === null ? '—' : `${formatCbm(computedCbm)} m³`}
+              <span className="shipper-cbm-badge">자동 계산</span>
+            </output>
+            <small className="form-help">
+              {computedCbm === null
+                ? '화물 크기(가로·세로·높이)와 박스 수를 넣으면 자동으로 계산됩니다.'
+                : '포장 규격에서 계산한 값입니다. 서류에도 이 값이 들어갑니다.'}
+            </small>
+          </div>
           <div className="form-group">
             <label className="form-label">Shipping Marks <span className="optional-label">(선택)</span></label>
             <textarea className="form-input" rows={3} value={profile.shippingMarks ?? ''} readOnly={supplemental.hasNoShippingMarks} onChange={(e) => onProfilePatch({ shippingMarks: e.target.value })} />
@@ -937,6 +1021,10 @@ export default function ShipperWorkspaceForm({
               });
               onProfilePatch({ shippingMarks: checked ? 'N/M' : supplemental.shippingMarksBeforeNoMarks });
             }} /> 화인 없음</label>
+          </div>
+          {/* 규격이 다른 포장을 더하는 버튼 — 포장 정보 맨 아래에 둔다. */}
+          <div className="shipper-dimension-add-row">
+            <button type="button" className="btn btn-secondary btn-sm shipper-dimension-add" onClick={addDimension}><Plus size={14} /> 다른 규격 화물 추가</button>
           </div>
         </div>
         {hasInvalidWeight && <div className="form-message error" role="alert">총중량 G.W.은 순중량 N.W.보다 작을 수 없습니다.</div>}

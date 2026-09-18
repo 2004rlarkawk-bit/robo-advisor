@@ -2634,7 +2634,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
           <div className="login-header">
             <div className="login-logo">🚢</div>
             <div className="login-brand">PortAI</div>
-            <div className="login-subtitle">스마트 물류 & 통관 자동화 플랫폼</div>
+            <div className="login-subtitle">수출입 서류 작성 · 검토 지원 플랫폼</div>
           </div>
           
           <form className="login-form" onSubmit={handleMemberLogin}>
@@ -4106,7 +4106,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                               {match.rows.map((row) => {
                                 // 불일치 + 업로드 값이 있을 때만 두 값을 눌러서 고를 수 있다.
                                 const key = `${match.attachmentId}::${row.field}`;
-                                const pickable = row.status === 'mismatch' && !!row.uploadedValue;
+                                // 계산값(CBM)은 서류 값으로 덮어쓸 수 없다 — 포장 규격을 고쳐야 한다.
+                                const pickable = row.status === 'mismatch' && !!row.uploadedValue && !row.computed;
                                 const choice = matchChoices[key];
                                 const renderValue = (side: MatchChoice, value: string) => {
                                   if (!pickable) return value || '—';
@@ -4142,6 +4143,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                       {row.status === 'mismatch' && (
                                         <div className="rv-match-fix">
                                           <span className="rv-match-badge bad">불일치</span>
+                                          {row.computed && (
+                                            <span className="rv-match-pick-state">포장 정보의 화물 크기를 확인해 주세요</span>
+                                          )}
                                           {pickable && (
                                             <span className="rv-match-pick-state">
                                               {matchBusyKey === key ? '품명을 영문으로 정리하는 중…'

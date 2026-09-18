@@ -144,7 +144,7 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
         <div className="login-header">
           <div className="login-logo">🚢</div>
           <div className="login-brand">PortAI</div>
-          <div className="login-subtitle">스마트 물류 &amp; 통관 자동화 플랫폼</div>
+          <div className="login-subtitle">수출입 서류 작성 · 검토 지원 플랫폼</div>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit}>
