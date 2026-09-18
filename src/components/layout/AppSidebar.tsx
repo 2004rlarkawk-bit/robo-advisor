@@ -78,7 +78,7 @@ export default function AppSidebar({ activeMenu, collapsed, role, onNavigate, on
         <div className="logo-icon">🚢</div>
         <div>
           <div className="logo-text">PortAI</div>
-          <div className="logo-sub">스마트 물류 & 통관 자동화 플랫폼</div>
+          <div className="logo-sub">수출입 서류 작성 · 검토 지원 플랫폼</div>
         </div>
       </div>
 
