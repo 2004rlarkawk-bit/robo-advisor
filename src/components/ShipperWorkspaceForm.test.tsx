@@ -539,7 +539,7 @@ describe('화주용 통관 입력 폼', () => {
       await Promise.resolve();
     });
 
-    expect(rendered.container.textContent).toContain('높은 일치 가능성');
+    expect(rendered.container.textContent).toContain('품목정보 기준 우선 추천 후보');
     expect(rendered.container.textContent).not.toContain('94%');
     expect(rendered.onItemsChange).not.toHaveBeenCalled();
 

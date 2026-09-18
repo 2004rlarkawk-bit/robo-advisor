@@ -38,7 +38,7 @@ describe('개발 테스트 데이터', () => {
     )).toEqual({ text: 'existing', count: 0, enabled: false, blank: 'filled' });
   });
 
-  it('완벽 테스트는 기존 유효값을 보존하고 미래 날짜를 채운다', () => {
+  it('정상 시나리오 테스트는 기존 유효값을 보존하고 미래 날짜를 채운다', () => {
     const result = createPerfectTestProfile(
       { ...emptyProfile, companyName: '기존 회사' },
       new Date('2026-07-14T00:00:00.000Z'),
@@ -62,7 +62,7 @@ describe('개발 테스트 데이터', () => {
     expect(result.departureDate).toBe('');
   });
 
-  it('완벽 테스트 프로필은 실제 검증에서 차단 이슈가 없다', async () => {
+  it('정상 시나리오 테스트 프로필은 실제 검증에서 차단 이슈가 없다', async () => {
     const result = await new OrchestratorAgent().run({
       profile: createPerfectTestProfile(emptyProfile, new Date('2026-07-14T00:00:00.000Z')),
       useLLM: false,
