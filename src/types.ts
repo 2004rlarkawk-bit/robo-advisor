@@ -14,6 +14,25 @@ export type Incoterms =
 
 export type NumericInput = number | '';
 
+/** 포장 규격 입력 단위 — 국내 포장명세는 cm가 기본이고, 미국 거래 서류는 inch로 적혀 온다. */
+export type PackageDimensionUnit = 'cm' | 'm' | 'mm' | 'inch';
+
+/**
+ * 최종 포장 후 화물 외부 크기 한 규격. 크기가 다른 포장이 섞여 있으면 여러 줄로 넣는다.
+ * CBM은 이 값들로 계산하므로(utils/packageCbm) 화주가 CBM을 직접 적지 않는다.
+ */
+export interface PackageDimension {
+  id: string;
+  /** 가로 */
+  width: NumericInput;
+  /** 세로 */
+  length: NumericInput;
+  /** 높이 */
+  height: NumericInput;
+  /** 이 규격의 박스 수 */
+  boxes: NumericInput;
+}
+
 /** 수출 포워더가 원천서류에서 확인하는 품목별 화물명세. */
 export interface ForwarderCargoItem {
   id: string;
@@ -154,7 +173,15 @@ export interface TradeProfile {
   eaPerBox?: NumericInput;
   netWeight?: NumericInput;
   grossWeight?: NumericInput;
+  /**
+   * 용적(CBM). 포장 규격(packageDimensions)에서 자동 계산한 값이 들어간다 —
+   * 화주가 직접 입력하는 칸은 없다.
+   */
   measurement?: string;
+  /** 포장 규격 입력 단위 (기본 cm) */
+  packageDimensionUnit?: PackageDimensionUnit;
+  /** 최종 포장 후 화물 외부 크기 — 규격이 다르면 여러 줄. CBM·포장 수량의 산출 근거. */
+  packageDimensions?: PackageDimension[];
   shippingMarks?: string;
 
   vesselOrFlight?: string;

@@ -3530,6 +3530,34 @@ body {
   margin-top: 0.5rem;
 }
 
+/* 포장 정보 — 화물 크기(가로·세로·높이 × 박스 수)와 자동 계산된 CBM */
+.shipper-dimension-block { grid-column: 1 / -1; }
+.shipper-dimension-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.shipper-dimension-head .form-label { margin: 0; }
+.shipper-dimension-unit { width: auto; min-width: 84px; padding-block: 4px; }
+.shipper-dimension-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px;
+}
+.shipper-dimension-row .form-input { width: 84px; flex: 0 0 auto; }
+.shipper-dimension-times { color: var(--text-secondary); font-size: 0.85rem; }
+.shipper-dimension-cbm {
+  min-width: 78px; font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);
+}
+.shipper-dimension-add-row { grid-column: 1 / -1; }
+.shipper-dimension-add { margin-top: 2px; }
+.shipper-cbm-value {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border: 1px solid var(--border-color-subtle); border-radius: 8px;
+  background: #f8fafc; font-size: 0.95rem; font-weight: 700; color: var(--text-primary);
+}
+.shipper-cbm-badge {
+  padding: 2px 8px; border-radius: 999px; background: #e0f2fe; color: #0369a1;
+  font-size: 0.68rem; font-weight: 700;
+}
+@media (max-width: 640px) {
+  .shipper-dimension-row .form-input { width: calc(50% - 16px); }
+}
+
 .optional-label,
 .form-help {
   color: var(--text-secondary);
