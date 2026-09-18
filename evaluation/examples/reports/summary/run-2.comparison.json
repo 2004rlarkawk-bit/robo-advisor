@@ -1,0 +1,91 @@
+{
+  "scorer": "comparison",
+  "runId": "example-run-2",
+  "generatedAt": "2026-09-18T03:02:07.948Z",
+  "confusion": {
+    "truePositive": 2,
+    "falsePositive": 0,
+    "falseNegative": 1,
+    "trueNegative": 6
+  },
+  "metrics": {
+    "precision": {
+      "numerator": 2,
+      "denominator": 2,
+      "value": 1
+    },
+    "recall": {
+      "numerator": 2,
+      "denominator": 3,
+      "value": 0.6666666666666666
+    },
+    "f1": 0.8
+  },
+  "counts": {
+    "comparableGold": 9,
+    "actualMismatch": 3,
+    "actualMatch": 6,
+    "notComparableGold": 2,
+    "mismatchPredictedOnNotComparable": 0,
+    "notComparablePredictedOnComparable": 0,
+    "missingPrediction": 0,
+    "invalidGoldRows": 0
+  },
+  "byField": {
+    "productDescription": {
+      "truePositive": 0,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "trueNegative": 2,
+      "recall": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      }
+    },
+    "quantity": {
+      "truePositive": 1,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "trueNegative": 1,
+      "recall": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1
+      }
+    },
+    "grossWeight": {
+      "truePositive": 0,
+      "falsePositive": 0,
+      "falseNegative": 1,
+      "trueNegative": 1,
+      "recall": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0
+      }
+    },
+    "packageCount": {
+      "truePositive": 0,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "trueNegative": 2,
+      "recall": {
+        "numerator": 0,
+        "denominator": 0,
+        "value": null
+      }
+    },
+    "originCountry": {
+      "truePositive": 1,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "trueNegative": 0,
+      "recall": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1
+      }
+    }
+  }
+}

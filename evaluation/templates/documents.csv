@@ -1,0 +1,4 @@
+document_id,trade_id,file_name,expected_type,dataset_split,source_kind,document_quality,notes
+EX-D-001,EX-T-001,example_doc_a.pdf,commercial_invoice,dev,synthetic-normal,original,가상 예시 - 실제 서류 아님
+EX-D-002,EX-T-001,example_doc_b.pdf,packing_list,dev,synthetic-normal,original,가상 예시 - 실제 서류 아님
+EX-D-003,EX-T-001,example_doc_c.pdf,bill_of_lading,dev,synthetic-normal,scan-100dpi,가상 예시 - 100dpi 변환본

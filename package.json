@@ -10,7 +10,13 @@
     "preview": "vite preview",
     "test": "vitest run",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "eval:test": "vitest run scripts/evaluation",
+    "eval:typecheck": "tsc --noEmit -p scripts/evaluation/tsconfig.json",
+    "eval:example": "tsx scripts/evaluation/run-example.ts",
+    "eval:report": "tsx scripts/evaluation/generate-report.ts",
+    "eval:aggregate": "tsx scripts/evaluation/aggregate-runs.ts",
+    "eval:probe": "tsx scripts/evaluation/probe-import-analysis.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.1",

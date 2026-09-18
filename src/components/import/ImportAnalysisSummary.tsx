@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { ChevronDown, Plus, Trash2 } from 'lucide-react';
-import { syncLegacyImportFields } from '../../services/importDocumentAnalysisService';
+import { IMPORT_DOCUMENT_TYPE_LABELS, syncLegacyImportFields } from '../../services/importDocumentAnalysisService';
 import type {
   ImportAnalysisResult,
+  ImportDocumentMeta,
   ImportExtractedFields,
   ImportItem,
   ImportParty,
@@ -14,7 +15,28 @@ interface Props {
   importerCompanyName?: string;
   hasCertificateOfOriginDocument?: boolean;
   readOnly?: boolean;
-  /** 문서 id → 파일명 매핑 — 검증 메시지의 근거 값 표기에 사용 */
+  /** 품목정보 참조 문서를 UUID 대신 '문서 유형 약칭 · 파일명'으로 보여주기 위한 첨부 문서 목록 */
+  documents?: ImportDocumentMeta[];
+}
+
+const SOURCE_TYPE_ABBR: Record<string, string> = {
+  commercial_invoice: 'C/I',
+  packing_list: 'P/L',
+  bill_of_lading: 'B/L',
+  certificate_of_origin: 'C/O',
+};
+
+/** 참조 문서 id를 사람이 읽는 이름으로 — 찾지 못하면 id를 노출하지 않는다. */
+function describeSourceDocuments(ids: string[], documents: ImportDocumentMeta[] = []): string {
+  if (!ids.length) return '참조 문서 정보가 없습니다';
+  const names = ids.map((id) => {
+    const document = documents.find((entry) => entry.id === id || entry.sourceId === id);
+    if (!document) return '참조 문서를 확인할 수 없습니다';
+    const typeLabel = SOURCE_TYPE_ABBR[document.type] ?? IMPORT_DOCUMENT_TYPE_LABELS[document.type] ?? '';
+    if (document.name?.trim()) return typeLabel ? `${typeLabel} · ${document.name}` : document.name;
+    return typeLabel || '참조 문서를 확인할 수 없습니다';
+  });
+  return Array.from(new Set(names)).join(', ');
 }
 
 const PARTY_FIELDS: Array<[keyof ImportParty, string]> = [
@@ -73,6 +95,7 @@ export default function ImportAnalysisSummary({
   importerCompanyName,
   hasCertificateOfOriginDocument = false,
   readOnly = false,
+  documents = [],
 }: Props) {
   const [open, setOpen] = useState(true);
   const fields = analysis.extracted;
@@ -221,7 +244,7 @@ export default function ImportAnalysisSummary({
             <TextField label="통화" value={item.currency} onChange={(value) => setItem(item.id, 'currency', value)} />
             <TextField label="품목 금액" value={item.amount} onChange={(value) => setItem(item.id, 'amount', value)} />
           </div>
-          <small>추출 출처: {item.sourceDocumentIds.length ? item.sourceDocumentIds.join(', ') : '첨부문서에서 출처 식별값을 확인할 수 없음'}</small>
+          <small className="import-item-source">품목정보 참조 문서: {describeSourceDocuments(item.sourceDocumentIds, documents)}</small>
         </fieldset>
       ))}
       </details>

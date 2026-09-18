@@ -1,0 +1,319 @@
+{
+  "scorer": "field-extraction",
+  "runId": "example-run-3",
+  "normalizationVersion": "norm-v1",
+  "generatedAt": "2026-09-18T03:02:07.971Z",
+  "metrics": {
+    "strictFieldAccuracy": {
+      "numerator": 4,
+      "denominator": 19,
+      "value": 0.21052631578947367
+    },
+    "normalizedFieldAccuracy": {
+      "numerator": 17,
+      "denominator": 19,
+      "value": 0.8947368421052632
+    },
+    "missingRate": {
+      "numerator": 1,
+      "denominator": 19,
+      "value": 0.05263157894736842
+    },
+    "wrongExtractionRate": {
+      "numerator": 1,
+      "denominator": 19,
+      "value": 0.05263157894736842
+    }
+  },
+  "counts": {
+    "evaluableFields": 19,
+    "notApplicableFields": 1,
+    "valueOnNotApplicable": 0,
+    "missing": 1,
+    "wrongExtraction": 1,
+    "unknownModeRows": 0
+  },
+  "byField": {
+    "invoiceNo": {
+      "strict": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      },
+      "normalized": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      },
+      "missing": 0,
+      "wrong": 0
+    },
+    "invoiceDate": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 2,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      },
+      "missing": 0,
+      "wrong": 0
+    },
+    "exporter": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 2,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      },
+      "missing": 0,
+      "wrong": 0
+    },
+    "importer": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1
+      },
+      "missing": 0,
+      "wrong": 0
+    },
+    "productDescription": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1
+      },
+      "missing": 0,
+      "wrong": 0
+    },
+    "quantity": {
+      "strict": {
+        "numerator": 1,
+        "denominator": 2,
+        "value": 0.5
+      },
+      "normalized": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      },
+      "missing": 0,
+      "wrong": 0
+    },
+    "currency": {
+      "strict": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1
+      },
+      "normalized": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1
+      },
+      "missing": 0,
+      "wrong": 0
+    },
+    "totalAmount": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1
+      },
+      "missing": 0,
+      "wrong": 0
+    },
+    "grossWeight": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 2,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      },
+      "missing": 0,
+      "wrong": 0
+    },
+    "loadPort": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 2,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      },
+      "missing": 0,
+      "wrong": 0
+    },
+    "dischargePort": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0
+      },
+      "missing": 0,
+      "wrong": 1
+    },
+    "blNo": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0
+      },
+      "missing": 1,
+      "wrong": 0
+    },
+    "originCountry": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1
+      },
+      "missing": 0,
+      "wrong": 0
+    }
+  },
+  "byMode": {
+    "strict": {
+      "strict": {
+        "numerator": 3,
+        "denominator": 4,
+        "value": 0.75
+      },
+      "normalized": {
+        "numerator": 3,
+        "denominator": 4,
+        "value": 0.75
+      }
+    },
+    "date": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 2,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      }
+    },
+    "company_relaxed": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 3,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 3,
+        "denominator": 3,
+        "value": 1
+      }
+    },
+    "text_relaxed": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 2,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      }
+    },
+    "numeric": {
+      "strict": {
+        "numerator": 1,
+        "denominator": 3,
+        "value": 0.3333333333333333
+      },
+      "normalized": {
+        "numerator": 3,
+        "denominator": 3,
+        "value": 1
+      }
+    },
+    "numeric_with_unit": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 2,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      }
+    },
+    "port_locode": {
+      "strict": {
+        "numerator": 0,
+        "denominator": 3,
+        "value": 0
+      },
+      "normalized": {
+        "numerator": 2,
+        "denominator": 3,
+        "value": 0.6666666666666666
+      }
+    }
+  },
+  "company": {
+    "rows": 3,
+    "strict": {
+      "numerator": 0,
+      "denominator": 3,
+      "value": 0
+    },
+    "relaxed": {
+      "numerator": 3,
+      "denominator": 3,
+      "value": 1
+    }
+  }
+}

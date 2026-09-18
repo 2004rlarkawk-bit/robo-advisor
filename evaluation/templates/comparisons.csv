@@ -1,0 +1,4 @@
+trade_id,field_key,expected_result,expected_outlier_document_id,expected_values_json,notes
+EX-T-001,quantity,match,,"{""EX-D-001"":""1500"",""EX-D-002"":""1500""}",가상 예시
+EX-T-001,grossWeight,mismatch,EX-D-003,"{""EX-D-002"":""550 KG"",""EX-D-003"":""500 KG""}",의도적 불일치
+EX-T-001,insuredAmount,not_comparable,,{},보험증권 없음

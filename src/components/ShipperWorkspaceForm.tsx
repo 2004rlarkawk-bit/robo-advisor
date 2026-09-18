@@ -789,7 +789,7 @@ export default function ShipperWorkspaceForm({
                         <>
                           <div className="shipper-hs-suggestion-heading">
                             <strong>AI 추천 - 관세청 기반</strong>
-                            <small>관세청 공식 HS 품목분류 사전 12,469건과 대조해 검증한 추천입니다.</small>
+                            <small>관세청 공식 HS 품목분류 사전 12,469건에서 확인된 추천 후보입니다.</small>
                           </div>
                           <div className="shipper-hs-suggestion-list">
                             {state.suggestions.map((suggestion) => (
@@ -799,7 +799,7 @@ export default function ShipperWorkspaceForm({
                                     <strong>{suggestion.formattedCode}</strong>
                                     <span className={`shipper-hs-confidence${suggestion.confidenceLabel === '보통' ? ' is-medium' : ''}`}>
                                       {suggestion.confidenceLabel === '높음'
-                                        ? '높은 일치 가능성'
+                                        ? '품목정보 기준 우선 추천 후보'
                                         : '추가 확인 필요'}
                                     </span>
                                   </div>

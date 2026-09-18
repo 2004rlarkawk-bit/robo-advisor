@@ -1,0 +1,105 @@
+{
+  "runId": "example-run-1",
+  "fields": [
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "invoiceNo",
+      "predicted_value": "EX-INV-1001"
+    },
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "invoiceDate",
+      "predicted_value": "SEP. 30, 2026"
+    },
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "exporter",
+      "predicted_value": "Example Trading Co Ltd"
+    },
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "importer",
+      "predicted_value": "Sample Imports Corp."
+    },
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "productDescription",
+      "predicted_value": "example cotton shirt"
+    },
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "quantity",
+      "predicted_value": "1,500 PCS"
+    },
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "currency",
+      "predicted_value": "USD"
+    },
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "totalAmount",
+      "predicted_value": "14400"
+    },
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "grossWeight",
+      "predicted_value": "550.00 KGS"
+    },
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "loadPort",
+      "predicted_value": "BUSAN, KOREA"
+    },
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "dischargePort",
+      "predicted_value": "KRPUS"
+    },
+    {
+      "document_id": "trade:EX-T-001",
+      "field_key": "blNo",
+      "predicted_value": "EXBL0001"
+    },
+    {
+      "document_id": "trade:EX-T-002",
+      "field_key": "invoiceNo",
+      "predicted_value": "EX-INV-2002"
+    },
+    {
+      "document_id": "trade:EX-T-002",
+      "field_key": "invoiceDate",
+      "predicted_value": "2026/10/15"
+    },
+    {
+      "document_id": "trade:EX-T-002",
+      "field_key": "exporter",
+      "predicted_value": "SAMPLE EXPORT CO., LTD."
+    },
+    {
+      "document_id": "trade:EX-T-002",
+      "field_key": "quantity",
+      "predicted_value": "2400"
+    },
+    {
+      "document_id": "trade:EX-T-002",
+      "field_key": "grossWeight",
+      "predicted_value": "1,250 KG"
+    },
+    {
+      "document_id": "trade:EX-T-002",
+      "field_key": "originCountry",
+      "predicted_value": "Korea"
+    },
+    {
+      "document_id": "trade:EX-T-002",
+      "field_key": "loadPort",
+      "predicted_value": "Incheon Port"
+    },
+    {
+      "document_id": "trade:EX-T-002",
+      "field_key": "insuredAmount",
+      "predicted_value": ""
+    }
+  ]
+}

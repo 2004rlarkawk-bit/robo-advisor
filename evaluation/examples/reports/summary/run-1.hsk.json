@@ -1,0 +1,52 @@
+{
+  "scorer": "hsk",
+  "runId": "example-run-1",
+  "generatedAt": "2026-09-18T03:02:07.929Z",
+  "split": null,
+  "metrics": {
+    "top1": {
+      "numerator": 2,
+      "denominator": 3,
+      "value": 0.6666666666666666
+    },
+    "top3": {
+      "numerator": 3,
+      "denominator": 3,
+      "value": 1
+    }
+  },
+  "counts": {
+    "itemsWithReference": 3,
+    "itemsWithoutReference": 1,
+    "emptyRecommendation": 1,
+    "unofficialCandidateCodes": 1,
+    "nonTenDigitCandidateCodes": 0,
+    "prefixMatchedItems": 1
+  },
+  "byReferenceSource": {
+    "team_reference": {
+      "top1": {
+        "numerator": 1,
+        "denominator": 2,
+        "value": 0.5
+      },
+      "top3": {
+        "numerator": 2,
+        "denominator": 2,
+        "value": 1
+      }
+    },
+    "expert_review": {
+      "top1": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1
+      },
+      "top3": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1
+      }
+    }
+  }
+}

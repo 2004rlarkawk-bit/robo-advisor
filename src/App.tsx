@@ -3043,14 +3043,14 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   toolbar={IS_DEV_TEST_ENABLED ? (
                     <div className="dev-test-actions">
                       <span className="dev-badge">DEV</span>
-                      <button type="button" className="dev-test-button dev-test-button-perfect" onClick={handleFillPerfectTestData} disabled={isProcessing}>완벽 테스트</button>
+                      <button type="button" className="dev-test-button dev-test-button-perfect" onClick={handleFillPerfectTestData} disabled={isProcessing}>정상 시나리오 테스트</button>
                       <button type="button" className="dev-test-button dev-test-button-revision" onClick={handleFillRevisionTestData} disabled={isProcessing}>수정 필요 테스트</button>
                       {devTestMode && <button type="button" className="dev-test-disable" onClick={handleDisableDevTestMode}>테스트 모드 해제</button>}
                     </div>
                   ) : undefined}
                   statusContent={(
                     <>
-                      {devTestMode && <div className="dev-test-mode-label" role="status">DEV · {devTestMode === 'perfect' ? '완벽 테스트 모드' : '수정 필요 테스트 모드'}</div>}
+                      {devTestMode && <div className="dev-test-mode-label" role="status">DEV · {devTestMode === 'perfect' ? '정상 시나리오 테스트 모드' : '수정 필요 테스트 모드'}</div>}
                       {devTestMessage && <div className="form-message info" role="status">{devTestMessage}</div>}
                       {draftSaveLabel && (
                         <div className={`draft-save-status ${draftSaveStatus}`} role="status" aria-live="polite">
@@ -3071,13 +3071,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     {IS_DEV_TEST_ENABLED && (
                       <div className="dev-test-actions">
                         <span className="dev-badge">DEV</span>
-                        <button type="button" className="dev-test-button dev-test-button-perfect" onClick={handleFillPerfectTestData} disabled={isProcessing}>완벽 테스트</button>
+                        <button type="button" className="dev-test-button dev-test-button-perfect" onClick={handleFillPerfectTestData} disabled={isProcessing}>정상 시나리오 테스트</button>
                         <button type="button" className="dev-test-button dev-test-button-revision" onClick={handleFillRevisionTestData} disabled={isProcessing}>수정 필요 테스트</button>
                         {devTestMode && <button type="button" className="dev-test-disable" onClick={handleDisableDevTestMode}>테스트 모드 해제</button>}
                       </div>
                     )}
                   </div>
-                  {devTestMode && <div className="dev-test-mode-label" role="status">DEV · {devTestMode === 'perfect' ? '완벽 테스트 모드' : '수정 필요 테스트 모드'}</div>}
+                  {devTestMode && <div className="dev-test-mode-label" role="status">DEV · {devTestMode === 'perfect' ? '정상 시나리오 테스트 모드' : '수정 필요 테스트 모드'}</div>}
                   {devTestMessage && <div className="form-message info" role="status">{devTestMessage}</div>}
                   {draftSaveLabel && (
                     <div className={`draft-save-status ${draftSaveStatus}`} role="status" aria-live="polite">

@@ -1,0 +1,5 @@
+item_id,trade_id,description,material,composition,intended_use,reference_hsk,reference_source,dataset_split,notes
+EX-I-101,EX-T-001,EXAMPLE COTTON SHIRT,cotton,COTTON 100%,apparel,6105100000,team_reference,dev,가상 참조
+EX-I-102,EX-T-001,EXAMPLE VACUUM FLASK,stainless steel,,drinking bottle,9617001000,team_reference,dev,가상 참조
+EX-I-201,EX-T-002,SAMPLE WOOL OVERCOAT,wool,WOOL 80%,apparel,620120,expert_review,test,6자리 참조 - 앞자리 일치 채점
+EX-I-202,EX-T-002,SAMPLE CERAMIC MUG,ceramic,,kitchen,,team_reference,test,참조 HSK 없음 - 분모 제외

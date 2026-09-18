@@ -404,7 +404,7 @@ export function assessImportRisks(
     if (role === 'shipper' && !item.confirmedHSCode) add({ id: `hs-${item.id}`, level: 'high', item: `품목 ${index + 1} HS Code 미확정`, cause: item.documentHSCode ? '문서 HS Code가 있으나 사용자가 최종 확정하지 않았습니다.' : '문서 HS Code가 없고 추천 후보도 아직 확정되지 않았습니다.', recommendation: recommendationFor('hs'), relatedDocuments: sourceDocumentNames(item.sourceDocumentIds), fixes: [{ kind: 'hs', itemId: item.id }], status: 'unresolved' });
     const itemSuggestions = suggestions.filter((suggestion) => !suggestion.itemId || suggestion.itemId === item.id);
     if (itemSuggestions.length && Math.max(...itemSuggestions.map((suggestion) => suggestion.confidence)) < 0.7) {
-      add({ id: `hs-confidence-${item.id}`, level: 'medium', item: `품목 ${index + 1} HS Code 신뢰도 낮음`, cause: 'AI 추천 후보의 최고 신뢰도가 70% 미만입니다.', recommendation: '추천에 부족하다고 표시된 재질·용도·규격을 확인하고 관세사 검토를 받으세요.', relatedDocuments: sourceDocumentNames(item.sourceDocumentIds), fixes: [{ kind: 'hs', itemId: item.id }], status: 'unresolved' });
+      add({ id: `hs-confidence-${item.id}`, level: 'medium', item: `품목 ${index + 1} 추천 판단에 필요한 품목정보 부족`, cause: '추천 후보를 판단할 품목정보가 부족해 확정 근거가 약합니다.', recommendation: '추천에 부족하다고 표시된 재질·용도·규격을 확인하고 관세사 검토를 받으세요.', relatedDocuments: sourceDocumentNames(item.sourceDocumentIds), fixes: [{ kind: 'hs', itemId: item.id }], status: 'unresolved' });
     }
   });
   if (dutyError) {

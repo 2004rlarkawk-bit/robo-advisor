@@ -1,0 +1,12 @@
+trade_id,field_key,expected_result,expected_outlier_document_id,expected_values_json,notes
+EX-T-001,productDescription,match,,{},
+EX-T-001,quantity,match,,{},
+EX-T-001,grossWeight,match,,{},
+EX-T-001,packageCount,match,,{},
+EX-T-001,originCountry,not_comparable,,{},C/O 없음
+EX-T-002,productDescription,match,,{},
+EX-T-002,quantity,mismatch,EX-D-202,"{""EX-D-201"":""2400"",""EX-D-202"":""2000""}",의도적 불일치
+EX-T-002,grossWeight,mismatch,EX-D-203,"{""EX-D-202"":""1250 KG"",""EX-D-203"":""1200 KG""}",의도적 불일치
+EX-T-002,packageCount,match,,{},
+EX-T-002,originCountry,mismatch,EX-D-204,"{""EX-D-201"":""KOREA"",""EX-D-204"":""CHINA""}",의도적 불일치
+EX-T-002,insuredAmount,not_comparable,,{},보험증권 없음

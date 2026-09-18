@@ -56,3 +56,11 @@ packing_sample_*.xlsx
 .codex/
 *.hwpx
 /*.png
+
+# 평가(evaluation) — 실서류·실서류 정답·실행 원본은 절대 커밋하지 않는다
+evaluation/private/
+evaluation/results/raw/
+.env.evaluation.local
+portai-evaluation-private/
+**/real-documents/
+**/real-gold/

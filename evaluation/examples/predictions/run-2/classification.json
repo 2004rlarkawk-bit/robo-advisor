@@ -1,0 +1,34 @@
+{
+  "runId": "example-run-2",
+  "documents": [
+    {
+      "document_id": "EX-D-101",
+      "predicted_type": "commercial_invoice"
+    },
+    {
+      "document_id": "EX-D-102",
+      "predicted_type": "packing_list"
+    },
+    {
+      "document_id": "EX-D-103",
+      "predicted_type": "bill_of_lading"
+    },
+    {
+      "document_id": "EX-D-201",
+      "predicted_type": "commercial_invoice"
+    },
+    {
+      "document_id": "EX-D-202",
+      "predicted_type": "commercial_invoice"
+    },
+    {
+      "document_id": "EX-D-203",
+      "predicted_type": "bill_of_lading",
+      "error": null
+    },
+    {
+      "document_id": "EX-D-204",
+      "predicted_type": "certificate_of_origin"
+    }
+  ]
+}

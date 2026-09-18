@@ -1,0 +1,68 @@
+{
+  "scorer": "document-classification",
+  "runId": "example-run-3",
+  "generatedAt": "2026-09-18T03:02:07.963Z",
+  "split": null,
+  "metrics": {
+    "classificationAccuracy": {
+      "numerator": 6,
+      "denominator": 7,
+      "value": 0.8571428571428571
+    },
+    "processingSuccessRate": {
+      "numerator": 6,
+      "denominator": 7,
+      "value": 0.8571428571428571
+    }
+  },
+  "byExpectedType": {
+    "commercial_invoice": {
+      "numerator": 2,
+      "denominator": 2,
+      "value": 1
+    },
+    "packing_list": {
+      "numerator": 2,
+      "denominator": 2,
+      "value": 1
+    },
+    "bill_of_lading": {
+      "numerator": 1,
+      "denominator": 2,
+      "value": 0.5
+    },
+    "certificate_of_origin": {
+      "numerator": 1,
+      "denominator": 1,
+      "value": 1
+    }
+  },
+  "bySourceKind": {
+    "synthetic-normal": {
+      "numerator": 3,
+      "denominator": 3,
+      "value": 1
+    },
+    "synthetic-error": {
+      "numerator": 3,
+      "denominator": 4,
+      "value": 0.75
+    }
+  },
+  "confusionMatrix": {
+    "commercial_invoice": {
+      "commercial_invoice": 2
+    },
+    "packing_list": {
+      "packing_list": 2
+    },
+    "bill_of_lading": {
+      "bill_of_lading": 1,
+      "(error)": 1
+    },
+    "certificate_of_origin": {
+      "certificate_of_origin": 1
+    }
+  },
+  "unmatchedPredictionIds": []
+}
