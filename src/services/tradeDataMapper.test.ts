@@ -154,6 +154,34 @@ describe('TradeFormData v3 mapper', () => {
     }
   });
 
+  it('CBM 계산 근거인 화물 크기와 단위를 저장하고 그대로 복원한다', () => {
+    const packageDimensions = [
+      { id: 'd1', width: 60, length: 40, height: 30, boxes: 2 },
+      { id: 'd2', width: 50, length: 50, height: 50, boxes: 1 },
+    ];
+    const formData = tradeProfileToFormData(
+      { ...profile, packageDimensions, packageDimensionUnit: 'inch', measurement: '3.407' },
+      'shipper',
+    );
+    expect(formData.packaging.packageDimensions).toEqual(packageDimensions);
+    expect(formData.packaging.packageDimensionUnit).toBe('inch');
+
+    const restored = tradeFormDataToProfile(formData);
+    expect(restored.packageDimensions).toEqual(packageDimensions);
+    expect(restored.packageDimensionUnit).toBe('inch');
+    expect(restored.measurement).toBe('3.407');
+  });
+
+  it('화물 크기를 넣기 전 저장분은 규격 키 없이 예전처럼 복원한다', () => {
+    const formData = tradeProfileToFormData(profile, 'shipper');
+    expect(formData.packaging.packageDimensions).toBeUndefined();
+    expect(formData.packaging.packageDimensionUnit).toBeUndefined();
+
+    const restored = tradeFormDataToProfile(formData);
+    expect(restored.packageDimensions).toBeUndefined();
+    expect(restored.packageDimensionUnit).toBeUndefined();
+  });
+
   it('수출 포워더 다품목 화물명세를 form_data.items로 저장하고 그대로 복원한다', () => {
     const forwarderProfile: TradeProfile = {
       ...profile,
