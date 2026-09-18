@@ -2699,6 +2699,10 @@ body {
 /* 공식 분류명이 길어 '의/류'처럼 끊기지 않게 한 줄로 — 좁은 화면에선 말줄임, 전체는 마우스를 올리면 보인다 */
 .hs-suggestion strong { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hs-suggestion small { margin-top: 5px; color: var(--text-light); line-height: 1.5; }
+/* HSK 추천 정렬 기준 안내 — 후보 목록 아래 한 번만 나온다 */
+.import-hs-rank-note { display: block; margin-top: 9px; color: var(--text-light); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+/* 추출 출처 파일명이 길어도 카드 밖으로 넘치지 않게 */
+.import-item-source { display: block; margin-top: 10px; color: var(--text-light); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
 .import-table-wrap { overflow-x: auto; }
 .import-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .import-table th, .import-table td { padding: 11px; border-bottom: 1px solid var(--border-color); text-align: left; white-space: nowrap; }

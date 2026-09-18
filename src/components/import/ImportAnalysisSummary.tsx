@@ -15,7 +15,7 @@ interface Props {
   importerCompanyName?: string;
   hasCertificateOfOriginDocument?: boolean;
   readOnly?: boolean;
-  /** 추출 출처를 UUID 대신 '문서 유형 약칭 · 파일명'으로 보여주기 위한 첨부 문서 목록 */
+  /** 품목정보 참조 문서를 UUID 대신 '문서 유형 약칭 · 파일명'으로 보여주기 위한 첨부 문서 목록 */
   documents?: ImportDocumentMeta[];
 }
 
@@ -26,15 +26,15 @@ const SOURCE_TYPE_ABBR: Record<string, string> = {
   certificate_of_origin: 'C/O',
 };
 
-/** 출처 문서 id를 사람이 읽는 이름으로 — 찾지 못하면 id를 노출하지 않고 '출처 문서 확인 불가'. */
+/** 참조 문서 id를 사람이 읽는 이름으로 — 찾지 못하면 id를 노출하지 않는다. */
 function describeSourceDocuments(ids: string[], documents: ImportDocumentMeta[] = []): string {
-  if (!ids.length) return '첨부문서에서 출처를 확인할 수 없음';
+  if (!ids.length) return '참조 문서 정보가 없습니다';
   const names = ids.map((id) => {
     const document = documents.find((entry) => entry.id === id || entry.sourceId === id);
-    if (!document) return '출처 문서 확인 불가';
+    if (!document) return '참조 문서를 확인할 수 없습니다';
     const typeLabel = SOURCE_TYPE_ABBR[document.type] ?? IMPORT_DOCUMENT_TYPE_LABELS[document.type] ?? '';
     if (document.name?.trim()) return typeLabel ? `${typeLabel} · ${document.name}` : document.name;
-    return typeLabel || '출처 문서 확인 불가';
+    return typeLabel || '참조 문서를 확인할 수 없습니다';
   });
   return Array.from(new Set(names)).join(', ');
 }
@@ -244,7 +244,7 @@ export default function ImportAnalysisSummary({
             <TextField label="통화" value={item.currency} onChange={(value) => setItem(item.id, 'currency', value)} />
             <TextField label="품목 금액" value={item.amount} onChange={(value) => setItem(item.id, 'amount', value)} />
           </div>
-          <small>추출 출처: {describeSourceDocuments(item.sourceDocumentIds, documents)}</small>
+          <small className="import-item-source">품목정보 참조 문서: {describeSourceDocuments(item.sourceDocumentIds, documents)}</small>
         </fieldset>
       ))}
       </details>

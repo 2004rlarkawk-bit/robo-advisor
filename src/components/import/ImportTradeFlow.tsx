@@ -738,7 +738,7 @@ export default function ImportTradeFlow({
     setAnalysisLogs([]);
     setShowAnalysisConsole(true);
     pushAnalysisLog('Orchestrator Agent', '세액·의뢰서·리스크 산출 파이프라인 가동 시작...');
-    pushAnalysisLog('HSCode Agent', `품목 ${fields.items.length}건 HSK 코드 확정값 검증 완료`, 'success');
+    pushAnalysisLog('HSCode Agent', `품목 ${fields.items.length}건 HSK 선택값 확인 완료`, 'success');
     {
       const stages = [
         '관세율 조회 · 예상세액 계산 중...',
@@ -1295,7 +1295,7 @@ export default function ImportTradeFlow({
                       ))}
                     </div>
                     {candidates.length > 0 && (
-                      <small className="import-hs-rank-note">관세청 HSK 공식 후보 중 입력된 품목정보와의 관련성을 기준으로 정렬한 결과입니다. 최종 품목분류는 사용자 또는 전문가의 확인이 필요합니다.</small>
+                      <small className="import-hs-rank-note">관세청 HSK 목록에 존재하는 후보 중 입력된 품목정보와의 관련성을 기준으로 정렬한 결과입니다. 최종 품목분류는 사용자 또는 전문가의 확인이 필요합니다.</small>
                     )}
                     {additionalInformation.length > 0 && (
                       <div className="import-hs-additional">
