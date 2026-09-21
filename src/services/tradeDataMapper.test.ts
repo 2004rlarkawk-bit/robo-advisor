@@ -172,6 +172,15 @@ describe('TradeFormData v3 mapper', () => {
     expect(restored.measurement).toBe('3.407');
   });
 
+  it('CBM을 직접 적어 넣은 표시도 저장하고 복원한다', () => {
+    const formData = tradeProfileToFormData(
+      { ...profile, measurement: '0.5', measurementManual: true },
+      'shipper',
+    );
+    expect(formData.packaging.measurementManual).toBe(true);
+    expect(tradeFormDataToProfile(formData).measurementManual).toBe(true);
+  });
+
   it('화물 크기를 넣기 전 저장분은 규격 키 없이 예전처럼 복원한다', () => {
     const formData = tradeProfileToFormData(profile, 'shipper');
     expect(formData.packaging.packageDimensions).toBeUndefined();

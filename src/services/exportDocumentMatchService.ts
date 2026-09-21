@@ -210,7 +210,8 @@ function buildRows(
       add('packageType', '포장 종류', extracted.packageUnit, profile.packageType ?? '');
       add('netWeight', '순중량', extracted.netWeight, text(profile.netWeight));
       add('grossWeight', '총중량', extracted.grossWeight, text(profile.grossWeight || profile.weight));
-      add('measurement', '용적(CBM)', extracted.measurement, profile.measurement ?? '', { computed: true });
+      // 직접 적어 넣은 CBM은 고칠 칸이 있으니 서류 값 반영을 열어 준다.
+      add('measurement', '용적(CBM)', extracted.measurement, profile.measurement ?? '', { computed: !profile.measurementManual });
       break;
     case 'transport_request':
       partiesRows();

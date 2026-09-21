@@ -343,6 +343,11 @@ export default function ShipperWorkspaceForm({
     : [createPackageDimension('package-dimension-1')];
   const computedCbm = totalPackageCbm(dimensionRows, dimensionUnit);
   const computedBoxes = totalPackageBoxes(dimensionRows);
+  // 화주가 CBM을 직접 적어 넣으면(포워더 실측값 등) 규격이 바뀌어도 그 값을 지키고, 배지로 알린다.
+  const manualCbm = profile.measurementManual === true;
+  const cbmFieldValue = manualCbm
+    ? profile.measurement ?? ''
+    : computedCbm === null ? '' : formatCbm(computedCbm);
 
   /**
    * 규격이 바뀌면 CBM(measurement)과 포장 수량(박스 수)을 함께 다시 계산한다.
@@ -354,7 +359,7 @@ export default function ShipperWorkspaceForm({
     onProfilePatch({
       packageDimensions: rows,
       packageDimensionUnit: unit,
-      measurement: cbm === null ? '' : formatCbm(cbm),
+      ...(manualCbm ? {} : { measurement: cbm === null ? '' : formatCbm(cbm) }),
       ...(boxes === null ? {} : { packageCount: boxes }),
     });
   };
@@ -487,7 +492,7 @@ export default function ShipperWorkspaceForm({
       onSupplementalChange({ ...supplemental, incotermsPlace: '' });
     },
     5: () => {
-      onProfilePatch({ packageCount: '', eaPerBox: '', packageType: '', grossWeight: '', netWeight: '', weight: '', measurement: '', shippingMarks: '', packageDimensions: [], packageDimensionUnit: DEFAULT_PACKAGE_DIMENSION_UNIT });
+      onProfilePatch({ packageCount: '', eaPerBox: '', packageType: '', grossWeight: '', netWeight: '', weight: '', measurement: '', measurementManual: false, shippingMarks: '', packageDimensions: [], packageDimensionUnit: DEFAULT_PACKAGE_DIMENSION_UNIT });
       setForceCustomPackageType(false);
       onSupplementalChange({ ...supplemental, hasNoShippingMarks: false, shippingMarksBeforeNoMarks: '' });
     },
@@ -998,16 +1003,39 @@ export default function ShipperWorkspaceForm({
           <div className="form-group" data-field="weight"><label className="form-label">총중량 G.W. (kg)</label><input type="number" min="0" step="any" className="form-input" value={profile.grossWeight ?? ''} onChange={(e) => onProfilePatch({ grossWeight: numericValue(e.target.value), weight: numericValue(e.target.value) })} /></div>
           <div className="form-group"><label className="form-label">순중량 N.W. (kg)</label><input type="number" min="0" step="any" className="form-input" value={profile.netWeight ?? ''} onChange={(e) => onProfilePatch({ netWeight: numericValue(e.target.value) })} /></div>
           <div className="form-group shipper-cbm-result" data-field="measurement">
-            <label className="form-label">CBM</label>
-            <output className="shipper-cbm-value">
-              {computedCbm === null ? '—' : `${formatCbm(computedCbm)} m³`}
-              <span className="shipper-cbm-badge">자동 계산</span>
-            </output>
+            <div className="shipper-cbm-head">
+              <label className="form-label" htmlFor="shipper-cbm-input">CBM (m³)</label>
+              <span className={`shipper-cbm-badge${manualCbm ? ' is-manual' : ''}`}>{manualCbm ? '직접 입력' : '자동 계산'}</span>
+            </div>
+            <input
+              id="shipper-cbm-input"
+              type="number"
+              min="0"
+              step="any"
+              className="form-input"
+              value={cbmFieldValue}
+              placeholder={computedCbm === null ? '화물 크기를 넣으면 자동 계산' : formatCbm(computedCbm)}
+              onChange={(e) => onProfilePatch({ measurement: e.target.value, measurementManual: true })}
+            />
             <small className="form-help">
-              {computedCbm === null
-                ? '화물 크기(가로·세로·높이)와 박스 수를 넣으면 자동으로 계산됩니다.'
-                : '포장 규격에서 계산한 값입니다. 서류에도 이 값이 들어갑니다.'}
+              {manualCbm
+                ? '직접 적어 넣은 값입니다. 화물 크기를 고쳐도 이 값이 그대로 서류에 들어갑니다.'
+                : computedCbm === null
+                  ? '화물 크기(가로·세로·높이)와 박스 수를 넣으면 자동으로 계산됩니다. 실측값이 있으면 직접 적어도 됩니다.'
+                  : '포장 규격에서 계산한 값입니다. 고쳐 쓰면 적은 값이 그대로 서류에 들어갑니다.'}
             </small>
+            {manualCbm && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm shipper-cbm-reset"
+                onClick={() => onProfilePatch({
+                  measurement: computedCbm === null ? '' : formatCbm(computedCbm),
+                  measurementManual: false,
+                })}
+              >
+                <RotateCcw size={13} /> 계산값으로 되돌리기
+              </button>
+            )}
           </div>
           <div className="form-group">
             <label className="form-label">Shipping Marks <span className="optional-label">(선택)</span></label>

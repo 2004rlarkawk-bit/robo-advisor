@@ -148,6 +148,8 @@ export interface TradeFormPackaging {
   grossWeight: NumericInput | string;
   /** 포장 규격에서 계산한 CBM. 계산 근거는 packageDimensions 에 함께 저장한다. */
   measurement: string;
+  /** CBM을 직접 적어 넣었는지. 없으면 규격에서 계산한 값으로 본다. */
+  measurementManual?: boolean;
   /** 화물 외부 크기 — 저장했다 이어서 작성할 때 CBM을 다시 계산하려면 근거가 남아 있어야 한다. */
   packageDimensions?: PackageDimension[];
   /** 화물 크기 입력 단위. 규격을 넣기 전 저장분에는 키가 없다. */

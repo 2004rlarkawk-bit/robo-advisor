@@ -684,14 +684,62 @@ describe('포장 정보 — 화물 크기 기반 CBM 자동 계산', () => {
   const dimensionInput = (rendered: { container: HTMLDivElement }, label: string) =>
     rendered.container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
 
-  it('CBM은 직접 입력칸 없이 계산 결과로만 보여준다', () => {
+  const cbmInput = (rendered: { container: HTMLDivElement }) =>
+    rendered.container.querySelector<HTMLInputElement>('#shipper-cbm-input');
+
+  it('계산한 CBM을 입력칸에 채워 보여주고 자동 계산이라고 알린다', () => {
     const rendered = renderForm([firstItem], false, {
       packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
     });
     const cbmGroup = rendered.container.querySelector('[data-field="measurement"]');
-    expect(cbmGroup?.textContent).toContain('0.369 m³');
     expect(cbmGroup?.textContent).toContain('자동 계산');
-    expect(cbmGroup?.querySelector('input')).toBeNull();
+    expect(cbmInput(rendered)?.value).toBe('0.369');
+    expect(cbmInput(rendered)?.readOnly).toBe(false);
+  });
+
+  it('CBM을 직접 고치면 직접 입력으로 표시하고 그 값을 그대로 넘긴다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    const input = cbmInput(rendered);
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, '0.5');
+      input!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ measurement: '0.5', measurementManual: true });
+  });
+
+  it('직접 입력한 CBM은 규격을 고쳐도 덮어쓰지 않는다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+      measurement: '0.5',
+      measurementManual: true,
+    });
+    const cbmGroup = rendered.container.querySelector('[data-field="measurement"]');
+    expect(cbmGroup?.textContent).toContain('직접 입력');
+    expect(cbmInput(rendered)?.value).toBe('0.5');
+
+    const boxes = dimensionInput(rendered, '규격 1 박스 수');
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(boxes, '20');
+      boxes!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const calls = rendered.onProfilePatch.mock.calls;
+    const patch = calls[calls.length - 1]?.[0];
+    expect(patch).not.toHaveProperty('measurement');
+    expect(patch.packageCount).toBe(20);
+  });
+
+  it('[계산값으로 되돌리기]를 누르면 규격에서 계산한 값으로 되돌린다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+      measurement: '0.5',
+      measurementManual: true,
+    });
+    const reset = Array.from(rendered.container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('계산값으로 되돌리기'));
+    act(() => reset?.click());
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ measurement: '0.369', measurementManual: false });
   });
 
   it('화물 크기 안내문과 단위 선택(cm 기본)을 보여준다', () => {
@@ -724,7 +772,7 @@ describe('포장 정보 — 화물 크기 기반 CBM 자동 계산', () => {
         { id: 'dim-2', width: 60, length: 40, height: 30, boxes: 3 },
       ],
     });
-    expect(rendered.container.querySelector('[data-field="measurement"]')?.textContent).toContain('0.401 m³');
+    expect(rendered.container.querySelector<HTMLInputElement>('#shipper-cbm-input')?.value).toBe('0.401');
     const packageCount = rendered.container.querySelector<HTMLInputElement>('input[readonly][value="8"]');
     expect(packageCount).not.toBeNull();
   });
@@ -745,7 +793,7 @@ describe('포장 정보 — 화물 크기 기반 CBM 자동 계산', () => {
   it('크기를 아직 넣지 않으면 CBM은 계산하지 않고 안내만 보여준다', () => {
     const rendered = renderForm();
     const cbmGroup = rendered.container.querySelector('[data-field="measurement"]');
-    expect(cbmGroup?.textContent).toContain('—');
+    expect(rendered.container.querySelector<HTMLInputElement>('#shipper-cbm-input')?.value).toBe('');
     expect(cbmGroup?.textContent).toContain('박스 수를 넣으면 자동으로 계산됩니다');
   });
 });

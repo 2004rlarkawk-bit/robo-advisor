@@ -178,6 +178,8 @@ export interface TradeProfile {
    * 화주가 직접 입력하는 칸은 없다.
    */
   measurement?: string;
+  /** CBM을 화주가 직접 고쳤는지. true면 규격이 바뀌어도 적어 넣은 값을 유지한다. */
+  measurementManual?: boolean;
   /** 포장 규격 입력 단위 (기본 cm) */
   packageDimensionUnit?: PackageDimensionUnit;
   /** 최종 포장 후 화물 외부 크기 — 규격이 다르면 여러 줄. CBM·포장 수량의 산출 근거. */

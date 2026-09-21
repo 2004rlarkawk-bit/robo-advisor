@@ -3545,15 +3545,15 @@ body {
 }
 .shipper-dimension-add-row { grid-column: 1 / -1; }
 .shipper-dimension-add { margin-top: 2px; }
-.shipper-cbm-value {
-  display: flex; align-items: center; gap: 8px;
-  padding: 9px 12px; border: 1px solid var(--border-color-subtle); border-radius: 8px;
-  background: #f8fafc; font-size: 0.95rem; font-weight: 700; color: var(--text-primary);
-}
+.shipper-cbm-head { display: flex; align-items: center; gap: 8px; }
+.shipper-cbm-head .form-label { margin: 0; }
 .shipper-cbm-badge {
   padding: 2px 8px; border-radius: 999px; background: #e0f2fe; color: #0369a1;
   font-size: 0.68rem; font-weight: 700;
 }
+/* 직접 적어 넣은 CBM은 계산값과 구분되게 다른 색을 쓴다. */
+.shipper-cbm-badge.is-manual { background: #fef3c7; color: #92400e; }
+.shipper-cbm-reset { align-self: flex-start; margin-top: 4px; }
 @media (max-width: 640px) {
   .shipper-dimension-row .form-input { width: calc(50% - 16px); }
 }
