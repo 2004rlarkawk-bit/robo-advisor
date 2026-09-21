@@ -4764,7 +4764,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   ].map(([k, v]) => (
                                     <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '4px 0', fontSize: 12.5, borderTop: '1px solid #eef2f7' }}>
                                       <span style={{ color: '#64748b', flexShrink: 0 }}>{k}</span>
-                                      <span style={{ color: '#0f172a', fontWeight: 600, textAlign: 'right', wordBreak: 'break-all' }}>{v}</span>
+                                      <span style={{ color: '#0f172a', fontWeight: 600, textAlign: 'right', overflowWrap: 'anywhere' }}>{v}</span>
                                     </div>
                                   ))}
                                 </div>
