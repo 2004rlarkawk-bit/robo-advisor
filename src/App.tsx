@@ -1835,6 +1835,10 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     if (direction === 'import') {
       setNotificationTab(tab);
       setNotificationTradeId(tradeId);
+      // ForwarderImportWorkspace가 이미 떠 있으면 업무 목록을 마운트 시점에만 불러온 채 그대로
+      // 쓴다 — 그 뒤에 들어온 새 의뢰는 목록에 없어 열리지 않는다(첫 클릭만 되는 것처럼 보임).
+      // 의뢰 수락 시(onAccepted)와 같은 방법으로 강제 리마운트해 최신 목록으로 다시 연다.
+      setImportWorkspaceVersion((version) => version + 1);
     }
     // 수출은 건별 상세 화면이 없어(포워더가 의뢰를 자기 폼으로 가져와 작업), 수출 작업실(의뢰
     // 수신함이 있는 화면)까지만 연다 — tradeId는 쓰지 않는다.
