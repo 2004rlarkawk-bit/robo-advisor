@@ -2846,6 +2846,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 <IncomingTradeRequestsPanel />
               ) : (
                 <ShipperForwarderRequestsPanel
+                  currentUserId={user.id}
                   onOpenTrade={handleLoadSavedTradeFromDocumentManager}
                   onRevise={handleReviseReturnedImportTrade}
                 />

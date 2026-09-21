@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ClipboardList,
   FileWarning,
+  MessageSquare,
   MessageSquareReply,
   X,
   XCircle,
@@ -76,6 +77,12 @@ const PRESENTATION: Record<NotificationType, NotificationPresentation> = {
     icon: CheckCheck,
     tone: 'success',
   },
+  trade_message_received: {
+    title: '새 메시지가 도착했습니다',
+    fallbackDetail: '의뢰 대화에서 내용을 확인해 주세요.',
+    icon: MessageSquare,
+    tone: 'info',
+  },
 };
 
 const DEFAULT_PRESENTATION: NotificationPresentation = {
@@ -113,6 +120,13 @@ function payloadText(payload: Record<string, unknown>, ...keys: string[]): strin
 
 function notificationDetail(notification: NotificationRecord): string {
   const presentation = getPresentation(notification.type);
+  // 대화 알림은 회사명보다 메시지 미리보기가 더 유용하다.
+  if (notification.type === 'trade_message_received') {
+    const sender = payloadText(notification.payload, 'sender_company', 'sender_contact');
+    const preview = payloadText(notification.payload, 'preview');
+    const summary = [sender, preview].filter(Boolean).join(': ');
+    return summary || presentation.fallbackDetail;
+  }
   const company = payloadText(
     notification.payload,
     'requester_company',
@@ -126,10 +140,12 @@ function notificationDetail(notification: NotificationRecord): string {
   return summary || presentation.fallbackDetail;
 }
 
-function notificationTarget(notification: NotificationRecord): AppMenu {
+function notificationTarget(notification: NotificationRecord, role: WorkspaceRole): AppMenu {
   switch (notification.type) {
     case 'trade_request_received': return 'dashboard';
     case 'trade_return_replied': return 'dashboard';
+    // 대화는 포워더는 업무 화면, 화주는 의뢰 화면에서 연다.
+    case 'trade_message_received': return role === 'forwarder' ? 'dashboard' : 'requests';
     case 'trade_request_accepted':
     case 'trade_request_rejected':
     case 'trade_forwarder_completed':
@@ -269,7 +285,7 @@ export default function NotificationBell({
       setUnreadCount((count) => Math.max(0, count - 1));
       void markNotificationRead(notification.id).catch(() => void refresh(false));
     }
-    const target = notificationTarget(notification);
+    const target = notificationTarget(notification, role);
     if (onOpenNotification) onOpenNotification(notification, target);
     else onNavigate(target);
   };
