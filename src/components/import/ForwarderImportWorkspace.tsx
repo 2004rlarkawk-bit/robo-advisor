@@ -615,7 +615,6 @@ export default function ForwarderImportWorkspace({
                   {anBusy ? '생성 중…' : 'A/N 생성·다운로드'}
                 </button>
               )}
-              notice={documentsLocked ? undefined : '한영 병기 · 비용 제외 · 도착 정보 확인 후 사용'}
             />
 
             {/* 배차 의뢰서 — D/O를 받은 뒤 운송사에 보내는 서류.
