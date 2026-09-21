@@ -75,9 +75,14 @@ describe('groupTradeMessages', () => {
 });
 
 describe('formatMessageTime', () => {
-  it('한국 시간 오전·오후로 표기한다', () => {
+  it('한국 시간 오전·오후로 표기한다 (로캘 데이터에 기대지 않는다)', () => {
     expect(formatMessageTime('2026-09-21T09:47:00.000Z')).toBe('오후 6:47');
     expect(formatMessageTime('2026-09-21T00:05:00.000Z')).toBe('오전 9:05');
+  });
+
+  it('정오·자정 경계를 12시로 표기한다', () => {
+    expect(formatMessageTime('2026-09-21T03:00:00.000Z')).toBe('오후 12:00'); // KST 12:00
+    expect(formatMessageTime('2026-09-21T15:00:00.000Z')).toBe('오전 12:00'); // KST 00:00
   });
 
   it('읽을 수 없는 값은 빈 문자열', () => {

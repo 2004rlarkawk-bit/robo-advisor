@@ -39,18 +39,39 @@ function shiftDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 86_400_000);
 }
 
+/**
+ * 한국 시간 기준 연·월·일·시·분을 숫자로 뽑는다.
+ *
+ * 한국어 표기(오후 6:47, 2026년 9월 19일)를 ko-KR 로캘에 맡기지 않는 이유: 로캘 데이터는
+ * 실행 환경(Node 빌드·ICU)에 따라 달라 CI에서 'PM 6:47'이 나온 적이 있다. 숫자만 뽑고
+ * 한국어는 직접 붙여 어디서나 같은 문자열이 나오게 한다. (시간대 데이터는 로캘과 별개다.)
+ */
+function kstParts(date: Date): { year: string; month: string; day: string; hour: number; minute: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: KST, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  // hour12:false에서 자정은 환경에 따라 '24'로 나오기도 한다.
+  const hour = Number(value('hour')) % 24;
+  return { year: value('year'), month: value('month'), day: value('day'), hour, minute: value('minute') };
+}
+
 function dayLabel(date: Date, now: Date): string {
   const key = dayKey(date);
   if (key === dayKey(now)) return '오늘';
   if (key === dayKey(shiftDays(now, -1))) return '어제';
-  return new Intl.DateTimeFormat('ko-KR', { timeZone: KST, year: 'numeric', month: 'long', day: 'numeric' }).format(date);
+  const { year, month, day } = kstParts(date);
+  return `${year}년 ${Number(month)}월 ${Number(day)}일`;
 }
 
 /** 말풍선 옆에 붙는 시각 — 오후 6:47 */
 export function formatMessageTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('ko-KR', { timeZone: KST, hour: 'numeric', minute: '2-digit' }).format(date);
+  const { hour, minute } = kstParts(date);
+  const meridiem = hour < 12 ? '오전' : '오후';
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${meridiem} ${hour12}:${minute}`;
 }
 
 export function groupTradeMessages(messages: TradeMessage[], now: Date = new Date()): MessageDayGroup[] {
