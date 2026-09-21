@@ -3,6 +3,7 @@ import {
   ArrowRight,
   FileCheck2,
   FolderOpen,
+  MessageSquare,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -16,9 +17,11 @@ import { FORWARDER_STAGE_LABEL, type ForwarderCaseState } from '../../types/forw
 import type { ExternalForwarderRequest, TradeRequest } from '../../types/forwarderRequest';
 import { listExternalForwarderRequests } from '../../services/externalForwarderEmailService';
 import { listOutgoingTradeRequests } from '../../services/forwarderRequestService';
+import { listUnreadTradeMessageCounts } from '../../services/tradeMessageService';
 import { fetchSubmittedTrades } from '../../services/storageService';
 import { filterDocumentManagerTrades } from '../../services/tradeListPolicy';
 import ForwarderRequestModal from './ForwarderRequestModal';
+import TradeMessageThread from './TradeMessageThread';
 import '../../styles/forwarderRequest.css';
 
 type RequestFilter = 'all' | 'ready' | 'active' | 'done';
@@ -26,6 +29,8 @@ type RequestCategory = 'ready' | 'waiting' | 'progress' | 'done';
 type RequestTone = 'neutral' | 'warning' | 'info' | 'success' | 'danger';
 
 interface Props {
+  /** 대화에서 내 말풍선을 구분하는 데 쓴다. */
+  currentUserId: string;
   onOpenTrade: (trade: SavedTrade) => void;
   onRevise?: (trade: SavedTrade) => void;
 }
@@ -153,7 +158,7 @@ export function deriveTradeRequestView(
   };
 }
 
-export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }: Props) {
+export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTrade, onRevise }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [internalRequests, setInternalRequests] = useState<TradeRequest[]>([]);
   const [externalRequests, setExternalRequests] = useState<ExternalForwarderRequest[]>([]);
@@ -162,6 +167,17 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
   const [error, setError] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [requestTrade, setRequestTrade] = useState<SavedTrade | null>(null);
+  /** 대화창을 연 거래 — 의뢰(trade_request)는 렌더 시점에 다시 찾는다. */
+  const [threadTrade, setThreadTrade] = useState<SavedTrade | null>(null);
+  const [unreadByRequest, setUnreadByRequest] = useState<Record<string, number>>({});
+
+  const loadUnread = useCallback(async () => {
+    try {
+      setUnreadByRequest(await listUnreadTradeMessageCounts());
+    } catch (err) {
+      console.warn('안 읽은 메시지 수 조회 실패:', err);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -188,15 +204,16 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void loadUnread(); }, [loadUnread, internalRequests]);
 
-  const rows = useMemo(() => trades.map((trade) => ({
-    trade,
-    view: deriveTradeRequestView(
+  const rows = useMemo(() => trades.map((trade) => {
+    const internal = latestForTrade(internalRequests, trade.id);
+    return {
       trade,
-      latestForTrade(internalRequests, trade.id),
-      latestForTrade(externalRequests, trade.id),
-    ),
-  })), [trades, internalRequests, externalRequests]);
+      internal,
+      view: deriveTradeRequestView(trade, internal, latestForTrade(externalRequests, trade.id)),
+    };
+  }), [trades, internalRequests, externalRequests]);
 
   const counts = useMemo(() => ({
     all: rows.length,
@@ -280,8 +297,9 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
             <div className="shipper-request-table-head">
               <span>거래·문서</span><span>포워더·상태</span><span>작업</span>
             </div>
-            {filteredRows.map(({ trade, view }) => {
+            {filteredRows.map(({ trade, view, internal }) => {
               const profile = trade.profile;
+              const unread = internal ? unreadByRequest[internal.id] ?? 0 : 0;
               const reference = profile.blNo || profile.invoiceNo || profile.documentNo || `거래 ${trade.id.slice(0, 8)}`;
               const direction = trade.tradeDirection ?? profile.tradeType;
               return (
@@ -298,6 +316,11 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
                     {view.requestedAt && <span>의뢰 {formatDate(view.requestedAt)}</span>}
                   </div>
                   <div className="shipper-request-next">
+                    {internal && (
+                      <button type="button" className="shipper-request-action" onClick={() => setThreadTrade(trade)}>
+                        <MessageSquare size={15} /> 대화{unread > 0 && <span className="tm-badge" aria-label={`안 읽은 메시지 ${unread}건`}>{unread}</span>}
+                      </button>
+                    )}
                     {view.needsRevision && onRevise ? (
                       <button type="button" className="shipper-request-action is-danger" onClick={() => onRevise(trade)}>
                         <RotateCcw size={15} /> 문서 수정
@@ -340,6 +363,32 @@ export default function ShipperForwarderRequestsPanel({ onOpenTrade, onRevise }:
           </div>
         </div>
       )}
+
+      {threadTrade && (() => {
+        const internal = latestForTrade(internalRequests, threadTrade.id);
+        if (!internal) return null;
+        const closed = internal.status !== 'pending' && internal.status !== 'accepted';
+        return (
+          <div className="fwd-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setThreadTrade(null); }}>
+            <div className="fwd-modal tm-modal" role="dialog" aria-modal="true" aria-labelledby="thread-modal-title">
+              <div className="fwd-modal-head">
+                <div>
+                  <h2 id="thread-modal-title">{threadTrade.profile.itemName || '품목명 미입력'}</h2>
+                  <p>{closed ? '종료된 의뢰의 대화 기록입니다.' : '지정 포워더와 확인할 내용을 바로 주고받으세요.'}</p>
+                </div>
+                <button type="button" className="fwd-modal-close" aria-label="닫기" onClick={() => setThreadTrade(null)}><X size={22} /></button>
+              </div>
+              <TradeMessageThread
+                tradeRequestId={internal.id}
+                currentUserId={currentUserId}
+                counterpartLabel="지정 포워더"
+                readOnly={closed}
+                onMessagesChanged={() => void loadUnread()}
+              />
+            </div>
+          </div>
+        );
+      })()}
 
       {requestTrade && (
         <ForwarderRequestModal

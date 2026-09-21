@@ -39,6 +39,9 @@ import ForwarderIssueReview from './ForwarderIssueReview';
 import ForwarderDocumentThumbnail from './ForwarderDocumentThumbnail';
 import ForwarderReturnRequestContent, { buildReturnRequestLetter } from './ForwarderReturnRequestContent';
 import ForwarderRequestMessages from './ForwarderRequestMessages';
+import TradeMessageThread from '../forwarder/TradeMessageThread';
+import { listIncomingTradeRequests } from '../../services/forwarderRequestService';
+import type { TradeRequest } from '../../types/forwarderRequest';
 import { getInboxImporterName } from '../../utils/forwarderInbox';
 import '../../styles/forwarderPolish.css';
 import '../../styles/forwarderRequest.css';
@@ -111,6 +114,8 @@ export default function ForwarderImportWorkspace({
   onInitialTradeOpened,
 }: Props) {
   const [cases, setCases] = useState<ForwarderImportCase[] | null>(null);
+  /** 내가 받은 의뢰 목록 — 대화 스레드는 의뢰(trade_request) 단위라 케이스와 따로 든다. */
+  const [requests, setRequests] = useState<TradeRequest[]>([]);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -152,6 +157,13 @@ export default function ForwarderImportWorkspace({
     } finally {
       setRefreshing(false);
     }
+    // 의뢰 조회 실패는 업무 목록을 막지 않는다 — 대화 탭만 비워진다.
+    try {
+      setRequests(await listIncomingTradeRequests());
+    } catch (err) {
+      console.warn('받은 의뢰 조회 실패:', err);
+      setRequests([]);
+    }
   }, [includeOwnShipperTrades]);
 
   useEffect(() => {
@@ -169,6 +181,13 @@ export default function ForwarderImportWorkspace({
     () => cases?.find((item) => item.tradeId === selectedId) ?? null,
     [cases, selectedId],
   );
+
+  /** 선택한 건의 의뢰 — 수락된 것이 있으면 그것, 없으면 가장 최근 것. 직접 등록 건은 null. */
+  const selectedRequest = useMemo(() => {
+    if (!selected) return null;
+    const mine = requests.filter((item) => item.tradeId === selected.tradeId);
+    return mine.find((item) => item.status === 'accepted') ?? mine[0] ?? null;
+  }, [requests, selected]);
 
   useEffect(() => {
     setCustomsLookupStatus('');
@@ -370,7 +389,7 @@ export default function ForwarderImportWorkspace({
           <button type="button" aria-current={detailTab === 'clearance' ? 'page' : undefined} className={detailTab === 'clearance' ? 'is-active' : ''} onClick={() => setDetailTab('clearance')}>통관·운송</button>
         </nav>
 
-        {detailTab === 'messages' && <div className="fwd-message-toolbar"><span>화주와 주고받은 보완 요청 및 회신</span><button type="button" className="btn btn-secondary" disabled={refreshing} onClick={() => void load()}>{refreshing ? '확인 중…' : '새 회신 확인'}</button></div>}
+        {detailTab === 'messages' && <div className="fwd-message-toolbar"><span>화주와 주고받은 보완 요청·회신과 대화</span><button type="button" className="btn btn-secondary" disabled={refreshing} onClick={() => void load()}>{refreshing ? '확인 중…' : '새 회신 확인'}</button></div>}
 
         {detailTab === 'messages' && selected.returnRequest && (
           <ForwarderRequestMessages
@@ -384,7 +403,18 @@ export default function ForwarderImportWorkspace({
           />
         )}
 
-        {detailTab === 'messages' && !selected.returnRequest && (
+        {detailTab === 'messages' && selectedRequest && (
+          <section className="form-card import-card">
+            <TradeMessageThread
+              tradeRequestId={selectedRequest.id}
+              currentUserId={userId}
+              counterpartLabel={getInboxImporterName(selected) === '화주명 미입력' ? '화주 담당자' : `${getInboxImporterName(selected)} 담당자`}
+              readOnly={selectedRequest.status !== 'pending' && selectedRequest.status !== 'accepted'}
+            />
+          </section>
+        )}
+
+        {detailTab === 'messages' && !selected.returnRequest && !selectedRequest && (
           <section className="form-card import-card fwd-message-empty">
             <span className="fwd-message-empty-icon" aria-hidden="true"><Mail size={22} /></span>
             <div className="fwd-message-empty-copy">

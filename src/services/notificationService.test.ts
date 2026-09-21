@@ -41,7 +41,7 @@ describe('listNotifications', () => {
     fromMock.mockReturnValue(query);
 
     await listNotifications(20, 'forwarder');
-    expect(query.in).toHaveBeenCalledWith('type', ['trade_request_received', 'trade_return_replied']);
+    expect(query.in).toHaveBeenCalledWith('type', ['trade_request_received', 'trade_return_replied', 'trade_message_received']);
   });
 });
 
@@ -103,6 +103,7 @@ describe('role notification policy', () => {
       'trade_request_rejected',
       'trade_return_requested',
       'trade_forwarder_completed',
+      'trade_message_received',
     ]);
   });
 });
