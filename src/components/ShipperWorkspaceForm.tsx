@@ -14,6 +14,7 @@ import {
   createPackageDimension,
   DEFAULT_PACKAGE_DIMENSION_UNIT,
   formatCbm,
+  isCompletePackageDimension,
   PACKAGE_DIMENSION_UNIT_OPTIONS,
   packageDimensionCbm,
   totalPackageBoxes,
@@ -348,6 +349,28 @@ export default function ShipperWorkspaceForm({
   const cbmFieldValue = manualCbm
     ? profile.measurement ?? ''
     : computedCbm === null ? '' : formatCbm(computedCbm);
+  // 계산이 다시 돌았다는 걸 눈에 보이게 — 값이 바뀌는 순간 CBM 칸을 잠깐 강조한다.
+  const [cbmJustComputed, setCbmJustComputed] = useState(false);
+  const previousCbmValue = useRef(cbmFieldValue);
+  useEffect(() => {
+    if (previousCbmValue.current === cbmFieldValue) return;
+    previousCbmValue.current = cbmFieldValue;
+    if (manualCbm || !cbmFieldValue) return;
+    setCbmJustComputed(true);
+    const timer = window.setTimeout(() => setCbmJustComputed(false), 1100);
+    return () => window.clearTimeout(timer);
+  }, [cbmFieldValue, manualCbm]);
+
+  /** 계산 과정을 그대로 보여주는 식 — 값만 있을 때보다 계산됐다는 게 분명해진다. */
+  const completedDimensionRows = dimensionRows.filter(isCompletePackageDimension);
+  const cbmFormula = (() => {
+    if (manualCbm || computedCbm === null) return '';
+    if (completedDimensionRows.length === 1) {
+      const row = completedDimensionRows[0];
+      return `${row.width} × ${row.length} × ${row.height} ${dimensionUnit} × ${row.boxes}박스 ÷ 1,000,000`;
+    }
+    return `규격 ${completedDimensionRows.length}줄 합계`;
+  })();
 
   /**
    * 규격이 바뀌면 CBM(measurement)과 포장 수량(박스 수)을 함께 다시 계산한다.
@@ -369,8 +392,22 @@ export default function ShipperWorkspaceForm({
   const addDimension = () => {
     patchDimensions([...dimensionRows, createPackageDimension(`package-dimension-${crypto.randomUUID()}`)]);
   };
+  /**
+   * 규격 줄 삭제. 마지막 한 줄이면 줄 자체는 남기고 값만 비운다 —
+   * 지웠는데 아무 변화가 없으면 안 되므로 박스 수·CBM 자동값도 같이 지운다.
+   */
   const removeDimension = (id: string) => {
-    patchDimensions(dimensionRows.filter((row) => row.id !== id));
+    const remaining = dimensionRows.filter((row) => row.id !== id);
+    if (remaining.length > 0) {
+      patchDimensions(remaining);
+      return;
+    }
+    onProfilePatch({
+      packageDimensions: [createPackageDimension('package-dimension-1')],
+      packageDimensionUnit: dimensionUnit,
+      packageCount: '',
+      ...(manualCbm ? {} : { measurement: '' }),
+    });
   };
 
   useEffect(() => {
@@ -995,7 +1032,7 @@ export default function ShipperWorkspaceForm({
                   <span className="shipper-dimension-times">×</span>
                   <input type="number" min="0" className="form-input" aria-label={`규격 ${index + 1} 박스 수`} placeholder="박스 수" value={row.boxes} onChange={(e) => updateDimension(row.id, { boxes: numericValue(e.target.value) })} />
                   <span className="shipper-dimension-cbm">{rowCbm === null ? '' : `${formatCbm(rowCbm)} m³`}</span>
-                  <button type="button" className="btn btn-secondary btn-sm" disabled={dimensionRows.length === 1} aria-label={`규격 ${index + 1} 삭제`} onClick={() => removeDimension(row.id)}><Trash2 size={14} /></button>
+                  <button type="button" className="btn btn-secondary btn-sm" aria-label={`규격 ${index + 1} 삭제`} title="이 규격 지우기" onClick={() => removeDimension(row.id)}><Trash2 size={14} /></button>
                 </div>
               );
             })}
@@ -1004,19 +1041,25 @@ export default function ShipperWorkspaceForm({
           <div className="form-group"><label className="form-label">순중량 N.W. (kg)</label><input type="number" min="0" step="any" className="form-input" value={profile.netWeight ?? ''} onChange={(e) => onProfilePatch({ netWeight: numericValue(e.target.value) })} /></div>
           <div className="form-group shipper-cbm-result" data-field="measurement">
             <div className="shipper-cbm-head">
-              <label className="form-label" htmlFor="shipper-cbm-input">CBM (m³)</label>
-              <span className={`shipper-cbm-badge${manualCbm ? ' is-manual' : ''}`}>{manualCbm ? '직접 입력' : '자동 계산'}</span>
+              <label className="form-label" htmlFor="shipper-cbm-input">CBM</label>
+              <span className={`shipper-cbm-badge${manualCbm ? ' is-manual' : ''}${cbmJustComputed ? ' is-flash' : ''}`}>
+                {manualCbm ? '직접 입력' : cbmJustComputed ? '계산 완료' : '자동 계산'}
+              </span>
             </div>
-            <input
-              id="shipper-cbm-input"
-              type="number"
-              min="0"
-              step="any"
-              className="form-input"
-              value={cbmFieldValue}
-              placeholder={computedCbm === null ? '화물 크기를 넣으면 자동 계산' : formatCbm(computedCbm)}
-              onChange={(e) => onProfilePatch({ measurement: e.target.value, measurementManual: true })}
-            />
+            <div className={`shipper-cbm-field${cbmJustComputed ? ' is-updated' : ''}`}>
+              <input
+                id="shipper-cbm-input"
+                type="number"
+                min="0"
+                step="any"
+                className="form-input shipper-cbm-input"
+                value={cbmFieldValue}
+                placeholder="0.000"
+                onChange={(e) => onProfilePatch({ measurement: e.target.value, measurementManual: true })}
+              />
+              <span className="shipper-cbm-unit">m³</span>
+            </div>
+            {cbmFormula && <div className="shipper-cbm-formula" aria-hidden="true">{cbmFormula}</div>}
             <small className="form-help">
               {manualCbm
                 ? '직접 적어 넣은 값입니다. 화물 크기를 고쳐도 이 값이 그대로 서류에 들어갑니다.'

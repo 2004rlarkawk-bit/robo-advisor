@@ -697,6 +697,57 @@ describe('포장 정보 — 화물 크기 기반 CBM 자동 계산', () => {
     expect(cbmInput(rendered)?.readOnly).toBe(false);
   });
 
+  const clickDelete = (rendered: { container: HTMLDivElement }, label: string) => {
+    const button = rendered.container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    act(() => button?.click());
+    return button;
+  };
+
+  it('규격이 여러 줄이면 삭제한 줄만 빼고 다시 계산한다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [
+        { id: 'dim-1', width: 45, length: 20, height: 41, boxes: 5 },
+        { id: 'dim-2', width: 60, length: 40, height: 30, boxes: 3 },
+      ],
+    });
+    clickDelete(rendered, '규격 2 삭제');
+    const calls = rendered.onProfilePatch.mock.calls;
+    const patch = calls[calls.length - 1]?.[0];
+    expect(patch.packageDimensions).toHaveLength(1);
+    expect(patch.measurement).toBe('0.185');
+    expect(patch.packageCount).toBe(5);
+  });
+
+  it('마지막 한 줄을 삭제하면 값만 비우고 박스 수·CBM도 함께 지운다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    const button = clickDelete(rendered, '규격 1 삭제');
+    expect(button?.disabled).toBe(false);
+    const calls = rendered.onProfilePatch.mock.calls;
+    const patch = calls[calls.length - 1]?.[0];
+    expect(patch.packageDimensions).toHaveLength(1);
+    expect(patch.packageDimensions[0]).toMatchObject({ width: '', length: '', height: '', boxes: '' });
+    expect(patch.measurement).toBe('');
+    expect(patch.packageCount).toBe('');
+  });
+
+  it('계산에 쓴 식을 CBM 아래에 같이 보여준다', () => {
+    const single = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    expect(single.container.querySelector('.shipper-cbm-formula')?.textContent)
+      .toBe('45 × 20 × 41 cm × 10박스 ÷ 1,000,000');
+
+    const many = renderForm([firstItem], false, {
+      packageDimensions: [
+        { id: 'dim-1', width: 45, length: 20, height: 41, boxes: 5 },
+        { id: 'dim-2', width: 60, length: 40, height: 30, boxes: 3 },
+      ],
+    });
+    expect(many.container.querySelector('.shipper-cbm-formula')?.textContent).toBe('규격 2줄 합계');
+  });
+
   it('CBM을 직접 고치면 직접 입력으로 표시하고 그 값을 그대로 넘긴다', () => {
     const rendered = renderForm([firstItem], false, {
       packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
