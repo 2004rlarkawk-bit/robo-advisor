@@ -85,6 +85,7 @@ import {
   createGeneratedImportTrade,
   createCompletedImportTrade,
   fetchSavedTradeById,
+  fetchTradeDirection,
   markTradeAsSubmitted,
   reopenSubmittedImportTradeForRevision,
   updateGeneratedTrade,
@@ -104,6 +105,7 @@ import { decideGeneratedTradeWrite } from './services/tradePersistencePolicy';
 import { resolveWorkspaceRole, type WorkspaceRole } from './utils/workspaceRole';
 import { countShipperReturnRequests } from './services/forwarderCaseService';
 import type { NotificationRecord } from './types/forwarderRequest';
+import { resolveForwarderNotificationTarget } from './utils/forwarderNotificationTarget';
 import {
   applyMatchPatchToProfile,
   buildExportCrossChecks,
@@ -436,6 +438,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   // 포워더 수입 워크스페이스에서 [직접 등록]을 누르면 기존 업로드 플로우로 전환한다.
   const [forwarderDirectUpload, setForwarderDirectUpload] = useState(false);
   const [notificationTradeId, setNotificationTradeId] = useState<string | null>(null);
+  const [notificationTab, setNotificationTab] = useState<'review' | 'messages'>('messages');
   useEffect(() => {
     setForwarderDirectUpload(false);
   }, [tradeDirection, workspaceRole]);
@@ -1825,13 +1828,34 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     }
     setActiveMenu(menu);
   };
+  /** 포워더 알림 클릭 — 방향(수입/수출)까지 확인한 뒤 해당 화면을 연다. */
+  const openForwarderNotificationTarget = (direction: 'import' | 'export', tradeId: string, tab: 'review' | 'messages') => {
+    setTradeDirection(direction);
+    setForwarderDirectUpload(false);
+    if (direction === 'import') {
+      setNotificationTab(tab);
+      setNotificationTradeId(tradeId);
+    }
+    // 수출은 건별 상세 화면이 없어(포워더가 의뢰를 자기 폼으로 가져와 작업), 수출 작업실(의뢰
+    // 수신함이 있는 화면)까지만 연다 — tradeId는 쓰지 않는다.
+  };
+
   const handleOpenNotification = (notification: NotificationRecord, menu: AppMenu) => {
     handleAppNavigate(menu);
-    if (notification.type === 'trade_return_replied' && notification.tradeId) {
-      setTradeDirection('import');
-      setForwarderDirectUpload(false);
-      setNotificationTradeId(notification.tradeId);
+    if (workspaceRole !== 'forwarder') return;
+    const target = resolveForwarderNotificationTarget(notification);
+    if (!target) return;
+    if (target.direction) {
+      openForwarderNotificationTarget(target.direction, target.tradeId, target.tab);
+      return;
     }
+    // 예전 알림(payload에 direction 없음)은 거래를 조회해 방향을 확인한다.
+    void fetchTradeDirection(target.tradeId)
+      .then((direction) => openForwarderNotificationTarget(direction ?? 'import', target.tradeId, target.tab))
+      .catch((err) => {
+        console.warn('[알림] 거래 방향 조회 실패 — 수입으로 간주:', err);
+        openForwarderNotificationTarget('import', target.tradeId, target.tab);
+      });
   };
   loadSavedTradeRef.current = handleLoadSavedTrade;
 const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
@@ -2942,6 +2966,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     onDirectUpload={() => setForwarderDirectUpload(true)}
                     includeOwnShipperTrades={userProfile.service_role === 'integrated'}
                     initialTradeId={notificationTradeId}
+                    initialTab={notificationTab}
                     onInitialTradeOpened={() => setNotificationTradeId(null)}
                   />
                   : <ImportForwarderFlow
