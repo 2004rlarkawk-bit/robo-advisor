@@ -393,6 +393,7 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
       {requestTrade && (
         <ForwarderRequestModal
           trade={requestTrade}
+          currentUserId={currentUserId}
           onClose={() => setRequestTrade(null)}
           onSent={() => void load()}
           onViewRequests={() => {

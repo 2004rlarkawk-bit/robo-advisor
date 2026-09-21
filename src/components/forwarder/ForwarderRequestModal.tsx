@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import SentConfirmation from '../common/SentConfirmation';
+import ForwarderAutoAssign from './ForwarderAutoAssign';
 import type { SavedTrade } from '../../types';
 import { ATTACHABLE_DOCUMENT_LABELS, type AttachableDocumentType } from '../../types/forwarderRequest';
 import { searchForwarderByEmail, sendTradeRequest } from '../../services/forwarderRequestService';
@@ -15,11 +16,13 @@ interface Props {
   onSent?: () => void;
   /** 전송 완료 화면의 "요청 내역 보기" — 호출부에서 해당 거래의 요청 상태로 이동한다. */
   onViewRequests?: () => void;
+  /** 겸용 계정이 자기에게 배정된 경우 안내하려고 받는다. */
+  currentUserId?: string;
 }
 
 type Tab = 'internal' | 'external';
 
-export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRequests }: Props) {
+export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRequests, currentUserId }: Props) {
   const [tab, setTab] = useState<Tab>('internal');
 
   // 내부(회원) 검색 상태
@@ -142,6 +145,19 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
             <SentConfirmation title="요청을 보냈어요" message="포워더가 수락하면 알려드릴게요." actions={sentActions} />
           ) : (
             <>
+              <ForwarderAutoAssign
+                trade={trade}
+                currentUserId={currentUserId}
+                onAssigned={(candidate) => {
+                  setSearchError('');
+                  setSearchResult(candidate
+                    ? { id: candidate.id, companyName: candidate.companyName, contactName: candidate.contactName }
+                    : null);
+                }}
+              />
+
+              <details className="fwd-assign-manual">
+                <summary>담당자 이메일을 알고 있다면 직접 찾기</summary>
               <div className="fwd-field">
                 <label htmlFor="fwd-search-email">포워더 이메일</label>
                 <div className="fwd-search-row">
@@ -157,6 +173,7 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
                   </button>
                 </div>
               </div>
+              </details>
 
               {searchError && <div className="form-message error">{searchError}</div>}
 

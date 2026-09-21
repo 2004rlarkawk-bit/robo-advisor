@@ -16,6 +16,7 @@ vi.mock('../lib/supabase', () => ({
 
 import {
   acceptTradeRequest,
+  matchForwarderForTrade,
   cancelTradeRequest,
   rejectTradeRequest,
   searchForwarderByEmail,
@@ -141,5 +142,35 @@ describe('rejectTradeRequest / cancelTradeRequest', () => {
     const payload = query.update.mock.calls[0][0] as Record<string, unknown>;
     expect(Object.keys(payload).sort()).toEqual(['cancelled_at', 'status']);
     expect(payload.status).toBe('cancelled');
+  });
+});
+
+describe('matchForwarderForTrade', () => {
+  it('조건·난이도 우선 여부를 RPC로 넘기고 후보를 카멜케이스로 매핑한다', async () => {
+    rpcMock.mockResolvedValue({
+      data: [{
+        id: 'fwd-1', company_name: 'PortAI Forwarding', contact_name: 'Kim',
+        specialties: ['route_cn', 'cargo_cold'], matched_specialties: ['route_cn'],
+        active_count: 2, completed_count: 14,
+      }],
+      error: null,
+    });
+
+    const result = await matchForwarderForTrade('trade-1', ['route_cn'], true);
+    expect(rpcMock).toHaveBeenCalledWith('match_forwarder_for_trade', {
+      p_trade_id: 'trade-1', p_specialties: ['route_cn'], p_prefer_experienced: true,
+    });
+    expect(result).toEqual([{
+      id: 'fwd-1', companyName: 'PortAI Forwarding', contactName: 'Kim',
+      specialties: ['route_cn', 'cargo_cold'], matchedSpecialties: ['route_cn'],
+      activeCount: 2, completedCount: 14,
+    }]);
+  });
+
+  it('후보가 없으면 빈 목록, RPC 오류는 그대로 던진다', async () => {
+    rpcMock.mockResolvedValueOnce({ data: null, error: null });
+    await expect(matchForwarderForTrade('trade-1', [])).resolves.toEqual([]);
+    rpcMock.mockResolvedValueOnce({ data: null, error: { message: 'not owned' } });
+    await expect(matchForwarderForTrade('trade-1', [])).rejects.toEqual({ message: 'not owned' });
   });
 });
