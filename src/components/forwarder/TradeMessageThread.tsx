@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { MessageSquare, Send } from 'lucide-react';
+import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { RefreshCw, Send } from 'lucide-react';
 import type { TradeMessage, TradeMessageKind } from '../../types/forwarderRequest';
 import {
   listTradeMessages,
@@ -8,6 +8,7 @@ import {
   subscribeToTradeMessages,
   TRADE_MESSAGE_MAX_LENGTH,
 } from '../../services/tradeMessageService';
+import { formatMessageTime, groupTradeMessages } from '../../utils/tradeMessageGrouping';
 import '../../styles/forwarderRequest.css';
 
 interface Props {
@@ -17,7 +18,7 @@ interface Props {
   counterpartLabel: string;
   /** 거절·취소된 의뢰 — 읽기만 가능 */
   readOnly?: boolean;
-  /** 스레드 위에 고정으로 보여줄 내용(기존 보완 요청 카드 등) */
+  /** 대화 위에 고정으로 보여줄 내용(기존 보완 요청 카드 등) */
   pinned?: React.ReactNode;
   /** 메시지 목록이 바뀔 때(로드·수신·전송) 호출 — 상위의 배지 갱신용 */
   onMessagesChanged?: (messages: TradeMessage[]) => void;
@@ -28,21 +29,20 @@ const KIND_LABEL: Record<Exclude<TradeMessageKind, 'message'>, string> = {
   return_reply: '보완 회신',
 };
 
-function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString('ko-KR', {
-    timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-  });
-}
+/** 글자 수는 평소엔 숨기고 한도에 가까워질 때만 보여준다. */
+const COUNTER_VISIBLE_FROM = 200;
 
 function appendUnique(list: TradeMessage[], incoming: TradeMessage): TradeMessage[] {
   return list.some((item) => item.id === incoming.id) ? list : [...list, incoming];
 }
 
+function initialOf(label: string): string {
+  return label.trim().charAt(0) || '·';
+}
+
 /**
- * 의뢰 한 건의 화주↔포워더 대화. 메시지는 오래된 순으로 쌓이고, 상대 메시지는 열자마자 읽음 처리한다.
- * 실시간 구독이 끊겨도 "새로고침"으로 다시 받을 수 있다.
+ * 의뢰 한 건의 화주↔포워더 대화. 메신저처럼 날짜 구분선·연속 메시지 묶기·시각 표시를 쓰고,
+ * 상대 메시지는 열자마자 읽음 처리한다. 실시간 구독이 끊겨도 새로고침으로 다시 받을 수 있다.
  */
 export default function TradeMessageThread({
   tradeRequestId,
@@ -56,7 +56,8 @@ export default function TradeMessageThread({
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const listRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const changedRef = useRef(onMessagesChanged);
   changedRef.current = onMessagesChanged;
 
@@ -99,9 +100,17 @@ export default function TradeMessageThread({
   }), [tradeRequestId, currentUserId, markRead]);
 
   useEffect(() => {
-    const node = listRef.current;
+    const node = logRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [messages?.length]);
+
+  const resizeInput = () => {
+    const node = inputRef.current;
+    if (!node) return;
+    node.style.height = 'auto';
+    // 다섯 줄쯤에서 멈추고 그 뒤로는 안에서 스크롤한다.
+    node.style.height = `${Math.min(node.scrollHeight, 116)}px`;
+  };
 
   const submit = async () => {
     const text = draft.trim();
@@ -116,6 +125,7 @@ export default function TradeMessageThread({
         return next;
       });
       setDraft('');
+      if (inputRef.current) inputRef.current.style.height = 'auto';
     } catch (err) {
       setError(err instanceof Error ? err.message : '메시지를 보내지 못했습니다.');
     } finally {
@@ -124,43 +134,66 @@ export default function TradeMessageThread({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault();
-      void submit();
-    }
+    if (event.key !== 'Enter' || event.shiftKey) return;
+    // 한글 입력 중 Enter는 글자 조합을 끝내는 키라 전송으로 쓰면 안 된다.
+    if (event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    void submit();
   };
 
   const remaining = TRADE_MESSAGE_MAX_LENGTH - draft.length;
+  const groups = groupTradeMessages(messages ?? []);
 
   return (
-    <section className="tm-thread" aria-label={`${counterpartLabel}와의 대화`}>
-      <div className="tm-head">
-        <MessageSquare size={16} aria-hidden="true" />
-        <strong>{counterpartLabel}와의 대화</strong>
-        <button type="button" className="tm-refresh" onClick={() => void load()}>새로고침</button>
-      </div>
+    <section className="tm-chat" aria-label={`${counterpartLabel}와의 대화`}>
+      <header className="tm-chat-head">
+        <span className="tm-avatar" aria-hidden="true">{initialOf(counterpartLabel)}</span>
+        <div className="tm-chat-who">
+          <strong>{counterpartLabel}</strong>
+          <span>{readOnly ? '종료된 의뢰' : '의뢰 진행 중'}</span>
+        </div>
+        <button type="button" className="tm-icon-btn" aria-label="대화 새로고침" onClick={() => void load()}>
+          <RefreshCw size={15} aria-hidden="true" />
+        </button>
+      </header>
 
       {pinned}
 
-      <div className="tm-list" ref={listRef} role="log" aria-live="polite">
+      <div className="tm-log" ref={logRef} role="log" aria-live="polite">
         {messages === null ? (
           <p className="tm-empty">대화를 불러오는 중입니다.</p>
         ) : messages.length === 0 ? (
-          <p className="tm-empty">아직 주고받은 메시지가 없습니다. 확인할 내용을 여기서 바로 물어보세요.</p>
-        ) : messages.map((item) => {
-          const mine = item.senderUserId === currentUserId;
-          return (
-            <article key={item.id} className={`tm-bubble${mine ? ' is-mine' : ''}${item.kind !== 'message' ? ' is-kind' : ''}`}>
-              <div className="tm-meta">
-                <span className="tm-sender">{mine ? '나' : counterpartLabel}</span>
-                {item.kind !== 'message' && <span className="tm-kind">{KIND_LABEL[item.kind]}</span>}
-                <time dateTime={item.createdAt}>{formatTime(item.createdAt)}</time>
-                {mine && item.readAt && <span className="tm-read">읽음</span>}
-              </div>
-              <p className="tm-body">{item.body}</p>
-            </article>
-          );
-        })}
+          <p className="tm-empty">아직 주고받은 메시지가 없습니다.<br />확인할 내용을 여기서 바로 물어보세요.</p>
+        ) : groups.map((group) => (
+          <Fragment key={group.dateKey}>
+            {group.dateLabel && <div className="tm-day"><span>{group.dateLabel}</span></div>}
+            {group.items.map(({ message, showSender, showTime }) => {
+              const mine = message.senderUserId === currentUserId;
+              return (
+                <div key={message.id} className={`tm-row${mine ? ' is-mine' : ''}${showSender ? ' is-head' : ''}`}>
+                  {!mine && (showSender
+                    ? <span className="tm-avatar is-sm" aria-hidden="true">{initialOf(counterpartLabel)}</span>
+                    : <span className="tm-avatar-gap" aria-hidden="true" />)}
+                  <div className="tm-stack">
+                    {!mine && showSender && <span className="tm-name">{counterpartLabel}</span>}
+                    <div className="tm-line">
+                      <div className={`tm-bubble${message.kind !== 'message' ? ' is-kind' : ''}`}>
+                        {message.kind !== 'message' && <span className="tm-kind">{KIND_LABEL[message.kind]}</span>}
+                        <p>{message.body}</p>
+                      </div>
+                      {showTime && (
+                        <span className="tm-stamp">
+                          {mine && message.readAt && <b>읽음</b>}
+                          <time dateTime={message.createdAt}>{formatMessageTime(message.createdAt)}</time>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </Fragment>
+        ))}
       </div>
 
       {error && <div className="form-message error" role="alert">{error}</div>}
@@ -170,23 +203,22 @@ export default function TradeMessageThread({
       ) : (
         <div className="tm-composer">
           <textarea
+            ref={inputRef}
             value={draft}
+            rows={1}
             maxLength={TRADE_MESSAGE_MAX_LENGTH}
-            placeholder="메시지를 입력하세요. (Ctrl+Enter로 전송)"
+            placeholder="메시지 입력"
             aria-label="메시지 입력"
-            rows={2}
             disabled={sending}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => { setDraft(event.target.value); resizeInput(); }}
             onKeyDown={onKeyDown}
           />
-          <div className="tm-composer-foot">
-            <span className={`tm-counter${remaining < 200 ? ' is-warn' : ''}`}>{remaining.toLocaleString()}자 남음</span>
-            <button type="button" className="btn btn-primary" disabled={sending || !draft.trim()} onClick={() => void submit()}>
-              <Send size={15} aria-hidden="true" /> {sending ? '전송 중…' : '보내기'}
-            </button>
-          </div>
+          <button type="button" className="tm-send" aria-label="보내기" disabled={sending || !draft.trim()} onClick={() => void submit()}>
+            <Send size={16} aria-hidden="true" />
+          </button>
         </div>
       )}
+      {!readOnly && remaining < COUNTER_VISIBLE_FROM && <span className="tm-counter">{remaining.toLocaleString()}자 남음</span>}
     </section>
   );
 }

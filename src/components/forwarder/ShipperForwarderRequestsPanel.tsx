@@ -374,7 +374,6 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
               <div className="fwd-modal-head">
                 <div>
                   <h2 id="thread-modal-title">{threadTrade.profile.itemName || '품목명 미입력'}</h2>
-                  <p>{closed ? '종료된 의뢰의 대화 기록입니다.' : '지정 포워더와 확인할 내용을 바로 주고받으세요.'}</p>
                 </div>
                 <button type="button" className="fwd-modal-close" aria-label="닫기" onClick={() => setThreadTrade(null)}><X size={22} /></button>
               </div>
