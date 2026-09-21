@@ -2,6 +2,7 @@ import type { Incoterms, TradeProfile } from '../types';
 import { supabase } from '../lib/supabase';
 import { normalizeCountryValue } from '../constants/countries';
 import { normalizePortValue } from '../constants/ports';
+import { normalizeSpecialties, type ForwarderSpecialtyKey } from '../utils/forwarderSpecialty';
 
 export const INCOTERM_OPTIONS: Exclude<Incoterms, ''>[] = [
   'FOB',
@@ -53,6 +54,9 @@ export interface UserProfile {
   service_role: ServiceRole;
   role: string;
 
+  /** 포워더 담당자 특화 분야(route_*, cargo_*). 화주→포워더 자동 배정에만 쓴다. */
+  forwarder_specialties: ForwarderSpecialtyKey[];
+
   created_at?: string;
   updated_at?: string;
 }
@@ -74,6 +78,7 @@ export type UserProfileUpdate = Partial<
     | 'default_discharge_port'
     | 'default_incoterm'
     | 'service_role'
+    | 'forwarder_specialties'
   >
 >;
 
@@ -83,10 +88,12 @@ export type UserProfileUpdate = Partial<
  */
 type UserProfileRow = Omit<
   UserProfile,
-  'service_role' | 'customs_clearance_code'
+  'service_role' | 'customs_clearance_code' | 'forwarder_specialties'
 > & {
   service_role?: ServiceRole | null;
   customs_clearance_code?: string | null;
+  /** 컬럼 추가 전에 저장된 세션 캐시에는 없을 수 있다. */
+  forwarder_specialties?: unknown;
 };
 
 /**
@@ -151,6 +158,9 @@ export function normalizeUserProfile(
 
     service_role:
       profile.service_role ?? 'integrated',
+
+    forwarder_specialties:
+      normalizeSpecialties(profile.forwarder_specialties),
   };
 }
 

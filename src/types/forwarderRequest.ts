@@ -76,6 +76,19 @@ export interface ForwarderLookupResult {
   contactName: string | null;
 }
 
+/** 거래 조건으로 자동 배정된 담당자 후보 — 이메일·연락처는 받지 않는다. */
+export interface ForwarderMatchCandidate {
+  id: string;
+  companyName: string | null;
+  contactName: string | null;
+  /** 담당자가 프로필에 등록한 특화 분야 전체 */
+  specialties: string[];
+  /** 그중 이번 거래 조건과 겹친 것 */
+  matchedSpecialties: string[];
+  activeCount: number;
+  completedCount: number;
+}
+
 export interface TradeRequestPreview {
   requestId: string;
   status: TradeRequestStatus;
