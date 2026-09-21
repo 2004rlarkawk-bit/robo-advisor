@@ -354,6 +354,20 @@ export async function fetchSavedTradeById(id: string): Promise<SavedTrade | null
   return data ? mapTradeRow(data) : null;
 }
 
+/**
+ * 거래의 수출/수입 방향만 조회한다. fetchSavedTradeById와 달리 소유자 조건을 걸지 않아,
+ * 나에게 배정된(forwarder_user_id) 화주 거래도 읽힌다. 볼 권한이 없으면 RLS가 null을 돌려준다.
+ */
+export async function fetchTradeDirection(id: string): Promise<'export' | 'import' | null> {
+  const { data, error } = await supabase
+    .from('trades')
+    .select('direction')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.direction === 'export' || data?.direction === 'import' ? data.direction : null;
+}
+
 // [EDIT: Trade Persistence] 전체 문서 전송은 새 row를 만들지 않고 같은 거래 row의 상태만 submitted로 갱신합니다.
 export async function markTradeAsSubmitted(
   tradeId: string,

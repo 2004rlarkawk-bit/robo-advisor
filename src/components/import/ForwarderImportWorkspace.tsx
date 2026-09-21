@@ -7,7 +7,7 @@
  * 운영 상태는 forwarderCaseService를 통해 workflow_data.forwarderCase에 저장한다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ArrowLeft, CheckCircle2, CornerUpLeft, Download, ExternalLink, Mail } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CornerUpLeft, Download, ExternalLink, Mail } from 'lucide-react';
 import {
   FORWARDER_STAGE_LABEL,
   FORWARDER_STAGE_ORDER,
@@ -58,6 +58,9 @@ interface Props {
   includeOwnShipperTrades?: boolean;
   /** 알림에서 들어온 경우 해당 의뢰 상세를 바로 연다. */
   initialTradeId?: string | null;
+  /** 알림 종류에 맞춰 열 탭 — 새 의뢰는 서류 검토, 회신·메시지는 요청·회신. */
+  initialTab?: 'review' | 'messages';
+  /** 상세를 열었거나, 목록에 없어 열 수 없다고 판단했을 때 호출 — 상위가 대상을 비운다. */
   onInitialTradeOpened?: () => void;
 }
 
@@ -111,6 +114,7 @@ export default function ForwarderImportWorkspace({
   onDirectUpload,
   includeOwnShipperTrades = false,
   initialTradeId = null,
+  initialTab = 'messages',
   onInitialTradeOpened,
 }: Props) {
   const [cases, setCases] = useState<ForwarderImportCase[] | null>(null);
@@ -171,11 +175,16 @@ export default function ForwarderImportWorkspace({
   }, [load]);
 
   useEffect(() => {
-    if (!initialTradeId || !cases?.some((item) => item.tradeId === initialTradeId)) return;
+    if (!initialTradeId || !cases) return;
+    // 아직 수락 전이라 내 업무 목록에 없는 건은 열 수 없다 — 대상을 비워 나중에 뜬금없이 열리지 않게 한다.
+    if (!cases.some((item) => item.tradeId === initialTradeId)) {
+      onInitialTradeOpened?.();
+      return;
+    }
     setSelectedId(initialTradeId);
-    setDetailTab('messages');
+    setDetailTab(initialTab);
     onInitialTradeOpened?.();
-  }, [cases, initialTradeId, onInitialTradeOpened]);
+  }, [cases, initialTradeId, initialTab, onInitialTradeOpened]);
 
   const selected = useMemo(
     () => cases?.find((item) => item.tradeId === selectedId) ?? null,
@@ -377,7 +386,7 @@ export default function ForwarderImportWorkspace({
             ))}
           </div>
           {selected.stage !== 'done' && (
-            <p className="fwd-next-banner"><AlertTriangle size={14} /> 다음 조치: <strong>{selected.nextAction}</strong></p>
+            <p className="fwd-next-banner">다음 조치: <strong>{selected.nextAction}</strong></p>
           )}
         </section>
 

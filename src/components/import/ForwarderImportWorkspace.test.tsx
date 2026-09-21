@@ -16,6 +16,35 @@ function fixture(overrides: Partial<ForwarderImportCase> = {}): ForwarderImportC
   return { tradeId: 'case-1', importer: '테스트 화주', shipperName: '테스트 공급사', vesselName: 'TEST', eta: '2026-09-20', requestedAt: '2026-09-14', stage: 'received', origin: 'shipper_request', blNo: 'BL-1', blockerCount: 1, checkCount: 0, returnRequest: null, shipperEditing: false, issues: [weight], issueNotes: {}, activity: [], nextAction: '서류 검토', snapshot: { documents: [], analysis: { comparison: [comparison], extracted: { items: [], productDescription: '테스트 품목' } } }, trade: { id: 'case-1', profile: { itemName: '테스트 품목' } }, ...overrides } as ForwarderImportCase;
 }
 
+describe('initialTradeId/initialTab — 알림 클릭으로 진입', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  const onInitialTradeOpened = vi.fn();
+  beforeEach(() => { container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); onInitialTradeOpened.mockClear(); });
+  afterEach(() => { act(() => root.unmount()); container.remove(); vi.clearAllMocks(); });
+
+  it('initialTab을 지정하면 그 탭이 바로 열린다', async () => {
+    vi.mocked(listForwarderCases).mockResolvedValue([fixture()]);
+    await act(async () => root.render(<Workspace userId="test" issuerName="" senderContactName="" onDirectUpload={() => {}} initialTradeId="case-1" initialTab="review" onInitialTradeOpened={onInitialTradeOpened} />));
+    expect(container.querySelector('.fwd-tabs .is-active')?.textContent).toBe('서류 검토');
+    expect(onInitialTradeOpened).toHaveBeenCalledTimes(1);
+  });
+
+  it('initialTab 생략 시 기본값은 요청·회신 탭', async () => {
+    vi.mocked(listForwarderCases).mockResolvedValue([fixture()]);
+    await act(async () => root.render(<Workspace userId="test" issuerName="" senderContactName="" onDirectUpload={() => {}} initialTradeId="case-1" onInitialTradeOpened={onInitialTradeOpened} />));
+    expect(container.querySelector('.fwd-tabs .is-active')?.textContent).toBe('요청·회신');
+  });
+
+  it('아직 목록에 없는(수락 전) 건을 가리키면 열지 않고 대상만 비운다', async () => {
+    vi.mocked(listForwarderCases).mockResolvedValue([fixture()]);
+    await act(async () => root.render(<Workspace userId="test" issuerName="" senderContactName="" onDirectUpload={() => {}} initialTradeId="not-in-queue" onInitialTradeOpened={onInitialTradeOpened} />));
+    // 목록은 정상 표시되지만(다른 건 case-1은 열려 있음), 없는 건을 자동으로 열지는 않는다.
+    expect(container.querySelector('.fwd-detail-top')).toBeNull();
+    expect(onInitialTradeOpened).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('forwarder task tabs', () => {
   let container: HTMLDivElement;
   let root: Root;
