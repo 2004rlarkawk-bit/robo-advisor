@@ -4,6 +4,10 @@
  *
  * 수입은 업무 상세를 바로 연다. 수출은 포워더가 의뢰를 자기 폼으로 가져와 작업하는 구조라
  * 건별 상세 화면이 없다 — 수출 작업실(의뢰 수신함이 있는 화면)로만 보낸다.
+ *
+ * 새 의뢰(trade_request_received)는 대상에 넣지 않는다 — 아직 수락 전이라 trades.forwarder_user_id가
+ * 비어 있고, 업무 큐(listForwarderCases)는 배정된 건만 보여주므로 절대 찾을 수 없다. 받은 의뢰
+ * 목록(IncomingTradeRequestsPanel)이 같은 알림을 자체 구독해 이미 스스로 새로고침한다.
  */
 import type { NotificationRecord } from '../types/forwarderRequest';
 
@@ -22,8 +26,6 @@ export function resolveForwarderNotificationTarget(notification: NotificationRec
   const direction = payloadDirection === 'import' || payloadDirection === 'export' ? payloadDirection : null;
 
   switch (notification.type) {
-    case 'trade_request_received':
-      return { tradeId: notification.tradeId, tab: 'review', direction };
     case 'trade_message_received':
       return { tradeId: notification.tradeId, tab: 'messages', direction };
     // 보완 요청·회신은 수입 검토 흐름에만 있다.
