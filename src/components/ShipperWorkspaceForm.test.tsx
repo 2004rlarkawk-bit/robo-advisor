@@ -679,3 +679,172 @@ describe('결제조건과 맞지 않게 남은 L/C 정보', () => {
     expect(rendered.container.textContent).not.toContain('L/C 정보 지우기');
   });
 });
+
+describe('포장 정보 — 화물 크기 기반 CBM 자동 계산', () => {
+  const dimensionInput = (rendered: { container: HTMLDivElement }, label: string) =>
+    rendered.container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+
+  const cbmInput = (rendered: { container: HTMLDivElement }) =>
+    rendered.container.querySelector<HTMLInputElement>('#shipper-cbm-input');
+
+  it('계산한 CBM을 입력칸에 채워 보여주고 자동 계산이라고 알린다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    const cbmGroup = rendered.container.querySelector('[data-field="measurement"]');
+    expect(cbmGroup?.textContent).toContain('자동 계산');
+    expect(cbmInput(rendered)?.value).toBe('0.369');
+    expect(cbmInput(rendered)?.readOnly).toBe(false);
+  });
+
+  const clickDelete = (rendered: { container: HTMLDivElement }, label: string) => {
+    const button = rendered.container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    act(() => button?.click());
+    return button;
+  };
+
+  it('규격이 여러 줄이면 삭제한 줄만 빼고 다시 계산한다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [
+        { id: 'dim-1', width: 45, length: 20, height: 41, boxes: 5 },
+        { id: 'dim-2', width: 60, length: 40, height: 30, boxes: 3 },
+      ],
+    });
+    clickDelete(rendered, '규격 2 삭제');
+    const calls = rendered.onProfilePatch.mock.calls;
+    const patch = calls[calls.length - 1]?.[0];
+    expect(patch.packageDimensions).toHaveLength(1);
+    expect(patch.measurement).toBe('0.185');
+    expect(patch.packageCount).toBe(5);
+  });
+
+  it('마지막 한 줄을 삭제하면 값만 비우고 박스 수·CBM도 함께 지운다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    const button = clickDelete(rendered, '규격 1 삭제');
+    expect(button?.disabled).toBe(false);
+    const calls = rendered.onProfilePatch.mock.calls;
+    const patch = calls[calls.length - 1]?.[0];
+    expect(patch.packageDimensions).toHaveLength(1);
+    expect(patch.packageDimensions[0]).toMatchObject({ width: '', length: '', height: '', boxes: '' });
+    expect(patch.measurement).toBe('');
+    expect(patch.packageCount).toBe('');
+  });
+
+  it('계산에 쓴 식을 CBM 아래에 같이 보여준다', () => {
+    const single = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    expect(single.container.querySelector('.shipper-cbm-formula')?.textContent)
+      .toBe('45 × 20 × 41 cm × 10박스 ÷ 1,000,000');
+
+    const many = renderForm([firstItem], false, {
+      packageDimensions: [
+        { id: 'dim-1', width: 45, length: 20, height: 41, boxes: 5 },
+        { id: 'dim-2', width: 60, length: 40, height: 30, boxes: 3 },
+      ],
+    });
+    expect(many.container.querySelector('.shipper-cbm-formula')?.textContent).toBe('규격 2줄 합계');
+  });
+
+  it('CBM을 직접 고치면 직접 입력으로 표시하고 그 값을 그대로 넘긴다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    const input = cbmInput(rendered);
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, '0.5');
+      input!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ measurement: '0.5', measurementManual: true });
+  });
+
+  it('직접 입력한 CBM은 규격을 고쳐도 덮어쓰지 않는다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+      measurement: '0.5',
+      measurementManual: true,
+    });
+    const cbmGroup = rendered.container.querySelector('[data-field="measurement"]');
+    expect(cbmGroup?.textContent).toContain('직접 입력');
+    expect(cbmInput(rendered)?.value).toBe('0.5');
+
+    const boxes = dimensionInput(rendered, '규격 1 박스 수');
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(boxes, '20');
+      boxes!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const calls = rendered.onProfilePatch.mock.calls;
+    const patch = calls[calls.length - 1]?.[0];
+    expect(patch).not.toHaveProperty('measurement');
+    expect(patch.packageCount).toBe(20);
+  });
+
+  it('[계산값으로 되돌리기]를 누르면 규격에서 계산한 값으로 되돌린다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+      measurement: '0.5',
+      measurementManual: true,
+    });
+    const reset = Array.from(rendered.container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('계산값으로 되돌리기'));
+    act(() => reset?.click());
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ measurement: '0.369', measurementManual: false });
+  });
+
+  it('화물 크기 안내문과 단위 선택(cm 기본)을 보여준다', () => {
+    const rendered = renderForm();
+    expect(rendered.container.textContent).toContain('최종 포장 후 화물의 외부 크기를 입력해 주세요.');
+    const unit = rendered.container.querySelector<HTMLSelectElement>('select[aria-label="화물 크기 단위"]');
+    expect(unit?.value).toBe('cm');
+    expect(Array.from(unit?.options ?? []).map((option) => option.value)).toEqual(['cm', 'm', 'mm', 'inch']);
+  });
+
+  it('크기를 채우면 CBM과 포장 수량을 함께 다시 계산해 넘긴다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: '' }],
+    });
+    const boxes = dimensionInput(rendered, '규격 1 박스 수');
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(boxes, '10');
+      boxes!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith(expect.objectContaining({
+      measurement: '0.369',
+      packageCount: 10,
+    }));
+  });
+
+  it('규격이 다른 포장을 추가하면 각각 계산해 총 CBM과 총 박스 수를 합산한다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [
+        { id: 'dim-1', width: 45, length: 20, height: 41, boxes: 5 },
+        { id: 'dim-2', width: 60, length: 40, height: 30, boxes: 3 },
+      ],
+    });
+    expect(rendered.container.querySelector<HTMLInputElement>('#shipper-cbm-input')?.value).toBe('0.401');
+    const packageCount = rendered.container.querySelector<HTMLInputElement>('input[readonly][value="8"]');
+    expect(packageCount).not.toBeNull();
+  });
+
+  it('[다른 규격 화물 추가]를 누르면 빈 규격 줄을 하나 더 넘긴다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    const add = Array.from(rendered.container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('다른 규격 화물 추가'));
+    act(() => add?.click());
+    const calls = rendered.onProfilePatch.mock.calls;
+    const patch = calls[calls.length - 1]?.[0];
+    expect(patch.packageDimensions).toHaveLength(2);
+    expect(patch.packageDimensions[1]).toMatchObject({ width: '', length: '', height: '', boxes: '' });
+  });
+
+  it('크기를 아직 넣지 않으면 CBM은 계산하지 않고 안내만 보여준다', () => {
+    const rendered = renderForm();
+    const cbmGroup = rendered.container.querySelector('[data-field="measurement"]');
+    expect(rendered.container.querySelector<HTMLInputElement>('#shipper-cbm-input')?.value).toBe('');
+    expect(cbmGroup?.textContent).toContain('박스 수를 넣으면 자동으로 계산됩니다');
+  });
+});

@@ -12,6 +12,7 @@ import type { TradeAttachment, TradeAttachmentDocumentType } from '../types/trad
 import type { ShipperItem, TradeProfile } from '../types';
 import { parseTradeNumber } from '../utils/number';
 import { areEquivalentTradeFieldValues, isAbsentTradeValue } from '../utils/tradeValueNormalization';
+import { isSameCbmAtDocumentPrecision } from '../utils/packageCbm';
 import { portComparisonKey } from './importReconciliationRules';
 
 export type ExportMatchStatus = 'match' | 'mismatch' | 'unknown';
@@ -32,6 +33,11 @@ export interface ExportDocMatchRow {
   /** 사용자가 폼에 입력한 값 */
   formValue: string;
   status: ExportMatchStatus;
+  /**
+   * 폼 값이 다른 입력에서 계산된 값이라 직접 덮어쓸 수 없는 항목(예: 포장 규격에서 나온 CBM).
+   * 업로드 서류 값 선택 대상에서 빼고, 원래 입력을 고치도록 안내한다.
+   */
+  computed?: boolean;
 }
 
 export interface ExportDocMatchResult {
@@ -112,6 +118,13 @@ function compare(field: string, uploadedValue: string, formValue: string): Expor
     if (insured === null || required === null) return 'unknown';
     return insured + 0.005 >= required ? 'match' : 'mismatch';
   }
+  // 용적(CBM)은 포장 규격에서 계산한 값이라 서류보다 자릿수가 길다.
+  // 서류에 적힌 자릿수로 반올림해 비교한다(P/L "0.35" ↔ 계산값 0.369 → 0.37, 불일치).
+  if (field === 'measurement') {
+    const computed = parseTradeNumber(formValue);
+    if (computed === null) return 'unknown';
+    return isSameCbmAtDocumentPrecision(uploadedValue, computed) ? 'match' : 'mismatch';
+  }
   if (normalize(uploadedValue) === normalize(formValue)) return 'match';
   if (field === 'hsCode') return isSameHSCode(uploadedValue, formValue) ? 'match' : 'mismatch';
   // 항구명은 "BUSAN, KOREA" / "Busan Port" / "KRPUS Busan" 을 같은 항구로 본다.
@@ -148,8 +161,20 @@ function buildRows(
   const extractedItem = extracted.items[0];
   const candidates: Array<Omit<ExportDocMatchRow, 'status'>> = [];
 
-  const add = (field: string, label: string, uploadedValue: string, formValue: string) => {
-    candidates.push({ field, label, uploadedValue: text(uploadedValue), formValue: text(formValue) });
+  const add = (
+    field: string,
+    label: string,
+    uploadedValue: string,
+    formValue: string,
+    options: { computed?: boolean } = {},
+  ) => {
+    candidates.push({
+      field,
+      label,
+      uploadedValue: text(uploadedValue),
+      formValue: text(formValue),
+      ...(options.computed ? { computed: true } : {}),
+    });
   };
 
   const partiesRows = () => {
@@ -185,7 +210,8 @@ function buildRows(
       add('packageType', '포장 종류', extracted.packageUnit, profile.packageType ?? '');
       add('netWeight', '순중량', extracted.netWeight, text(profile.netWeight));
       add('grossWeight', '총중량', extracted.grossWeight, text(profile.grossWeight || profile.weight));
-      add('measurement', '용적(CBM)', extracted.measurement, profile.measurement ?? '');
+      // 직접 적어 넣은 CBM은 고칠 칸이 있으니 서류 값 반영을 열어 준다.
+      add('measurement', '용적(CBM)', extracted.measurement, profile.measurement ?? '', { computed: !profile.measurementManual });
       break;
     case 'transport_request':
       partiesRows();
