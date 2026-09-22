@@ -69,6 +69,8 @@ function riskToIssue(risk: ImportRisk, resolutions: Record<string, boolean>): Fo
     // 옛 결과의 규칙 번호(IR8. 등)는 떼고 보여준다. 관련 서류(documents)는 id 매칭에 쓰이므로 그대로 둔다.
     title: cleanRiskTitle(risk.item),
     detail: risk.cause,
+    // 무엇이 어떻게 다른지 — 화주가 저장한 판정값을 그대로 보여준다(포워더 쪽에서 다시 계산하지 않는다).
+    values: risk.differentValues?.length ? risk.differentValues : undefined,
     documents: risk.relatedDocuments,
     // 리스크 자체의 확인 상태(구 플로우)와 워크스페이스 체크를 모두 인정
     resolved: resolutions[id] === true || risk.status === 'resolved',
@@ -252,11 +254,13 @@ export async function saveForwarderCaseState(
   const previous = workflowData.forwarderCase;
   const now = new Date().toISOString();
   const next: ForwarderCaseState = {
+    ...previous,
     stage: patch.stage ?? previous?.stage ?? 'received',
     issueResolutions: { ...(previous?.issueResolutions ?? {}), ...(patch.issueResolutions ?? {}) },
     issueNotes: { ...(previous?.issueNotes ?? {}), ...(patch.issueNotes ?? {}) },
     arrivalNotice: patch.arrivalNotice !== undefined ? patch.arrivalNotice : previous?.arrivalNotice ?? null,
     returnRequest: patch.returnRequest !== undefined ? patch.returnRequest : previous?.returnRequest ?? null,
+    importOperations: patch.importOperations ?? previous?.importOperations,
     activity: [
       ...(previous?.activity ?? []),
       ...appendActivity.map((text) => ({ at: now, text })),

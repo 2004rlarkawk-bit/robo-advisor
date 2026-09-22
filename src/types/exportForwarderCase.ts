@@ -33,12 +33,31 @@ export interface ExportForwarderCaseActivity {
   text: string;
 }
 
+/**
+ * 외부 채널(선사 홈페이지·메일·전화)에서 확정된 부킹을 PortAI에 등록한 값 중
+ * 기존 TradeProfile 필드로 표현할 수 없는 항목만 담는다.
+ * Booking No.·선박·항차·POL/POD·ETD/ETA·컨테이너는 TradeProfile에 이미 있으므로 여기 두지 않는다.
+ */
+export interface ExportBookingDetails {
+  /** 서류 마감 */
+  cargoClosingDate?: string;
+  /** CY 반입 마감 — 없는 경우도 있다 */
+  cyClosingDate?: string;
+  /** 선사와 합의된 운임 지급조건 — H/B/L 운임조건이 비어 있을 때만 채운다 */
+  freightTerms?: '' | 'PREPAID' | 'COLLECT';
+  remarks?: string;
+  /** 부킹 완료 처리(=외부 확정 부킹 등록) 시각 */
+  confirmedAt?: string | null;
+}
+
 /** trades.workflow_data.exportForwarderCase 로 저장되는 포워더 운영 상태 */
 export interface ExportForwarderCaseState {
   /** 단계별 상태 — 값이 없으면 '대기'로 취급한다. */
   progress: Partial<Record<ExportProgressStageKey, ExportProgressStatus>>;
   /** 선사가 발행한 Master B/L 번호 — M/B/L은 PortAI가 생성하지 않고 등록만 한다. */
   masterBlNo?: string;
+  /** 선사에서 확정받아 등록한 부킹 부가정보 */
+  booking?: ExportBookingDetails;
   shipperNotifiedAt?: string | null;
   shippingAdviceSentAt?: string | null;
   completedAt?: string | null;

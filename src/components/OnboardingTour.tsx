@@ -140,9 +140,13 @@ export default function OnboardingTour() {
       if (cancelled) return;
       const el = step.find();
       if (el) {
-        const r = el.getBoundingClientRect();
+        let r = el.getBoundingClientRect();
+        // 화면 밖일 때만 즉시 이동한다 — 부드러운 스크롤은 scroll 이벤트로 이 함수가 반복 호출돼 천천히 끌려가 보인다.
+        if (r.top < 0 || r.bottom > window.innerHeight) {
+          el.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior });
+          r = el.getBoundingClientRect();
+        }
         setBox({ left: r.left, top: r.top, width: r.width, height: r.height });
-        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
         return;
       }
       tries += 1;

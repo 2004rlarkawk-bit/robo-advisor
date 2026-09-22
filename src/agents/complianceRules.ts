@@ -349,10 +349,14 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
   // ── R11. 결제조건 ↔ L/C 필드 정합성 ─────────────────
   // 비신용장(T/T 등) 결제인데 L/C 정보가 있으면 모순 → error(차단, 사유 override 가능).
   // 반대로 L/C 결제인데 L/C 번호가 없으면 → warning.
-  const lcVals = [profile.lcNo, profile.lcBank, profile.lcDate].map(v => (v || '').trim()).filter(Boolean);
+  const lcVals = [
+    ['L/C No.', profile.lcNo],
+    ['L/C 은행', profile.lcBank],
+    ['L/C Date', profile.lcDate],
+  ].map(([label, v]) => [label, (v || '').trim()] as const).filter(([, v]) => v);
   if (isNonLcPayment(profile.paymentTerms) && lcVals.length > 0) {
     issues.push(mk('r11-payment-lc-conflict', 'invoice', 'paymentTerms',
-      `결제조건이 비신용장("${profile.paymentTerms}")인데 L/C 정보(${lcVals.join(', ')})가 입력되어 있습니다. 서로 모순이므로 결제조건 또는 L/C 필드를 정정하세요.`));
+      `결제조건이 비신용장("${profile.paymentTerms}")인데 ${lcVals.map(([label, v]) => `${label}(${v})`).join(', ')}이 남아 있습니다. ${profile.paymentTerms}가 맞다면 [L/C 정보 지우기]를 누르고, 신용장 거래라면 결제조건을 L/C로 바꾸세요.`));
   } else if (isLcPayment(profile.paymentTerms) && !(profile.lcNo || '').trim()) {
     issues.push(mk('r11-lc-missing', 'invoice', 'lcNo',
       `결제조건이 L/C인데 L/C 번호가 비어 있습니다. 신용장 번호(예: LC-2026-0001)를 입력하세요.`));
@@ -490,6 +494,15 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
 // 대조 근거가 없으면(박스 내역 미입력 등) 억지 판정 대신 조용히 통과 + 로그(R5/R6와 동일 정책).
 const norm = (s?: string) => (s || '').toUpperCase().replace(/\s+/g, ' ').trim();
 
+/** 짧은 쪽 품명의 단어가 모두 긴 쪽에 들어 있으면 같은 품목으로 본다(단어 단위라 CAP ⊄ CAPACITOR). */
+function descriptionsCompatible(a: string, b: string): boolean {
+  if (a === b) return true;
+  const words = (s: string) => s.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const wa = words(a), wb = words(b);
+  const [short, long] = wa.length <= wb.length ? [wa, new Set(wb)] : [wb, new Set(wa)];
+  return short.length > 0 && short.every(w => long.has(w));
+}
+
 /** 패킹 품목의 총 EA = Σ(박스수 × 박스당 수량). 박스 내역이 하나도 없으면 null(대조 불가). */
 function packingTotalEA(items: InvoiceItem[]): number | null {
   let sum = 0, counted = 0;
@@ -556,11 +569,12 @@ export function checkPackingInvoiceConsistency(
   }
 
   // 품명 대조: 같은 순번 품목의 품명이 다르면 경고(둘 다 값이 있을 때만).
+  // 한쪽이 색상·규격 등을 덧붙인 경우("COTTON SHIRT" vs "COTTON SHIRT, LIGHT GREEN")는 일치로 본다.
   const n = Math.min(invItems.length, plItems.length);
   for (let i = 0; i < n; i++) {
     const a = norm((invItems[i] as any).description);
     const b = norm((plItems[i] as any).description);
-    if (a && b && a !== b) {
+    if (a && b && !descriptionsCompatible(a, b)) {
       issues.push(mk('r10-packing-desc-mismatch', 'packing_list', 'itemName',
         `패킹리스트 품명("${(plItems[i] as any).description}")이 상업송장 품명("${(invItems[i] as any).description}")과 다릅니다. 두 서류의 품명은 일치해야 합니다.`));
     }

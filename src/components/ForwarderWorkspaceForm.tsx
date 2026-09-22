@@ -5,18 +5,21 @@ import type { TradeAttachment } from '../types/tradeFormData';
 import type {
   ExportProgressStageKey,
   ExportProgressStatus,
+  ExportBookingDetails,
 } from '../types/exportForwarderCase';
+import { ArrowLeft } from 'lucide-react';
 import DocumentManagerReadOnlyAction from './DocumentManagerReadOnlyAction';
 import ImportStepIndicator from './import/ImportStepIndicator';
 import type { ForwarderExportRequest } from '../services/forwarderExportRequestService';
 import { mergeForwarderAutoFill } from '../services/forwarderDocumentAnalysisService';
+import ExportForwarderInboxView from './forwarder/export/ExportForwarderInboxView';
 import ExportForwarderRequestStep from './forwarder/export/ExportForwarderRequestStep';
 import ExportForwarderBookingStep from './forwarder/export/ExportForwarderBookingStep';
 import ExportForwarderProgressStep from './forwarder/export/ExportForwarderProgressStep';
 import ExportForwarderBLStep from './forwarder/export/ExportForwarderBLStep';
 import ExportForwarderCompletionStep from './forwarder/export/ExportForwarderCompletionStep';
 
-const STEP_LABELS = ['의뢰 접수', 'Booking', '선적 진행', 'B/L 관리', '선적 완료'];
+const STEP_LABELS = ['화주 의뢰 확인', '선복 부킹', '반입·선적 준비', 'B/L 관리', '선적 완료'];
 
 interface Props {
   state: ForwarderFormState;
@@ -34,15 +37,23 @@ interface Props {
   currentStep: number;
   onStepChange: (step: number) => void;
 
+  /** 첫 진입은 "받은 의뢰" Inbox, 의뢰를 불러오거나 직접 등록을 완료하면 5단계 workflow로 전환된다. */
+  view: 'inbox' | 'workflow';
+  /** 업무 화면(workflow)에서 Inbox 화면으로 돌아간다 — 거래 저장 데이터는 지우지 않는다. */
+  onReturnToInbox: () => void;
+  /** 직접 등록에서 서류 확인을 마치고 STEP 1(화주 의뢰 확인)로 진입 */
+  onEnterWorkflow: () => void;
+
   /** STEP 1 — 의뢰 접수 */
   onNextFromRequest: () => void;
-  onResetTrade: () => void;
-  showRequestInbox?: boolean;
   appliedRequestTradeId?: string | null;
   onApplyExportRequest?: (request: ForwarderExportRequest) => void;
 
-  /** STEP 2 — Booking */
+  /** STEP 2 — 선복 부킹 */
   onSaveBooking: () => void;
+  /** 외부에서 확정받은 부킹의 부가정보(마감일·운임조건·비고) */
+  booking: ExportBookingDetails;
+  onBookingChange: (values: Partial<ExportBookingDetails>) => void;
 
   /** STEP 3 — 선적 진행 관리 */
   progress: Partial<Record<ExportProgressStageKey, ExportProgressStatus>>;
@@ -90,12 +101,15 @@ export default function ForwarderWorkspaceForm({
   onClose,
   currentStep,
   onStepChange,
+  view,
+  onReturnToInbox,
+  onEnterWorkflow,
   onNextFromRequest,
-  onResetTrade,
-  showRequestInbox = false,
   appliedRequestTradeId = null,
   onApplyExportRequest,
   onSaveBooking,
+  booking,
+  onBookingChange,
   progress,
   onProgressChange,
   onNextFromProgress,
@@ -151,8 +165,45 @@ export default function ForwarderWorkspaceForm({
 
   const billOfLadingReady = Boolean(billOfLadingData) && !generationError;
 
+  const handleApplyAnalysis = (
+    values: Partial<ForwarderFormState>,
+    sourceFiles: Record<string, string>,
+  ) => {
+    const merged = mergeForwarderAutoFill(
+      state,
+      values,
+      sourceFiles,
+      profileDefaults,
+      manuallyEditedFieldsRef.current,
+    );
+    onChange(merged.state);
+    return merged;
+  };
+
+  // 첫 진입 화면 — 업무 단계(Stepper)·입력 폼 없이 "받은 의뢰" Inbox만 보여준다.
+  if (view === 'inbox') {
+    return (
+      <ExportForwarderInboxView
+        userId={userId}
+        attachmentScopeId={attachmentScopeId}
+        attachments={attachments}
+        onAttachmentsChange={onAttachmentsChange}
+        onApplyAnalysis={handleApplyAnalysis}
+        appliedRequestTradeId={appliedRequestTradeId}
+        onApplyExportRequest={onApplyExportRequest ?? (() => {})}
+        onContinueToWorkflow={onEnterWorkflow}
+      />
+    );
+  }
+
   return (
     <div className="forwarder-export-flow">
+      {!readOnly && (
+        <button type="button" className="btn btn-secondary forwarder-back-to-inbox" onClick={onReturnToInbox}>
+          <ArrowLeft size={16} /> 목록으로 돌아가기
+        </button>
+      )}
+
       <ImportStepIndicator
         current={currentStep}
         labels={STEP_LABELS}
@@ -165,28 +216,9 @@ export default function ForwarderWorkspaceForm({
           state={state}
           patch={patch}
           patchCargoItem={patchCargoItem}
-          userId={userId}
-          attachmentScopeId={attachmentScopeId}
-          attachments={attachments}
-          onAttachmentsChange={onAttachmentsChange}
-          onApplyAnalysis={(values, sourceFiles) => {
-            const merged = mergeForwarderAutoFill(
-              state,
-              values,
-              sourceFiles,
-              profileDefaults,
-              manuallyEditedFieldsRef.current,
-            );
-            onChange(merged.state);
-            return merged;
-          }}
           readOnly={readOnly}
           busy={busy}
           onNext={onNextFromRequest}
-          onResetTrade={onResetTrade}
-          showRequestInbox={showRequestInbox}
-          appliedRequestTradeId={appliedRequestTradeId}
-          onApplyExportRequest={onApplyExportRequest}
         />
       )}
 
@@ -194,6 +226,12 @@ export default function ForwarderWorkspaceForm({
         <ExportForwarderBookingStep
           state={state}
           patch={patch}
+          booking={booking}
+          onBookingChange={onBookingChange}
+          userId={userId}
+          scopeId={attachmentScopeId}
+          attachments={attachments}
+          onAttachmentsChange={onAttachmentsChange}
           readOnly={readOnly}
           busy={busy}
           onSave={onSaveBooking}
@@ -220,6 +258,7 @@ export default function ForwarderWorkspaceForm({
         <ExportForwarderBLStep
           state={state}
           patch={patch}
+          booking={booking}
           userId={userId}
           scopeId={attachmentScopeId}
           attachments={attachments}

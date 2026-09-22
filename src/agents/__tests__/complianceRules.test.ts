@@ -193,6 +193,20 @@ describe('R10 — 패킹리스트 ↔ 상업송장 교차 대조', () => {
     expect(checkPackingInvoiceConsistency(invoice, packing).map(i => i.id))
       .not.toContain('r10-packing-desc-mismatch');
   });
+
+  it('한쪽 품명에 색상 등 상세가 덧붙어 있으면 일치로 본다', () => {
+    const invoice = inv([{ description: 'Cotton Shirt, Light Green', quantity: 50 }]);
+    const packing = pl([{ description: 'Cotton Shirt', boxes: 5, eaPerBox: 10 }]);
+    expect(checkPackingInvoiceConsistency(invoice, packing).map(i => i.id))
+      .not.toContain('r10-packing-desc-mismatch');
+  });
+
+  it('글자만 겹치고 단어가 다르면 불일치로 본다', () => {
+    const invoice = inv([{ description: 'CAPACITOR', quantity: 50 }]);
+    const packing = pl([{ description: 'CAP', boxes: 5, eaPerBox: 10 }]);
+    expect(checkPackingInvoiceConsistency(invoice, packing).map(i => i.id))
+      .toContain('r10-packing-desc-mismatch');
+  });
 });
 
 describe('R11 — 결제조건 ↔ L/C 필드 정합성', () => {
@@ -201,6 +215,13 @@ describe('R11 — 결제조건 ↔ L/C 필드 정합성', () => {
     expect(issue).toBeTruthy();
     expect(issue.severity).toBe('error');
     expect(issue.overridable).toBe(true);
+  });
+
+  it('모순 메시지는 남아 있는 L/C 칸 이름과 값, 해결 방법을 알려준다', () => {
+    const issue = find({ paymentTerms: 'D/A', lcDate: '2026-09-25' }, 'r11-payment-lc-conflict')!;
+    expect(issue.message).toContain('L/C Date(2026-09-25)');
+    expect(issue.message).toContain('[L/C 정보 지우기]');
+    expect(issue.message).not.toContain('L/C No.');
   });
 
   it('L/C 은행/일자만 있어도(번호 없이) T/T와 함께면 모순으로 잡는다', () => {

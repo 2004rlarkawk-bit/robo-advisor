@@ -1,4 +1,4 @@
-import { FTA_CHOICE_KEY } from '../types/importTrade';
+import { CO_HOLDING_KEY, FTA_CHOICE_KEY, isFtaReviewChoice } from '../types/importTrade';
 import type {
   ImportAnalysisResult,
   ImportDocumentMeta,
@@ -117,6 +117,36 @@ function titleForField(field: string): string {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * 수입신고에 직접 영향을 주는 값만 화주에게 확인시킨다.
+ * 회사명·주소·연락처·Invoice 번호·컨테이너/Seal·선박명처럼 신고 금액이나 세액을 바꾸지 않는
+ * 표기 차이는 목록에서 제외한다.
+ */
+const CORE_VALIDATION_FIELDS = [
+  'description', 'productdescription', 'goods', 'commodity', 'item', '품명', '품목',
+  'quantity', 'qty', '수량',
+  'amount', 'total', 'unitprice', 'price', 'value', 'currency', '금액', '단가', '통화',
+  'weight', '중량',
+  'origin', '원산지',
+  'hscode', 'hsk', 'hs',
+  'incoterms', '인코텀',
+];
+
+/** LLM 검증 항목이 신고에 영향을 주는 핵심 값인지 판단한다. */
+function isCoreValidationField(field: string): boolean {
+  const normalized = field.replace(/[^a-zA-Z가-힣]/g, '').toLowerCase();
+  if (!normalized) return false;
+  // 포장 수량(packageCount)·포장 단위는 '수량'이 아니라 포장 정보라 제외한다.
+  if (/package|포장/.test(normalized)) return false;
+  return CORE_VALIDATION_FIELDS.some((core) => normalized.includes(core));
+}
+
+/**
+ * 화주 수입 화면에 띄울 서류 대사 규칙 — 신고 항목에 직접 영향을 주는 것만 남긴다.
+ * 제외: IR5(포장 수량), IR12(선적항·도착항), IR13(Consignee), IR14(보험금액).
+ */
+const CORE_RULE_IDS = new Set(['IR1', 'IR2', 'IR3', 'IR4', 'IR6', 'IR7', 'IR8', 'IR9', 'IR10', 'IR11']);
+
 function recommendationFor(field: string): string {
   const normalized = field.toLowerCase();
   if (normalized.includes('package') || normalized.includes('포장')) return 'C/I와 P/L의 포장 단위·수량을 대조하고 실제 선적 수량으로 확정하세요.';
@@ -182,7 +212,6 @@ export function resolveImportRisks(
   analysis: ImportAnalysisResult,
   suggestions: ImportHSCodeSuggestion[] = [],
   dutyError = '',
-  importerCompanyName = '',
   reconciliationInput?: ImportReconciliationInput,
   role: UserTradeRole = 'shipper',
 ): ImportRisk[] {
@@ -201,6 +230,8 @@ export function resolveImportRisks(
     ? runImportReconciliation(originalInput).filter((result) => result.status === 'fail').map((result) => [result.ruleId, result] as const)
     : []);
   const ruleRisks: ImportRisk[] = reconciliation
+    // 화주에게는 신고 항목에 직접 영향을 주는 규칙만 보여준다(포워더는 전체 규칙 그대로).
+    .filter((result) => role !== 'shipper' || CORE_RULE_IDS.has(result.ruleId))
     .filter((result) => result.status === 'fail' || originalFails.has(result.ruleId))
     .flatMap((current) => {
       const stillFails = current.status === 'fail';
@@ -222,12 +253,18 @@ export function resolveImportRisks(
       const isChosen = !stillFails && pickGroups.some((group) => group.selected);
       // 고른 값 없이 다른 수정으로 해소된 규칙은 목록에서 뺀다.
       if (!stillFails && !isChosen) return [];
+      // 서류에 HS CODE가 없어도(IR8) G 섹션에서 모든 품목의 HSK를 확정했으면 해결된 카드로 남긴다.
+      const confirmedCodes = result.ruleId === 'IR8'
+        ? analysis.extracted.items.map((item) => item.confirmedHSCode?.trim()).filter(Boolean)
+        : [];
+      const hsConfirmed = confirmedCodes.length > 0 && confirmedCodes.length === analysis.extracted.items.length;
+      const resolved = isChosen || hsConfirmed;
       return [{
         id: `reconcile-${result.ruleId}`,
         level: result.severity === 'error' ? 'high' : 'medium',
         // 규칙 번호(IR8 등)는 내부 기준이라 제목에 붙이지 않는다 — id에만 남긴다.
         item: result.label,
-        cause: result.evidence,
+        cause: hsConfirmed ? `대한민국 HSK 확정: ${[...new Set(confirmedCodes)].join(', ')}` : result.evidence,
         recommendation: pickGroups.length
           ? '원본 서류를 확인하고 맞는 값을 고르세요. 둘 다 틀렸다면 직접 입력하면 됩니다.'
           : 'C/I·P/L·B/L·C/O·보험증권 원본을 대조하고 확인된 값으로 정정하세요.',
@@ -235,10 +272,11 @@ export function resolveImportRisks(
         ...(pickGroups.length ? { pickGroups } : {}),
         ...(pickGroups.length ? {} : (() => { const fixes = ruleFixes(result.ruleId, analysis); return fixes.length ? { fixes } : {}; })()),
         ...(isChosen ? { chosen: true } : {}),
-        status: isChosen ? 'resolved' as const : 'unresolved' as const,
+        ...(hsConfirmed ? { autoResolved: true } : {}),
+        status: resolved ? 'resolved' as const : 'unresolved' as const,
       }];
     });
-  const existing = assessImportRisks(documents, analysis, suggestions, dutyError, importerCompanyName, role)
+  const existing = assessImportRisks(documents, analysis, suggestions, dutyError, role)
     .filter((risk) => risk.id !== 'reference');
   return [...ruleRisks, ...existing.filter((risk) => !ruleRisks.some((ruleRisk) => ruleRisk.id === risk.id))];
 }
@@ -248,7 +286,6 @@ export function assessImportRisks(
   analysis: ImportAnalysisResult,
   suggestions: ImportHSCodeSuggestion[] = [],
   dutyError = '',
-  importerCompanyName = '',
   // 포워더 화면에는 대한민국 HSK를 확정하는 입력이 없다 — 화주만 확정 가능하므로
   // "HS Code 미확정" 리스크를 포워더에게 띄우면 영원히 해소할 방법이 없는 항목이 된다.
   role: UserTradeRole = 'shipper',
@@ -266,6 +303,8 @@ export function assessImportRisks(
   // 화주가 이미 맞는 값을 고른 항목은 해결된 것으로 보되, 카드는 남기고 고른 값을 눌린 버튼으로 보여준다.
   const chosen = analysis.chosenValues ?? {};
   const risks: ImportRisk[] = analysis.validations
+    // 신고에 영향을 주지 않는 표기 차이(회사명·주소·연락처·Invoice 번호 등)는 화주 화면에서 제외한다.
+    .filter((validation) => role !== 'shipper' || isCoreValidationField(validation.field))
     .flatMap((validation) => {
       const choices = uniqueChoices((validation.values ?? [])
         .map((entry) => ({ source: docNameOf(entry.documentId), value: (entry.value ?? '').trim() }))
@@ -312,41 +351,22 @@ export function assessImportRisks(
   });
 
   const fields = analysis.extracted;
-  if (importerCompanyName && fields.importerDetails.name
-    && importerCompanyName.trim().toLowerCase() !== fields.importerDetails.name.trim().toLowerCase()) {
-    add({
-      id: 'importer-profile-mismatch',
-      level: 'high',
-      item: 'Importer 불일치',
-      cause: '문서의 Importer와 로그인 회사정보가 다릅니다.',
-      recommendation: '문서가 해당 회사의 거래인지 확인하세요. 문서값은 자동으로 덮어쓰지 않습니다.',
-      relatedDocuments: ['Commercial Invoice', 'Bill of Lading', '회원프로필'],
-      differentValues: [fields.importerDetails.name, importerCompanyName],
-      fixes: [{
-        kind: 'value',
-        label: '맞는 Importer 고르기',
-        target: { type: 'importer' },
-        choices: [{ source: '서류', value: fields.importerDetails.name }, { source: '회원 프로필', value: importerCompanyName }],
-      }],
-      status: 'unresolved',
-    });
-  }
-  // C/O 없음: FTA 적용 안 함 → 정상(카드 없음), 미확인 → 확인 권장, 적용 요청 → 반드시 수정. C/O가 있으면 대사 규칙이 다룬다.
+  // Importer 회사명이 로그인 회사와 달라도 신고 금액·세액에는 영향이 없어 확인 항목으로 띄우지 않는다.
+  // 추출값 자체는 분석 결과 화면에서 그대로 보고 고칠 수 있다.
+  // C/O는 모든 수입신고의 필수서류가 아니라 FTA 협정세율을 적용할 때 필요한 조건부 서류다.
+  // 화주가 "적용 가능 여부 확인"을 고르고 C/O를 갖고 있다고 답했는데 서류가 없을 때만 추가를 안내한다.
   const ftaChoice = analysis.chosenValues?.[FTA_CHOICE_KEY];
-  if (!documents.some((document) => document.type === 'certificate_of_origin') && ftaChoice !== 'FTA 적용 안 함') {
-    const requested = ftaChoice === 'FTA 적용 요청';
+  const coHolding = analysis.chosenValues?.[CO_HOLDING_KEY];
+  const hasCoDocument = documents.some((document) => document.type === 'certificate_of_origin');
+  if (isFtaReviewChoice(ftaChoice) && coHolding === '있음' && !hasCoDocument) {
     add({
       id: 'missing-co',
-      level: requested ? 'high' : 'medium',
-      item: requested ? '원산지증명서 누락 (FTA 적용 요청)' : '원산지증명서 누락 (FTA 적용 여부 확인 필요)',
-      cause: requested
-        ? 'FTA 협정세율 적용을 요청했지만 Certificate of Origin이 없어 협정세율을 적용할 수 없습니다.'
-        : 'Certificate of Origin이 첨부되지 않아 협정세율 적용 여부를 확인할 수 없습니다. 적용하지 않을 거면 아래에서 "FTA 적용 안 함"을 고르세요.',
-      recommendation: requested
-        ? '협정 요건에 맞는 C/O를 수출자에게 받아 추가로 올리거나, 적용하지 않기로 하면 "FTA 적용 안 함"을 고르세요.'
-        : 'FTA 적용을 검토하려면 협정 요건에 맞는 C/O를 수출자에게 요청하세요.',
       relatedDocuments: ['Certificate of Origin'],
-      fixes: [{ kind: 'fta' }, { kind: 'upload' }],
+      level: 'medium',
+      item: '원산지증명서 추가 필요',
+      cause: '원산지증명서를 갖고 있다고 하셨는데 서류가 아직 첨부되지 않았습니다.',
+      recommendation: '원산지증명서를 서류로 추가하면 협정세율 적용 가능 여부를 함께 확인할 수 있습니다.',
+      fixes: [{ kind: 'upload' }],
       status: 'unresolved',
     });
   }

@@ -12,7 +12,6 @@ export const PORTAI_DOCUMENT_NAMES = {
   transport_request: 'shipping.instruction',
   co: 'certificate.of.origin',
   insurance: 'insurance.policy',
-  dispatch_request: 'dispatch.request',
   arrival_notice: 'arrival.notice',
 } as const;
 

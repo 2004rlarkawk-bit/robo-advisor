@@ -8,6 +8,7 @@ import ProfileForm from './ProfileForm';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const profile: UserProfile = {
+  forwarder_specialties: [],
   id: 'user-1',
   email: 'member@example.com',
   company_name: '인천테크',
@@ -150,13 +151,13 @@ describe('ProfileForm 서비스 이용 목적 선택', () => {
     const rendered = renderForm();
     const selected = rendered.container.querySelector<HTMLButtonElement>('[role="radio"][aria-checked="true"]');
 
-    expect(selected?.textContent).toContain('화주·포워더 통합');
+    expect(selected?.textContent).toContain('관리자');
   });
 
   it('프로필 설정에서 변경한 역할을 저장 값으로 전달한다', async () => {
     const rendered = renderForm();
     const forwarder = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('[role="radio"]'))
-      .find((button) => button.textContent?.includes('포워더') && !button.textContent.includes('통합'));
+      .find((button) => button.textContent?.includes('포워더') && !button.textContent.includes('관리자'));
     const form = rendered.container.querySelector('form');
 
     await act(async () => forwarder?.click());
@@ -169,5 +170,35 @@ describe('ProfileForm 서비스 이용 목적 선택', () => {
     const submitted = (rendered.onSubmit.mock.calls as unknown as [[Record<string, unknown>]])[0][0];
     expect(submitted).not.toHaveProperty('industry');
     expect(submitted).not.toHaveProperty('trade_purpose');
+  });
+});
+
+describe('ProfileForm 담당 특화 분야', () => {
+  const chip = (root: HTMLElement, text: string) =>
+    Array.from(root.querySelectorAll('.fwd-cond-chip')).find((node) => node.textContent === text) as HTMLButtonElement | undefined;
+  const rolePill = (root: HTMLElement, label: string) =>
+    Array.from(root.querySelectorAll('.service-role-option')).find((node) => node.querySelector('strong')?.textContent === label) as HTMLButtonElement;
+  const submit = async (root: HTMLElement) => {
+    await act(async () => { root.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+  };
+
+  it('포워더 업무를 하는 계정은 특화 분야를 골라 저장한다', async () => {
+    const rendered = renderForm();
+    act(() => { chip(rendered.container, '중국 항로')?.click(); });
+    act(() => { chip(rendered.container, '콜드체인')?.click(); });
+    expect(chip(rendered.container, '중국 항로')?.getAttribute('aria-checked')).toBe('true');
+
+    await submit(rendered.container);
+    expect(rendered.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ forwarder_specialties: ['route_cn', 'cargo_cold'] }));
+  });
+
+  it('화주 전용으로 바꾸면 칸을 숨기고 저장 시 특화 분야를 비운다', async () => {
+    const rendered = renderForm();
+    act(() => { chip(rendered.container, '위험물')?.click(); });
+    act(() => { rolePill(rendered.container, '화주').click(); });
+    expect(chip(rendered.container, '위험물')).toBeUndefined();
+
+    await submit(rendered.container);
+    expect(rendered.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ service_role: 'shipper', forwarder_specialties: [] }));
   });
 });

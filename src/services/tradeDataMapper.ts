@@ -248,6 +248,10 @@ export function tradeProfileToFormData(
       measurement: role === 'forwarder'
         ? profile.forwarderCargoTotals?.measurementCbm ?? profile.measurement ?? ''
         : profile.measurement ?? '',
+      ...(profile.measurementManual ? { measurementManual: true } : {}),
+      // CBM 계산 근거(화물 크기)도 같이 저장해야 다시 열었을 때 규격이 비어 있지 않다.
+      ...(profile.packageDimensions?.length ? { packageDimensions: profile.packageDimensions } : {}),
+      ...(profile.packageDimensionUnit ? { packageDimensionUnit: profile.packageDimensionUnit } : {}),
       shippingMarks: profile.shippingMarks ?? '',
       containerSize: profile.containerSize ?? '',
       containerQuantity: profile.containerQuantity ?? '',
@@ -349,6 +353,10 @@ export function tradeFormDataToProfile(formData: TradeFormDataV3): TradeProfile 
     netWeight: numericInput(packaging.netWeight),
     grossWeight: numericInput(packaging.grossWeight),
     measurement: packaging.measurement,
+    ...(packaging.measurementManual ? { measurementManual: true } : {}),
+    // 규격을 넣기 전에 저장된 거래에는 키가 없어서, 그때는 예전처럼 빈 규격으로 연다.
+    ...(packaging.packageDimensions?.length ? { packageDimensions: packaging.packageDimensions } : {}),
+    ...(packaging.packageDimensionUnit ? { packageDimensionUnit: packaging.packageDimensionUnit } : {}),
     shippingMarks: packaging.shippingMarks,
     signedBy: formData.parties.signer.signedBy,
     signerName: formData.parties.signer.name,
@@ -421,7 +429,8 @@ export function tradeAttachmentToImportDocument(
   if (attachment.documentType === 'arrival_notice' || !hasValidStoragePath(attachment)) {
     return null;
   }
-  const type: ImportDocumentType = attachment.documentType === 'other'
+  // 선사 발행 Booking Confirmation은 수입 분석 대상 문서 종류가 아니라 기타로 넘긴다.
+  const type: ImportDocumentType = attachment.documentType === 'other' || attachment.documentType === 'booking_confirmation'
     ? 'other'
     : attachment.documentType;
   return {

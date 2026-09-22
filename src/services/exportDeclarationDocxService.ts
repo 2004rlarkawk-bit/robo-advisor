@@ -3,6 +3,9 @@ import Docxtemplater from 'docxtemplater';
 import { renderAsync } from 'docx-preview';
 import type { CustomsDeclarationData, TradeItem } from '../types';
 import { tradeItemAmount } from '../utils/shipment';
+import { isFobIncoterms } from '../utils/exportDeclarationFob';
+
+export { exportDeclarationFobNotice } from '../utils/exportDeclarationFob';
 // 고정 docx 템플릿(수출신고서 갑지·을지) — XML/서식 무수정, {{placeholder}} 값만 주입.
 import templateUrl from '../../templates/export_declaration_template.docx?url';
 
@@ -61,11 +64,12 @@ const num = (n: unknown) => (Number(n) > 0 ? Number(n).toLocaleString() : '');
 const wt = (n: unknown) => (Number(n) > 0 ? `${Number(n).toLocaleString()} KG` : '');
 const pkg = (count: unknown, unit: string) => (Number(count) > 0 ? `${Number(count).toLocaleString()} ${unit}`.trim() : '');
 
-/** 품목별 신고가격(FOB) 원화 — KRW면 금액 그대로, 외화면 관세청 수출환율로 환산, 환율 없으면 공란. */
-function fobKrw(amount: number, currency: string, rate: number | null | undefined): string {
-  if (amount <= 0) return '';
+/** 품목별 신고가격(FOB) 원화 — FOB 조건만. KRW면 금액 그대로, 외화면 관세청 수출환율로 환산. 값이 없거나 잘못되면 공란(0원·NaN 금지). */
+function fobKrw(amount: number, currency: string, rate: number | null | undefined, incoterms: string | undefined): string {
+  if (!isFobIncoterms(incoterms)) return '';
+  if (!Number.isFinite(amount) || amount <= 0) return '';
   if (currency === 'KRW') return `₩${Math.round(amount).toLocaleString()}`;
-  if (rate && rate > 0) return `₩${Math.round(amount * rate).toLocaleString()}`;
+  if (typeof rate === 'number' && Number.isFinite(rate) && rate > 0) return `₩${Math.round(amount * rate).toLocaleString()}`;
   return ''; // 외화인데 환율 미확보 → 공란(자동 추정 안 함)
 }
 
@@ -94,7 +98,7 @@ export function transportTypeCode(loadingMode: string | undefined): string {
 const krw = (n: unknown) => (Number(n) > 0 ? Math.round(Number(n)).toLocaleString() : '');
 
 function mapItem(it: TradeItem, idx: number, total: number, ctx: {
-  currency: string; rate: number | null | undefined; invoiceNo: string; origin: string;
+  currency: string; rate: number | null | undefined; invoiceNo: string; origin: string; incoterms: string;
 }): ExportDeclItemSchema {
   const amt = tradeItemAmount(it);
   return {
@@ -110,7 +114,7 @@ function mapItem(it: TradeItem, idx: number, total: number, ctx: {
     amount: num(amt),
     hs_code: s(it.hsCode),
     net_weight: wt(it.netWeight),
-    fob_price: fobKrw(amt, ctx.currency, ctx.rate),
+    fob_price: fobKrw(amt, ctx.currency, ctx.rate, ctx.incoterms),
     invoice_no: ctx.invoiceNo,
     import_decl_no: '',   // 소스 없음
     origin: ctx.origin,
@@ -137,14 +141,16 @@ export function mapExportDeclarationToDocxSchema(cd: CustomsDeclarationData): Ex
   const invoiceNo = s(cd.invoiceNo);
   const origin = s(cd.countryOfOrigin);
   const total = items.length;
-  const ctx = { currency, rate, invoiceNo, origin };
+  const incoterms = s(cd.incoterms);
+  const ctx = { currency, rate, invoiceNo, origin, incoterms };
 
   const firstItem = items.length > 0 ? mapItem(items[0], 0, total, ctx) : EMPTY_ITEM;
   const extraItems = items.slice(1).map((it, i) => mapItem(it, i + 1, total, ctx));
 
   const invoiceAmount = Number(cd.invoiceAmount) || 0;
-  const totalFobUsd = currency !== 'KRW' && invoiceAmount > 0 ? `$ ${invoiceAmount.toLocaleString()}` : '';
-  const totalFobKrw = fobKrw(invoiceAmount, currency, rate).replace('₩', '₩ ');
+  // 총신고가격(FOB)도 FOB 조건일 때만 송장금액으로 채운다.
+  const totalFobUsd = isFobIncoterms(incoterms) && currency !== 'KRW' && invoiceAmount > 0 ? `$ ${invoiceAmount.toLocaleString()}` : '';
+  const totalFobKrw = fobKrw(invoiceAmount, currency, rate, incoterms).replace('₩', '₩ ');
 
   const exporterName = s(cd.exporter?.name);
   const exporterAddr = s(cd.ownerAddress) || s(cd.exporter?.address);

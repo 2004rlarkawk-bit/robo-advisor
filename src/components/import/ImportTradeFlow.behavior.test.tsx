@@ -275,7 +275,7 @@ describe('수입 문서관리 조회 모드', () => {
 
     expect(container?.textContent).toContain('통관 진행 현황');
     act(() => button('2단계 이전 단계 보기').click());
-    expect(container?.textContent).toContain('분석 결과 확인 및 수정');
+    expect(container?.textContent).toContain('분석 결과 확인');
     expect(container?.querySelector<HTMLFieldSetElement>('.workspace-readonly-fieldset')?.disabled).toBe(true);
 
     act(() => button('3단계 통관처리 보기').click());
@@ -288,7 +288,7 @@ describe('수입 문서관리 조회 모드', () => {
     expect(localStorage.getItem(cacheKey)).toBe(initialCache);
   });
 
-  it('수입 화주는 조회 상태를 유지하면서 3단계와 2단계를 왕복한 뒤 닫는다', () => {
+  it('수입 화주는 조회 상태를 유지하면서 FTA·세액↔신고자료↔HSK 단계를 오간 뒤 닫는다', () => {
     const initialCache = JSON.stringify(cachedForwarderState());
     localStorage.setItem(otherDraftKey, initialCache);
     const onClose = vi.fn();
@@ -298,16 +298,23 @@ describe('수입 문서관리 조회 모드', () => {
       onClose,
     });
 
-    expect(container?.textContent).toContain('수입신고 의뢰서');
+    // 3단계는 FTA·세액 확인, 신고자료(의뢰서)는 4단계로 옮겨졌다.
+    expect(container?.textContent).toContain('FTA 적용 여부');
     expect(container?.textContent).not.toContain('완료 및 제출');
-    act(() => button('2단계 이전 단계 보기').click());
+
+    act(() => button('4단계 신고자료 준비 보기').click());
+    expect(container?.textContent).toContain('수입신고 의뢰서');
+
+    const hskStepButton = Array.from(container!.querySelectorAll<HTMLButtonElement>('button'))
+      .find((candidate) => candidate.textContent?.includes('HSK 검토'))!;
+    act(() => hskStepButton.click());
     expect(container?.textContent).toContain('G. 품목별 HSK 자동추천 및 확정');
     const manualHsInput = container?.querySelector<HTMLInputElement>('.import-hs-manual input');
     expect(manualHsInput?.matches(':disabled')).toBe(true);
     expect(button('직접 입력 확정').matches(':disabled')).toBe(true);
 
-    act(() => button('3단계 세액·의뢰서 보기').click());
-    expect(container?.textContent).toContain('수입신고 의뢰서');
+    act(() => button('3단계 FTA·세액 확인 보기').click());
+    expect(container?.textContent).toContain('FTA 적용 여부');
     act(() => button('닫기').click());
 
     expect(onClose).toHaveBeenCalledOnce();
@@ -323,10 +330,13 @@ describe('수입 문서관리 조회 모드', () => {
       readOnly: false,
     });
 
-    // '단계 초기화'는 이제 1단계(입력)에서만 노출된다 — 결과 단계(2·3)에서는 소개 헤더와 함께 숨김.
-    // 편집(normal) 모드 유지 여부는 '완료' 액션 노출 + '닫기'(읽기전용) 미노출 + 아래 입력 활성으로 검증한다.
-    expect(container?.textContent).toContain('완료');
+    // '단계 초기화'는 1단계(입력)에서만 노출된다 — 결과 단계에서는 소개 헤더와 함께 숨김.
+    // 편집(normal) 모드 유지 여부는 다음 단계 이동 + '닫기'(읽기전용) 미노출 + 아래 입력 활성으로 검증한다.
+    expect(container?.textContent).toContain('다음: 신고자료 준비');
     expect(container?.textContent).not.toContain('닫기');
+    act(() => button('다음: 신고자료 준비').click());
+    expect(container?.textContent).toContain('완료');
+    act(() => button('이전').click());
     act(() => button('이전').click());
     const manualHsInput = container?.querySelector<HTMLInputElement>('.import-hs-manual input');
     expect(manualHsInput?.matches(':disabled')).toBe(false);

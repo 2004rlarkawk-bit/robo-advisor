@@ -8,6 +8,13 @@ import {
 import { normalizeCountryValue } from '../constants/countries';
 import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS, normalizePortValue } from '../constants/ports';
 import CountrySelect from './CountrySelect';
+import {
+  FORWARDER_SPECIALTIES,
+  FORWARDER_SPECIALTY_GROUP_LABEL,
+  type ForwarderSpecialtyGroup,
+  type ForwarderSpecialtyKey,
+} from '../utils/forwarderSpecialty';
+import '../styles/forwarderRequest.css';
 
 interface Props { profile: UserProfile; submitLabel: string; isSaving: boolean; onSubmit: (values: UserProfileUpdate) => Promise<void>; requireExplicitServiceRole?: boolean; secondaryAction?: ReactNode; }
 
@@ -25,7 +32,7 @@ const SERVICE_ROLE_OPTIONS: { value: ServiceRole; label: string; description: st
   },
   {
     value: 'integrated',
-    label: '화주·포워더 통합',
+    label: '관리자',
     description: '화주용 작업과 포워더용 작업을 모두 사용할 수 있습니다.',
   },
 ];
@@ -35,13 +42,22 @@ const formValues = (p: UserProfile, requireExplicitServiceRole: boolean): UserPr
   phone: p.phone ?? '', country: normalizeCountryValue(p.country),
   default_load_port: normalizePortValue(p.default_load_port), default_discharge_port: normalizePortValue(p.default_discharge_port), default_incoterm: p.default_incoterm ?? '',
   service_role: requireExplicitServiceRole ? undefined : p.service_role,
+  forwarder_specialties: p.forwarder_specialties ?? [],
 });
+
+const SPECIALTY_GROUPS: ForwarderSpecialtyGroup[] = ['route', 'cargo'];
 
 export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, requireExplicitServiceRole = false, secondaryAction }: Props) {
   const [values, setValues] = useState<UserProfileUpdate>(() => formValues(profile, requireExplicitServiceRole));
   const [message, setMessage] = useState('');
   useEffect(() => setValues(formValues(profile, requireExplicitServiceRole)), [profile, requireExplicitServiceRole]);
   const set = (field: keyof UserProfileUpdate, value: string) => setValues((v) => ({ ...v, [field]: value }));
+  const toggleSpecialty = (key: ForwarderSpecialtyKey) => setValues((v) => {
+    const current = v.forwarder_specialties ?? [];
+    return { ...v, forwarder_specialties: current.includes(key) ? current.filter((item) => item !== key) : [...current, key] };
+  });
+  // 포워더 업무를 하는 계정에만 특화 분야를 묻는다. 화주 전용으로 바꾸면 저장 시 비운다.
+  const handlesForwarding = values.service_role === 'forwarder' || values.service_role === 'integrated';
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); setMessage('');
     if (!values.service_role) {
@@ -53,7 +69,7 @@ export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, 
     if (requireExplicitServiceRole && (!values.contact_name?.trim() || !values.phone?.trim() || !values.country?.trim())) {
       setMessage('담당자명, 회사 연락처, 국가는 필수 정보입니다.'); return;
     }
-    try { await onSubmit(values); } catch (e) { setMessage(e instanceof Error ? e.message : '프로필을 저장하지 못했습니다.'); }
+    try { await onSubmit({ ...values, forwarder_specialties: handlesForwarding ? values.forwarder_specialties ?? [] : [] }); } catch (e) { setMessage(e instanceof Error ? e.message : '프로필을 저장하지 못했습니다.'); }
   };
   return (
     <form className={'profile-form'} onSubmit={submit}>
@@ -87,6 +103,26 @@ export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, 
           ))}
         </div>
       </section>
+      {handlesForwarding && (
+        <section className={'profile-form-section'}>
+          <div className={'profile-section-heading'}><h2>담당 특화 분야</h2><p>화주가 의뢰할 때 거래 조건과 맞는 담당자에게 자동으로 배정됩니다. 실제로 자주 맡는 분야만 골라 주세요.</p></div>
+          {SPECIALTY_GROUPS.map((group) => (
+            <div key={group} className={'profile-specialty-group'} role={'group'} aria-label={`${FORWARDER_SPECIALTY_GROUP_LABEL[group]} 특화 분야`}>
+              <span className={'profile-specialty-group-label'}>{FORWARDER_SPECIALTY_GROUP_LABEL[group]}</span>
+              <div className={'profile-specialty-chips'}>
+                {FORWARDER_SPECIALTIES.filter((item) => item.group === group).map((item) => {
+                  const checked = (values.forwarder_specialties ?? []).includes(item.key);
+                  return (
+                    <button key={item.key} type={'button'} role={'checkbox'} aria-checked={checked} className={`fwd-cond-chip${checked ? ' is-on' : ''}`} onClick={() => toggleSpecialty(item.key)}>
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
       <section className={'profile-form-section'}>
         <div className={'profile-section-heading'}><h2>기본 거래 정보</h2><p>새 거래를 시작할 때 자동 입력되며 거래별로 바꿀 수 있습니다.</p></div>
         <div className={'profile-form-grid profile-trade-grid'}>

@@ -1,4 +1,4 @@
-import type { ImportDispatchRequest } from './importTrade';
+import type { TradeAttachment } from './tradeFormData';
 /**
  * 포워더 수입 건(ForwarderImportCase) 데이터 계약.
  *
@@ -34,6 +34,8 @@ export interface ForwarderCaseIssue {
   severity: ForwarderIssueSeverity;
   title: string;
   detail: string;
+  /** 무엇이 어떻게 다른지 — 화주 화면과 같은 값 비교 목록(예: '서류의 Importer: A', '로그인 회사정보: B') */
+  values?: string[];
   documents: string[];
   resolved: boolean;
 }
@@ -66,9 +68,19 @@ export interface ForwarderCaseState {
   arrivalNotice?: ArrivalNoticeMeta | null;
   returnRequest?: ForwarderReturnRequest | null;
   activity?: ForwarderCaseActivity[];
-  /** 포워더가 작성한 배차 의뢰 — 통관·운송 단계에서 운송사에 전달한다 */
-  dispatchRequest?: ImportDispatchRequest | null;
+  /** 신고·인도 진행 기록. 실제 세관 신고나 선사 발급과 구분한다. */
+  importOperations?: ForwarderImportOperationsState;
   updatedAt: string;
+}
+
+export interface ForwarderImportOperationsState {
+  brokerName: string;
+  declarationNo: string;
+  declarationStatus: 'preparing' | 'handed_over' | 'filed' | 'cleared';
+  doStatus: 'waiting' | 'requested' | 'received';
+  doNumber: string;
+  doIssuer: string;
+  doDocument?: TradeAttachment | null;
 }
 
 export interface ForwarderImportCase {

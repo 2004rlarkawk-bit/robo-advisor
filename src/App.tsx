@@ -1,3 +1,4 @@
+import { exportDeclarationFobNotice } from './utils/exportDeclarationFob';
 import {
   Fragment,
   Suspense,
@@ -84,6 +85,7 @@ import {
   createGeneratedImportTrade,
   createCompletedImportTrade,
   fetchSavedTradeById,
+  fetchTradeDirection,
   markTradeAsSubmitted,
   reopenSubmittedImportTradeForRevision,
   updateGeneratedTrade,
@@ -103,6 +105,7 @@ import { decideGeneratedTradeWrite } from './services/tradePersistencePolicy';
 import { resolveWorkspaceRole, type WorkspaceRole } from './utils/workspaceRole';
 import { countShipperReturnRequests } from './services/forwarderCaseService';
 import type { NotificationRecord } from './types/forwarderRequest';
+import { resolveForwarderNotificationTarget } from './utils/forwarderNotificationTarget';
 import {
   applyMatchPatchToProfile,
   buildExportCrossChecks,
@@ -126,6 +129,7 @@ import {
   createEmptyForwarderFormState,
   forwarderFormToTradeProfile,
   isEtaBeforeEtd,
+  missingBookingFields,
   tradeProfileToForwarderFormState,
   type ForwarderFormState,
 } from './utils/forwarderForm';
@@ -140,6 +144,7 @@ import {
 import { saveExportForwarderCaseState } from './services/exportForwarderCaseService';
 import {
   EXPORT_PROGRESS_STAGE_LABEL,
+  type ExportBookingDetails,
   type ExportForwarderCaseState,
   type ExportProgressStageKey,
   type ExportProgressStatus,
@@ -277,6 +282,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setHtmlTemplates({});
     setBillOfLadingData(null);
     setForwarderGenerationError('');
+    setExportForwarderView('inbox');
   };
 
   const handleImportComplete = async (snapshot: ImportTradeSnapshot): Promise<SavedTrade> => {
@@ -435,6 +441,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   // 포워더 수입 워크스페이스에서 [직접 등록]을 누르면 기존 업로드 플로우로 전환한다.
   const [forwarderDirectUpload, setForwarderDirectUpload] = useState(false);
   const [notificationTradeId, setNotificationTradeId] = useState<string | null>(null);
+  const [notificationTab, setNotificationTab] = useState<'review' | 'messages'>('messages');
   useEffect(() => {
     setForwarderDirectUpload(false);
   }, [tradeDirection, workspaceRole]);
@@ -480,6 +487,17 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [appliedExportRequestShipperContact, setAppliedExportRequestShipperContact] = useState<{ email: string; company: string } | null>(null);
   /** 수출 포워더 5단계 운영 상태(선적 진행단계·Master B/L 번호·전달 이력). trades.workflow_data.exportForwarderCase */
   const [exportForwarderCase, setExportForwarderCase] = useState<ExportForwarderCaseState | null>(null);
+  /**
+   * 아직 저장 전인 부킹 부가정보(마감일·운임조건·비고).
+   * 저장된 값(exportForwarderCase.booking) 위에 덮어 쓰는 형태로 화면에 보여준다.
+   */
+  const [bookingDetailsDraft, setBookingDetailsDraft] = useState<ExportBookingDetails>({});
+  /**
+   * 수출 포워더 첫 화면 상태 — 'inbox'(받은 의뢰 목록만 표시) / 'workflow'(5단계 업무 화면).
+   * 의뢰 불러오기·직접 등록·거래 조회/재개 시 'workflow'로 전환되고,
+   * 목록으로 돌아가기·선적 완료 처리 후에는 'inbox'로 복귀한다.
+   */
+  const [exportForwarderView, setExportForwarderView] = useState<'inbox' | 'workflow'>('inbox');
 
   const tradeDraftDefaultProfile: TradeProfile = {
     ...EMPTY_TRADE_PROFILE,
@@ -796,6 +814,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [highlightHint, setHighlightHint] = useState<string>('');
   // [입력 수정]으로 진입한 이슈 — 폼 섹션 상단 인라인 안내 카드용 (토스트 5초 타이머와 별개로 유지)
   const [activeFixIssue, setActiveFixIssue] = useState<ValidationIssue | null>(null);
+  // 오른쪽 고칠 항목을 누를 때마다 늘어나는 번호 — 닫았던 안내 카드(원산지 전용 카드 포함)를 다시 열 때 쓴다.
+  const [fixRevealKey, setFixRevealKey] = useState(0);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearFieldHighlight = () => {
@@ -822,6 +842,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setHighlightHint(issue.message.replace(/^AI 참고 — /, '').replace(/\s*\[근거:[^\]]*\]\s*$/, ''));
     setHighlightField(issueToFieldKey(issue));
     setActiveFixIssue(issue);
+    setFixRevealKey((key) => key + 1);
     setHasGenerated(false);
   };
 
@@ -890,6 +911,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setExportForwarderCase(null);
     setAppliedExportRequestId(null);
     setAppliedExportRequestShipperContact(null);
+    setExportForwarderView('inbox');
     hasSubmittedTradeRef.current = false;
     exportDraftCompletedRef.current = true;
     clearWorkspaceSession();
@@ -905,6 +927,22 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       email: contact.includes('@') ? contact : '',
       company: request.exporterName,
     });
+    // 의뢰 불러오기 → 5단계 업무 화면(STEP 1 화주 의뢰 확인)으로 진입한다.
+    setWorkspaceCurrentStep(1);
+    setExportForwarderView('workflow');
+  };
+
+  // 직접 등록에서 서류를 확인한 뒤 업무 화면(STEP 1)으로 진입한다. 새 거래를 만들지 않는다 —
+  // 실제 trades row 생성은 기존과 동일하게 STEP 1의 [다음] 클릭(persistForwarderProfile) 시점에 일어난다.
+  const handleEnterExportForwarderWorkflow = () => {
+    setWorkspaceCurrentStep(1);
+    setExportForwarderView('workflow');
+  };
+
+  // 업무 화면 → Inbox로 복귀. 로컬 편집 상태만 비우고 저장된 거래 데이터(DB)는 건드리지 않는다.
+  const handleReturnToExportForwarderInbox = () => {
+    handleResetForwarderTrade();
+    setExportForwarderView('inbox');
   };
 
   // 수출 포워더 1~2단계 공통 저장 — 화물·당사자·Booking 입력값(TradeProfile)을 trades row에 반영한다.
@@ -982,21 +1020,46 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     }
   };
 
-  // STEP 2 — 선적 Booking → 저장 후 STEP 3(선적 진행 관리)로 이동
+  // STEP 2 — 선복 부킹. 외부(선사 홈페이지·메일·전화)에서 확정된 부킹을 PortAI에 등록하고 STEP 3으로 이동.
   const handleForwarderStep2Save = async () => {
     if (isForwarderSaving) return;
     if (isEtaBeforeEtd(forwarderForm.departureDate, forwarderForm.arrivalDate)) {
       alert('ETA는 ETD보다 빠를 수 없습니다.');
       return;
     }
-    if (!forwarderForm.bookingNo.trim() || !forwarderForm.vesselOrFlight.trim() || !forwarderForm.carrier.trim()) {
-      const proceed = window.confirm('Carrier / Booking No. / Vessel 정보가 비어 있습니다. 이대로 저장할까요?');
-      if (!proceed) return;
+    const missing = missingBookingFields(forwarderForm);
+    if (missing.length > 0) {
+      alert(`${missing.join(', ')}를 입력해야 부킹 완료 처리를 할 수 있습니다.`);
+      return;
     }
     setIsForwarderSaving(true);
     try {
       const saved = await persistForwarderProfile(3);
-      if (saved) setWorkspaceCurrentStep(3);
+      if (saved) {
+        const bookingDetails: ExportBookingDetails = {
+          ...(exportForwarderCase?.booking ?? {}),
+          ...bookingDetailsDraft,
+          confirmedAt: exportForwarderCase?.booking?.confirmedAt ?? new Date().toISOString(),
+        };
+        try {
+          const nextCase = await saveExportForwarderCaseState(
+            saved.id,
+            { booking: bookingDetails, progress: { booking: 'done' } },
+            [exportForwarderCase?.booking?.confirmedAt ? '부킹 정보 수정' : '부킹 확정 정보 등록'],
+          );
+          setExportForwarderCase(nextCase);
+          setBookingDetailsDraft({});
+        } catch (caseError) {
+          console.warn('[Forwarder Export] 부킹 부가정보 저장 실패:', caseError);
+        }
+        // H/B/L 운임조건이 비어 있을 때만 부킹 값으로 채운다 — 이미 적어 둔 값은 덮어쓰지 않는다.
+        if (bookingDetails.freightTerms && !forwarderForm.freightTerms) {
+          setForwarderForm((current) => current.freightTerms
+            ? current
+            : { ...current, freightTerms: bookingDetails.freightTerms as ForwarderFormState['freightTerms'] });
+        }
+        setWorkspaceCurrentStep(3);
+      }
     } catch (error) {
       console.error('[Forwarder Export] Booking 저장 실패:', error);
       alert('Booking 정보를 저장하지 못했습니다. 현재 입력값을 유지한 채 다시 시도해주세요.');
@@ -1221,6 +1284,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setHtmlTemplates({});
     setBillOfLadingData(null);
     setForwarderGenerationError('');
+    setExportForwarderView('inbox');
   };
 
   // 재검증(rerunAgents) 동시 실행 제어 — 마지막 요청의 결과만 반영한다
@@ -1583,9 +1647,12 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       setBillOfLadingData((t.generatedDocs?.billOfLading as BillOfLadingData) || null);
       setForwarderGenerationError('');
       setExportForwarderCase((t.exportForwarderCase as ExportForwarderCaseState | null) ?? null);
+      setBookingDetailsDraft({});
       setAppliedExportRequestId(null);
       setAppliedExportRequestShipperContact(null);
       hasSubmittedTradeRef.current = t.status === 'submitted';
+      // 문서관리 조회·거래관리 이어서 작성은 Inbox를 거치지 않고 바로 업무 화면으로 연다.
+      setExportForwarderView('workflow');
       setActiveMenu('dashboard');
       return;
     }
@@ -1665,7 +1732,11 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   // 포워더 보완 요청을 받은 제출 거래를 다시 열어(status를 generated로 되돌려) 작업실에서 수정한다.
   const handleReviseReturnedImportTrade = async (trade: SavedTrade) => {
     try {
-      const reopened = await reopenSubmittedImportTradeForRevision(trade.id);
+      // 이미 수정용으로 열려 있는(generated) 건은 다시 열 필요가 없다.
+      // 알림을 두 번 누르거나, 수정하다 만 건을 다시 여는 경우가 여기 해당한다.
+      const reopened = trade.status === 'submitted'
+        ? await reopenSubmittedImportTradeForRevision(trade.id)
+        : trade;
       await handleResumeSavedTradeFromDocumentManager(reopened);
 
       // 값을 고치는 화면은 2단계(분석 결과)이므로 그리로 열고,
@@ -1679,7 +1750,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
           const forwarderState = (reopened.forwarderCase ?? trade.forwarderCase) as
             | import('./types/forwarderCase').ForwarderCaseState
             | null;
-          const reason = forwarderState?.returnRequest?.reason ?? '';
+          // 이미 회신 처리된 요청이면 안내 카드를 다시 띄우지 않는다(지난 요청이 새 요청처럼 보이지 않게).
+          const pendingRequest = forwarderState?.returnRequest?.resolvedAt ? null : forwarderState?.returnRequest;
+          const reason = pendingRequest?.reason ?? '';
           localStorage.setItem(cacheKey, JSON.stringify({
             ...cached,
             step: 2,
@@ -1821,13 +1894,53 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     }
     setActiveMenu(menu);
   };
+  /** 포워더 알림 클릭 — 방향(수입/수출)까지 확인한 뒤 해당 화면을 연다. */
+  const openForwarderNotificationTarget = (direction: 'import' | 'export', tradeId: string, tab: 'review' | 'messages') => {
+    setTradeDirection(direction);
+    setForwarderDirectUpload(false);
+    if (direction === 'import') {
+      setNotificationTab(tab);
+      setNotificationTradeId(tradeId);
+      // ForwarderImportWorkspace가 이미 떠 있으면 업무 목록을 마운트 시점에만 불러온 채 그대로
+      // 쓴다 — 그 뒤에 들어온 새 의뢰는 목록에 없어 열리지 않는다(첫 클릭만 되는 것처럼 보임).
+      // 의뢰 수락 시(onAccepted)와 같은 방법으로 강제 리마운트해 최신 목록으로 다시 연다.
+      setImportWorkspaceVersion((version) => version + 1);
+    }
+    // 수출은 건별 상세 화면이 없어(포워더가 의뢰를 자기 폼으로 가져와 작업), 수출 작업실(의뢰
+    // 수신함이 있는 화면)까지만 연다 — tradeId는 쓰지 않는다.
+  };
+
   const handleOpenNotification = (notification: NotificationRecord, menu: AppMenu) => {
     handleAppNavigate(menu);
-    if (notification.type === 'trade_return_replied' && notification.tradeId) {
-      setTradeDirection('import');
-      setForwarderDirectUpload(false);
-      setNotificationTradeId(notification.tradeId);
+    if (workspaceRole !== 'forwarder') {
+      // 화주가 보완 요청 알림을 누르면 문서관리 탭만 여는 게 아니라, 해당 거래를 다시 열고
+      // 포워더의 요청 사유 카드까지 펼친다(문서관리에서 [지금 수정하러 가기]와 같은 경로).
+      if (notification.type === 'trade_return_requested' && notification.tradeId) {
+        void fetchSavedTradeById(notification.tradeId)
+          .then(async (trade) => {
+            if (!trade) {
+              console.warn('[알림] 보완 요청 거래를 찾지 못했습니다:', notification.tradeId);
+              return;
+            }
+            await handleReviseReturnedImportTrade(trade);
+          })
+          .catch((err) => console.warn('[알림] 보완 요청 거래 열기 실패:', err));
+      }
+      return;
     }
+    const target = resolveForwarderNotificationTarget(notification);
+    if (!target) return;
+    if (target.direction) {
+      openForwarderNotificationTarget(target.direction, target.tradeId, target.tab);
+      return;
+    }
+    // 예전 알림(payload에 direction 없음)은 거래를 조회해 방향을 확인한다.
+    void fetchTradeDirection(target.tradeId)
+      .then((direction) => openForwarderNotificationTarget(direction ?? 'import', target.tradeId, target.tab))
+      .catch((err) => {
+        console.warn('[알림] 거래 방향 조회 실패 — 수입으로 간주:', err);
+        openForwarderNotificationTarget('import', target.tradeId, target.tab);
+      });
   };
   loadSavedTradeRef.current = handleLoadSavedTrade;
 const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
@@ -1901,6 +2014,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       setAppliedExportRequestId(null);
       setAppliedExportRequestShipperContact(null);
       hasSubmittedTradeRef.current = false;
+      // 새 거래로 복사한 값을 바로 이어서 채울 수 있도록 업무 화면으로 연다.
+      setExportForwarderView('workflow');
       setActiveMenu('dashboard');
       return;
     }
@@ -2630,7 +2745,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
           <div className="login-header">
             <div className="login-logo">🚢</div>
             <div className="login-brand">PortAI</div>
-            <div className="login-subtitle">스마트 물류 & 통관 자동화 플랫폼</div>
+            <div className="login-subtitle">수출입 서류 작성 · 검토 지원 플랫폼</div>
           </div>
           
           <form className="login-form" onSubmit={handleMemberLogin}>
@@ -2842,6 +2957,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 <IncomingTradeRequestsPanel />
               ) : (
                 <ShipperForwarderRequestsPanel
+                  currentUserId={user.id}
                   onOpenTrade={handleLoadSavedTradeFromDocumentManager}
                   onRevise={handleReviseReturnedImportTrade}
                 />
@@ -2937,6 +3053,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     onDirectUpload={() => setForwarderDirectUpload(true)}
                     includeOwnShipperTrades={userProfile.service_role === 'integrated'}
                     initialTradeId={notificationTradeId}
+                    initialTab={notificationTab}
                     onInitialTradeOpened={() => setNotificationTradeId(null)}
                   />
                   : <ImportForwarderFlow
@@ -2985,12 +3102,15 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 onClose={handleCloseDocumentPreview}
                 currentStep={workspaceCurrentStep}
                 onStepChange={setWorkspaceCurrentStep}
+                view={exportForwarderView}
+                onReturnToInbox={handleReturnToExportForwarderInbox}
+                onEnterWorkflow={handleEnterExportForwarderWorkflow}
                 onNextFromRequest={() => void handleForwarderStep1Next()}
-                onResetTrade={handleResetForwarderTrade}
-                showRequestInbox
                 appliedRequestTradeId={appliedExportRequestId}
                 onApplyExportRequest={handleApplyExportRequest}
                 onSaveBooking={() => void handleForwarderStep2Save()}
+                booking={{ ...(exportForwarderCase?.booking ?? {}), ...bookingDetailsDraft }}
+                onBookingChange={(values) => setBookingDetailsDraft((current) => ({ ...current, ...values }))}
                 progress={exportForwarderCase?.progress ?? {}}
                 onProgressChange={(stage, statusValue) => void handleForwarderProgressChange(stage, statusValue)}
                 onNextFromProgress={() => void handleForwarderStep3Next()}
@@ -3035,6 +3155,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   }}
                   fixNotice={shipperFixNotice}
                   onDismissFixNotice={clearFieldHighlight}
+                  fixRevealKey={fixRevealKey}
                   toolbar={IS_DEV_TEST_ENABLED ? (
                     <div className="dev-test-actions">
                       <span className="dev-badge">DEV</span>
@@ -3381,7 +3502,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           <input
                             type="number"
                             className="form-input"
-                            placeholder="외화 입력 시 과세가격 자동 환산"
+                            placeholder="외화 입력 시 원화 자동 환산"
                             value={profile.invoiceAmount ?? ''}
                             onChange={(e) => handleInputChange('invoiceAmount', e.target.value ? Number(e.target.value) : '')}
                           />
@@ -4101,7 +4222,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                               {match.rows.map((row) => {
                                 // 불일치 + 업로드 값이 있을 때만 두 값을 눌러서 고를 수 있다.
                                 const key = `${match.attachmentId}::${row.field}`;
-                                const pickable = row.status === 'mismatch' && !!row.uploadedValue;
+                                // 계산값(CBM)은 서류 값으로 덮어쓸 수 없다 — 포장 규격을 고쳐야 한다.
+                                const pickable = row.status === 'mismatch' && !!row.uploadedValue && !row.computed;
                                 const choice = matchChoices[key];
                                 const renderValue = (side: MatchChoice, value: string) => {
                                   if (!pickable) return value || '—';
@@ -4137,6 +4259,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                       {row.status === 'mismatch' && (
                                         <div className="rv-match-fix">
                                           <span className="rv-match-badge bad">불일치</span>
+                                          {row.computed && (
+                                            <span className="rv-match-pick-state">포장 정보의 화물 크기를 확인해 주세요</span>
+                                          )}
                                           {pickable && (
                                             <span className="rv-match-pick-state">
                                               {matchBusyKey === key ? '품명을 영문으로 정리하는 중…'
@@ -4331,8 +4456,19 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   </span>
                                 )}
                               </div>
-                              <div className="fact-card-value">{f.value}</div>
+                              {f.value && f.valueLabel && <div className="fact-card-value-label">{f.valueLabel}</div>}
+                              {f.value && <div className="fact-card-value">{f.value}</div>}
                               {f.formula && <div className="fact-card-formula">{f.formula}</div>}
+                              {f.notice && <p className="fact-card-notice">{f.notice}</p>}
+                              {f.action && !isDocumentManagerReadOnlyView && (
+                                <button
+                                  type="button"
+                                  className="fact-card-action"
+                                  onClick={() => goToFieldFix({ id: `${f.id}-input`, docType: 'customs_dec', severity: 'info', message: f.action!.hint, field: f.action!.field })}
+                                >
+                                  {f.action.label} →
+                                </button>
+                              )}
                               {f.meta && <div className="fact-card-meta">{f.meta}</div>}
                             </div>
                           ))}
@@ -4460,9 +4596,17 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                         const qm = issue.qtyMismatch;
                                         return (
                                           <div className="qty-mismatch">
-                                            <div className="qm-chips">
-                                              <span className="qm-chip qm-chip--pl">패킹리스트 총수량 <b>{qm.plTotal.toLocaleString()}개</b></span>
-                                              <span className="qm-chip qm-chip--inv">상업송장 수량 <b>{qm.invQty.toLocaleString()}개</b></span>
+                                            {/* 수입 '반드시 수정' 카드와 같은 비교형 — 두 서류 값을 ≠로 나란히 */}
+                                            <div className="qm-compare">
+                                              <div className="qm-compare__side">
+                                                <span className="qm-compare__doc">Packing List (PL) · 총수량</span>
+                                                <strong className="qm-compare__value">{qm.plTotal.toLocaleString()}개</strong>
+                                              </div>
+                                              <span className="qm-compare__neq" aria-label="다름">≠</span>
+                                              <div className="qm-compare__side">
+                                                <span className="qm-compare__doc">Commercial Invoice (CI) · 수량</span>
+                                                <strong className="qm-compare__value">{qm.invQty.toLocaleString()}개</strong>
+                                              </div>
                                             </div>
                                             <p className="qm-guide">실제 포장 수량을 기준으로 하나를 수정해 주세요.</p>
                                             <div className="qm-options">
@@ -4706,7 +4850,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   ].map(([k, v]) => (
                                     <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '4px 0', fontSize: 12.5, borderTop: '1px solid #eef2f7' }}>
                                       <span style={{ color: '#64748b', flexShrink: 0 }}>{k}</span>
-                                      <span style={{ color: '#0f172a', fontWeight: 600, textAlign: 'right', wordBreak: 'break-all' }}>{v}</span>
+                                      <span style={{ color: '#0f172a', fontWeight: 600, textAlign: 'right', overflowWrap: 'anywhere' }}>{v}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -4973,6 +5117,16 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   }}>
                     <b>초안 생성</b> — 세관 제출본이 아닙니다. 신고번호·세관기재란 등은 <b>신고 후 확정</b>되며, 실제 신고는 관세사 또는 UNI-PASS를 통해 진행하세요.
                   </div>
+                  {customsDeclarationData && exportDeclarationFobNotice(customsDeclarationData.incoterms) && (
+                    // 신고가격(FOB) 숫자 칸은 비워 두고, 이유는 문서 위 주석으로만 알린다.
+                    <div role="note" style={{
+                      marginBottom: '12px', padding: '10px 14px', borderRadius: '8px',
+                      background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155',
+                      fontSize: '13px', lineHeight: 1.5,
+                    }}>
+                      <b>신고가격(FOB) 빈칸</b> — {customsDeclarationData.incoterms || 'Incoterms 미선택'} 조건: {exportDeclarationFobNotice(customsDeclarationData.incoterms)}
+                    </div>
+                  )}
                   <div ref={customsDocxPreviewRef} style={{ width: '100%' }} />
                 </div>
               ) : (

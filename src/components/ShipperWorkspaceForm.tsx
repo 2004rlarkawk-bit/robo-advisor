@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { FileSignature, FileText, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import PortLocodeHint from './trade/PortLocodeHint';
 import {
@@ -8,8 +8,18 @@ import {
   OTHER_FOREIGN_PORT_VALUE,
   normalizeExportPortValue,
 } from '../constants/ports';
-import type { ExportDeclarationInfo, FreightTerms, Incoterms, NumericInput, ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
+import type { ExportDeclarationInfo, FreightTerms, Incoterms, NumericInput, PackageDimension, PackageDimensionUnit, ShipperItem, ShipperSupplementalState, TradeProfile } from '../types';
 import { deriveFreightTerms, isFreightTermsUnusual, FREIGHT_TERMS_LABEL } from '../utils/freightTerms';
+import {
+  createPackageDimension,
+  DEFAULT_PACKAGE_DIMENSION_UNIT,
+  formatCbm,
+  isCompletePackageDimension,
+  PACKAGE_DIMENSION_UNIT_OPTIONS,
+  packageDimensionCbm,
+  totalPackageBoxes,
+  totalPackageCbm,
+} from '../utils/packageCbm';
 import type { TradeAttachment } from '../types/tradeFormData';
 import CountrySelect from './CountrySelect';
 import TradeAttachmentUploader from './TradeAttachmentUploader';
@@ -58,9 +68,26 @@ interface Props {
   /** [입력 수정]으로 진입한 이슈 — 해당 섹션 상단에 인라인 안내 카드 표시 */
   fixNotice?: ShipperFixNotice | null;
   onDismissFixNotice?: () => void;
+  /** 고칠 항목을 다시 누르면 바뀌는 값 — 닫았던 원산지 안내 카드를 다시 연다 */
+  fixRevealKey?: number;
 }
 
 const INCOTERMS_OPTIONS: Exclude<Incoterms, ''>[] = ['FOB', 'CFR', 'CIF', 'FAS', 'FCA'];
+
+type IncotermsPlaceSource = 'loadPort' | 'dischargePort';
+/**
+ * Incoterms별 지정 장소 — 규칙상 FOB·FAS는 선적항, CFR·CIF는 도착항이 곧 지정 장소라 자동으로 연결한다.
+ * FCA는 내륙 인도장소일 수 있어 자동 연결하지 않는다.
+ */
+const INCOTERMS_PLACE: Record<string, { label: string; placeholder: string; source: IncotermsPlaceSource | null; options: IncotermsPlaceSource[] }> = {
+  FOB: { label: '지정 선적항', placeholder: 'Busan Port', source: 'loadPort', options: ['loadPort'] },
+  FAS: { label: '지정 선적항', placeholder: 'Busan Port', source: 'loadPort', options: ['loadPort'] },
+  CFR: { label: '지정 도착항', placeholder: 'Los Angeles Port', source: 'dischargePort', options: ['dischargePort'] },
+  CIF: { label: '지정 도착항', placeholder: 'Los Angeles Port', source: 'dischargePort', options: ['dischargePort'] },
+  FCA: { label: '지정 인도장소', placeholder: '운송인에게 인도하는 장소 (예: Busan CY)', source: null, options: ['loadPort'] },
+};
+const DEFAULT_INCOTERMS_PLACE = { label: 'Incoterms 지정 장소 또는 항만', placeholder: 'Busan Port', source: null, options: ['loadPort', 'dischargePort'] as IncotermsPlaceSource[] };
+const incotermsPlaceRule = (incoterms: string) => INCOTERMS_PLACE[incoterms] ?? DEFAULT_INCOTERMS_PLACE;
 const PAYMENT_TERM_OPTIONS = [
   { value: 'T/T', label: 'T/T (전신송금)' },
   { value: 'L/C', label: 'L/C (신용장)' },
@@ -138,12 +165,13 @@ export default function ShipperWorkspaceForm({
   onOriginOverrideRequest,
   fixNotice = null,
   onDismissFixNotice,
+  fixRevealKey = 0,
 }: Props) {
   // 인라인 수정 안내 카드 — fixNotice가 가리키는 섹션에만 렌더.
   // 카드를 닫아도 섹션이 접히지 않도록 details의 open은 이펙트로만 켠다(제어 안 함).
   const fixSection = fixNotice ? SHIPPER_FIELD_SECTION[fixNotice.fieldKey] : undefined;
   const [originDismissed, setOriginDismissed] = useState(false);
-  useEffect(() => { if (originIssueActive) setOriginDismissed(false); }, [originIssueActive]);
+  useEffect(() => { if (originIssueActive) setOriginDismissed(false); }, [originIssueActive, fixRevealKey]);
   const showOriginCard = originIssueActive && !originDismissed;
 
   useEffect(() => {
@@ -309,6 +337,91 @@ export default function ShipperWorkspaceForm({
     ? OTHER_PACKAGE_TYPE_VALUE
     : knownPackageType ?? '';
 
+  // 포장 규격 → CBM 자동 계산. 규격 줄이 없으면 첫 줄을 빈 줄로 보여준다.
+  const dimensionUnit = profile.packageDimensionUnit ?? DEFAULT_PACKAGE_DIMENSION_UNIT;
+  const dimensionRows = profile.packageDimensions?.length
+    ? profile.packageDimensions
+    : [createPackageDimension('package-dimension-1')];
+  const computedCbm = totalPackageCbm(dimensionRows, dimensionUnit);
+  const computedBoxes = totalPackageBoxes(dimensionRows);
+  // 화주가 CBM을 직접 적어 넣으면(포워더 실측값 등) 규격이 바뀌어도 그 값을 지키고, 배지로 알린다.
+  const manualCbm = profile.measurementManual === true;
+  const cbmFieldValue = manualCbm
+    ? profile.measurement ?? ''
+    : computedCbm === null ? '' : formatCbm(computedCbm);
+  // 계산이 다시 돌았다는 걸 눈에 보이게 — 값이 바뀌는 순간 CBM 칸을 잠깐 강조한다.
+  const [cbmJustComputed, setCbmJustComputed] = useState(false);
+  const previousCbmValue = useRef(cbmFieldValue);
+  const cbmFlashTimer = useRef<number | undefined>(undefined);
+  const flashCbm = useCallback(() => {
+    setCbmJustComputed(true);
+    window.clearTimeout(cbmFlashTimer.current);
+    cbmFlashTimer.current = window.setTimeout(() => setCbmJustComputed(false), 1100);
+  }, []);
+  useEffect(() => () => window.clearTimeout(cbmFlashTimer.current), []);
+  useEffect(() => {
+    if (previousCbmValue.current === cbmFieldValue) return;
+    previousCbmValue.current = cbmFieldValue;
+    if (manualCbm || !cbmFieldValue) return;
+    flashCbm();
+  }, [cbmFieldValue, manualCbm, flashCbm]);
+
+  /** 규격에서 계산한 CBM을 그대로 CBM 칸에 넣는다(직접 입력 상태였다면 자동 계산으로 되돌린다). */
+  const applyComputedCbm = () => {
+    if (computedCbm === null) return;
+    onProfilePatch({ measurement: formatCbm(computedCbm), measurementManual: false });
+    flashCbm();
+  };
+
+  /** 계산 과정을 그대로 보여주는 식 — 값만 있을 때보다 계산됐다는 게 분명해진다. */
+  const completedDimensionRows = dimensionRows.filter(isCompletePackageDimension);
+  const cbmFormula = (() => {
+    if (manualCbm || computedCbm === null) return '';
+    if (completedDimensionRows.length === 1) {
+      const row = completedDimensionRows[0];
+      return `${row.width} × ${row.length} × ${row.height} ${dimensionUnit} × ${row.boxes}박스 ÷ 1,000,000`;
+    }
+    return `규격 ${completedDimensionRows.length}줄 합계`;
+  })();
+
+  /**
+   * 규격이 바뀌면 CBM(measurement)과 포장 수량(박스 수)을 함께 다시 계산한다.
+   * 박스 수는 규격 줄 합계로 채우므로 같은 값을 두 번 입력할 일이 없다.
+   */
+  const patchDimensions = (rows: PackageDimension[], unit: PackageDimensionUnit = dimensionUnit) => {
+    const cbm = totalPackageCbm(rows, unit);
+    const boxes = totalPackageBoxes(rows);
+    onProfilePatch({
+      packageDimensions: rows,
+      packageDimensionUnit: unit,
+      ...(manualCbm ? {} : { measurement: cbm === null ? '' : formatCbm(cbm) }),
+      ...(boxes === null ? {} : { packageCount: boxes }),
+    });
+  };
+  const updateDimension = (id: string, patch: Partial<PackageDimension>) => {
+    patchDimensions(dimensionRows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  };
+  const addDimension = () => {
+    patchDimensions([...dimensionRows, createPackageDimension(`package-dimension-${crypto.randomUUID()}`)]);
+  };
+  /**
+   * 규격 줄 삭제. 마지막 한 줄이면 줄 자체는 남기고 값만 비운다 —
+   * 지웠는데 아무 변화가 없으면 안 되므로 박스 수·CBM 자동값도 같이 지운다.
+   */
+  const removeDimension = (id: string) => {
+    const remaining = dimensionRows.filter((row) => row.id !== id);
+    if (remaining.length > 0) {
+      patchDimensions(remaining);
+      return;
+    }
+    onProfilePatch({
+      packageDimensions: [createPackageDimension('package-dimension-1')],
+      packageDimensionUnit: dimensionUnit,
+      packageCount: '',
+      ...(manualCbm ? {} : { measurement: '' }),
+    });
+  };
+
   useEffect(() => {
     let active = true;
     if (!userId) {
@@ -428,7 +541,7 @@ export default function ShipperWorkspaceForm({
       onSupplementalChange({ ...supplemental, incotermsPlace: '' });
     },
     5: () => {
-      onProfilePatch({ packageCount: '', eaPerBox: '', packageType: '', grossWeight: '', netWeight: '', weight: '', measurement: '', shippingMarks: '' });
+      onProfilePatch({ packageCount: '', eaPerBox: '', packageType: '', grossWeight: '', netWeight: '', weight: '', measurement: '', measurementManual: false, shippingMarks: '', packageDimensions: [], packageDimensionUnit: DEFAULT_PACKAGE_DIMENSION_UNIT });
       setForceCustomPackageType(false);
       onSupplementalChange({ ...supplemental, hasNoShippingMarks: false, shippingMarksBeforeNoMarks: '' });
     },
@@ -478,6 +591,28 @@ export default function ShipperWorkspaceForm({
       });
     }
   };
+
+  // Incoterms를 고르면 규칙상 같은 항만(FOB·FAS→선적항, CFR·CIF→도착항)에 자동 연결한다. 사용자는 체크를 풀고 직접 입력할 수 있다.
+  const placeRule = incotermsPlaceRule(profile.incoterms);
+  const isLcPaymentTerms = profile.paymentTerms === 'L/C';
+  const hasLeftoverLc = !isLcPaymentTerms && [profile.lcNo, profile.lcDate, profile.lcBank].some((value) => (value ?? '').trim());
+  const previousIncotermsRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousIncotermsRef.current;
+    previousIncotermsRef.current = profile.incoterms;
+    if (previous === profile.incoterms) return;
+    const rule = incotermsPlaceRule(profile.incoterms);
+    if (previous === null) {
+      // 첫 표시(임시저장 복원 포함): 직접 적어 둔 장소는 덮어쓰지 않는다.
+      if (!rule.source) return;
+      const linked = rule.source === 'loadPort' ? normalizedLoadPort : normalizedDischargePort;
+      const place = supplemental.incotermsPlace.trim();
+      if (!place || place === linked) toggleIncotermsPlaceSource(rule.source, true);
+      return;
+    }
+    if (rule.source) toggleIncotermsPlaceSource(rule.source, true);
+    else if (incotermsPlaceSource && !rule.options.includes(incotermsPlaceSource)) setIncotermsPlaceSource(null);
+  }, [profile.incoterms]);
 
   const patchParty = (field: keyof TradeProfile, value: string) => {
     const patch: Record<string, string> = { [field]: value };
@@ -845,16 +980,32 @@ export default function ShipperWorkspaceForm({
         {fixNoticeCard(4)}
         <div className="form-grid">
           <div className="form-group" data-field="incoterms"><label className="form-label">Incoterms <Req /></label><select className="form-input" value={profile.incoterms} onChange={(e) => onProfilePatch({ incoterms: e.target.value as Incoterms })}><option value="">선택하세요</option>{INCOTERMS_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-          <div className="form-group shipper-incoterms-place"><label className="form-label">Incoterms 지정 장소 또는 항만</label><input className="form-input" value={supplemental.incotermsPlace} readOnly={incotermsPlaceSource !== null} onChange={(e) => onSupplementalChange({ ...supplemental, incotermsPlace: e.target.value })} placeholder="Busan Port" /><div className="shipper-inline-options"><label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'loadPort'} onChange={(e) => toggleIncotermsPlaceSource('loadPort', e.target.checked)} /> 선적항과 동일</label><label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'dischargePort'} onChange={(e) => toggleIncotermsPlaceSource('dischargePort', e.target.checked)} /> 도착항과 동일</label></div></div>
-          {profile.paymentTerms === 'L/C' && <>
-            <div className="form-group"><label className="form-label">L/C No.</label><input className="form-input" value={profile.lcNo ?? ''} onChange={(e) => onProfilePatch({ lcNo: e.target.value })} /></div>
-            <div className="form-group"><label className="form-label">L/C Date</label><input type="date" className="form-input" value={profile.lcDate ?? ''} onChange={(e) => onProfilePatch({ lcDate: e.target.value })} /></div>
-            <div className="form-group"><label className="form-label">L/C 종류</label><select className="form-input" value={declaration.lcPaymentType ?? ''} onChange={(e) => patchDeclaration({ lcPaymentType: e.target.value as ExportDeclarationInfo['lcPaymentType'] })}><option value="">선택하세요</option><option value="SIGHT">일람출급 (At Sight)</option><option value="USANCE">기한부 (Usance)</option></select></div>
+          <div className="form-group" data-field="paymentTerms"><label className="form-label">결제조건</label><select className="form-input" value={profile.paymentTerms ?? ''} onChange={(e) => onProfilePatch({ paymentTerms: e.target.value })}><option value="">선택하세요</option>{PAYMENT_TERM_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+          <div className="form-group shipper-incoterms-place"><label className="form-label">{placeRule.label}</label><input className="form-input" value={supplemental.incotermsPlace} readOnly={incotermsPlaceSource !== null} onChange={(e) => onSupplementalChange({ ...supplemental, incotermsPlace: e.target.value })} placeholder={placeRule.placeholder} /><div className="shipper-inline-options">{placeRule.options.includes('loadPort') && <label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'loadPort'} onChange={(e) => toggleIncotermsPlaceSource('loadPort', e.target.checked)} /> 선적항과 동일</label>}{placeRule.options.includes('dischargePort') && <label className="shipper-inline-checkbox"><input type="checkbox" checked={incotermsPlaceSource === 'dischargePort'} onChange={(e) => toggleIncotermsPlaceSource('dischargePort', e.target.checked)} /> 도착항과 동일</label>}</div></div>
+          {/* 결제조건이 L/C가 아닌데 예전에 적어 둔 L/C 값이 남아 있으면 칸을 보여주고 주황색으로 표시해, 무엇을 지워야 하는지 바로 알게 한다. */}
+          {!isLcPaymentTerms && hasLeftoverLc && (
+            <div className="lc-leftover-note">
+              <span>결제조건이 <b>{profile.paymentTerms || '미선택'}</b>인데 아래 L/C 정보가 남아 있어요. {profile.paymentTerms ? `${profile.paymentTerms}가 맞다면 지워 주세요.` : ''}</span>
+              <button
+                type="button"
+                className="lc-leftover-clear"
+                onClick={() => {
+                  onProfilePatch({ lcNo: '', lcDate: '', lcBank: '' });
+                  patchDeclaration({ lcPaymentType: '' });
+                }}
+              >
+                L/C 정보 지우기
+              </button>
+            </div>
+          )}
+          {(isLcPaymentTerms || hasLeftoverLc) && <>
+            <div className={`form-group${!isLcPaymentTerms && (profile.lcNo ?? '').trim() ? ' lc-leftover' : ''}`} data-field="lcNo"><label className="form-label">L/C No.</label><input className="form-input" value={profile.lcNo ?? ''} onChange={(e) => onProfilePatch({ lcNo: e.target.value })} /></div>
+            <div className={`form-group${!isLcPaymentTerms && (profile.lcDate ?? '').trim() ? ' lc-leftover' : ''}`} data-field="lcDate"><label className="form-label">L/C Date</label><input type="date" className="form-input" value={profile.lcDate ?? ''} onChange={(e) => onProfilePatch({ lcDate: e.target.value })} /></div>
+            {isLcPaymentTerms && (<div className="form-group"><label className="form-label">L/C 종류</label><select className="form-input" value={declaration.lcPaymentType ?? ''} onChange={(e) => patchDeclaration({ lcPaymentType: e.target.value as ExportDeclarationInfo['lcPaymentType'] })}><option value="">선택하세요</option><option value="SIGHT">일람출급 (At Sight)</option><option value="USANCE">기한부 (Usance)</option></select></div>)}
           </>}
           <div className="form-group"><label className="form-label">수출 거래 형태</label><select className="form-input" value={declaration.tradeKind ?? ''} onChange={(e) => patchDeclaration({ tradeKind: e.target.value as ExportDeclarationInfo['tradeKind'] })}><option value="">선택 안 함 (관세사 확인)</option><option value="GENERAL">일반 수출 (유상 매매)</option></select><small className="form-help">무상 견본품·위탁가공 등은 선택하지 않으면 관세사가 확인합니다.</small></div>
-          <div className="form-group"><label className="form-label">운임 (원) <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={declaration.freightKrw ?? ''} onChange={(e) => patchDeclaration({ freightKrw: e.target.value === '' ? '' : Number(e.target.value) })} /></div>
-          <div className="form-group"><label className="form-label">보험료 (원) <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={declaration.insuranceKrw ?? ''} onChange={(e) => patchDeclaration({ insuranceKrw: e.target.value === '' ? '' : Number(e.target.value) })} /></div>
+          <div className="form-group" data-field="freightKrw"><label className="form-label">국제운임(원) <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={declaration.freightKrw ?? ''} onChange={(e) => patchDeclaration({ freightKrw: e.target.value === '' ? '' : Number(e.target.value) })} /></div>
+          <div className="form-group" data-field="insuranceKrw"><label className="form-label">보험료(원) <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={declaration.insuranceKrw ?? ''} onChange={(e) => patchDeclaration({ insuranceKrw: e.target.value === '' ? '' : Number(e.target.value) })} /></div>
           <div className="form-group"><label className="form-label">기타 참조번호 Other References <span className="optional-label">(선택)</span></label><input className="form-input" value={profile.otherReferences ?? ''} onChange={(e) => onProfilePatch({ otherReferences: e.target.value })} placeholder="P/O No., Contract No. 등" /></div>
         </div>
       </details>
@@ -863,12 +1014,95 @@ export default function ShipperWorkspaceForm({
         <summary className="form-section-summary"><span>5. 포장 정보</span>{sectionResetButton(5)}</summary>
         {fixNoticeCard(5)}
         <div className="form-grid">
-          <div className="form-group"><label className="form-label">포장 수량 (박스 수)</label><input type="number" min="0" className="form-input" value={profile.packageCount ?? ''} onChange={(e) => onProfilePatch({ packageCount: numericValue(e.target.value) })} /></div>
+          <div className="form-group"><label className="form-label">포장 수량 (박스 수)</label><input type="number" min="0" className="form-input" readOnly={computedBoxes !== null} value={computedBoxes ?? profile.packageCount ?? ''} onChange={(e) => onProfilePatch({ packageCount: numericValue(e.target.value) })} />{computedBoxes !== null && <small className="form-help">화물 크기의 박스 수를 모두 더한 값입니다.</small>}</div>
           <div className="form-group"><label className="form-label">박스당 수량 <span className="optional-label">(선택)</span></label><input type="number" min="0" className="form-input" value={profile.eaPerBox ?? ''} onChange={(e) => onProfilePatch({ eaPerBox: numericValue(e.target.value) })} placeholder="예: 20" /></div>
           <div className="form-group"><label className="form-label">포장 종류</label><select className="form-input" value={packageTypeSelection} onChange={(e) => { if (e.target.value === OTHER_PACKAGE_TYPE_VALUE) setForceCustomPackageType(true); else { setForceCustomPackageType(false); onProfilePatch({ packageType: e.target.value }); } }}><option value="">선택하세요</option>{SHIPPER_PACKAGE_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}<option value={OTHER_PACKAGE_TYPE_VALUE}>기타</option></select>{packageTypeSelection === OTHER_PACKAGE_TYPE_VALUE && <input className="form-input shipper-custom-package-input" aria-label="기타 포장종류 직접 입력" value={profile.packageType ?? ''} maxLength={24} onChange={(e) => onProfilePatch({ packageType: e.target.value.toUpperCase().replace(/[^A-Z0-9 ./-]/g, '') })} placeholder="영문 포장종류 직접 입력 (예: SACK)" />}</div>
+          <div className="form-group shipper-dimension-block">
+            <div className="shipper-dimension-head">
+              <label className="form-label">화물 크기</label>
+              <select
+                className="form-input shipper-dimension-unit"
+                aria-label="화물 크기 단위"
+                value={dimensionUnit}
+                onChange={(e) => patchDimensions(dimensionRows, e.target.value as PackageDimensionUnit)}
+              >
+                {PACKAGE_DIMENSION_UNIT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </div>
+            <small className="form-help">최종 포장 후 화물의 외부 크기를 입력해 주세요.</small>
+            {dimensionRows.map((row, index) => {
+              const rowCbm = packageDimensionCbm(row, dimensionUnit);
+              return (
+                <div className="shipper-dimension-row" key={row.id}>
+                  <input type="number" min="0" step="any" className="form-input" aria-label={`규격 ${index + 1} 가로`} placeholder="가로" value={row.width} onChange={(e) => updateDimension(row.id, { width: numericValue(e.target.value) })} />
+                  <span className="shipper-dimension-times">×</span>
+                  <input type="number" min="0" step="any" className="form-input" aria-label={`규격 ${index + 1} 세로`} placeholder="세로" value={row.length} onChange={(e) => updateDimension(row.id, { length: numericValue(e.target.value) })} />
+                  <span className="shipper-dimension-times">×</span>
+                  <input type="number" min="0" step="any" className="form-input" aria-label={`규격 ${index + 1} 높이`} placeholder="높이" value={row.height} onChange={(e) => updateDimension(row.id, { height: numericValue(e.target.value) })} />
+                  <span className="shipper-dimension-times">×</span>
+                  <input type="number" min="0" className="form-input" aria-label={`규격 ${index + 1} 박스 수`} placeholder="박스 수" value={row.boxes} onChange={(e) => updateDimension(row.id, { boxes: numericValue(e.target.value) })} />
+                  {rowCbm === null ? <span className="shipper-dimension-cbm" /> : (
+                    // 계산된 줄 CBM을 누르면 아래 CBM 칸에 바로 반영한다. 여러 줄이면 합계가 들어간다.
+                    <button
+                      type="button"
+                      className="shipper-dimension-cbm is-clickable"
+                      title={dimensionRows.length > 1 ? '규격 합계를 CBM 칸에 넣기' : '이 값을 CBM 칸에 넣기'}
+                      aria-label={`규격 ${index + 1} 계산값 ${formatCbm(rowCbm)} m³를 CBM 칸에 넣기`}
+                      onClick={applyComputedCbm}
+                    >
+                      {formatCbm(rowCbm)} m³
+                    </button>
+                  )}
+                  <button type="button" className="btn btn-secondary btn-sm" aria-label={`규격 ${index + 1} 삭제`} title="이 규격 지우기" onClick={() => removeDimension(row.id)}><Trash2 size={14} /></button>
+                </div>
+              );
+            })}
+          </div>
           <div className="form-group" data-field="weight"><label className="form-label">총중량 G.W. (kg)</label><input type="number" min="0" step="any" className="form-input" value={profile.grossWeight ?? ''} onChange={(e) => onProfilePatch({ grossWeight: numericValue(e.target.value), weight: numericValue(e.target.value) })} /></div>
           <div className="form-group"><label className="form-label">순중량 N.W. (kg)</label><input type="number" min="0" step="any" className="form-input" value={profile.netWeight ?? ''} onChange={(e) => onProfilePatch({ netWeight: numericValue(e.target.value) })} /></div>
-          <div className="form-group"><label className="form-label">CBM</label><input className="form-input" value={profile.measurement ?? ''} onChange={(e) => onProfilePatch({ measurement: e.target.value })} /></div>
+          <div className="form-group shipper-cbm-result" data-field="measurement">
+            <div className="shipper-cbm-head">
+              <label className="form-label" htmlFor="shipper-cbm-input">CBM</label>
+              <span className={`shipper-cbm-badge${manualCbm ? ' is-manual' : ''}${cbmJustComputed ? ' is-flash' : ''}`}>
+                {manualCbm ? '직접 입력' : cbmJustComputed ? '계산 완료' : '자동 계산'}
+              </span>
+            </div>
+            <div className={`shipper-cbm-field${cbmJustComputed ? ' is-updated' : ''}`}>
+              <input
+                id="shipper-cbm-input"
+                type="number"
+                min="0"
+                step="any"
+                className="form-input shipper-cbm-input"
+                value={cbmFieldValue}
+                placeholder="0.000"
+                onChange={(e) => onProfilePatch({ measurement: e.target.value, measurementManual: true })}
+              />
+              <span className="shipper-cbm-unit">m³</span>
+            </div>
+            {cbmFormula && <div className="shipper-cbm-formula" aria-hidden="true">{cbmFormula}</div>}
+            <small className="form-help">
+              {manualCbm
+                ? '직접 적어 넣은 값입니다. 화물 크기를 고쳐도 이 값이 그대로 서류에 들어갑니다.'
+                : computedCbm === null
+                  ? '화물 크기(가로·세로·높이)와 박스 수를 넣으면 자동으로 계산됩니다. 실측값이 있으면 직접 적어도 됩니다.'
+                  : '포장 규격에서 계산한 값입니다. 고쳐 쓰면 적은 값이 그대로 서류에 들어갑니다.'}
+            </small>
+            {manualCbm && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm shipper-cbm-reset"
+                onClick={() => {
+                  if (computedCbm === null) onProfilePatch({ measurement: '', measurementManual: false });
+                  else applyComputedCbm();
+                }}
+              >
+                <RotateCcw size={13} /> 계산값으로 되돌리기
+              </button>
+            )}
+          </div>
           <div className="form-group">
             <label className="form-label">Shipping Marks <span className="optional-label">(선택)</span></label>
             <textarea className="form-input" rows={3} value={profile.shippingMarks ?? ''} readOnly={supplemental.hasNoShippingMarks} onChange={(e) => onProfilePatch({ shippingMarks: e.target.value })} />
@@ -881,6 +1115,10 @@ export default function ShipperWorkspaceForm({
               });
               onProfilePatch({ shippingMarks: checked ? 'N/M' : supplemental.shippingMarksBeforeNoMarks });
             }} /> 화인 없음</label>
+          </div>
+          {/* 규격이 다른 포장을 더하는 버튼 — 포장 정보 맨 아래에 둔다. */}
+          <div className="shipper-dimension-add-row">
+            <button type="button" className="btn btn-secondary btn-sm shipper-dimension-add" onClick={addDimension}><Plus size={14} /> 다른 규격 화물 추가</button>
           </div>
         </div>
         {hasInvalidWeight && <div className="form-message error" role="alert">총중량 G.W.은 순중량 N.W.보다 작을 수 없습니다.</div>}
@@ -948,7 +1186,6 @@ export default function ShipperWorkspaceForm({
         )}
         <div className="form-grid">
           <div className="form-group" data-field="countryOfOrigin"><label className="form-label">원산지 국가 <Req /></label><CountrySelect className="form-input" value={profile.countryOfOrigin ?? ''} onChange={(value) => onProfilePatch({ countryOfOrigin: value })} /></div>
-          <div className="form-group"><label className="form-label">원산지 결정기준</label><select className="form-input" value={supplemental.originCriterion} onChange={(e) => onSupplementalChange({ ...supplemental, originCriterion: e.target.value as ShipperSupplementalState['originCriterion'] })}><option value="">선택하세요</option><option value="세번변경기준">세번변경기준</option><option value="부가가치기준">부가가치기준</option><option value="완전생산기준">완전생산기준</option></select></div>
           <div className="form-group"><label className="form-label">제조자 구분</label><select className="form-input" value={declaration.exporterType ?? ''} onChange={(e) => patchDeclaration({ exporterType: e.target.value as ExportDeclarationInfo['exporterType'] })}><option value="">선택 안 함</option><option value="A">직접 제조해서 수출</option><option value="C">다른 회사 완제품을 받아 수출</option></select></div>
           {declaration.exporterType === 'C' && <>
             <div className="form-group"><label className="form-label">제조자 상호</label><input className="form-input" value={declaration.makerName ?? ''} onChange={(e) => patchDeclaration({ makerName: e.target.value })} /></div>

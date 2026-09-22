@@ -14,6 +14,25 @@ export type Incoterms =
 
 export type NumericInput = number | '';
 
+/** 포장 규격 입력 단위 — 국내 포장명세는 cm가 기본이고, 미국 거래 서류는 inch로 적혀 온다. */
+export type PackageDimensionUnit = 'cm' | 'm' | 'mm' | 'inch';
+
+/**
+ * 최종 포장 후 화물 외부 크기 한 규격. 크기가 다른 포장이 섞여 있으면 여러 줄로 넣는다.
+ * CBM은 이 값들로 계산하므로(utils/packageCbm) 화주가 CBM을 직접 적지 않는다.
+ */
+export interface PackageDimension {
+  id: string;
+  /** 가로 */
+  width: NumericInput;
+  /** 세로 */
+  length: NumericInput;
+  /** 높이 */
+  height: NumericInput;
+  /** 이 규격의 박스 수 */
+  boxes: NumericInput;
+}
+
 /** 수출 포워더가 원천서류에서 확인하는 품목별 화물명세. */
 export interface ForwarderCargoItem {
   id: string;
@@ -154,7 +173,17 @@ export interface TradeProfile {
   eaPerBox?: NumericInput;
   netWeight?: NumericInput;
   grossWeight?: NumericInput;
+  /**
+   * 용적(CBM). 포장 규격(packageDimensions)에서 자동 계산한 값이 들어간다 —
+   * 화주가 직접 입력하는 칸은 없다.
+   */
   measurement?: string;
+  /** CBM을 화주가 직접 고쳤는지. true면 규격이 바뀌어도 적어 넣은 값을 유지한다. */
+  measurementManual?: boolean;
+  /** 포장 규격 입력 단위 (기본 cm) */
+  packageDimensionUnit?: PackageDimensionUnit;
+  /** 최종 포장 후 화물 외부 크기 — 규격이 다르면 여러 줄. CBM·포장 수량의 산출 근거. */
+  packageDimensions?: PackageDimension[];
   shippingMarks?: string;
 
   vesselOrFlight?: string;
@@ -331,7 +360,10 @@ export interface FeedbackBasis {
 export interface FeedbackFactCard {
   id: string;
   title: string;             // 예: 과세가격 환산
-  value: string;             // 예: 약 36,961,000원
+  value?: string;            // 예: 약 36,961,000원 — 아직 계산할 수 없으면 비우고 notice로 안내
+  valueLabel?: string;       // 예: FOB 기준 환산액 — 값이 있을 때 값 위에 작게
+  notice?: string;           // 값 대신 보여줄 안내
+  action?: { label: string; field: string; hint: string }; // 안내 아래 입력칸 이동 버튼
   formula?: string;          // 예: USD 25,000 × 1,478.44원
   meta?: string;             // 예: 여성 캐시미어 코트 · 관세청 주간환율 · 적용일 2026-07-26
   basis?: FeedbackBasis;     // 예: 근거 · 관세법 제30조

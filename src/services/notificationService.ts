@@ -20,10 +20,12 @@ const ROLE_NOTIFICATION_TYPES: Record<WorkspaceRole, NotificationType[]> = {
     'trade_request_rejected',
     'trade_return_requested',
     'trade_forwarder_completed',
+    'trade_message_received',
   ],
   forwarder: [
     'trade_request_received',
     'trade_return_replied',
+    'trade_message_received',
   ],
 };
 

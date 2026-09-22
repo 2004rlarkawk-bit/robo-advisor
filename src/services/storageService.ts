@@ -194,10 +194,16 @@ async function carryForwarderCase(
   if (!existing) return;
   // 화주가 보완 요청을 받고 재제출하는 시점이면 요청을 '회신됨'으로 기록하고 이력에 남긴다.
   const resubmittedAt = new Date().toISOString();
+  // shipperReplyAt도 함께 갱신한다 — 포워더에게 'trade_return_replied' 알림을 만드는 DB 트리거의
+  // 조건이 이 값의 변경이라, 회신 메모 없이 서류만 재제출하면 포워더가 알림을 못 받았다.
   const carried = options.markReturnResolved && existing.returnRequest && !existing.returnRequest.resolvedAt
     ? {
       ...existing,
-      returnRequest: { ...existing.returnRequest, resolvedAt: resubmittedAt },
+      returnRequest: {
+        ...existing.returnRequest,
+        resolvedAt: resubmittedAt,
+        shipperReplyAt: resubmittedAt,
+      },
       activity: [...(existing.activity ?? []), { at: resubmittedAt, text: '화주가 수정 후 재제출 — 재검토 필요' }],
     }
     : existing;
@@ -352,6 +358,20 @@ export async function fetchSavedTradeById(id: string): Promise<SavedTrade | null
 
   if (error) throw error;
   return data ? mapTradeRow(data) : null;
+}
+
+/**
+ * 거래의 수출/수입 방향만 조회한다. fetchSavedTradeById와 달리 소유자 조건을 걸지 않아,
+ * 나에게 배정된(forwarder_user_id) 화주 거래도 읽힌다. 볼 권한이 없으면 RLS가 null을 돌려준다.
+ */
+export async function fetchTradeDirection(id: string): Promise<'export' | 'import' | null> {
+  const { data, error } = await supabase
+    .from('trades')
+    .select('direction')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.direction === 'export' || data?.direction === 'import' ? data.direction : null;
 }
 
 // [EDIT: Trade Persistence] 전체 문서 전송은 새 row를 만들지 않고 같은 거래 row의 상태만 submitted로 갱신합니다.

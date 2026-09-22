@@ -56,8 +56,6 @@
 .fwd-workspace .fwd-cargo-hint { margin: 12px 0 0; color: #71839b; font-size: 13px; line-height: 1.7; }
 .fwd-workspace .fwd-cargo-result-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: #284d7f; }
 .fwd-workspace .fwd-cargo-updated { margin-bottom: 0; color: #78899d; font-size: 11px; line-height: 1.7; }
-.fwd-workspace .fwd-dispatch-reply { margin-top: 18px; border-top: 1px solid #e5ebf3; padding-top: 12px; }
-.fwd-workspace .fwd-dispatch-reply > summary { font-size: 13px; color: #647a97; cursor: pointer; }
 .fwd-workspace .fwd-an-file-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .fwd-workspace .fwd-an-file-actions .btn { padding: 7px 10px; font-size: 12px; }
 .fwd-workspace .arrival-notice-file { flex-wrap: wrap; }
@@ -65,14 +63,16 @@
 .fwd-workspace .fwd-document-lock .btn { padding: 6px 10px; border-color: #f2d790; background: #fff; color: #855619; font-size: 12px; }
 .fwd-workspace .fwd-document-lock .btn:hover { background: #fff2cd; border-color: #dca62c; }
 .fwd-workspace .fwd-document-lock .btn:focus-visible { outline: 2px solid #996617; outline-offset: 3px; }
-.fwd-workspace .fwd-dispatch-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
-.fwd-workspace .fwd-dispatch-fields:disabled .form-input { background: #f4f6f9; color: #7d899b; cursor: not-allowed; }
 .fwd-workspace .arrival-notice-picker.is-locked { background: #f4f6f9; color: #77889c; cursor: not-allowed; border-color: #dce3ed; }
-.fwd-workspace .arrival-notice-card .btn:disabled, .fwd-workspace .fwd-dispatch-fields .btn:disabled { background: #e8edf4; border-color: #dce3ed; color: #78889f; box-shadow: none; cursor: not-allowed; }
 .fwd-workspace .fwd-reply-documents { padding: 0 24px 20px; font-size: 13px; }
 .fwd-workspace .fwd-reply-documents > div { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .fwd-workspace .fwd-reply-documents button { display: flex; gap: 8px; align-items: center; border: 1px solid #dce5f0; border-radius: 6px; background: #fff; padding: 8px; color: #526988; cursor: pointer; font: inherit; overflow-wrap: anywhere; }
-.fwd-workspace .fwd-issue-comparison { margin-bottom: 18px; }
+.fwd-workspace /* 무엇이 어떻게 다른지 — 서류값과 회원정보를 나란히 */
+.fwd-issue-values { margin-bottom: 12px; }
+.fwd-issue-values h3 { margin: 0 0 6px; font-size: 13px; font-weight: 700; }
+.fwd-issue-values ul { margin: 0; padding-left: 18px; color: #334155; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+
+.fwd-issue-comparison { margin-bottom: 18px; }
 .fwd-workspace .fwd-issue-comparison h3 { margin: 0 0 12px; font-size: 13px; color: #334155; }
 .fwd-workspace .fwd-issue-comparison h3 span { margin-left: 7px; font-size: 11px; }
 .fwd-workspace .fwd-issue-comparison dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; border: 1px solid #dce5f0; border-radius: 8px; overflow: hidden; background: #fff; }

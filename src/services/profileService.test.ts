@@ -7,6 +7,7 @@ import {
 } from './profileService';
 
 const profile: UserProfile = {
+  forwarder_specialties: [],
   id: 'user-1',
   email: 'member@example.com',
   role: 'user',

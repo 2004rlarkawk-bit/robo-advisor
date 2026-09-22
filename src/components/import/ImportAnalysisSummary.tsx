@@ -1,4 +1,5 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { syncLegacyImportFields } from '../../services/importDocumentAnalysisService';
 import type {
   ImportAnalysisResult,
@@ -10,7 +11,6 @@ import type {
 interface Props {
   analysis: ImportAnalysisResult;
   onChange: (fields: ImportExtractedFields) => void;
-  importerCompanyName?: string;
   hasCertificateOfOriginDocument?: boolean;
   readOnly?: boolean;
   /** 문서 id → 파일명 매핑 — 검증 메시지의 근거 값 표기에 사용 */
@@ -18,7 +18,7 @@ interface Props {
 
 const PARTY_FIELDS: Array<[keyof ImportParty, string]> = [
   ['name', '회사명'], ['address', '주소'], ['country', '국가'],
-  ['contactName', '담당자'], ['phone', '전화번호'],
+  ['phone', '전화번호'],
 ];
 
 const EMPTY_ITEM = (): ImportItem => ({
@@ -69,10 +69,10 @@ function TextField({
 export default function ImportAnalysisSummary({
   analysis,
   onChange,
-  importerCompanyName,
   hasCertificateOfOriginDocument = false,
   readOnly = false,
 }: Props) {
+  const [open, setOpen] = useState(true);
   const fields = analysis.extracted;
   const commit = (next: ImportExtractedFields) => onChange(syncLegacyImportFields(next));
   const setField = (field: keyof ImportExtractedFields, value: string) => commit({ ...fields, [field]: value });
@@ -86,19 +86,20 @@ export default function ImportAnalysisSummary({
     items: fields.items.map((item) => item.id === id ? { ...item, [field]: value } : item),
   });
 
-  const importerMismatch = Boolean(
-    importerCompanyName
-    && fields.importerDetails.name
-    && fields.importerDetails.name.trim().toLocaleLowerCase() !== importerCompanyName.trim().toLocaleLowerCase(),
-  );
-
   return (
     <section className="form-card import-card">
-      <div className="import-card-heading">
-        <div><span className="ai-badge">AI 추출값</span><h2>분석 결과 확인 및 수정</h2></div>
-      </div>
+      {/* 제목을 누르면 분석 결과 전체를 접고 펼친다 */}
+      <button
+        type="button"
+        className={`import-card-heading import-card-toggle${open ? ' is-open' : ''}`}
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <div><span className="ai-badge">AI 추출값</span><h2>분석 결과 확인</h2></div>
+        <span className="import-card-toggle-hint">{open ? '접기' : '펼치기'}<ChevronDown size={16} /></span>
+      </button>
 
-      <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
+      <fieldset className="workspace-readonly-fieldset" disabled={readOnly} hidden={!open}>
 
       <details className="form-section">
       <summary className="form-section-summary"><span>A. 거래 당사자</span></summary>
@@ -137,11 +138,6 @@ export default function ImportAnalysisSummary({
               <TextField key={field} label={label} value={fields[partyKey][field]} onChange={(value) => setParty(partyKey, field, value)} />
             ))}
           </div>
-          {partyKey === 'importerDetails' && importerMismatch && (
-            <div className="form-message warning">
-              문서의 Importer가 로그인 회사({importerCompanyName})와 다릅니다. 문서값을 덮어쓰지 않았으니 확인해 주세요.
-            </div>
-          )}
         </fieldset>
       ))}
       </details>
@@ -190,9 +186,16 @@ export default function ImportAnalysisSummary({
           </button>
           <div className="import-field-grid">
             <TextField label="품명" value={item.description} onChange={(value) => setItem(item.id, 'description', value)} />
-            <TextField label="한글 품명" value={item.koreanDescription} onChange={(value) => setItem(item.id, 'koreanDescription', value)} />
-            <TextField label="모델명" value={item.modelName} placeholder="선택" onChange={(value) => setItem(item.id, 'modelName', value)} />
-            <TextField label="규격" value={item.specification} placeholder="선택" onChange={(value) => setItem(item.id, 'specification', value)} />
+            {/* 수입신고서의 '모델·규격' 칸과 같게 한 칸으로 보여준다. 고치면 규격에 담고 모델명은 비운다. */}
+            <TextField
+              label="모델·규격"
+              value={[item.modelName, item.specification].filter((value) => value?.trim()).join(', ')}
+              placeholder="선택 (예: VF-500, 500ML)"
+              onChange={(value) => commit({
+                ...fields,
+                items: fields.items.map((entry) => entry.id === item.id ? { ...entry, modelName: '', specification: value } : entry),
+              })}
+            />
             <TextField label="재질" value={item.material} placeholder="선택" onChange={(value) => setItem(item.id, 'material', value)} />
             <TextField label="성분" value={item.composition} placeholder="선택" onChange={(value) => setItem(item.id, 'composition', value)} />
             <TextField label="용도" value={item.intendedUse} placeholder="선택" onChange={(value) => setItem(item.id, 'intendedUse', value)} />

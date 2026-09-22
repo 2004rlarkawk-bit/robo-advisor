@@ -32,6 +32,10 @@ export async function saveExportForwarderCaseState(
   const next: ExportForwarderCaseState = {
     progress: { ...(previous?.progress ?? {}), ...(patch.progress ?? {}) },
     masterBlNo: patch.masterBlNo !== undefined ? patch.masterBlNo : previous?.masterBlNo ?? '',
+    // 부킹 정보는 통째로 갈아끼우지 않고 기존 값 위에 덮어 쓴다(부분 수정 지원).
+    booking: patch.booking !== undefined
+      ? { ...(previous?.booking ?? {}), ...patch.booking }
+      : previous?.booking,
     shipperNotifiedAt: patch.shipperNotifiedAt !== undefined ? patch.shipperNotifiedAt : previous?.shipperNotifiedAt ?? null,
     shippingAdviceSentAt: patch.shippingAdviceSentAt !== undefined ? patch.shippingAdviceSentAt : previous?.shippingAdviceSentAt ?? null,
     completedAt: patch.completedAt !== undefined ? patch.completedAt : previous?.completedAt ?? null,

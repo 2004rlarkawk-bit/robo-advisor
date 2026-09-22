@@ -171,12 +171,24 @@ export function isEtaBeforeEtd(etd: string, eta: string): boolean {
 }
 
 /**
- * Booking 완료 여부의 단일 기준 — Booking No.가 저장되어 있으면 완료로 본다.
+ * Booking 완료 여부의 단일 기준 — Booking No.·선박명·항차번호가 모두 있으면 완료로 본다.
+ * (선사에 예약을 보내는 것이 아니라, 외부에서 확정된 부킹을 등록했다는 뜻이다.)
  * 2단계(Booking 저장)·3단계(진행상태 표시)·5단계(완료 체크리스트)가 모두 이 함수로 판정해야
  * "TradeProfile.bookingNo는 있는데 workflow_data.progress.booking은 비어있는" 불일치가 생기지 않는다.
  */
-export function isBookingRegistered(state: Pick<ForwarderFormState, 'bookingNo'>): boolean {
-  return state.bookingNo.trim().length > 0;
+export function isBookingRegistered(state: BookingCoreFields): boolean {
+  return missingBookingFields(state).length === 0;
+}
+
+type BookingCoreFields = Pick<ForwarderFormState, 'bookingNo' | 'vesselOrFlight' | 'voyageNo'>;
+
+/** 부킹 완료 처리에 반드시 필요한 값 — 비어 있는 항목의 라벨을 돌려준다. */
+export function missingBookingFields(state: BookingCoreFields): string[] {
+  return [
+    ['Booking No.', state.bookingNo],
+    ['선박명(Vessel)', state.vesselOrFlight],
+    ['항차번호(Voyage No.)', state.voyageNo],
+  ].filter(([, value]) => !String(value ?? '').trim()).map(([label]) => label);
 }
 
 export function forwarderFormToTradeProfile(state: ForwarderFormState): TradeProfile {
@@ -229,7 +241,7 @@ export function forwarderFormToTradeProfile(state: ForwarderFormState): TradePro
     forwarderCargoTotals: state.cargoTotals,
     exportDeclarationNo: state.exportDeclarationNo,
     bookingNo: state.bookingNo,
-    bookingStatus: state.bookingNo.trim() ? 'confirmed' : 'requested',
+    bookingStatus: isBookingRegistered(state) ? 'confirmed' : 'requested',
     loadingMode: state.loadingMode || undefined,
     containerSize: state.containerSize,
     containerQuantity: state.containerQuantity,
@@ -273,7 +285,11 @@ export function tradeProfileToForwarderFormState(profile: TradeProfile): Forward
     shippingMarks: firstCargo.marksAndNumbers,
     exportDeclarationNo: profile.exportDeclarationNo ?? '',
     bookingNo: profile.bookingNo ?? '',
-    bookingStatus: profile.bookingNo ? 'confirmed' : (profile.bookingStatus ?? 'requested'),
+    bookingStatus: isBookingRegistered({
+      bookingNo: profile.bookingNo ?? '',
+      vesselOrFlight: profile.vesselOrFlight ?? '',
+      voyageNo: profile.voyageNo ?? '',
+    }) ? 'confirmed' : 'requested',
     loadingMode: profile.loadingMode
       ?? (profile.containerNo || profile.sealNo || profile.containerQuantity ? 'FCL' : ''),
     containerSize: profile.containerSize ?? '20GP',

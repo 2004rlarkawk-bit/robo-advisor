@@ -2,6 +2,7 @@ import { TradeProfile, ValidationIssue } from '../types';
 import { getIncotermsRule } from '../agents/incotermsRules';
 import { isGrossWeightBelowNet } from '../utils/shipperForm';
 import { calcDutiableValue, verifyBusinessRegistration } from '../services/customsApiService';
+import { calcExportFobValue } from '../services/exportFobValueService';
 import { estimateDuty } from '../services/unipassService';
 import { getRelatedLawForIssue } from '../services/lawService';
 
@@ -453,6 +454,91 @@ export function validateTradeDocuments(profile: TradeProfile): ValidationIssue[]
  * 공공 API 기반 비동기 검증 (동기 룰 + 환율·사업자 룰).
  * API 키 미설정/호출 실패 시에도 시뮬레이션 폴백으로 항상 완료됨.
  */
+/** yyyyMMdd 주간 시작일 → "2026.09.13~09.19" */
+function formatRateWeek(effectiveDate: string): string {
+  if (!/^\d{8}$/.test(effectiveDate)) return effectiveDate;
+  const start = new Date(Number(effectiveDate.slice(0, 4)), Number(effectiveDate.slice(4, 6)) - 1, Number(effectiveDate.slice(6, 8)));
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${start.getFullYear()}.${pad(start.getMonth() + 1)}.${pad(start.getDate())}~${pad(end.getMonth() + 1)}.${pad(end.getDate())}`;
+}
+
+function buildExportFobValueIssue(
+  profile: TradeProfile,
+  amount: number,
+  currency: string,
+  dv: { rate: number; effectiveDate: string; source: string },
+  itemNote: string,
+): ValidationIssue {
+  const result = calcExportFobValue({
+    invoiceAmount: amount,
+    rate: dv.rate,
+    incoterms: profile.incoterms,
+    freightKrw: profile.exportDeclaration?.freightKrw,
+    insuranceKrw: profile.exportDeclaration?.insuranceKrw,
+  });
+  const krw = (value: number) => `${Math.round(value).toLocaleString()}원`;
+  // 오늘 기준 주간환율이다 — 신고일 환율과 다를 수 있어 확정값처럼 표시하지 않는다.
+  const rateNote = dv.source === 'krw'
+    ? '원화 송장 — 환율 적용 없음'
+    : dv.source === 'api'
+    ? `${currency} 관세청 수출 주간환율 ${dv.rate.toLocaleString()}원 · 적용 주간 ${formatRateWeek(dv.effectiveDate)} · 신고일 환율과 다를 수 있음`
+    : `${currency} 시뮬레이션 환율 ${dv.rate.toLocaleString()}원 — 실환율 확인 필요`;
+  const invoiceFormula = currency === 'KRW'
+    ? `송장 ${krw(amount)}`
+    : `${currency} ${amount.toLocaleString()} × ${dv.rate.toLocaleString()}원`;
+
+  const title = '수출신고 금액 환산(참고)';
+  const meta = `${itemNote}${rateNote}`;
+  const goToSection4 = (field: string, hint: string) => ({ label: '4. 거래 조건에서 입력', field, hint });
+  let card: NonNullable<ValidationIssue['card']>;
+  if (result.status === 'fob') {
+    // 'FOB 기준' 표현은 계산 결과가 나온 경우에만 쓴다.
+    card = {
+      id: 'export-fob-value', title, meta,
+      value: `약 ${krw(result.fobKrw)}`,
+      valueLabel: 'FOB 기준 환산액',
+      formula: [
+        invoiceFormula,
+        result.freightKrw !== null ? `− 국제운임 ${krw(result.freightKrw)}` : '',
+        result.insuranceKrw !== null ? `− 보험료 ${krw(result.insuranceKrw)}` : '',
+      ].filter(Boolean).join(' '),
+    };
+  } else if (result.status === 'unsupported') {
+    card = {
+      id: 'export-fob-value', title, meta,
+      value: `약 ${krw(result.invoiceKrw)}`,
+      valueLabel: '송장금액 원화 환산',
+      formula: invoiceFormula,
+      notice: result.reason,
+    };
+  } else if (result.status === 'pending') {
+    const field = result.missing[0];
+    card = {
+      id: 'export-fob-value', title, meta,
+      notice: result.reason,
+      action: goToSection4(field, result.reason),
+    };
+  } else {
+    const costProblem = /운임|보험료/.test(result.reason);
+    card = {
+      id: 'export-fob-value', title, meta,
+      notice: result.reason,
+      ...(costProblem ? { action: goToSection4('freightKrw', result.reason) } : {}),
+    };
+  }
+
+  return {
+    id: 'export-fob-value-info',
+    docType: 'customs_dec',
+    severity: 'info',
+    message: `${title}: ${card.value ?? card.notice ?? ''}${card.formula ? ` (${card.formula})` : ''}`,
+    field: 'invoiceAmount',
+    card,
+  };
+}
+
 export async function validateTradeDocumentsAsync(
   profile: TradeProfile
 ): Promise<ValidationIssue[]> {
@@ -466,6 +552,12 @@ export async function validateTradeDocumentsAsync(
     profile.invoiceAmount !== undefined
       ? profile.invoiceAmount
       : 0;
+
+  // 원화 송장 수출: 환율 1로 두고 CFR·CIF 운임·보험료 차감은 동일하게 적용한다(환율 조회 없음).
+  if (currency === 'KRW' && amount > 0 && profile.tradeType === 'export') {
+    const itemNote = profile.itemName ? `${profile.itemName} · ` : '';
+    issues.push(buildExportFobValueIssue(profile, amount, currency, { rate: 1, effectiveDate: '', source: 'krw' }, itemNote));
+  }
 
   if (currency !== 'KRW' && amount > 0) {
     try {
@@ -490,7 +582,10 @@ export async function validateTradeDocumentsAsync(
         ? `${profile.itemName} · `
         : '';
 
-      issues.push({
+      if (profile.tradeType === 'export') {
+        // 수출은 과세가격이 아니라 수출신고 금액 환산(참고)을 보여준다. 입력 안내·확인 안내도 서류 생성을 막지 않도록 info로 둔다.
+        issues.push(buildExportFobValueIssue(profile, amount, currency, dv, itemNote));
+      } else issues.push({
         id: 'dutiable-value-info',
         docType: 'customs_dec',
         severity: 'info',

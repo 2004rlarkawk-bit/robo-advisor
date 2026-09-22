@@ -4,6 +4,7 @@ import type { BillOfLadingData, BillOfLadingKind, BillOfLadingSignerCapacity, Fr
 import { deriveFreightTerms, isFreightTermsUnusual, FREIGHT_TERMS_LABEL } from '../../../utils/freightTerms';
 import type { ForwarderFormState } from '../../../utils/forwarderForm';
 import type { TradeAttachment } from '../../../types/tradeFormData';
+import type { ExportBookingDetails } from '../../../types/exportForwarderCase';
 import ForwarderDocumentSlot from './ForwarderDocumentSlot';
 
 interface Props {
@@ -13,6 +14,8 @@ interface Props {
   scopeId: string;
   attachments: TradeAttachment[];
   onAttachmentsChange: (attachments: TradeAttachment[]) => void;
+  /** 2단계에서 등록한 부킹 확정 정보 — 참고 표기·빈 칸 채우기에만 쓴다 */
+  booking: ExportBookingDetails;
   readOnly: boolean;
   busy: boolean;
   masterBlNo: string;
@@ -38,6 +41,7 @@ export default function ExportForwarderBLStep({
   scopeId,
   attachments,
   onAttachmentsChange,
+  booking,
   readOnly,
   busy,
   masterBlNo,
@@ -55,6 +59,9 @@ export default function ExportForwarderBLStep({
   const hasBillOfLading = Boolean(billOfLadingData);
   const billOfLadingReady = hasBillOfLading && !generationError;
   const houseBillOfLadingNo = billOfLadingData?.blNo?.trim() || billOfLadingData?.draftNo || '';
+  // 2단계 부킹 값과 H/B/L 입력값이 다를 때만 알려준다. 자동으로 덮어쓰지 않는다.
+  const bookingFreightTerms = booking.freightTerms ?? '';
+  const freightTermsDiffersFromBooking = Boolean(bookingFreightTerms && state.freightTerms && bookingFreightTerms !== state.freightTerms);
 
   return (
     <div className="form-card forwarder-workspace-form">
@@ -79,7 +86,7 @@ export default function ExportForwarderBLStep({
           <div className="form-group"><label className="form-label">Vessel / Voyage</label><input className="form-input" value={[state.vesselOrFlight, state.voyageNo].filter(Boolean).join(' / ')} disabled readOnly /></div>
           <div className="form-group"><label className="form-label">POL / POD</label><input className="form-input" value={[state.loadPort, state.dischargePort].filter(Boolean).join(' → ')} disabled readOnly /></div>
         </div>
-        <p className="form-help">Carrier·Vessel/Voyage·POL/POD는 2단계 Booking 입력값을 그대로 보여줍니다.</p>
+        <p className="form-help">Carrier·Vessel/Voyage·POL/POD는 2단계 선복 부킹 입력값을 그대로 보여줍니다.</p>
         <ForwarderDocumentSlot
           label="M/B/L 파일"
           documentType="bill_of_lading"
@@ -93,6 +100,13 @@ export default function ExportForwarderBLStep({
 
       <details className="form-section" open>
         <summary className="form-section-summary">House B/L <span className="form-section-hint">포워더 발행 — PortAI 자동생성</span></summary>
+
+        <div className="form-grid">
+          <div className="form-group"><label className="form-label">Booking No. (참고)</label><input className="form-input" value={state.bookingNo || '미등록'} disabled readOnly /></div>
+          <div className="form-group"><label className="form-label">ETD (참고)</label><input className="form-input" value={state.departureDate || '미입력'} disabled readOnly /></div>
+          <div className="form-group"><label className="form-label">컨테이너 (참고)</label><input className="form-input" value={state.loadingMode === 'FCL' ? [state.containerSize, state.containerQuantity !== '' ? `${state.containerQuantity}개` : ''].filter(Boolean).join(' · ') : state.loadingMode || '미정'} disabled readOnly /></div>
+        </div>
+        <p className="form-help">2단계 선복 부킹에서 등록한 값입니다. 본선 적재일(Shipped on Board)은 실제 적재일이므로 ETD로 자동 채우지 않습니다.</p>
 
         {!readOnly && (
           <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
@@ -114,6 +128,11 @@ export default function ExportForwarderBLStep({
                   <option value="PREPAID">{FREIGHT_TERMS_LABEL.PREPAID}</option>
                   <option value="COLLECT">{FREIGHT_TERMS_LABEL.COLLECT}</option>
                 </select>
+                {freightTermsDiffersFromBooking && (
+                  <small className="form-help" role="status">
+                    2단계 부킹에는 {FREIGHT_TERMS_LABEL[bookingFreightTerms as 'PREPAID' | 'COLLECT']}로 등록되어 있습니다. 여기 입력한 값이 H/B/L에 쓰입니다.
+                  </small>
+                )}
                 {freightTermsUnusual && (
                   <small className="form-help form-help-error" role="alert">
                     {state.incoterms} 조건은 통상 {suggestedFreightTerms}입니다. 화주와 합의된 값인지 확인하세요.

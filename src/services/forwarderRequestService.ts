@@ -2,6 +2,7 @@
 import { supabase } from '../lib/supabase';
 import type {
   ForwarderLookupResult,
+  ForwarderMatchCandidate,
   TradeRequest,
   TradeRequestPreview,
   TradeRequestStatus,
@@ -104,6 +105,33 @@ export async function listOutgoingTradeRequests(tradeId?: string): Promise<Trade
   const { data, error } = await query;
   if (error) throw error;
   return (data || []).map((row) => mapTradeRequestRow(row as TradeRequestRow));
+}
+
+/**
+ * 거래 조건에 맞는 담당자 후보(최대 3명, 배정 우선순위 순).
+ * 화주는 user_profiles를 직접 읽을 수 없어 RPC로만 조회한다. preferExperienced는 서류 불일치가
+ * 많은 건에서 완료 건수가 많은 담당자를 앞세운다.
+ */
+export async function matchForwarderForTrade(
+  tradeId: string,
+  specialties: string[],
+  preferExperienced = false,
+): Promise<ForwarderMatchCandidate[]> {
+  const { data, error } = await supabase.rpc('match_forwarder_for_trade', {
+    p_trade_id: tradeId,
+    p_specialties: specialties,
+    p_prefer_experienced: preferExperienced,
+  });
+  if (error) throw error;
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    companyName: (row.company_name as string | null) ?? null,
+    contactName: (row.contact_name as string | null) ?? null,
+    specialties: Array.isArray(row.specialties) ? row.specialties as string[] : [],
+    matchedSpecialties: Array.isArray(row.matched_specialties) ? row.matched_specialties as string[] : [],
+    activeCount: Number(row.active_count ?? 0),
+    completedCount: Number(row.completed_count ?? 0),
+  }));
 }
 
 /** 포워더 본인이 받은 의뢰 요청 목록(수신함). */

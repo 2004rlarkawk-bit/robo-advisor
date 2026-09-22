@@ -26,9 +26,9 @@ const baseAnalysis = () => normalizeImportAnalysisResult({
   ],
   validations: [
     {
-      id: 'v-invoice', field: 'invoiceNumber', message: 'Invoice No.가 일치하지 않습니다.', severity: 'error',
+      id: 'v-total', field: 'invoiceTotal', message: 'Invoice 총금액이 일치하지 않습니다.', severity: 'error',
       documents: ['commercial_invoice', 'packing_list'],
-      values: [{ documentId: 'ci', value: 'INV-001' }, { documentId: 'pl', value: 'INV-002' }],
+      values: [{ documentId: 'ci', value: '8,000' }, { documentId: 'pl', value: '8,500' }],
     },
   ],
 });
@@ -42,9 +42,9 @@ describe('수입 불일치 — 맞는 값 고르기', () => {
     expect(riskById(analysis, 'reconcile-IR3')?.pickGroups).toEqual([
       { key: 'field:grossWeight', label: '총중량', choices: [{ source: 'P/L', value: '1,317 KG' }, { source: 'B/L', value: '4,631 KG' }] },
     ]);
-    // IR12는 불일치한 도착항만 고르게 한다
-    expect(riskById(analysis, 'reconcile-IR12')?.pickGroups?.map((group) => group.label)).toEqual(['도착항']);
-    expect(riskById(analysis, 'v-invoice')?.pickGroups?.[0].key).toBe('validation:v-invoice');
+    // 신고 금액·세액과 무관한 항구 불일치(IR12)는 화주 확인 목록에 넣지 않는다
+    expect(riskById(analysis, 'reconcile-IR12')).toBeUndefined();
+    expect(riskById(analysis, 'v-total')?.pickGroups?.[0].key).toBe('validation:v-total');
   });
 
   it('값을 고르면 카드는 남아 해결됨으로 바뀌고, 고른 값이 표시되며 추출 결과에도 반영된다', () => {
@@ -58,10 +58,10 @@ describe('수입 불일치 — 맞는 값 고르기', () => {
     expect(chosen.comparison[0].billOfLading).toBe('4,631 KG'); // 원본 비교표는 그대로
     expect(buildReconciliationInput(chosen, documents.map((d) => d.type)).packing_list?.grossWeight).toBe('4631');
 
-    const invoice = applyChosenValue(chosen, 'validation:v-invoice', 'INV-002');
-    expect(riskById(invoice, 'v-invoice')).toMatchObject({ status: 'resolved', chosen: true });
-    expect(riskById(invoice, 'v-invoice')?.pickGroups?.[0].selected).toBe('INV-002');
-    expect(invoice.extracted.invoiceNo).toBe('INV-002');
+    const total = applyChosenValue(chosen, 'validation:v-total', '8,500');
+    expect(riskById(total, 'v-total')).toMatchObject({ status: 'resolved', chosen: true });
+    expect(riskById(total, 'v-total')?.pickGroups?.[0].selected).toBe('8,500');
+    expect(total.extracted.totalAmount).toBe('8,500');
   });
 
   it('되돌리면 경고가 다시 나타난다', () => {
@@ -72,10 +72,10 @@ describe('수입 불일치 — 맞는 값 고르기', () => {
 
   it('분석 결과 표에서 직접 고친 칸도 확인한 값으로 보고 다시 계산한다', () => {
     const analysis = baseAnalysis();
-    const edited = mergeEditedChoices(analysis, { ...analysis.extracted, dischargePort: 'BOSTON, USA' });
-    expect(edited.chosenValues).toEqual({ 'field:dischargePort': 'BOSTON, USA' });
-    expect(riskById(edited, 'reconcile-IR12')).toMatchObject({ status: 'resolved', chosen: true });
-    expect(riskById(edited, 'reconcile-IR3')).toMatchObject({ status: 'unresolved' }); // 고치지 않은 항목은 그대로
+    const edited = mergeEditedChoices(analysis, { ...analysis.extracted, grossWeight: '4,631' });
+    expect(edited.chosenValues).toEqual({ 'field:grossWeight': '4631' });
+    expect(riskById(edited, 'reconcile-IR3')).toMatchObject({ status: 'resolved', chosen: true });
+    expect(riskById(edited, 'reconcile-IR1')).toBeUndefined(); // 고치지 않은 다른 항목에는 영향이 없다
   });
 
   it('저장본을 다시 불러와도 고른 값이 유지된다', () => {

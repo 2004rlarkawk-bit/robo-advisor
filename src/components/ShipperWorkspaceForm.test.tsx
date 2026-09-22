@@ -375,34 +375,43 @@ describe('화주용 통관 입력 폼', () => {
     expect(rendered.container.textContent).toContain('Open Account (외상거래)');
   });
 
-  it('Incoterms 장소 연결은 상호 배타적이며 연결된 항만 변경을 반영한다', () => {
+  it('Incoterms에 맞춰 지정 장소 칸 이름·체크박스가 바뀌고 해당 항만에 자동 연결된다', () => {
     const rendered = renderForm();
-    const sourceLabels = Array.from(rendered.container.querySelectorAll('label'))
-      .filter((label) => label.textContent?.includes('항과 동일'));
-    const loadCheckbox = sourceLabels.find((label) => label.textContent?.includes('선적항'))
-      ?.querySelector<HTMLInputElement>('input');
-    const dischargeCheckbox = sourceLabels.find((label) => label.textContent?.includes('도착항'))
-      ?.querySelector<HTMLInputElement>('input');
+    const placeGroup = () => rendered.container.querySelector('.shipper-incoterms-place');
+    const checkbox = (text: string) => Array.from(placeGroup()?.querySelectorAll('label') ?? [])
+      .find((label) => label.textContent?.includes(text))?.querySelector<HTMLInputElement>('input');
 
-    act(() => loadCheckbox?.click());
-    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({
-      incotermsPlace: 'Incheon Port',
-    }));
+    // FOB: 지정 선적항 — 선적항과 동일만 보이고 자동으로 체크된다.
+    expect(placeGroup()?.textContent).toContain('지정 선적항');
+    expect(checkbox('선적항과 동일')?.checked).toBe(true);
+    expect(checkbox('도착항과 동일')).toBeUndefined();
+    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({ incotermsPlace: 'Incheon Port' }));
 
-    act(() => dischargeCheckbox?.click());
-    expect(loadCheckbox?.checked).toBe(false);
-    expect(dischargeCheckbox?.checked).toBe(true);
+    // CIF로 바꾸면 지정 도착항에 연결되고, 도착항 변경도 따라간다.
+    rendered.rerenderProfile({ incoterms: 'CIF', dischargePort: 'TOKYO' });
+    expect(placeGroup()?.textContent).toContain('지정 도착항');
+    expect(checkbox('도착항과 동일')?.checked).toBe(true);
+    expect(checkbox('선적항과 동일')).toBeUndefined();
+    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({ incotermsPlace: 'Tokyo Port' }));
 
+    // 체크를 풀면 직접 입력할 수 있고, 장소를 비우지는 않는다.
     rendered.onSupplementalChange.mockClear();
-    rendered.rerenderProfile({ dischargePort: 'TOKYO' });
-    expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({
-      incotermsPlace: 'Tokyo Port',
-    }));
+    act(() => checkbox('도착항과 동일')?.click());
+    expect(checkbox('도착항과 동일')?.checked).toBe(false);
+    expect(rendered.onSupplementalChange).not.toHaveBeenCalledWith(expect.objectContaining({ incotermsPlace: '' }));
 
-    act(() => dischargeCheckbox?.click());
-    expect(rendered.onSupplementalChange).not.toHaveBeenCalledWith(expect.objectContaining({
-      incotermsPlace: '',
-    }));
+    // FCA는 내륙 인도장소일 수 있어 자동 연결하지 않는다.
+    rendered.rerenderProfile({ incoterms: 'FCA' });
+    expect(placeGroup()?.textContent).toContain('지정 인도장소');
+    expect(checkbox('선적항과 동일')?.checked).toBe(false);
+  });
+
+  it('임시저장에서 직접 적어 둔 지정 장소는 자동 연결로 덮어쓰지 않는다', () => {
+    const rendered = renderForm([firstItem], false, {}, { incotermsPlace: 'Pyeongtaek Port' });
+    const loadCheckbox = Array.from(rendered.container.querySelectorAll('.shipper-incoterms-place label'))
+      .find((label) => label.textContent?.includes('선적항과 동일'))?.querySelector<HTMLInputElement>('input');
+    expect(loadCheckbox?.checked).toBe(false);
+    expect(rendered.onSupplementalChange).not.toHaveBeenCalledWith(expect.objectContaining({ incotermsPlace: 'Incheon Port' }));
   });
 
   it('수출 전용 항만과 기타 직접입력을 제공하고 영문 실제값을 전달한다', () => {
@@ -614,5 +623,254 @@ describe('화주용 통관 입력 폼', () => {
       Array.from(rendered.container.querySelectorAll('button'))
         .some((button) => button.textContent === '적용')
     ).toBe(true);
+  });
+});
+
+describe('원산지 안내 카드 다시 열기', () => {
+  it('확인으로 닫은 원산지 안내 카드는 고칠 항목을 다시 누르면(fixRevealKey 변경) 다시 보인다', () => {
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    const renderWithKey = (fixRevealKey: number) => act(() => {
+      root?.render(
+        <ShipperWorkspaceForm
+          profile={{ ...profile, countryOfOrigin: 'South Korea' }}
+          items={[firstItem]}
+          supplemental={EMPTY_SHIPPER_SUPPLEMENTAL_STATE}
+          isProcessing={false}
+          onProfilePatch={vi.fn()}
+          onItemsChange={vi.fn()}
+          onSupplementalChange={vi.fn()}
+          onReset={vi.fn()}
+          onGenerate={vi.fn()}
+          originIssueActive
+          fixRevealKey={fixRevealKey}
+        />,
+      );
+    });
+    const originCard = () => Array.from(container!.querySelectorAll('.inline-fix-card'))
+      .find((card) => card.textContent?.includes('대외무역법'));
+
+    renderWithKey(1);
+    expect(originCard()).toBeDefined();
+    const confirm = Array.from(originCard()!.querySelectorAll('button')).find((button) => button.textContent === '확인');
+    act(() => confirm?.click());
+    expect(originCard()).toBeUndefined();
+
+    renderWithKey(2);
+    expect(originCard()).toBeDefined();
+  });
+});
+
+describe('결제조건과 맞지 않게 남은 L/C 정보', () => {
+  it('D/A인데 L/C Date가 남아 있으면 그 칸을 보여주고 [L/C 정보 지우기]로 비운다', () => {
+    const rendered = renderForm([firstItem], false, { paymentTerms: 'D/A', lcDate: '2026-09-25' });
+    const lcDate = rendered.container.querySelector('[data-field="lcDate"]');
+    expect(lcDate?.className).toContain('lc-leftover');
+    expect(rendered.container.querySelector('[data-field="lcNo"]')?.className).not.toContain('lc-leftover');
+    const clear = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === 'L/C 정보 지우기');
+    act(() => clear?.click());
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ lcNo: '', lcDate: '', lcBank: '' });
+  });
+
+  it('L/C 값이 없고 L/C 결제도 아니면 L/C 칸을 보이지 않는다', () => {
+    const rendered = renderForm([firstItem], false, { paymentTerms: 'T/T', lcNo: '', lcDate: '' });
+    expect(rendered.container.querySelector('[data-field="lcDate"]')).toBeNull();
+    expect(rendered.container.textContent).not.toContain('L/C 정보 지우기');
+  });
+});
+
+describe('포장 정보 — 화물 크기 기반 CBM 자동 계산', () => {
+  const dimensionInput = (rendered: { container: HTMLDivElement }, label: string) =>
+    rendered.container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+
+  const cbmInput = (rendered: { container: HTMLDivElement }) =>
+    rendered.container.querySelector<HTMLInputElement>('#shipper-cbm-input');
+
+  it('계산한 CBM을 입력칸에 채워 보여주고 자동 계산이라고 알린다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    const cbmGroup = rendered.container.querySelector('[data-field="measurement"]');
+    expect(cbmGroup?.textContent).toContain('자동 계산');
+    expect(cbmInput(rendered)?.value).toBe('0.369');
+    expect(cbmInput(rendered)?.readOnly).toBe(false);
+  });
+
+  const clickDelete = (rendered: { container: HTMLDivElement }, label: string) => {
+    const button = rendered.container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    act(() => button?.click());
+    return button;
+  };
+
+  it('규격이 여러 줄이면 삭제한 줄만 빼고 다시 계산한다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [
+        { id: 'dim-1', width: 45, length: 20, height: 41, boxes: 5 },
+        { id: 'dim-2', width: 60, length: 40, height: 30, boxes: 3 },
+      ],
+    });
+    clickDelete(rendered, '규격 2 삭제');
+    const calls = rendered.onProfilePatch.mock.calls;
+    const patch = calls[calls.length - 1]?.[0];
+    expect(patch.packageDimensions).toHaveLength(1);
+    expect(patch.measurement).toBe('0.185');
+    expect(patch.packageCount).toBe(5);
+  });
+
+  it('마지막 한 줄을 삭제하면 값만 비우고 박스 수·CBM도 함께 지운다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    const button = clickDelete(rendered, '규격 1 삭제');
+    expect(button?.disabled).toBe(false);
+    const calls = rendered.onProfilePatch.mock.calls;
+    const patch = calls[calls.length - 1]?.[0];
+    expect(patch.packageDimensions).toHaveLength(1);
+    expect(patch.packageDimensions[0]).toMatchObject({ width: '', length: '', height: '', boxes: '' });
+    expect(patch.measurement).toBe('');
+    expect(patch.packageCount).toBe('');
+  });
+
+  it('계산에 쓴 식을 CBM 아래에 같이 보여준다', () => {
+    const single = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    expect(single.container.querySelector('.shipper-cbm-formula')?.textContent)
+      .toBe('45 × 20 × 41 cm × 10박스 ÷ 1,000,000');
+
+    const many = renderForm([firstItem], false, {
+      packageDimensions: [
+        { id: 'dim-1', width: 45, length: 20, height: 41, boxes: 5 },
+        { id: 'dim-2', width: 60, length: 40, height: 30, boxes: 3 },
+      ],
+    });
+    expect(many.container.querySelector('.shipper-cbm-formula')?.textContent).toBe('규격 2줄 합계');
+  });
+
+  it('CBM을 직접 고치면 직접 입력으로 표시하고 그 값을 그대로 넘긴다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    const input = cbmInput(rendered);
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, '0.5');
+      input!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ measurement: '0.5', measurementManual: true });
+  });
+
+  it('직접 입력한 CBM은 규격을 고쳐도 덮어쓰지 않는다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+      measurement: '0.5',
+      measurementManual: true,
+    });
+    const cbmGroup = rendered.container.querySelector('[data-field="measurement"]');
+    expect(cbmGroup?.textContent).toContain('직접 입력');
+    expect(cbmInput(rendered)?.value).toBe('0.5');
+
+    const boxes = dimensionInput(rendered, '규격 1 박스 수');
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(boxes, '20');
+      boxes!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const calls = rendered.onProfilePatch.mock.calls;
+    const patch = calls[calls.length - 1]?.[0];
+    expect(patch).not.toHaveProperty('measurement');
+    expect(patch.packageCount).toBe(20);
+  });
+
+  it('[계산값으로 되돌리기]를 누르면 규격에서 계산한 값으로 되돌린다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+      measurement: '0.5',
+      measurementManual: true,
+    });
+    const reset = Array.from(rendered.container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('계산값으로 되돌리기'));
+    act(() => reset?.click());
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ measurement: '0.369', measurementManual: false });
+  });
+
+  it('줄별 계산값을 누르면 직접 입력 상태여도 CBM 칸에 그 값이 들어간다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+      measurement: '0.5',
+      measurementManual: true,
+    });
+    const apply = rendered.container.querySelector<HTMLButtonElement>('button[aria-label="규격 1 계산값 0.369 m³를 CBM 칸에 넣기"]');
+    expect(apply?.textContent).toBe('0.369 m³');
+    act(() => apply?.click());
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ measurement: '0.369', measurementManual: false });
+  });
+
+  it('규격이 여러 줄이면 줄별 계산값을 눌러도 합계가 들어간다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [
+        { id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 },
+        { id: 'dim-2', width: 20, length: 11, height: 4.5, boxes: 8 },
+      ],
+    });
+    const buttons = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.shipper-dimension-cbm'));
+    expect(buttons.map((button) => button.textContent)).toEqual(['0.369 m³', '0.008 m³']);
+    expect(buttons[1].title).toBe('규격 합계를 CBM 칸에 넣기');
+    act(() => buttons[1].click());
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ measurement: '0.377', measurementManual: false });
+  });
+
+  it('화물 크기 안내문과 단위 선택(cm 기본)을 보여준다', () => {
+    const rendered = renderForm();
+    expect(rendered.container.textContent).toContain('최종 포장 후 화물의 외부 크기를 입력해 주세요.');
+    const unit = rendered.container.querySelector<HTMLSelectElement>('select[aria-label="화물 크기 단위"]');
+    expect(unit?.value).toBe('cm');
+    expect(Array.from(unit?.options ?? []).map((option) => option.value)).toEqual(['cm', 'm', 'mm', 'inch']);
+  });
+
+  it('크기를 채우면 CBM과 포장 수량을 함께 다시 계산해 넘긴다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: '' }],
+    });
+    const boxes = dimensionInput(rendered, '규격 1 박스 수');
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(boxes, '10');
+      boxes!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith(expect.objectContaining({
+      measurement: '0.369',
+      packageCount: 10,
+    }));
+  });
+
+  it('규격이 다른 포장을 추가하면 각각 계산해 총 CBM과 총 박스 수를 합산한다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [
+        { id: 'dim-1', width: 45, length: 20, height: 41, boxes: 5 },
+        { id: 'dim-2', width: 60, length: 40, height: 30, boxes: 3 },
+      ],
+    });
+    expect(rendered.container.querySelector<HTMLInputElement>('#shipper-cbm-input')?.value).toBe('0.401');
+    const packageCount = rendered.container.querySelector<HTMLInputElement>('input[readonly][value="8"]');
+    expect(packageCount).not.toBeNull();
+  });
+
+  it('[다른 규격 화물 추가]를 누르면 빈 규격 줄을 하나 더 넘긴다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+    });
+    const add = Array.from(rendered.container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('다른 규격 화물 추가'));
+    act(() => add?.click());
+    const calls = rendered.onProfilePatch.mock.calls;
+    const patch = calls[calls.length - 1]?.[0];
+    expect(patch.packageDimensions).toHaveLength(2);
+    expect(patch.packageDimensions[1]).toMatchObject({ width: '', length: '', height: '', boxes: '' });
+  });
+
+  it('크기를 아직 넣지 않으면 CBM은 계산하지 않고 안내만 보여준다', () => {
+    const rendered = renderForm();
+    const cbmGroup = rendered.container.querySelector('[data-field="measurement"]');
+    expect(rendered.container.querySelector<HTMLInputElement>('#shipper-cbm-input')?.value).toBe('');
+    expect(cbmGroup?.textContent).toContain('박스 수를 넣으면 자동으로 계산됩니다');
   });
 });

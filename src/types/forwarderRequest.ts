@@ -40,7 +40,8 @@ export type NotificationType =
   | 'trade_request_rejected'
   | 'trade_return_requested'
   | 'trade_return_replied'
-  | 'trade_forwarder_completed';
+  | 'trade_forwarder_completed'
+  | 'trade_message_received';
 
 export interface NotificationRecord {
   id: string;
@@ -53,10 +54,39 @@ export interface NotificationRecord {
   createdAt: string;
 }
 
+/** 의뢰별 대화 메시지 종류 — 일반 대화 / 보완 요청 / 보완 회신. */
+export type TradeMessageKind = 'message' | 'return_request' | 'return_reply';
+
+/** 의뢰(trade_request) 한 건에 매달린 화주↔포워더 대화 한 줄. */
+export interface TradeMessage {
+  id: string;
+  tradeRequestId: string;
+  tradeId: string;
+  senderUserId: string;
+  kind: TradeMessageKind;
+  body: string;
+  createdAt: string;
+  /** 받는 쪽이 읽은 시각. 보낸 쪽 화면에서는 "읽음" 표시에 쓴다. */
+  readAt: string | null;
+}
+
 export interface ForwarderLookupResult {
   id: string;
   companyName: string | null;
   contactName: string | null;
+}
+
+/** 거래 조건으로 자동 배정된 담당자 후보 — 이메일·연락처는 받지 않는다. */
+export interface ForwarderMatchCandidate {
+  id: string;
+  companyName: string | null;
+  contactName: string | null;
+  /** 담당자가 프로필에 등록한 특화 분야 전체 */
+  specialties: string[];
+  /** 그중 이번 거래 조건과 겹친 것 */
+  matchedSpecialties: string[];
+  activeCount: number;
+  completedCount: number;
 }
 
 export interface TradeRequestPreview {
