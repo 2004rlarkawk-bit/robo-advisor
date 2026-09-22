@@ -96,6 +96,36 @@ describe('수입 persisted 첨부 표시', () => {
     expect(onChange).toHaveBeenCalledWith([persisted]);
   });
 
+  it('항공운송장 파일을 올리면 해상만 지원한다고 안내한다', async () => {
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <ImportDocumentUploader
+          documents={[]}
+          onChange={vi.fn()}
+          onFilesAdded={vi.fn()}
+          onFileRemoved={vi.fn()}
+          description="수입 서류"
+        />,
+      );
+    });
+    // 업로드 전에도 지원 범위를 먼저 알린다
+    expect(container.textContent).toContain('해상운송(B/L) 기준으로 지원합니다');
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [new File(['x'], '항공화물운송장(AWB).pdf', { type: 'application/pdf' })],
+    });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain('항공화물운송장(AWB)은 현재 지원하지 않습니다');
+  });
+
   it('persisted 문서 종류를 변경해도 Storage metadata를 보존한다', () => {
     const onChange = vi.fn();
     container = document.createElement('div');

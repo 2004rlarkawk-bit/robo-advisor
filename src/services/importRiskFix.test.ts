@@ -16,14 +16,15 @@ const analysis = () => normalizeImportAnalysisResult({
   comparison: [{ field: 'Incoterms', invoice: 'F.O.B. HO CHI MINH', packingList: '', billOfLading: '', matches: true, detail: '' }],
   validations: [],
 });
-const risks = (value = analysis()) => resolveImportRisks(documents, value, [], '', 'PORTAI KOREA');
+const risks = (value = analysis()) => resolveImportRisks(documents, value, [], '');
 const byId = (list: ReturnType<typeof risks>, id: string) => list.find((risk) => risk.id === id);
 
 describe('수입 경고 카드 — 카드 안에서 고치기', () => {
   it('카드마다 고칠 방법이 붙고, HS 카드 배지에는 서류 ID 대신 서류 이름이 나온다', () => {
     const list = risks();
     expect(byId(list, 'reconcile-IR9')?.fixes?.[0]).toMatchObject({ kind: 'value', options: expect.arrayContaining(['FOB', 'CIF']) });
-    expect(byId(list, 'importer-profile-mismatch')?.fixes?.[0]).toMatchObject({ kind: 'value', target: { type: 'importer' } });
+    // 회사명 대조처럼 신고 금액·세액과 무관한 항목은 확인 목록에 넣지 않는다
+    expect(byId(list, 'importer-profile-mismatch')).toBeUndefined();
     expect(byId(list, 'origin-i1')?.fixes?.[0]).toMatchObject({ target: { type: 'itemOrigin', itemId: 'i1' } });
     expect(byId(list, 'hs-i1')?.fixes).toEqual([{ kind: 'hs', itemId: 'i1' }]);
     expect(byId(list, 'hs-i1')?.relatedDocuments).toEqual(['Commercial Invoice', 'Packing List']);

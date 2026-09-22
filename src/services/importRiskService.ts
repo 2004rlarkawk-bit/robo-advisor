@@ -117,6 +117,36 @@ function titleForField(field: string): string {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * 수입신고에 직접 영향을 주는 값만 화주에게 확인시킨다.
+ * 회사명·주소·연락처·Invoice 번호·컨테이너/Seal·선박명처럼 신고 금액이나 세액을 바꾸지 않는
+ * 표기 차이는 목록에서 제외한다.
+ */
+const CORE_VALIDATION_FIELDS = [
+  'description', 'productdescription', 'goods', 'commodity', 'item', '품명', '품목',
+  'quantity', 'qty', '수량',
+  'amount', 'total', 'unitprice', 'price', 'value', 'currency', '금액', '단가', '통화',
+  'weight', '중량',
+  'origin', '원산지',
+  'hscode', 'hsk', 'hs',
+  'incoterms', '인코텀',
+];
+
+/** LLM 검증 항목이 신고에 영향을 주는 핵심 값인지 판단한다. */
+function isCoreValidationField(field: string): boolean {
+  const normalized = field.replace(/[^a-zA-Z가-힣]/g, '').toLowerCase();
+  if (!normalized) return false;
+  // 포장 수량(packageCount)·포장 단위는 '수량'이 아니라 포장 정보라 제외한다.
+  if (/package|포장/.test(normalized)) return false;
+  return CORE_VALIDATION_FIELDS.some((core) => normalized.includes(core));
+}
+
+/**
+ * 화주 수입 화면에 띄울 서류 대사 규칙 — 신고 항목에 직접 영향을 주는 것만 남긴다.
+ * 제외: IR5(포장 수량), IR12(선적항·도착항), IR13(Consignee), IR14(보험금액).
+ */
+const CORE_RULE_IDS = new Set(['IR1', 'IR2', 'IR3', 'IR4', 'IR6', 'IR7', 'IR8', 'IR9', 'IR10', 'IR11']);
+
 function recommendationFor(field: string): string {
   const normalized = field.toLowerCase();
   if (normalized.includes('package') || normalized.includes('포장')) return 'C/I와 P/L의 포장 단위·수량을 대조하고 실제 선적 수량으로 확정하세요.';
@@ -182,7 +212,6 @@ export function resolveImportRisks(
   analysis: ImportAnalysisResult,
   suggestions: ImportHSCodeSuggestion[] = [],
   dutyError = '',
-  importerCompanyName = '',
   reconciliationInput?: ImportReconciliationInput,
   role: UserTradeRole = 'shipper',
 ): ImportRisk[] {
@@ -201,6 +230,8 @@ export function resolveImportRisks(
     ? runImportReconciliation(originalInput).filter((result) => result.status === 'fail').map((result) => [result.ruleId, result] as const)
     : []);
   const ruleRisks: ImportRisk[] = reconciliation
+    // 화주에게는 신고 항목에 직접 영향을 주는 규칙만 보여준다(포워더는 전체 규칙 그대로).
+    .filter((result) => role !== 'shipper' || CORE_RULE_IDS.has(result.ruleId))
     .filter((result) => result.status === 'fail' || originalFails.has(result.ruleId))
     .flatMap((current) => {
       const stillFails = current.status === 'fail';
@@ -245,7 +276,7 @@ export function resolveImportRisks(
         status: resolved ? 'resolved' as const : 'unresolved' as const,
       }];
     });
-  const existing = assessImportRisks(documents, analysis, suggestions, dutyError, importerCompanyName, role)
+  const existing = assessImportRisks(documents, analysis, suggestions, dutyError, role)
     .filter((risk) => risk.id !== 'reference');
   return [...ruleRisks, ...existing.filter((risk) => !ruleRisks.some((ruleRisk) => ruleRisk.id === risk.id))];
 }
@@ -255,7 +286,6 @@ export function assessImportRisks(
   analysis: ImportAnalysisResult,
   suggestions: ImportHSCodeSuggestion[] = [],
   dutyError = '',
-  importerCompanyName = '',
   // 포워더 화면에는 대한민국 HSK를 확정하는 입력이 없다 — 화주만 확정 가능하므로
   // "HS Code 미확정" 리스크를 포워더에게 띄우면 영원히 해소할 방법이 없는 항목이 된다.
   role: UserTradeRole = 'shipper',
@@ -273,6 +303,8 @@ export function assessImportRisks(
   // 화주가 이미 맞는 값을 고른 항목은 해결된 것으로 보되, 카드는 남기고 고른 값을 눌린 버튼으로 보여준다.
   const chosen = analysis.chosenValues ?? {};
   const risks: ImportRisk[] = analysis.validations
+    // 신고에 영향을 주지 않는 표기 차이(회사명·주소·연락처·Invoice 번호 등)는 화주 화면에서 제외한다.
+    .filter((validation) => role !== 'shipper' || isCoreValidationField(validation.field))
     .flatMap((validation) => {
       const choices = uniqueChoices((validation.values ?? [])
         .map((entry) => ({ source: docNameOf(entry.documentId), value: (entry.value ?? '').trim() }))
@@ -319,25 +351,8 @@ export function assessImportRisks(
   });
 
   const fields = analysis.extracted;
-  if (importerCompanyName && fields.importerDetails.name
-    && importerCompanyName.trim().toLowerCase() !== fields.importerDetails.name.trim().toLowerCase()) {
-    add({
-      id: 'importer-profile-mismatch',
-      level: 'high',
-      item: 'Importer 불일치',
-      cause: '문서의 Importer와 로그인 회사정보가 다릅니다.',
-      recommendation: '문서가 해당 회사의 거래인지 확인하세요. 문서값은 자동으로 덮어쓰지 않습니다.',
-      relatedDocuments: ['Commercial Invoice', 'Bill of Lading', '회원프로필'],
-      differentValues: [`서류의 Importer: ${fields.importerDetails.name}`, `로그인 회사정보: ${importerCompanyName}`],
-      fixes: [{
-        kind: 'value',
-        label: '맞는 Importer 고르기',
-        target: { type: 'importer' },
-        choices: [{ source: '서류', value: fields.importerDetails.name }, { source: '회원 프로필', value: importerCompanyName }],
-      }],
-      status: 'unresolved',
-    });
-  }
+  // Importer 회사명이 로그인 회사와 달라도 신고 금액·세액에는 영향이 없어 확인 항목으로 띄우지 않는다.
+  // 추출값 자체는 분석 결과 화면에서 그대로 보고 고칠 수 있다.
   // C/O 없음: 화주가 고른 FTA 적용 여부에 따라 안내가 달라진다. C/O가 있으면 대사 규칙이 다룬다.
   //  - FTA 적용 안 함 → 기본 관세율로 진행, 카드는 흐리게 남기고 검토 완료는 화주가 직접 누른다
   //  - 적용 여부 미확인 → 확인 권장: 적용 여부를 확인해 달라고 안내
