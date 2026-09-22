@@ -51,6 +51,18 @@ describe('mapPackingListToSchema — 상업송장과 공유하는 거래 데이�
     expect(s.totalCbm).toBe(12.5);          // "12.5 CBM" → 12.5
   });
 
+  it('문서 단위 CBM이 비어 있으면 품목의 용적(포장 정보 자동 계산값)을 합산해 Total CBM에 넣는다', () => {
+    // DocumentAgent는 문서 단위 measurement를 ''로 두고 첫 품목에만 CBM을 싣는다.
+    const s = mapPackingListToSchema(basePL({
+      measurement: '',
+      items: [
+        { no: 1, description: 'COATS', hsCode: '', quantity: 50, unit: 'EA', unitPrice: 0, amount: 0, netWeight: 0, grossWeight: 0, dimensions: '', measurement: '0.266' },
+        { no: 2, description: 'HATS', hsCode: '', quantity: 10, unit: 'EA', unitPrice: 0, amount: 0, netWeight: 0, grossWeight: 0, dimensions: '', measurement: '' },
+      ],
+    } as any));
+    expect(s.totalCbm).toBe(0.266);
+  });
+
   it('빈 값은 0/"N/A"가 아니라 공란("")으로 남긴다', () => {
     const s = mapPackingListToSchema(basePL({ items: [{ no: 1, description: '', hsCode: '', quantity: 0, unit: '', unitPrice: 0, amount: 0, netWeight: 0, grossWeight: 0, dimensions: '' }], measurement: '' } as any));
     expect(s.items[0].netWeight).toBe('');

@@ -70,6 +70,15 @@ function parseCbm(v: unknown): number | '' {
   return Number.isFinite(n) && n > 0 ? n : '';
 }
 
+/** 품목별 measurement("0.266", "1.25 CBM" 등)를 더한다. 하나도 없으면 ''. */
+function sumItemCbm(items: InvoiceItem[]): number | '' {
+  const total = items.reduce((sum, item) => {
+    const value = parseCbm((item as Record<string, unknown>).measurement);
+    return value === '' ? sum : sum + value;
+  }, 0);
+  return total > 0 ? Number(total.toFixed(3)) : '';
+}
+
 /**
  * PackingListData(= 상업송장과 같은 거래 데이터에서 파생) → 템플릿 스키마.
  * 당사자·항구·인보이스 번호는 재입력받지 않고 이미 채워진 필드에서 가져온다.
@@ -117,7 +126,9 @@ export function mapPackingListToSchema(pl: PackingListData): PackingListSchema {
     lcBank: s(d.lcBank),
     remarks,
     items: rows,
-    totalCbm: parseCbm(d.totalCbm ?? pl.measurement),
+    // 문서 단위 값이 없으면 품목별 용적(포장 정보에서 계산한 CBM)을 합산한다 —
+    // 화주 폼은 CBM을 첫 품목에 실어 보내므로 여기서 안 더하면 Total CBM이 빈 칸으로 나간다.
+    totalCbm: parseCbm(d.totalCbm ?? pl.measurement) || sumItemCbm(items),
     signedBy: s(pl.signedBy),
   };
 }
