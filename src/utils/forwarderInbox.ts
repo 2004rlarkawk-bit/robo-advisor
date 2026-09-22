@@ -1,4 +1,4 @@
-import type { ForwarderImportCase } from '../types/forwarderCase';
+import type { ForwarderCaseState, ForwarderImportCase } from '../types/forwarderCase';
 
 export type InboxCategory = 'new' | 'progress' | 'reply' | 'done';
 export type InboxFilter = 'all' | InboxCategory;
@@ -14,11 +14,13 @@ export function getInboxState(item: ForwarderImportCase): { category: InboxCateg
   if (item.stage === 'done') return { category: 'done', label: '업무 완료', next: '완료 내역 보기', tone: 'done' };
   if (item.returnRequest?.resolvedAt) return { category: 'reply', label: '보완 회신', next: '수정본 확인', tone: 'reply' };
   if (item.returnRequest) return { category: 'progress', label: item.shipperEditing ? '화주 수정 중' : '화주 회신 대기', next: '회신 대기', tone: 'waiting' };
-  if (item.stage === 'received') return { category: 'new', label: '신규 의뢰', next: '서류 검토', tone: 'new' };
-  if (item.stage === 'review') return { category: 'progress', label: '서류 검토 중', next: item.blockerCount ? '보완 사항 확인' : '검토 이어하기', tone: 'progress' };
-  return item.arrivalNotice?.storagePath
-    ? { category: 'progress', label: '서류 마무리 중', next: '완료 전 확인', tone: 'progress' }
-    : { category: 'progress', label: 'A/N 작성 중', next: '작성 이어하기', tone: 'progress' };
+  if (item.stage === 'received') return { category: 'new', label: '신규 의뢰', next: '제출 서류 확인', tone: 'new' };
+  if (item.stage === 'review') return { category: 'progress', label: '서류 확인 중', next: item.blockerCount ? '확인 항목 검토' : '신고자료 준비', tone: 'progress' };
+  const operations = (item.trade.forwarderCase as ForwarderCaseState | undefined)?.importOperations;
+  if (operations?.declarationStatus === 'cleared') return { category: 'progress', label: '신고 수리 기록', next: 'A/N·D/O 확인', tone: 'progress' };
+  if (operations?.declarationStatus === 'filed') return { category: 'progress', label: '신고 접수 기록', next: '통관 진행 확인', tone: 'progress' };
+  if (operations?.declarationStatus === 'handed_over') return { category: 'progress', label: '관세사 전달', next: '신고 진행 확인', tone: 'progress' };
+  return { category: 'progress', label: '신고자료 준비', next: '신고의뢰서 확인', tone: 'progress' };
 }
 
 export function getInboxItemName(item: ForwarderImportCase): string {

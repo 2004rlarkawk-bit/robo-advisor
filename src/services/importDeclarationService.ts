@@ -26,6 +26,10 @@ export interface ImportDeclarationData {
   requestDate?: Date;
   /** C/O 없이 화주가 고른 FTA 적용 여부 */
   ftaChoice?: string;
+  /** 포워더가 기록한 신고 대행처와 인도 서류 정보 */
+  customsBroker?: string;
+  deliveryOrderNo?: string;
+  hasDeliveryOrderDocument?: boolean;
 }
 
 export interface ImportDeclarationItemSchema {
@@ -150,9 +154,9 @@ export function mapImportDeclarationToSchema(data: ImportDeclarationData): Impor
     importer_bizno: '',
     contact_name: text(fields.importerDetails.contactName),
     contact_tel: text(fields.importerDetails.phone) || text(fields.importerDetails.email),
-    customs_broker: '',
+    customs_broker: text(data.customsBroker),
     bl_no: text(fields.blNo),
-    do_no: '',
+    do_no: text(data.deliveryOrderNo),
     exporter_name: text(fields.exporterDetails.name) || text(fields.shipper),
     invoice_no_date: joinFilled([fields.invoiceNo, fields.invoiceDate], ' / '),
     shipping_country: text(fields.exporterDetails.country),
@@ -184,7 +188,7 @@ export function mapImportDeclarationToSchema(data: ImportDeclarationData): Impor
     cb_att_pl: box(types.has('packing_list')),
     cb_att_bl: box(types.has('bill_of_lading')),
     cb_att_co: box(types.has('certificate_of_origin')),
-    cb_att_do: UNCHECKED,
+    cb_att_do: box(Boolean(data.hasDeliveryOrderDocument)),
     cb_att_other: box(otherDocument),
     remarks: remarks.join(' · '),
   };

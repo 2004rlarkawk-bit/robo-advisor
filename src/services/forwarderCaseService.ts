@@ -254,11 +254,13 @@ export async function saveForwarderCaseState(
   const previous = workflowData.forwarderCase;
   const now = new Date().toISOString();
   const next: ForwarderCaseState = {
+    ...previous,
     stage: patch.stage ?? previous?.stage ?? 'received',
     issueResolutions: { ...(previous?.issueResolutions ?? {}), ...(patch.issueResolutions ?? {}) },
     issueNotes: { ...(previous?.issueNotes ?? {}), ...(patch.issueNotes ?? {}) },
     arrivalNotice: patch.arrivalNotice !== undefined ? patch.arrivalNotice : previous?.arrivalNotice ?? null,
     returnRequest: patch.returnRequest !== undefined ? patch.returnRequest : previous?.returnRequest ?? null,
+    importOperations: patch.importOperations ?? previous?.importOperations,
     activity: [
       ...(previous?.activity ?? []),
       ...appendActivity.map((text) => ({ at: now, text })),
