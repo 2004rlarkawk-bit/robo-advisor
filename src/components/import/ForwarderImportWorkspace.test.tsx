@@ -65,14 +65,13 @@ describe('forwarder task tabs', () => {
     await click('검토하기');
     expect(container.querySelector('.fwd-review-detail:not([hidden])')?.textContent).toContain('1,280 kg');
     await click('통관·운송');
-    expect(container.textContent).toContain('서류 검토를 완료하면 도착통지서와 배차 의뢰서를 작성할 수 있습니다.');
+    expect(container.textContent).toContain('서류 검토를 완료하면 도착통지서를 작성할 수 있습니다.');
     expect(container.querySelectorAll('.fwd-document-lock')).toHaveLength(1);
     expect(container.textContent).toContain('도착 안내 · A/N');
-    expect(container.textContent).toContain('D/O · 배차');
+    // 배차는 전화·메신저로 처리하는 업무라 앱에서 다루지 않는다.
+    expect(container.textContent).not.toContain('배차');
     expect(button('A/N 생성·다운로드').disabled).toBe(true);
     expect(container.querySelector<HTMLInputElement>('.arrival-notice-picker input')?.disabled).toBe(true);
-    expect(container.querySelector<HTMLFieldSetElement>('.fwd-dispatch-fields')?.disabled).toBe(true);
-    expect(button('배차 의뢰서 생성·다운로드').disabled).toBe(true);
     await click('A/N 생성·다운로드');
     expect(saveForwarderCaseState).not.toHaveBeenCalled();
     expect(container.querySelector('.fwd-review-panel')).toBeNull();
@@ -193,16 +192,14 @@ describe('forwarder task tabs', () => {
     await click('통관·운송');
     const text = container.textContent!;
     expect(text.indexOf('입항 확인')).toBeLessThan(text.indexOf('도착 안내 · A/N'));
-    expect(text.indexOf('도착 안내 · A/N')).toBeLessThan(text.indexOf('D/O · 배차'));
+    expect(text).not.toContain('D/O · 배차');
     expect(text).toContain('수입신고 조회 전');
     expect(text).toContain('관부가세 확인 필요');
     expect(button('진행 조회')).toBeTruthy();
     expect(button('A/N 생성·다운로드').disabled).toBe(false);
     expect(container.querySelector<HTMLInputElement>('.arrival-notice-picker input')?.disabled).toBe(false);
-    expect(container.querySelector<HTMLFieldSetElement>('.fwd-dispatch-fields')?.disabled).toBe(false);
     expect(button('포워더 업무 완료')).toBeTruthy();
     expect(text).toContain('실제 세관·반출 상태는 변경되지 않습니다.');
-    expect(container.querySelector('.fwd-dispatch-reply')?.hasAttribute('open')).toBe(false);
   });
 });
 
