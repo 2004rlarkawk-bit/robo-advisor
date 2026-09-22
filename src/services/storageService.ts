@@ -194,10 +194,16 @@ async function carryForwarderCase(
   if (!existing) return;
   // 화주가 보완 요청을 받고 재제출하는 시점이면 요청을 '회신됨'으로 기록하고 이력에 남긴다.
   const resubmittedAt = new Date().toISOString();
+  // shipperReplyAt도 함께 갱신한다 — 포워더에게 'trade_return_replied' 알림을 만드는 DB 트리거의
+  // 조건이 이 값의 변경이라, 회신 메모 없이 서류만 재제출하면 포워더가 알림을 못 받았다.
   const carried = options.markReturnResolved && existing.returnRequest && !existing.returnRequest.resolvedAt
     ? {
       ...existing,
-      returnRequest: { ...existing.returnRequest, resolvedAt: resubmittedAt },
+      returnRequest: {
+        ...existing.returnRequest,
+        resolvedAt: resubmittedAt,
+        shipperReplyAt: resubmittedAt,
+      },
       activity: [...(existing.activity ?? []), { at: resubmittedAt, text: '화주가 수정 후 재제출 — 재검토 필요' }],
     }
     : existing;

@@ -3,17 +3,31 @@ import {
   createEmptyForwarderFormState,
   forwarderFormToTradeProfile,
   isEtaBeforeEtd,
+  missingBookingFields,
   tradeProfileToForwarderFormState,
 } from './forwarderForm';
 
 describe('포워더 입력 검증과 저장 매핑', () => {
-  it('Booking No. 유무로 부킹 상태를 자동 산출한다', () => {
+  it('Booking No.·선박명·항차번호가 모두 있어야 부킹 완료로 본다', () => {
     expect(forwarderFormToTradeProfile({
       ...createEmptyForwarderFormState(), bookingNo: '', bookingStatus: 'confirmed',
     }).bookingStatus).toBe('requested');
+    // 선박명·항차번호가 없으면 Booking No.만으로는 완료가 아니다.
     expect(forwarderFormToTradeProfile({
-      ...createEmptyForwarderFormState(), bookingNo: 'BK-100', bookingStatus: 'requested',
+      ...createEmptyForwarderFormState(), bookingNo: 'BK-100', bookingStatus: 'confirmed',
+    }).bookingStatus).toBe('requested');
+    expect(forwarderFormToTradeProfile({
+      ...createEmptyForwarderFormState(), bookingNo: 'BK-100', vesselOrFlight: 'HMM ALGECIRAS', voyageNo: '0012E', bookingStatus: 'requested',
     }).bookingStatus).toBe('confirmed');
+  });
+
+  it('부킹 완료에 필요한데 비어 있는 항목만 돌려준다', () => {
+    expect(missingBookingFields({ bookingNo: '', vesselOrFlight: '', voyageNo: '' }))
+      .toEqual(['Booking No.', '선박명(Vessel)', '항차번호(Voyage No.)']);
+    expect(missingBookingFields({ bookingNo: 'BK-100', vesselOrFlight: 'HMM ALGECIRAS', voyageNo: ' ' }))
+      .toEqual(['항차번호(Voyage No.)']);
+    expect(missingBookingFields({ bookingNo: 'BK-100', vesselOrFlight: 'HMM ALGECIRAS', voyageNo: '0012E' }))
+      .toEqual([]);
   });
 
   it('ETA가 ETD보다 빠르면 오류다', () => {
@@ -32,6 +46,8 @@ describe('포워더 입력 검증과 저장 매핑', () => {
       requestedDepartureDate: '2026-08-20',
       shippingMarks: 'ABC / BUSAN',
       bookingNo: 'BK-1',
+      vesselOrFlight: 'HMM ALGECIRAS',
+      voyageNo: '0012E',
       bookingStatus: 'confirmed' as const,
       loadingMode: 'LCL' as const,
       containerSize: '40HC' as const,

@@ -29,6 +29,7 @@ export type TradeAttachmentDocumentType =
   | 'export_declaration'
   | 'insurance_policy'
   | 'arrival_notice'
+  | 'booking_confirmation'
   | 'other';
 
 export interface TradeAttachment {

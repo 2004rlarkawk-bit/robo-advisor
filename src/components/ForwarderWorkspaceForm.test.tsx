@@ -64,6 +64,8 @@ function renderForm(
         onNextFromRequest={vi.fn()}
         onResetTrade={vi.fn()}
         onSaveBooking={vi.fn()}
+        booking={{}}
+        onBookingChange={vi.fn()}
         progress={{}}
         onProgressChange={vi.fn()}
         onNextFromProgress={vi.fn()}
@@ -86,7 +88,7 @@ function renderForm(
 describe('수출 포워더 5단계 워크플로우', () => {
   it('Step 표시줄에 5단계 라벨을 모두 표시한다', () => {
     const rendered = renderForm();
-    ['의뢰 접수', 'Booking', '선적 진행', 'B/L 관리', '선적 완료'].forEach((label) => {
+    ['화주 의뢰 확인', '선복 부킹', '반입·선적 준비', 'B/L 관리', '선적 완료'].forEach((label) => {
       expect(rendered.container.textContent).toContain(label);
     });
   });
@@ -206,13 +208,16 @@ describe('수출 포워더 5단계 워크플로우', () => {
         loadingMode: 'FCL',
         cargoItems: [{ id: 'a', itemNo: '', sku: '', descriptionOfGoods: 'Facial Toner', numberOfPackages: 10, kindOfPackages: 'CARTON', grossWeightKg: 100, measurementCbm: '0.5', marksAndNumbers: '', sourceDocumentIds: [] }],
       }, { currentStep: 2 });
-      expect(rendered.container.textContent).toContain('선적 Booking');
-      expect(rendered.container.textContent).toContain('화물정보 Summary');
+      expect(rendered.container.textContent).toContain('선복 부킹');
+      expect(rendered.container.textContent).toContain('화주 운송의뢰 확인');
       expect(rendered.container.textContent).toContain('Facial Toner');
       expect(rendered.container.textContent).toContain('Carrier / 선사');
       expect(rendered.container.textContent).toContain('Booking No.');
       expect(rendered.container.textContent).toContain('컨테이너 규격');
-      expect(rendered.container.textContent).toContain('PortAI가 선사 부킹을 대행하지 않습니다');
+      expect(rendered.container.textContent).toContain('PortAI가 선사에 예약을 보내거나 부킹을 대행하지 않습니다');
+      expect(rendered.container.textContent).toContain('Cargo Closing Date');
+      expect(rendered.container.textContent).toContain('Freight Terms');
+      expect(rendered.container.textContent).toContain('Booking Confirmation');
     });
 
     it('수출 화주와 같은 국내 POL·해외 POD 옵션을 재사용한다', () => {
@@ -228,13 +233,39 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(rendered.container.textContent).toContain('ETA는 ETD보다 빠를 수 없습니다.');
     });
 
-    it('Booking 정보 저장 클릭 시 onSaveBooking을 호출한다', () => {
+    it('핵심 정보가 없으면 부킹 완료 처리 버튼을 누를 수 없다', () => {
       const onSaveBooking = vi.fn();
-      const rendered = renderForm({}, { currentStep: 2, onSaveBooking });
+      const rendered = renderForm({ bookingNo: 'BK-100' }, { currentStep: 2, onSaveBooking });
       const button = Array.from(rendered.container.querySelectorAll('button'))
-        .find((candidate) => candidate.textContent?.includes('Booking 정보 저장')) as HTMLButtonElement;
+        .find((candidate) => candidate.textContent?.includes('부킹 확정 정보 등록')) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      expect(rendered.container.textContent).toContain('부킹 대기');
+      expect(rendered.container.textContent).toContain('선박명(Vessel), 항차번호(Voyage No.)가 필요합니다');
+      act(() => button.click());
+      expect(onSaveBooking).not.toHaveBeenCalled();
+    });
+
+    it('핵심 정보가 모두 있으면 부킹 완료로 표시하고 등록을 호출한다', () => {
+      const onSaveBooking = vi.fn();
+      const rendered = renderForm({ bookingNo: 'BK-100', vesselOrFlight: 'HMM ALGECIRAS', voyageNo: '0012E' }, { currentStep: 2, onSaveBooking });
+      expect(rendered.container.textContent).toContain('부킹 완료');
+      const button = Array.from(rendered.container.querySelectorAll('button'))
+        .find((candidate) => candidate.textContent?.includes('부킹 정보 수정 저장')) as HTMLButtonElement;
       act(() => button.click());
       expect(onSaveBooking).toHaveBeenCalledOnce();
+    });
+
+    it('마감일·운임조건·비고를 고치면 onBookingChange로 넘긴다', () => {
+      const onBookingChange = vi.fn();
+      const rendered = renderForm({}, { currentStep: 2, onBookingChange, booking: { cargoClosingDate: '2026-10-01' } });
+      const cargoClosing = rendered.container.querySelector<HTMLInputElement>('#booking-cargo-closing');
+      expect(cargoClosing?.value).toBe('2026-10-01');
+      const freight = rendered.container.querySelector<HTMLSelectElement>('#booking-freight-terms');
+      act(() => {
+        freight!.value = 'COLLECT';
+        freight!.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      expect(onBookingChange).toHaveBeenCalledWith({ freightTerms: 'COLLECT' });
     });
   });
 
@@ -261,14 +292,14 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(onProgressChange).toHaveBeenCalledWith('cargoReceived', 'done');
     });
 
-    it('Booking 완료 상태는 2단계 Booking No. 저장 여부로 자동 판정되며 직접 변경할 수 없다', () => {
+    it('Booking 완료 상태는 2단계 부킹 확정 정보로 자동 판정되며 직접 변경할 수 없다', () => {
       const onProgressChange = vi.fn();
       const withoutBooking = renderForm({ bookingNo: '' }, { currentStep: 3, onProgressChange });
       const bookingSelect = withoutBooking.container.querySelector<HTMLSelectElement>('select[aria-label="Booking 완료 상태"]');
       expect(bookingSelect?.value).toBe('pending');
       expect(bookingSelect?.disabled).toBe(true);
 
-      const withBooking = renderForm({ bookingNo: 'BK-100' }, { currentStep: 3 });
+      const withBooking = renderForm({ bookingNo: 'BK-100', vesselOrFlight: 'HMM ALGECIRAS', voyageNo: '0012E' }, { currentStep: 3 });
       const bookingSelectDone = withBooking.container.querySelector<HTMLSelectElement>('select[aria-label="Booking 완료 상태"]');
       expect(bookingSelectDone?.value).toBe('done');
     });
@@ -352,7 +383,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
     });
 
     it('모든 조건이 충족되면 선적 완료 처리 버튼이 활성화된다', () => {
-      const rendered = renderForm({ bookingNo: 'BK-100' }, {
+      const rendered = renderForm({ bookingNo: 'BK-100', vesselOrFlight: 'HMM ALGECIRAS', voyageNo: '0012E' }, {
         currentStep: 5,
         trade: FIXTURE_TRADE,
         billOfLadingData: FIXTURE_BILL_OF_LADING,
@@ -372,7 +403,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
 
     it('Booking 완료는 exportForwarderCase.progress가 아니라 2단계 Booking No. 저장 여부로 판정한다', () => {
       // progress.booking이 전혀 없어도(2단계에서 진행상태를 따로 건드린 적 없어도) bookingNo만 있으면 완료로 본다.
-      const withBooking = renderForm({ bookingNo: 'BK-100' }, { currentStep: 5, progress: {} });
+      const withBooking = renderForm({ bookingNo: 'BK-100', vesselOrFlight: 'HMM ALGECIRAS', voyageNo: '0012E' }, { currentStep: 5, progress: {} });
       const items = Array.from(withBooking.container.querySelectorAll('.forwarder-completion-checklist li'));
       const bookingItem = items.find((li) => li.textContent?.includes('Booking 완료'));
       expect(bookingItem?.className).toContain('is-done');

@@ -11,7 +11,6 @@ import type {
 interface Props {
   analysis: ImportAnalysisResult;
   onChange: (fields: ImportExtractedFields) => void;
-  importerCompanyName?: string;
   hasCertificateOfOriginDocument?: boolean;
   readOnly?: boolean;
   /** 문서 id → 파일명 매핑 — 검증 메시지의 근거 값 표기에 사용 */
@@ -70,7 +69,6 @@ function TextField({
 export default function ImportAnalysisSummary({
   analysis,
   onChange,
-  importerCompanyName,
   hasCertificateOfOriginDocument = false,
   readOnly = false,
 }: Props) {
@@ -87,12 +85,6 @@ export default function ImportAnalysisSummary({
     ...fields,
     items: fields.items.map((item) => item.id === id ? { ...item, [field]: value } : item),
   });
-
-  const importerMismatch = Boolean(
-    importerCompanyName
-    && fields.importerDetails.name
-    && fields.importerDetails.name.trim().toLocaleLowerCase() !== importerCompanyName.trim().toLocaleLowerCase(),
-  );
 
   return (
     <section className="form-card import-card">
@@ -146,11 +138,6 @@ export default function ImportAnalysisSummary({
               <TextField key={field} label={label} value={fields[partyKey][field]} onChange={(value) => setParty(partyKey, field, value)} />
             ))}
           </div>
-          {partyKey === 'importerDetails' && importerMismatch && (
-            <div className="form-message warning">
-              문서의 Importer가 로그인 회사({importerCompanyName})와 다릅니다. 문서값을 덮어쓰지 않았으니 확인해 주세요.
-            </div>
-          )}
         </fieldset>
       ))}
       </details>

@@ -389,18 +389,6 @@ export default function ImportTradeFlow({
   }, [state.step]);
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState(false);
-  // 배송 요청 입력칸도 수입신고의뢰서처럼 '보기'를 눌러야 펼친다.
-  const [deliveryOpen, setDeliveryOpen] = useState(false);
-  // 배송 요청 — 스냅샷에 저장되어 포워더 배차 의뢰서로 넘어간다.
-  const delivery: ImportDeliveryRequest = state.deliveryRequest ?? {
-    deliveryAddress: '', deliveryAt: '', contactName: '', contactTel: '', remarks: '', updatedAt: '',
-  };
-  const patchDelivery = (patch: Partial<ImportDeliveryRequest>) => {
-    setState((current) => ({
-      ...current,
-      deliveryRequest: { ...delivery, ...patch, updatedAt: new Date().toISOString() },
-    }));
-  };
   const [showInProgressConfirmation, setShowInProgressConfirmation] = useState(false);
   const [manualHsInputs, setManualHsInputs] = useState<Record<string, string>>({});
   const [manualHsErrors, setManualHsErrors] = useState<Record<string, string>>({});
@@ -625,7 +613,7 @@ export default function ImportTradeFlow({
           selectedCode: '',
           duty: null,
           dutyError: '',
-          risks: resolveImportRisks(documents, analysis, suggestions, '', importerCompanyName, undefined, role),
+          risks: resolveImportRisks(documents, analysis, suggestions, '', undefined, role),
         };
       });
       if (failures.length > 0) {
@@ -706,7 +694,6 @@ export default function ImportTradeFlow({
         scenario.analysis,
         [],
         '',
-        importerCompanyName,
         scenario.input,
         role,
       ),
@@ -768,7 +755,7 @@ export default function ImportTradeFlow({
       console.error('[Import Duty] calculation failed', { error, message: dutyError });
     }
     const riskStatusById = new Map(state.risks.map((risk) => [risk.id, risk.status]));
-    const risks = resolveImportRisks(state.documents, state.analysis, state.suggestions, dutyError, importerCompanyName, undefined, role)
+    const risks = resolveImportRisks(state.documents, state.analysis, state.suggestions, dutyError, undefined, role)
       .map((risk) => ({ ...risk, status: riskStatusById.get(risk.id) ?? risk.status }));
     const generatedAt = new Date().toISOString();
     try {
@@ -926,7 +913,7 @@ export default function ImportTradeFlow({
     if (!state.analysis || busy) return;
     if (!state.generatedAt) return setMessage('수입신고 의뢰서를 먼저 생성해 주세요.');
     const unresolvedHigh = state.risks.filter((risk) => risk.level === 'high' && risk.status !== 'resolved');
-    if (unresolvedHigh.length && !window.confirm(`미해결 HIGH 리스크가 ${unresolvedHigh.length}건 있습니다. 내용을 확인했으며 계속 진행할까요?`)) return;
+    if (unresolvedHigh.length && !window.confirm(`확인이 끝나지 않은 신고 항목이 ${unresolvedHigh.length}건 있습니다. 내용을 확인했으며 계속 진행할까요?`)) return;
     if (state.dutyError && !window.confirm(`예상세액이 계산되지 않았습니다.\n${state.dutyError}\n사유를 확인했으며 계속 진행할까요?`)) return;
     if (role === 'forwarder' && !hasValidStoragePath(state.arrivalNotice)) {
       setShowInProgressConfirmation(true);
@@ -992,7 +979,7 @@ export default function ImportTradeFlow({
   const liveRisks = useMemo(() => {
     if (!state.analysis) return [];
     const storedById = new Map(state.risks.map((risk) => [risk.id, risk]));
-    return resolveImportRisks(state.documents, state.analysis, state.suggestions, state.dutyError, importerCompanyName, undefined, role)
+    return resolveImportRisks(state.documents, state.analysis, state.suggestions, state.dutyError, undefined, role)
       .map((risk) => {
         const stored = storedById.get(risk.id);
         // 값을 고른 카드는 항상 해결됨. 고른 값을 되돌렸다면 저장된 '해결됨'도 따라가지 않는다.
@@ -1080,7 +1067,7 @@ export default function ImportTradeFlow({
       )}
       <ImportStepIndicator
         current={state.step}
-        labels={role === 'shipper' ? ['서류 업로드·AI 분석', '분석 결과·리스크·HS 확정', '세액·의뢰서'] : ['서류 업로드', '서류 확인', '통관 처리']}
+        labels={role === 'shipper' ? ['서류 업로드', '신고정보 확인 · HSK 확정', '예상세액 · 신고자료'] : ['서류 업로드', '서류 확인', '통관 처리']}
         onMove={canBrowseReadOnlyResultSteps
           ? moveToReadOnlyResultStep
           : readOnly ? undefined : (step) => setState((current) => ({ ...current, step }))}
@@ -1248,7 +1235,6 @@ export default function ImportTradeFlow({
           </div>
           <ImportAnalysisSummary
             analysis={state.analysis}
-            importerCompanyName={role === 'shipper' ? importerCompanyName : undefined}
             hasCertificateOfOriginDocument={state.documents.some((document) => document.type === 'certificate_of_origin')}
             readOnly={readOnly}
             onChange={(extracted) => setState((current) => ({
@@ -1328,6 +1314,17 @@ export default function ImportTradeFlow({
                 );
               })}
             </section>
+            {/* 수입요건은 HSK가 정해져야 판단할 수 있다. 앱에는 세번별 요건 데이터가 없어
+                추정값을 보여주지 않고, 공식 확인 경로만 안내한다(추후 관세청 API 연동 예정). */}
+            <section className="form-card import-card">
+              <div className="import-card-heading">
+                <div><h2>H. 수입요건 확인</h2></div>
+                <p>확정한 HSK에 세관장확인 대상 요건(식품·전기용품·전파 등)이 걸리는지는 공식 경로에서 확인해야 합니다.</p>
+              </div>
+              <p className="import-card-note">
+                이 앱은 요건 해당 여부를 판정하지 않습니다. 관세법령정보포털(unipass.customs.go.kr)의 세번별 요건 또는 관세사를 통해 확인하세요.
+              </p>
+            </section>
             </fieldset>
           )}
           {readOnly && onClose ? (
@@ -1335,7 +1332,7 @@ export default function ImportTradeFlow({
               onClose={onClose}
               className="import-actions"
               navigationAction={{
-                label: role === 'forwarder' ? '3단계 통관처리 보기' : '3단계 세액·의뢰서 보기',
+                label: role === 'forwarder' ? '3단계 통관처리 보기' : '3단계 예상세액·신고자료 보기',
                 onClick: () => moveToReadOnlyResultStep(3),
               }}
             />
@@ -1374,75 +1371,6 @@ export default function ImportTradeFlow({
             {preview && <div className="declaration-preview" ref={declarationPreviewRef} />}
           </section>
 
-          {/* 배송 요청 — 서류에 없고 화주만 아는 값이라 직접 입력받는다.
-              포워더가 배차 의뢰서를 만들 때 이 값이 배송지 칸으로 그대로 넘어간다. */}
-          <section className="form-card import-card">
-            <div className="import-card-heading">
-              <div><h2>배송 요청</h2></div>
-              <p>배송 요청은 선택 항목입니다. 비워 두고 제출해도 되며, 배차 전 포워더가 다시 확인합니다.</p>
-            </div>
-            <div className="document-preview-actions">
-              <button type="button" className="btn btn-secondary" onClick={() => setDeliveryOpen((value) => !value)}><Eye size={17} /> {deliveryOpen ? '닫기' : '보기'}</button>
-            </div>
-            {deliveryOpen && (
-            <div className="form-grid" style={{ marginTop: 20 }}>
-              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label" htmlFor="dlv-address">배송지 주소</label>
-                <input
-                  id="dlv-address"
-                  className="form-input"
-                  value={delivery.deliveryAddress}
-                  readOnly={readOnly}
-                  onChange={(event) => patchDelivery({ deliveryAddress: event.target.value })}
-                  placeholder="예: 경기도 화성시 동탄산단로 123 A동 물류창고"
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="dlv-at">희망 배송일시</label>
-                <input
-                  id="dlv-at"
-                  type="datetime-local"
-                  className="form-input"
-                  value={delivery.deliveryAt}
-                  readOnly={readOnly}
-                  onChange={(event) => patchDelivery({ deliveryAt: event.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="dlv-name">수령 담당자</label>
-                <input
-                  id="dlv-name"
-                  className="form-input"
-                  value={delivery.contactName}
-                  readOnly={readOnly}
-                  onChange={(event) => patchDelivery({ contactName: event.target.value })}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="dlv-tel">담당자 연락처</label>
-                <input
-                  id="dlv-tel"
-                  className="form-input"
-                  value={delivery.contactTel}
-                  readOnly={readOnly}
-                  onChange={(event) => patchDelivery({ contactTel: event.target.value })}
-                  placeholder="010-0000-0000"
-                />
-              </div>
-              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                <label className="form-label" htmlFor="dlv-remarks">요청사항 <span className="optional-label">(선택)</span></label>
-                <input
-                  id="dlv-remarks"
-                  className="form-input"
-                  value={delivery.remarks}
-                  readOnly={readOnly}
-                  onChange={(event) => patchDelivery({ remarks: event.target.value })}
-                  placeholder="예: 지게차 없음 · 오전 배송 희망 · 차량 진입로 협소"
-                />
-              </div>
-            </div>
-            )}
-          </section>
           {readOnly && onClose ? <DocumentManagerReadOnlyAction
             onClose={onClose}
             className="import-actions"
@@ -1910,13 +1838,16 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
 
   return (
     <section className="form-card import-card" id="import-risk-summary">
-      <div className="import-card-heading"><div><h2>AI 검증 결과</h2></div></div>
+      <div className="import-card-heading">
+        <div><h2>신고 전 확인사항</h2></div>
+        <p>수입신고에 직접 영향을 주는 값만 확인합니다. 회사명·주소·연락처 같은 표기 차이는 확인 대상이 아닙니다.</p>
+      </div>
       {nothingFound ? (
         <div className="risk-pass">
           <CheckCircle2 size={20} />
           <div>
-            <strong>자동 탐지된 주요 위험이 없습니다</strong>
-            <p>최종 의뢰 전 원본 문서와 한 번 더 대조하세요.</p>
+            <strong>신고 전 확인할 항목이 없습니다</strong>
+            <p>관세사에게 보내기 전에 원본 서류와 한 번 더 대조하세요.</p>
           </div>
         </div>
       ) : (
@@ -1924,7 +1855,7 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
           {blockers.length > 0 && (
             <div className="sev-section-header sev-error">
               <span className="sev-section-icon"><OctagonAlert size={17} strokeWidth={2.4} /></span>
-              <span className="sev-section-label">반드시 수정</span>
+              <span className="sev-section-label">확인 필요</span>
               <span className="sev-section-count">{blockers.length}</span>
             </div>
           )}
@@ -1937,14 +1868,14 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
               onClick={() => setAdvisoriesOpen((open) => !open)}
             >
               <span className="sev-section-icon"><AlertTriangle size={17} strokeWidth={2.4} /></span>
-              <span className="sev-section-label">확인 권장</span>
+              <span className="sev-section-label">참고 항목</span>
               <span className="sev-section-count">{advisories.length}</span>
               <span className="sev-section-toggle-hint">{advisoriesOpen ? '접기' : '펼쳐 보기'}<ChevronDown size={16} /></span>
             </button>
           ) : (
             <div className="sev-section-header sev-warning">
               <span className="sev-section-icon"><AlertTriangle size={17} strokeWidth={2.4} /></span>
-              <span className="sev-section-label">확인 권장</span>
+              <span className="sev-section-label">참고 항목</span>
               <span className="sev-section-count">{advisories.length}</span>
             </div>
           ))}

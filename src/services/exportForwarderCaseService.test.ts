@@ -90,3 +90,59 @@ describe('saveExportForwarderCaseState', () => {
     await expect(saveExportForwarderCaseState('missing-trade', {})).rejects.toThrow('수정할 거래를 찾지 못했습니다.');
   });
 });
+
+describe('부킹 확정 정보 저장', () => {
+  it('부킹 정보를 저장하고 새로 읽을 때 유지된다', async () => {
+    const { writeQuery } = mockReadThenWrite({});
+
+    const result = await saveExportForwarderCaseState(
+      'trade-1',
+      {
+        booking: { cargoClosingDate: '2026-10-01', freightTerms: 'PREPAID', confirmedAt: '2026-09-22T00:00:00.000Z' },
+        progress: { booking: 'done' },
+      },
+      ['부킹 확정 정보 등록'],
+    );
+
+    expect(result.booking).toEqual({
+      cargoClosingDate: '2026-10-01', freightTerms: 'PREPAID', confirmedAt: '2026-09-22T00:00:00.000Z',
+    });
+    expect(writeQuery.update).toHaveBeenCalledWith({
+      workflow_data: expect.objectContaining({
+        exportForwarderCase: expect.objectContaining({
+          booking: expect.objectContaining({ cargoClosingDate: '2026-10-01' }),
+        }),
+      }),
+    });
+  });
+
+  it('일부만 수정하면 나머지 부킹 값은 지워지지 않는다', async () => {
+    mockReadThenWrite({
+      exportForwarderCase: {
+        progress: { booking: 'done' },
+        booking: { cargoClosingDate: '2026-10-01', cyClosingDate: '2026-09-30', freightTerms: 'PREPAID', remarks: '부산신항 반입' },
+        updatedAt: '2026-09-22T00:00:00.000Z',
+      },
+    });
+
+    const result = await saveExportForwarderCaseState('trade-1', { booking: { remarks: '반입지 변경' } }, ['부킹 정보 수정']);
+
+    expect(result.booking).toEqual({
+      cargoClosingDate: '2026-10-01', cyClosingDate: '2026-09-30', freightTerms: 'PREPAID', remarks: '반입지 변경',
+    });
+  });
+
+  it('부킹 정보를 넘기지 않는 저장은 기존 값을 건드리지 않는다', async () => {
+    mockReadThenWrite({
+      exportForwarderCase: {
+        progress: {},
+        booking: { cargoClosingDate: '2026-10-01' },
+        updatedAt: '2026-09-22T00:00:00.000Z',
+      },
+    });
+
+    const result = await saveExportForwarderCaseState('trade-1', { masterBlNo: 'MBL-1' });
+
+    expect(result.booking).toEqual({ cargoClosingDate: '2026-10-01' });
+  });
+});

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Ship } from 'lucide-react';
+import { CheckCircle2, PenLine, Ship } from 'lucide-react';
 import PortLocodeHint from '../../trade/PortLocodeHint';
+import ForwarderDocumentSlot from './ForwarderDocumentSlot';
 import {
   EXPORT_POD_OPTIONS,
   EXPORT_POL_OPTIONS,
@@ -8,12 +9,22 @@ import {
   OTHER_FOREIGN_PORT_VALUE,
   normalizeExportPortValue,
 } from '../../../constants/ports';
-import type { ContainerSize, NumericInput } from '../../../types';
-import { isBookingRegistered, isEtaBeforeEtd, type ForwarderFormState } from '../../../utils/forwarderForm';
+import type { ContainerSize, FreightTerms, NumericInput } from '../../../types';
+import type { ExportBookingDetails } from '../../../types/exportForwarderCase';
+import type { TradeAttachment } from '../../../types/tradeFormData';
+import { FREIGHT_TERMS_LABEL } from '../../../utils/freightTerms';
+import { isBookingRegistered, isEtaBeforeEtd, missingBookingFields, type ForwarderFormState } from '../../../utils/forwarderForm';
 
 interface Props {
   state: ForwarderFormState;
   patch: (values: Partial<ForwarderFormState>) => void;
+  /** 외부에서 확정받은 부킹의 부가정보(마감일·운임조건·비고) */
+  booking: ExportBookingDetails;
+  onBookingChange: (values: Partial<ExportBookingDetails>) => void;
+  userId: string;
+  scopeId: string;
+  attachments: TradeAttachment[];
+  onAttachmentsChange: (attachments: TradeAttachment[]) => void;
   readOnly: boolean;
   busy: boolean;
   onSave: () => void;
@@ -25,8 +36,14 @@ function numericValue(value: string): NumericInput {
   return value === '' ? '' : Number(value);
 }
 
-/** STEP 2 — 선적 Booking. 화물정보 요약(읽기전용) + 포워더가 확보한 실제 선사 부킹 결과 기록. */
-export default function ExportForwarderBookingStep({ state, patch, readOnly, busy, onSave }: Props) {
+/**
+ * STEP 2 — 선복 부킹.
+ * PortAI가 선사에 예약을 보내는 화면이 아니다. 포워더가 선사 홈페이지·메일·전화로 확정한 부킹을
+ * PortAI에 등록해 이후 단계(H/B/L 작성 등)에서 쓰게 하는 화면이다.
+ */
+export default function ExportForwarderBookingStep({
+  state, patch, booking, onBookingChange, userId, scopeId, attachments, onAttachmentsChange, readOnly, busy, onSave,
+}: Props) {
   const [forceCustomLoadPort, setForceCustomLoadPort] = useState(false);
   const [forceCustomDischargePort, setForceCustomDischargePort] = useState(false);
   const normalizedLoadPort = normalizeExportPortValue(state.loadPort);
@@ -50,6 +67,7 @@ export default function ExportForwarderBookingStep({ state, patch, readOnly, bus
 
   const invalidSchedule = isEtaBeforeEtd(state.departureDate, state.arrivalDate);
   const bookingRegistered = isBookingRegistered(state);
+  const missingFields = missingBookingFields(state);
   const cargoSummary = state.cargoItems.filter((item) => item.descriptionOfGoods.trim());
 
   return (
@@ -58,14 +76,19 @@ export default function ExportForwarderBookingStep({ state, patch, readOnly, bus
         <div className="trade-section-title">
           <Ship size={20} className="text-primary" />
           <div>
-            <h2 className="card-title">2. 선적 Booking</h2>
-            <p className="forwarder-step-description">외부 선사·부킹 시스템에서 확보한 결과를 PortAI에 기록합니다. PortAI가 선사 부킹을 대행하지 않습니다.</p>
+            <h2 className="card-title">2. 선복 부킹</h2>
+            <p className="forwarder-step-description">선사 홈페이지·메일·전화로 확정한 부킹 내용을 PortAI에 등록합니다. PortAI가 선사에 예약을 보내거나 부킹을 대행하지 않습니다.</p>
           </div>
         </div>
       </div>
 
       <details className="form-section" open>
-        <summary className="form-section-summary">화물정보 Summary <span className="form-section-hint">1단계 입력값 — 여기서는 참고만</span></summary>
+        <summary className="form-section-summary">화주 운송의뢰 확인 <span className="form-section-hint">1단계 화주 의뢰·화물명세 — 여기서는 참고만</span></summary>
+        <div className="form-grid">
+          <div className="form-group"><label className="form-label">Shipper</label><input className="form-input" value={state.companyName} disabled readOnly /></div>
+          <div className="form-group"><label className="form-label">Consignee</label><input className="form-input" value={state.partnerName} disabled readOnly /></div>
+          <div className="form-group"><label className="form-label">Incoterms / 희망 출항일</label><input className="form-input" value={[state.incoterms, state.requestedDepartureDate].filter(Boolean).join(' · ') || '미입력'} disabled readOnly /></div>
+        </div>
         {cargoSummary.length === 0 ? (
           <p className="form-message info" role="status">1단계에서 입력한 화물명세가 없습니다.</p>
         ) : (
@@ -90,7 +113,7 @@ export default function ExportForwarderBookingStep({ state, patch, readOnly, bus
 
       <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
         <details className="form-section" open>
-          <summary className="form-section-summary">Booking 입력</summary>
+          <summary className="form-section-summary">부킹 확정 정보 <span className="form-section-hint">선사에서 확정받은 값 입력</span></summary>
           <div className="form-grid">
             <div className="form-group"><label className="form-label">Carrier / 선사</label><input className="form-input" value={state.carrier} onChange={(e) => patch({ carrier: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Booking No.</label><input className="form-input" value={state.bookingNo} onChange={(e) => patch({ bookingNo: e.target.value, bookingStatus: e.target.value.trim() ? 'confirmed' : 'requested' })} /></div>
@@ -100,9 +123,23 @@ export default function ExportForwarderBookingStep({ state, patch, readOnly, bus
             <div className="form-group" data-field="dischargePort"><label className="form-label">POD</label><select className="form-input" value={dischargePortSelection} onChange={(e) => { if (e.target.value === OTHER_FOREIGN_PORT_VALUE) { setForceCustomDischargePort(true); patch({ dischargePort: '' }); } else { setForceCustomDischargePort(false); patch({ dischargePort: e.target.value }); } }}><option value="">도착항을 선택하세요</option>{EXPORT_POD_OPTIONS.map((port) => <option key={port.value} value={port.value}>{port.label}</option>)}<option value={OTHER_FOREIGN_PORT_VALUE}>기타 해외항</option></select>{dischargePortSelection === OTHER_FOREIGN_PORT_VALUE && <><input className="form-input shipper-custom-port-input" aria-label="기타 해외항 직접 입력" value={state.dischargePort} onChange={(e) => patch({ dischargePort: e.target.value })} placeholder="기타 해외항 직접 입력" /><PortLocodeHint value={state.dischargePort} onApply={(value) => patch({ dischargePort: value })} /></>}</div>
             <div className="form-group"><label className="form-label">ETD</label><input type="date" className="form-input" value={state.departureDate} onChange={(e) => patch({ departureDate: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">ETA</label><input type="date" className="form-input" value={state.arrivalDate} onChange={(e) => patch({ arrivalDate: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label" htmlFor="booking-cargo-closing">Cargo Closing Date</label><input id="booking-cargo-closing" type="date" className="form-input" value={booking.cargoClosingDate ?? ''} onChange={(e) => onBookingChange({ cargoClosingDate: e.target.value })} /></div>
+            <div className="form-group"><label className="form-label" htmlFor="booking-cy-closing">CY Closing Date <span className="optional-label">(있는 경우)</span></label><input id="booking-cy-closing" type="date" className="form-input" value={booking.cyClosingDate ?? ''} onChange={(e) => onBookingChange({ cyClosingDate: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">운송방식</label><select className="form-input" value={state.loadingMode} onChange={(e) => patch({ loadingMode: e.target.value as ForwarderFormState['loadingMode'] })}><option value="">미정</option><option value="FCL">FCL</option><option value="LCL">LCL</option></select></div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="booking-freight-terms">Freight Terms</label>
+              <select id="booking-freight-terms" className="form-input" value={booking.freightTerms ?? ''} onChange={(e) => onBookingChange({ freightTerms: e.target.value as FreightTerms })}>
+                <option value="">선택하세요</option>
+                <option value="PREPAID">{FREIGHT_TERMS_LABEL.PREPAID}</option>
+                <option value="COLLECT">{FREIGHT_TERMS_LABEL.COLLECT}</option>
+              </select>
+            </div>
           </div>
-          <div className={`form-message ${bookingRegistered ? 'info' : ''}`} role="status">{bookingRegistered ? 'Booking 등록 완료' : 'Booking 미등록'}</div>
+          <div className="form-group"><label className="form-label" htmlFor="booking-remarks">비고</label><textarea id="booking-remarks" className="form-input" rows={2} value={booking.remarks ?? ''} onChange={(e) => onBookingChange({ remarks: e.target.value })} placeholder="선사 안내사항, 반입지, 특이사항 등" /></div>
+          <div className={`form-message ${bookingRegistered ? 'info' : ''}`} role="status">
+            {bookingRegistered ? '부킹 완료' : '부킹 대기'}
+            {!bookingRegistered && missingFields.length > 0 ? ` — ${missingFields.join(', ')}가 필요합니다.` : ''}
+          </div>
           {invalidSchedule && <div className="form-message error" role="alert">ETA는 ETD보다 빠를 수 없습니다.</div>}
         </details>
 
@@ -115,12 +152,32 @@ export default function ExportForwarderBookingStep({ state, patch, readOnly, bus
             <div className="form-group"><label className="form-label">Seal 번호 (선택)</label><input className="form-input" value={state.sealNo} onChange={(e) => patch({ sealNo: e.target.value })} /></div>
           </div> : <div className="form-message info" role="status">{state.loadingMode === 'LCL' ? 'LCL 운송은 컨테이너 정보를 입력하지 않아도 됩니다.' : '운송방식이 정해지면 FCL 컨테이너 정보를 입력할 수 있습니다.'}</div>}
         </details>
+
+        <details className="form-section" open>
+          <summary className="form-section-summary">Booking Confirmation <span className="form-section-hint">선사 발행 문서 — 등록만</span></summary>
+          <p className="form-help">선사가 발행한 부킹 확인서를 그대로 보관합니다. PortAI가 만드는 문서가 아닙니다.</p>
+          <ForwarderDocumentSlot
+            label="Booking Confirmation 파일"
+            documentType="booking_confirmation"
+            userId={userId}
+            scopeId={scopeId}
+            attachments={attachments}
+            onAttachmentsChange={onAttachmentsChange}
+            readOnly={readOnly}
+          />
+        </details>
       </fieldset>
 
       {!readOnly && (
         <div className="form-actions">
-          <button type="button" className="btn btn-primary" disabled={busy || invalidSchedule} onClick={onSave}>
-            Booking 정보 저장 <ArrowRight size={16} />
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy || invalidSchedule || missingFields.length > 0}
+            title={missingFields.length > 0 ? `${missingFields.join(', ')}를 입력해야 부킹 완료 처리를 할 수 있습니다.` : undefined}
+            onClick={onSave}
+          >
+            {bookingRegistered ? <><PenLine size={16} /> 부킹 정보 수정 저장</> : <><CheckCircle2 size={16} /> 부킹 확정 정보 등록</>}
           </button>
         </div>
       )}

@@ -258,7 +258,7 @@ function toDocumentMeta(attachment: TradeAttachment): ImportDocumentMeta {
     name: attachment.fileName,
     size: attachment.sizeBytes,
     mimeType: attachment.mimeType,
-    type: attachment.documentType === 'arrival_notice' ? 'other' : attachment.documentType,
+    type: attachment.documentType === 'arrival_notice' || attachment.documentType === 'booking_confirmation' ? 'other' : attachment.documentType,
     status: 'ready',
     uploadStatus: 'uploaded',
     analysisStatus: 'pending',

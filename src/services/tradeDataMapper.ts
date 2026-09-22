@@ -429,7 +429,8 @@ export function tradeAttachmentToImportDocument(
   if (attachment.documentType === 'arrival_notice' || !hasValidStoragePath(attachment)) {
     return null;
   }
-  const type: ImportDocumentType = attachment.documentType === 'other'
+  // 선사 발행 Booking Confirmation은 수입 분석 대상 문서 종류가 아니라 기타로 넘긴다.
+  const type: ImportDocumentType = attachment.documentType === 'other' || attachment.documentType === 'booking_confirmation'
     ? 'other'
     : attachment.documentType;
   return {

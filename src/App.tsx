@@ -129,6 +129,7 @@ import {
   createEmptyForwarderFormState,
   forwarderFormToTradeProfile,
   isEtaBeforeEtd,
+  missingBookingFields,
   tradeProfileToForwarderFormState,
   type ForwarderFormState,
 } from './utils/forwarderForm';
@@ -143,6 +144,7 @@ import {
 import { saveExportForwarderCaseState } from './services/exportForwarderCaseService';
 import {
   EXPORT_PROGRESS_STAGE_LABEL,
+  type ExportBookingDetails,
   type ExportForwarderCaseState,
   type ExportProgressStageKey,
   type ExportProgressStatus,
@@ -484,6 +486,11 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [appliedExportRequestShipperContact, setAppliedExportRequestShipperContact] = useState<{ email: string; company: string } | null>(null);
   /** 수출 포워더 5단계 운영 상태(선적 진행단계·Master B/L 번호·전달 이력). trades.workflow_data.exportForwarderCase */
   const [exportForwarderCase, setExportForwarderCase] = useState<ExportForwarderCaseState | null>(null);
+  /**
+   * 아직 저장 전인 부킹 부가정보(마감일·운임조건·비고).
+   * 저장된 값(exportForwarderCase.booking) 위에 덮어 쓰는 형태로 화면에 보여준다.
+   */
+  const [bookingDetailsDraft, setBookingDetailsDraft] = useState<ExportBookingDetails>({});
 
   const tradeDraftDefaultProfile: TradeProfile = {
     ...EMPTY_TRADE_PROFILE,
@@ -989,21 +996,46 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     }
   };
 
-  // STEP 2 — 선적 Booking → 저장 후 STEP 3(선적 진행 관리)로 이동
+  // STEP 2 — 선복 부킹. 외부(선사 홈페이지·메일·전화)에서 확정된 부킹을 PortAI에 등록하고 STEP 3으로 이동.
   const handleForwarderStep2Save = async () => {
     if (isForwarderSaving) return;
     if (isEtaBeforeEtd(forwarderForm.departureDate, forwarderForm.arrivalDate)) {
       alert('ETA는 ETD보다 빠를 수 없습니다.');
       return;
     }
-    if (!forwarderForm.bookingNo.trim() || !forwarderForm.vesselOrFlight.trim() || !forwarderForm.carrier.trim()) {
-      const proceed = window.confirm('Carrier / Booking No. / Vessel 정보가 비어 있습니다. 이대로 저장할까요?');
-      if (!proceed) return;
+    const missing = missingBookingFields(forwarderForm);
+    if (missing.length > 0) {
+      alert(`${missing.join(', ')}를 입력해야 부킹 완료 처리를 할 수 있습니다.`);
+      return;
     }
     setIsForwarderSaving(true);
     try {
       const saved = await persistForwarderProfile(3);
-      if (saved) setWorkspaceCurrentStep(3);
+      if (saved) {
+        const bookingDetails: ExportBookingDetails = {
+          ...(exportForwarderCase?.booking ?? {}),
+          ...bookingDetailsDraft,
+          confirmedAt: exportForwarderCase?.booking?.confirmedAt ?? new Date().toISOString(),
+        };
+        try {
+          const nextCase = await saveExportForwarderCaseState(
+            saved.id,
+            { booking: bookingDetails, progress: { booking: 'done' } },
+            [exportForwarderCase?.booking?.confirmedAt ? '부킹 정보 수정' : '부킹 확정 정보 등록'],
+          );
+          setExportForwarderCase(nextCase);
+          setBookingDetailsDraft({});
+        } catch (caseError) {
+          console.warn('[Forwarder Export] 부킹 부가정보 저장 실패:', caseError);
+        }
+        // H/B/L 운임조건이 비어 있을 때만 부킹 값으로 채운다 — 이미 적어 둔 값은 덮어쓰지 않는다.
+        if (bookingDetails.freightTerms && !forwarderForm.freightTerms) {
+          setForwarderForm((current) => current.freightTerms
+            ? current
+            : { ...current, freightTerms: bookingDetails.freightTerms as ForwarderFormState['freightTerms'] });
+        }
+        setWorkspaceCurrentStep(3);
+      }
     } catch (error) {
       console.error('[Forwarder Export] Booking 저장 실패:', error);
       alert('Booking 정보를 저장하지 못했습니다. 현재 입력값을 유지한 채 다시 시도해주세요.');
@@ -1590,6 +1622,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       setBillOfLadingData((t.generatedDocs?.billOfLading as BillOfLadingData) || null);
       setForwarderGenerationError('');
       setExportForwarderCase((t.exportForwarderCase as ExportForwarderCaseState | null) ?? null);
+      setBookingDetailsDraft({});
       setAppliedExportRequestId(null);
       setAppliedExportRequestShipperContact(null);
       hasSubmittedTradeRef.current = t.status === 'submitted';
@@ -1672,7 +1705,11 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   // 포워더 보완 요청을 받은 제출 거래를 다시 열어(status를 generated로 되돌려) 작업실에서 수정한다.
   const handleReviseReturnedImportTrade = async (trade: SavedTrade) => {
     try {
-      const reopened = await reopenSubmittedImportTradeForRevision(trade.id);
+      // 이미 수정용으로 열려 있는(generated) 건은 다시 열 필요가 없다.
+      // 알림을 두 번 누르거나, 수정하다 만 건을 다시 여는 경우가 여기 해당한다.
+      const reopened = trade.status === 'submitted'
+        ? await reopenSubmittedImportTradeForRevision(trade.id)
+        : trade;
       await handleResumeSavedTradeFromDocumentManager(reopened);
 
       // 값을 고치는 화면은 2단계(분석 결과)이므로 그리로 열고,
@@ -1686,7 +1723,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
           const forwarderState = (reopened.forwarderCase ?? trade.forwarderCase) as
             | import('./types/forwarderCase').ForwarderCaseState
             | null;
-          const reason = forwarderState?.returnRequest?.reason ?? '';
+          // 이미 회신 처리된 요청이면 안내 카드를 다시 띄우지 않는다(지난 요청이 새 요청처럼 보이지 않게).
+          const pendingRequest = forwarderState?.returnRequest?.resolvedAt ? null : forwarderState?.returnRequest;
+          const reason = pendingRequest?.reason ?? '';
           localStorage.setItem(cacheKey, JSON.stringify({
             ...cached,
             step: 2,
@@ -1846,7 +1885,22 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
 
   const handleOpenNotification = (notification: NotificationRecord, menu: AppMenu) => {
     handleAppNavigate(menu);
-    if (workspaceRole !== 'forwarder') return;
+    if (workspaceRole !== 'forwarder') {
+      // 화주가 보완 요청 알림을 누르면 문서관리 탭만 여는 게 아니라, 해당 거래를 다시 열고
+      // 포워더의 요청 사유 카드까지 펼친다(문서관리에서 [지금 수정하러 가기]와 같은 경로).
+      if (notification.type === 'trade_return_requested' && notification.tradeId) {
+        void fetchSavedTradeById(notification.tradeId)
+          .then(async (trade) => {
+            if (!trade) {
+              console.warn('[알림] 보완 요청 거래를 찾지 못했습니다:', notification.tradeId);
+              return;
+            }
+            await handleReviseReturnedImportTrade(trade);
+          })
+          .catch((err) => console.warn('[알림] 보완 요청 거래 열기 실패:', err));
+      }
+      return;
+    }
     const target = resolveForwarderNotificationTarget(notification);
     if (!target) return;
     if (target.direction) {
@@ -3025,6 +3079,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 appliedRequestTradeId={appliedExportRequestId}
                 onApplyExportRequest={handleApplyExportRequest}
                 onSaveBooking={() => void handleForwarderStep2Save()}
+                booking={{ ...(exportForwarderCase?.booking ?? {}), ...bookingDetailsDraft }}
+                onBookingChange={(values) => setBookingDetailsDraft((current) => ({ ...current, ...values }))}
                 progress={exportForwarderCase?.progress ?? {}}
                 onProgressChange={(stage, statusValue) => void handleForwarderProgressChange(stage, statusValue)}
                 onNextFromProgress={() => void handleForwarderStep3Next()}
