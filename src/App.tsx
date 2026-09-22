@@ -282,6 +282,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setHtmlTemplates({});
     setBillOfLadingData(null);
     setForwarderGenerationError('');
+    setExportForwarderView('inbox');
   };
 
   const handleImportComplete = async (snapshot: ImportTradeSnapshot): Promise<SavedTrade> => {
@@ -491,6 +492,12 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
    * 저장된 값(exportForwarderCase.booking) 위에 덮어 쓰는 형태로 화면에 보여준다.
    */
   const [bookingDetailsDraft, setBookingDetailsDraft] = useState<ExportBookingDetails>({});
+  /**
+   * 수출 포워더 첫 화면 상태 — 'inbox'(받은 의뢰 목록만 표시) / 'workflow'(5단계 업무 화면).
+   * 의뢰 불러오기·직접 등록·거래 조회/재개 시 'workflow'로 전환되고,
+   * 목록으로 돌아가기·선적 완료 처리 후에는 'inbox'로 복귀한다.
+   */
+  const [exportForwarderView, setExportForwarderView] = useState<'inbox' | 'workflow'>('inbox');
 
   const tradeDraftDefaultProfile: TradeProfile = {
     ...EMPTY_TRADE_PROFILE,
@@ -904,6 +911,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setExportForwarderCase(null);
     setAppliedExportRequestId(null);
     setAppliedExportRequestShipperContact(null);
+    setExportForwarderView('inbox');
     hasSubmittedTradeRef.current = false;
     exportDraftCompletedRef.current = true;
     clearWorkspaceSession();
@@ -919,6 +927,22 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       email: contact.includes('@') ? contact : '',
       company: request.exporterName,
     });
+    // 의뢰 불러오기 → 5단계 업무 화면(STEP 1 화주 의뢰 확인)으로 진입한다.
+    setWorkspaceCurrentStep(1);
+    setExportForwarderView('workflow');
+  };
+
+  // 직접 등록에서 서류를 확인한 뒤 업무 화면(STEP 1)으로 진입한다. 새 거래를 만들지 않는다 —
+  // 실제 trades row 생성은 기존과 동일하게 STEP 1의 [다음] 클릭(persistForwarderProfile) 시점에 일어난다.
+  const handleEnterExportForwarderWorkflow = () => {
+    setWorkspaceCurrentStep(1);
+    setExportForwarderView('workflow');
+  };
+
+  // 업무 화면 → Inbox로 복귀. 로컬 편집 상태만 비우고 저장된 거래 데이터(DB)는 건드리지 않는다.
+  const handleReturnToExportForwarderInbox = () => {
+    handleResetForwarderTrade();
+    setExportForwarderView('inbox');
   };
 
   // 수출 포워더 1~2단계 공통 저장 — 화물·당사자·Booking 입력값(TradeProfile)을 trades row에 반영한다.
@@ -1260,6 +1284,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setHtmlTemplates({});
     setBillOfLadingData(null);
     setForwarderGenerationError('');
+    setExportForwarderView('inbox');
   };
 
   // 재검증(rerunAgents) 동시 실행 제어 — 마지막 요청의 결과만 반영한다
@@ -1626,6 +1651,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       setAppliedExportRequestId(null);
       setAppliedExportRequestShipperContact(null);
       hasSubmittedTradeRef.current = t.status === 'submitted';
+      // 문서관리 조회·거래관리 이어서 작성은 Inbox를 거치지 않고 바로 업무 화면으로 연다.
+      setExportForwarderView('workflow');
       setActiveMenu('dashboard');
       return;
     }
@@ -1987,6 +2014,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       setAppliedExportRequestId(null);
       setAppliedExportRequestShipperContact(null);
       hasSubmittedTradeRef.current = false;
+      // 새 거래로 복사한 값을 바로 이어서 채울 수 있도록 업무 화면으로 연다.
+      setExportForwarderView('workflow');
       setActiveMenu('dashboard');
       return;
     }
@@ -3073,9 +3102,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 onClose={handleCloseDocumentPreview}
                 currentStep={workspaceCurrentStep}
                 onStepChange={setWorkspaceCurrentStep}
+                view={exportForwarderView}
+                onReturnToInbox={handleReturnToExportForwarderInbox}
+                onEnterWorkflow={handleEnterExportForwarderWorkflow}
                 onNextFromRequest={() => void handleForwarderStep1Next()}
-                onResetTrade={handleResetForwarderTrade}
-                showRequestInbox
                 appliedRequestTradeId={appliedExportRequestId}
                 onApplyExportRequest={handleApplyExportRequest}
                 onSaveBooking={() => void handleForwarderStep2Save()}

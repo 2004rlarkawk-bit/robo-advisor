@@ -1,101 +1,32 @@
-import { useState } from 'react';
-import { ArrowRight, FileSignature, Plus, RotateCcw, X } from 'lucide-react';
+import { ArrowRight, FileSignature } from 'lucide-react';
 import type { ForwarderFormState } from '../../../utils/forwarderForm';
-import type { TradeAttachment } from '../../../types/tradeFormData';
-import TradeAttachmentUploader from '../../TradeAttachmentUploader';
-import ForwarderExportRequestInbox from '../../ForwarderExportRequestInbox';
-import type { ForwarderExportRequest } from '../../../services/forwarderExportRequestService';
-import type { ForwarderAutoFillApplicationResult } from '../../../services/forwarderDocumentAnalysisService';
 
 interface Props {
   state: ForwarderFormState;
   patch: (values: Partial<ForwarderFormState>) => void;
   patchCargoItem: (index: number, values: Partial<ForwarderFormState['cargoItems'][number]>) => void;
-  userId: string;
-  attachmentScopeId: string;
-  attachments: TradeAttachment[];
-  onAttachmentsChange: (attachments: TradeAttachment[]) => void;
-  onApplyAnalysis: (
-    values: Partial<ForwarderFormState>,
-    sourceFiles: Record<string, string>,
-  ) => ForwarderAutoFillApplicationResult;
   readOnly: boolean;
   busy: boolean;
   onNext: () => void;
-  onResetTrade: () => void;
-  showRequestInbox: boolean;
-  appliedRequestTradeId?: string | null;
-  onApplyExportRequest?: (request: ForwarderExportRequest) => void;
 }
 
-/** STEP 1 — 운송 의뢰 접수 + AI 서류 분석. 화주 의뢰함, 서류 업로드, 당사자·화물명세를 다룬다. */
+/** STEP 1 — 화주 의뢰 확인. 이미 접수된(받은 의뢰 또는 직접 등록) 화주 의뢰 내용을 포워더가 확인·보정한다. */
 export default function ExportForwarderRequestStep({
   state,
   patch,
   patchCargoItem,
-  userId,
-  attachmentScopeId,
-  attachments,
-  onAttachmentsChange,
-  onApplyAnalysis,
   readOnly,
   busy,
   onNext,
-  onResetTrade,
-  showRequestInbox,
-  appliedRequestTradeId,
-  onApplyExportRequest,
 }: Props) {
-  const [isManualRegistrationOpen, setIsManualRegistrationOpen] = useState(false);
-
   return (
     <div className="form-card forwarder-workspace-form">
       <div className="trade-section-header">
         <div className="trade-section-title">
           <FileSignature size={20} className="text-primary" />
-          <h2 className="card-title">1. 운송 의뢰 접수 + AI 서류 분석</h2>
+          <h2 className="card-title">1. 화주 의뢰 확인</h2>
         </div>
-        {!readOnly && (
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setIsManualRegistrationOpen((open) => !open)}
-            aria-expanded={isManualRegistrationOpen}
-          >
-            {isManualRegistrationOpen ? <X size={16} /> : <Plus size={16} />}
-            {isManualRegistrationOpen ? '직접 등록 닫기' : '직접 등록'}
-          </button>
-        )}
       </div>
-
-      {showRequestInbox && onApplyExportRequest && !readOnly && (
-        <ForwarderExportRequestInbox
-          onApply={onApplyExportRequest}
-          appliedTradeId={appliedRequestTradeId ?? null}
-        />
-      )}
-
-      {isManualRegistrationOpen && !readOnly && (
-        <details className="form-section" open>
-          <summary className="form-section-summary">직접 의뢰 등록 <span className="form-section-hint">외부에서 받은 의뢰 서류 업로드</span></summary>
-          <p className="forwarder-step-description">
-            이메일, 메신저 등 외부에서 받은 화주의 수출 의뢰 서류를 업로드해 주세요.
-            업로드한 문서는 AI가 분석하여 화주·수하인·화물정보를 자동 입력합니다.
-          </p>
-          <TradeAttachmentUploader
-            userId={userId}
-            scopeId={attachmentScopeId}
-            attachments={attachments}
-            onChange={onAttachmentsChange}
-            onApplyAnalysis={onApplyAnalysis}
-          />
-          <div className="form-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setIsManualRegistrationOpen(false)}>
-              <X size={16} /> 닫기
-            </button>
-          </div>
-        </details>
-      )}
 
       <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
         <details className="form-section" open>
@@ -142,11 +73,8 @@ export default function ExportForwarderRequestStep({
 
       {!readOnly && (
         <div className="form-actions">
-          <button type="button" className="btn btn-secondary" disabled={busy} onClick={onResetTrade}>
-            <RotateCcw size={16} /> 초기화
-          </button>
           <button type="button" className="btn btn-primary" disabled={busy} onClick={onNext}>
-            다음: Booking <ArrowRight size={16} />
+            다음: 선복 부킹 <ArrowRight size={16} />
           </button>
         </div>
       )}

@@ -61,8 +61,10 @@ function renderForm(
         onAttachmentsChange={vi.fn()}
         currentStep={1}
         onStepChange={vi.fn()}
+        view="workflow"
+        onReturnToInbox={vi.fn()}
+        onEnterWorkflow={vi.fn()}
         onNextFromRequest={vi.fn()}
-        onResetTrade={vi.fn()}
         onSaveBooking={vi.fn()}
         booking={{}}
         onBookingChange={vi.fn()}
@@ -93,25 +95,24 @@ describe('수출 포워더 5단계 워크플로우', () => {
     });
   });
 
-  describe('STEP 1 — 운송 의뢰 접수 + AI 서류 분석', () => {
-    it('화주 운송의뢰 정보와 화물명세를 표시하고, 직접 등록 영역은 기본적으로 숨긴다', () => {
-      const rendered = renderForm({}, { currentStep: 1 });
-      expect(rendered.container.textContent).toContain('운송 의뢰 접수 + AI 서류 분석');
-      expect(rendered.container.textContent).toContain('화주 운송의뢰 정보');
-      expect(rendered.container.textContent).toContain('화물명세');
+  describe('Inbox 화면 (view=inbox) — 수출 포워더 첫 진입', () => {
+    it('받은 의뢰 목록만 표시하고, Stepper·입력 폼·직접 등록 영역은 보이지 않는다', () => {
+      const rendered = renderForm({}, { view: 'inbox', onApplyExportRequest: vi.fn() });
+      expect(rendered.container.textContent).toContain('수출 포워더 업무');
+      expect(rendered.container.textContent).toContain('받은 의뢰');
       expect(rendered.container.textContent).toContain('직접 등록');
+      // 업무 단계(Stepper)·입력 폼은 의뢰를 불러오기 전까지 나타나지 않는다.
+      expect(rendered.container.querySelector('.import-steps')).toBeNull();
+      expect(rendered.container.textContent).not.toContain('화주 의뢰 확인');
+      expect(rendered.container.textContent).not.toContain('화주 운송의뢰 정보');
+      expect(rendered.container.textContent).not.toContain('화물명세');
       // 직접 등록을 열기 전에는 업로드 영역이 보이지 않는다.
       expect(rendered.container.textContent).not.toContain('직접 의뢰 등록');
       expect(rendered.container.textContent).not.toContain('여러 파일 선택');
-      expect(rendered.container.textContent).not.toContain('AI 분석 및 빈 필드 자동입력');
-      // Booking/컨테이너/B/L 발행정보는 이제 1단계에 없다 — 2·4단계로 이동했다.
-      expect(rendered.container.textContent).not.toContain('선복예약');
-      expect(rendered.container.textContent).not.toContain('컨테이너 정보');
-      expect(rendered.container.textContent).not.toContain('선하증권 발행 정보');
     });
 
     it('[+ 직접 등록] 클릭 시 서류 업로드 영역이 열리고, 닫기를 누르면 다시 숨겨진다', () => {
-      const rendered = renderForm({}, { currentStep: 1, showRequestInbox: true, onApplyExportRequest: vi.fn() });
+      const rendered = renderForm({}, { view: 'inbox', onApplyExportRequest: vi.fn() });
       const openButton = Array.from(rendered.container.querySelectorAll('button'))
         .find((button) => button.textContent?.trim() === '직접 등록') as HTMLButtonElement;
       expect(openButton).toBeTruthy();
@@ -137,10 +138,36 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(rendered.container.textContent).toContain('직접 의뢰 등록');
     });
 
-    it('조회모드에서는 직접 등록 버튼을 표시하지 않는다', () => {
-      const rendered = renderForm({}, { currentStep: 1, readOnly: true, onClose: vi.fn() });
-      expect(Array.from(rendered.container.querySelectorAll('button'))
-        .some((button) => button.textContent?.includes('직접 등록'))).toBe(false);
+    it('직접 등록 패널에서 [다음: 화주 의뢰 확인] 클릭 시 업무 화면 진입 콜백을 호출한다', () => {
+      const onEnterWorkflow = vi.fn();
+      const rendered = renderForm({}, { view: 'inbox', onApplyExportRequest: vi.fn(), onEnterWorkflow });
+      const openButton = Array.from(rendered.container.querySelectorAll('button'))
+        .find((button) => button.textContent?.trim() === '직접 등록') as HTMLButtonElement;
+      act(() => openButton.click());
+      const continueButton = Array.from(rendered.container.querySelectorAll('button'))
+        .find((button) => button.textContent?.includes('다음: 화주 의뢰 확인')) as HTMLButtonElement;
+      act(() => continueButton.click());
+      expect(onEnterWorkflow).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('STEP 1 — 화주 의뢰 확인', () => {
+    it('화주 운송의뢰 정보와 화물명세를 표시한다(입력 폼만 — 업로드/AI 분석 UI 없음)', () => {
+      const rendered = renderForm({}, { currentStep: 1 });
+      expect(rendered.container.textContent).toContain('1. 화주 의뢰 확인');
+      expect(rendered.container.textContent).toContain('화주 운송의뢰 정보');
+      expect(rendered.container.textContent).toContain('화물명세');
+      // 받은 의뢰함·직접 등록은 Inbox 화면(view=inbox)의 몫이지, STEP 1에는 없다.
+      expect(rendered.container.textContent).not.toContain('받은 의뢰');
+      expect(rendered.container.textContent).not.toContain('직접 등록');
+      expect(rendered.container.textContent).not.toContain('여러 파일 선택');
+      expect(rendered.container.textContent).not.toContain('AI 분석 및 빈 필드 자동입력');
+      // 초기화 버튼은 제거되었다 — "목록으로 돌아가기"가 같은 역할을 한다.
+      expect(rendered.container.textContent).not.toContain('초기화');
+      // Booking/컨테이너/B/L 발행정보는 이제 1단계에 없다 — 2·4단계로 이동했다.
+      expect(rendered.container.textContent).not.toContain('선복예약');
+      expect(rendered.container.textContent).not.toContain('컨테이너 정보');
+      expect(rendered.container.textContent).not.toContain('선하증권 발행 정보');
     });
 
     it('다품목 화물명세를 품목별 카드로 모두 표시한다', () => {
@@ -183,22 +210,22 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(rendered.container.querySelector<HTMLInputElement>('#cargo-weight-2')?.value).toBe('300');
     });
 
-    it('다음: Booking 클릭 시 onNextFromRequest를 호출한다', () => {
+    it('다음: 선복 부킹 클릭 시 onNextFromRequest를 호출한다', () => {
       const onNextFromRequest = vi.fn();
       const rendered = renderForm({}, { currentStep: 1, onNextFromRequest });
       const button = Array.from(rendered.container.querySelectorAll('button'))
-        .find((candidate) => candidate.textContent?.includes('다음: Booking')) as HTMLButtonElement;
+        .find((candidate) => candidate.textContent?.includes('다음: 선복 부킹')) as HTMLButtonElement;
       act(() => button.click());
       expect(onNextFromRequest).toHaveBeenCalledOnce();
     });
 
-    it('초기화 클릭 시 onResetTrade를 호출한다', () => {
-      const onResetTrade = vi.fn();
-      const rendered = renderForm({}, { currentStep: 1, onResetTrade });
+    it('업무 화면 상단에서 [목록으로 돌아가기] 클릭 시 onReturnToInbox를 호출한다', () => {
+      const onReturnToInbox = vi.fn();
+      const rendered = renderForm({}, { currentStep: 1, onReturnToInbox });
       const button = Array.from(rendered.container.querySelectorAll('button'))
-        .find((candidate) => candidate.textContent?.trim() === '초기화') as HTMLButtonElement;
+        .find((candidate) => candidate.textContent?.includes('목록으로 돌아가기')) as HTMLButtonElement;
       act(() => button.click());
-      expect(onResetTrade).toHaveBeenCalledOnce();
+      expect(onReturnToInbox).toHaveBeenCalledOnce();
     });
   });
 
@@ -422,7 +449,8 @@ describe('수출 포워더 5단계 워크플로우', () => {
       const onClose = vi.fn();
       const rendered = renderForm({}, { currentStep: 1, readOnly: true, onClose });
       expect(rendered.container.textContent).not.toContain('초기화');
-      expect(rendered.container.textContent).not.toContain('다음: Booking');
+      expect(rendered.container.textContent).not.toContain('다음: 선복 부킹');
+      expect(rendered.container.textContent).not.toContain('목록으로 돌아가기');
       expect(rendered.container.querySelector('fieldset')?.disabled).toBe(true);
       const closeButton = Array.from(rendered.container.querySelectorAll('button'))
         .find((candidate) => candidate.textContent?.trim() === '닫기') as HTMLButtonElement;

@@ -593,6 +593,7 @@ body {
 .forwarder-bl-review-actions { flex-wrap: wrap; }
 /* 수출 포워더 5단계 흐름 — Step 표시줄과 각 단계 카드를 세로로 쌓는다. */
 .forwarder-export-flow { display: grid; gap: 20px; }
+.forwarder-back-to-inbox { justify-self: start; }
 /* Master B/L·수출신고필증 등 문서 1건 등록 위젯 — 기존 import-document-row/list 톤을 그대로 쓴다. */
 .forwarder-document-slot { display: grid; gap: 10px; margin-top: 12px; }
 .forwarder-document-slot-head { display: flex; align-items: baseline; gap: 8px; }
