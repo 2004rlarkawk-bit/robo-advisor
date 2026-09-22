@@ -793,6 +793,32 @@ describe('포장 정보 — 화물 크기 기반 CBM 자동 계산', () => {
     expect(rendered.onProfilePatch).toHaveBeenCalledWith({ measurement: '0.369', measurementManual: false });
   });
 
+  it('줄별 계산값을 누르면 직접 입력 상태여도 CBM 칸에 그 값이 들어간다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [{ id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 }],
+      measurement: '0.5',
+      measurementManual: true,
+    });
+    const apply = rendered.container.querySelector<HTMLButtonElement>('button[aria-label="규격 1 계산값 0.369 m³를 CBM 칸에 넣기"]');
+    expect(apply?.textContent).toBe('0.369 m³');
+    act(() => apply?.click());
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ measurement: '0.369', measurementManual: false });
+  });
+
+  it('규격이 여러 줄이면 줄별 계산값을 눌러도 합계가 들어간다', () => {
+    const rendered = renderForm([firstItem], false, {
+      packageDimensions: [
+        { id: 'dim-1', width: 45, length: 20, height: 41, boxes: 10 },
+        { id: 'dim-2', width: 20, length: 11, height: 4.5, boxes: 8 },
+      ],
+    });
+    const buttons = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.shipper-dimension-cbm'));
+    expect(buttons.map((button) => button.textContent)).toEqual(['0.369 m³', '0.008 m³']);
+    expect(buttons[1].title).toBe('규격 합계를 CBM 칸에 넣기');
+    act(() => buttons[1].click());
+    expect(rendered.onProfilePatch).toHaveBeenCalledWith({ measurement: '0.377', measurementManual: false });
+  });
+
   it('화물 크기 안내문과 단위 선택(cm 기본)을 보여준다', () => {
     const rendered = renderForm();
     expect(rendered.container.textContent).toContain('최종 포장 후 화물의 외부 크기를 입력해 주세요.');

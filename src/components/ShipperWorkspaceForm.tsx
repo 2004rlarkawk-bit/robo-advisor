@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { FileSignature, FileText, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import PortLocodeHint from './trade/PortLocodeHint';
 import {
@@ -352,14 +352,26 @@ export default function ShipperWorkspaceForm({
   // 계산이 다시 돌았다는 걸 눈에 보이게 — 값이 바뀌는 순간 CBM 칸을 잠깐 강조한다.
   const [cbmJustComputed, setCbmJustComputed] = useState(false);
   const previousCbmValue = useRef(cbmFieldValue);
+  const cbmFlashTimer = useRef<number | undefined>(undefined);
+  const flashCbm = useCallback(() => {
+    setCbmJustComputed(true);
+    window.clearTimeout(cbmFlashTimer.current);
+    cbmFlashTimer.current = window.setTimeout(() => setCbmJustComputed(false), 1100);
+  }, []);
+  useEffect(() => () => window.clearTimeout(cbmFlashTimer.current), []);
   useEffect(() => {
     if (previousCbmValue.current === cbmFieldValue) return;
     previousCbmValue.current = cbmFieldValue;
     if (manualCbm || !cbmFieldValue) return;
-    setCbmJustComputed(true);
-    const timer = window.setTimeout(() => setCbmJustComputed(false), 1100);
-    return () => window.clearTimeout(timer);
-  }, [cbmFieldValue, manualCbm]);
+    flashCbm();
+  }, [cbmFieldValue, manualCbm, flashCbm]);
+
+  /** 규격에서 계산한 CBM을 그대로 CBM 칸에 넣는다(직접 입력 상태였다면 자동 계산으로 되돌린다). */
+  const applyComputedCbm = () => {
+    if (computedCbm === null) return;
+    onProfilePatch({ measurement: formatCbm(computedCbm), measurementManual: false });
+    flashCbm();
+  };
 
   /** 계산 과정을 그대로 보여주는 식 — 값만 있을 때보다 계산됐다는 게 분명해진다. */
   const completedDimensionRows = dimensionRows.filter(isCompletePackageDimension);
@@ -1031,7 +1043,18 @@ export default function ShipperWorkspaceForm({
                   <input type="number" min="0" step="any" className="form-input" aria-label={`규격 ${index + 1} 높이`} placeholder="높이" value={row.height} onChange={(e) => updateDimension(row.id, { height: numericValue(e.target.value) })} />
                   <span className="shipper-dimension-times">×</span>
                   <input type="number" min="0" className="form-input" aria-label={`규격 ${index + 1} 박스 수`} placeholder="박스 수" value={row.boxes} onChange={(e) => updateDimension(row.id, { boxes: numericValue(e.target.value) })} />
-                  <span className="shipper-dimension-cbm">{rowCbm === null ? '' : `${formatCbm(rowCbm)} m³`}</span>
+                  {rowCbm === null ? <span className="shipper-dimension-cbm" /> : (
+                    // 계산된 줄 CBM을 누르면 아래 CBM 칸에 바로 반영한다. 여러 줄이면 합계가 들어간다.
+                    <button
+                      type="button"
+                      className="shipper-dimension-cbm is-clickable"
+                      title={dimensionRows.length > 1 ? '규격 합계를 CBM 칸에 넣기' : '이 값을 CBM 칸에 넣기'}
+                      aria-label={`규격 ${index + 1} 계산값 ${formatCbm(rowCbm)} m³를 CBM 칸에 넣기`}
+                      onClick={applyComputedCbm}
+                    >
+                      {formatCbm(rowCbm)} m³
+                    </button>
+                  )}
                   <button type="button" className="btn btn-secondary btn-sm" aria-label={`규격 ${index + 1} 삭제`} title="이 규격 지우기" onClick={() => removeDimension(row.id)}><Trash2 size={14} /></button>
                 </div>
               );
@@ -1071,10 +1094,10 @@ export default function ShipperWorkspaceForm({
               <button
                 type="button"
                 className="btn btn-secondary btn-sm shipper-cbm-reset"
-                onClick={() => onProfilePatch({
-                  measurement: computedCbm === null ? '' : formatCbm(computedCbm),
-                  measurementManual: false,
-                })}
+                onClick={() => {
+                  if (computedCbm === null) onProfilePatch({ measurement: '', measurementManual: false });
+                  else applyComputedCbm();
+                }}
               >
                 <RotateCcw size={13} /> 계산값으로 되돌리기
               </button>
