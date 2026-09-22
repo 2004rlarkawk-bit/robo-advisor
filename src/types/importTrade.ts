@@ -290,6 +290,35 @@ export const FTA_CHOICE_KEY = 'fta:apply';
 export const FTA_CHOICES = ['FTA 적용 안 함', '적용 여부 미확인', 'FTA 적용 요청'] as const;
 export type FtaChoice = typeof FTA_CHOICES[number];
 
+/**
+ * 화면에 보여주는 선택은 두 갈래다 — 적용 안 함 / 적용 가능 여부 확인.
+ * 저장값은 기존 그대로 쓰고(과거 거래 호환), '적용 여부 미확인'을 '적용 가능 여부 확인'으로 보여준다.
+ * 'FTA 적용 요청'으로 저장된 옛 거래도 같은 상태로 취급한다.
+ */
+export const FTA_REVIEW_CHOICE: FtaChoice = '적용 여부 미확인';
+export const isFtaReviewChoice = (value?: string): boolean =>
+  value === '적용 여부 미확인' || value === 'FTA 적용 요청';
+
+/** 원산지증명서 보유 여부 — chosenValues[CO_HOLDING_KEY] */
+/**
+ * 화주가 포워더에게 알려주는 배송 요청.
+ * 배송지·희망 일시·수령 담당자는 서류에 없고 화주만 아는 값이라 직접 입력받는다.
+ */
+export interface ImportDeliveryRequest {
+  deliveryAddress: string;
+  /** 희망 배송일시 — datetime-local 문자열 */
+  deliveryAt: string;
+  contactName: string;
+  contactTel: string;
+  /** 화주가 운송사에 전달할 요청사항 */
+  remarks: string;
+  updatedAt: string;
+}
+
+export const CO_HOLDING_KEY = 'fta:co';
+export const CO_HOLDING_CHOICES = ['있음', '없음 / 발급 예정'] as const;
+export type CoHolding = typeof CO_HOLDING_CHOICES[number];
+
 /** 카드 안에서 바로 고치는 방법 — 값 입력, HS 확정 칸으로 이동, 서류 추가 업로드로 이동 */
 export type ImportRiskFix =
   | {
@@ -354,51 +383,6 @@ export interface CargoTrackingResult {
   timeline: CargoTimelineItem[];
 }
 
-/** 요청 차량 종류 — 배차 의뢰서 '요청 차량' 칸 */
-export type DispatchVehicleType = '트랙터' | '카고' | '윙바디' | '기타';
-
-/** 운임 정산 방식 — 배차 의뢰서 '운임 정산' 칸 */
-export type DispatchSettlement = '선불' | '착불' | '월마감';
-
-/**
- * 화주가 포워더에게 알려주는 배송 요청.
- * 배송지·희망 일시·수령 담당자는 서류에 없고 화주만 아는 값이라 직접 입력받는다.
- */
-export interface ImportDeliveryRequest {
-  deliveryAddress: string;
-  /** 희망 배송일시 — datetime-local 문자열 */
-  deliveryAt: string;
-  contactName: string;
-  contactTel: string;
-  /** 화주가 운송사에 전달할 요청사항 */
-  remarks: string;
-  updatedAt: string;
-}
-
-/**
- * 포워더가 D/O 수령 후 운송사에 보내는 배차 의뢰.
- * 상차지·공컨 반납지·차량·정산은 포워더가 선사·터미널과 정하는 값이다.
- */
-export interface ImportDispatchRequest {
-  /** 수신 운송사 */
-  carrierCompany: string;
-  attention: string;
-  doNo: string;
-  terminal: string;
-  pickupPlace: string;
-  /** 상차 요청일시 — datetime-local 문자열 */
-  pickupAt: string;
-  emptyReturnPlace: string;
-  emptyReturnDue: string;
-  vehicleType: DispatchVehicleType | '';
-  settlement: DispatchSettlement | '';
-  remarks: string;
-  /** 운송사 회신 — 배차 확정 후 기록 */
-  vehicleNo: string;
-  driverName: string;
-  driverTel: string;
-  issuedAt: string;
-}
 
 export interface ImportTradeSnapshot {
   tradeId?: string;
@@ -411,7 +395,7 @@ export interface ImportTradeSnapshot {
   duty?: ImportDutyEstimate;
   risks: ImportRisk[];
   cargo?: CargoTrackingResult;
-  /** 화주가 입력한 배송 요청 — 포워더 배차 의뢰서의 배송지 칸으로 이어진다 */
+  /** 화주가 입력한 배송 요청 — 포워더가 운송사에 전달할 때 참고한다 */
   deliveryRequest?: ImportDeliveryRequest;
   generatedAt: string;
   flowCompletedAt?: string;

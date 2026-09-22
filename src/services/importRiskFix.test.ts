@@ -28,20 +28,26 @@ describe('수입 경고 카드 — 카드 안에서 고치기', () => {
     expect(byId(list, 'origin-i1')?.fixes?.[0]).toMatchObject({ target: { type: 'itemOrigin', itemId: 'i1' } });
     expect(byId(list, 'hs-i1')?.fixes).toEqual([{ kind: 'hs', itemId: 'i1' }]);
     expect(byId(list, 'hs-i1')?.relatedDocuments).toEqual(['Commercial Invoice', 'Packing List']);
-    expect(byId(list, 'missing-co')?.fixes).toEqual([{ kind: 'fta' }, { kind: 'upload' }]);
-    expect(byId(list, 'missing-co')).toMatchObject({ level: 'medium', item: '원산지증명서 누락 (FTA 적용 여부 확인 필요)' });
+    // C/O는 FTA 협정세율을 적용할 때만 필요한 조건부 서류다 — 고르기 전에는 안내하지 않는다.
+    expect(byId(list, 'missing-co')).toBeUndefined();
   });
 
-  it('C/O 없음 카드의 FTA 선택: 적용 안 함은 선택 표시만(검토 완료는 직접), 미확인은 확인 안내, 적용 요청은 C/O 제출 안내(반드시 수정)', () => {
+  it('C/O는 FTA 적용 가능 여부를 확인하면서 보유했다고 답했을 때만 서류 추가를 안내한다', () => {
     const none = risks(applyRiskFix(analysis(), { type: 'fta' }, 'FTA 적용 안 함'));
-    expect(byId(none, 'missing-co')).toMatchObject({ level: 'medium', status: 'unresolved', ftaChoice: 'FTA 적용 안 함' });
-    expect(byId(none, 'missing-co')?.chosen).toBeUndefined();
-    const requested = risks(applyRiskFix(analysis(), { type: 'fta' }, 'FTA 적용 요청'));
-    expect(byId(requested, 'missing-co')).toMatchObject({ level: 'medium', status: 'unresolved', ftaChoice: 'FTA 적용 요청' });
-    expect(byId(requested, 'missing-co')?.cause).toContain('원산지증명서가 필요합니다');
-    const unknown = risks(applyRiskFix(analysis(), { type: 'fta' }, '적용 여부 미확인'));
-    expect(byId(unknown, 'missing-co')).toMatchObject({ level: 'medium', status: 'unresolved' });
-    expect(byId(unknown, 'missing-co')?.cause).toContain('FTA 적용 여부를 확인해 주세요');
+    expect(byId(none, 'missing-co')).toBeUndefined();
+
+    // 적용 가능 여부만 확인 중 — C/O 보유 여부를 아직 고르지 않았으면 아무 안내도 하지 않는다.
+    const reviewing = applyRiskFix(analysis(), { type: 'fta' }, '적용 여부 미확인');
+    expect(byId(risks(reviewing), 'missing-co')).toBeUndefined();
+
+    const withoutCo = { ...reviewing, chosenValues: { ...reviewing.chosenValues, 'fta:co': '없음 / 발급 예정' } };
+    expect(byId(risks(withoutCo), 'missing-co')).toBeUndefined();
+
+    const holdingCo = { ...reviewing, chosenValues: { ...reviewing.chosenValues, 'fta:co': '있음' } };
+    expect(byId(risks(holdingCo), 'missing-co')).toMatchObject({
+      level: 'medium', status: 'unresolved', item: '원산지증명서 추가 필요',
+    });
+    expect(byId(risks(holdingCo), 'missing-co')?.fixes).toEqual([{ kind: 'upload' }]);
   });
 
   it('카드에서 값을 고치면 해당 경고가 사라진다', () => {

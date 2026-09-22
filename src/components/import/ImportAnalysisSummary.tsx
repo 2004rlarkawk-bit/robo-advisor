@@ -95,7 +95,7 @@ export default function ImportAnalysisSummary({
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <div><span className="ai-badge">AI 추출값</span><h2>분석 결과 확인 및 수정</h2></div>
+        <div><span className="ai-badge">AI 추출값</span><h2>분석 결과 확인</h2></div>
         <span className="import-card-toggle-hint">{open ? '접기' : '펼치기'}<ChevronDown size={16} /></span>
       </button>
 

@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Download, PenLine,
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
 import ImportAnalysisSummary from './ImportAnalysisSummary';
+import ImportDeclarationChecklist from './ImportDeclarationChecklist';
 import ImportDocumentComparison from './ImportDocumentComparison';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 import {
@@ -17,7 +18,7 @@ import {
   validateOfficialImportHSK,
 } from '../../services/importHSCodeSuggestionService';
 import { resolveImportRisks } from '../../services/importRiskService';
-import { applyChosenValue, applyRiskFix, clearChosenValue, mergeEditedChoices } from '../../services/importValueChoiceService';
+import { applyChosenValue, clearChosenValue, mergeEditedChoices } from '../../services/importValueChoiceService';
 import { IMPORT_DEMO_SCENARIO } from '../../services/importReconciliationFixtures';
 import {
   buildImportDeclarationDocx,
@@ -60,7 +61,14 @@ import type {
   ImportTradeSnapshot,
   UserTradeRole,
 } from '../../types/importTrade';
-import { FTA_CHOICES, FTA_CHOICE_KEY } from '../../types/importTrade';
+import {
+  CO_HOLDING_CHOICES,
+  CO_HOLDING_KEY,
+  FTA_CHOICE_KEY,
+  FTA_REVIEW_CHOICE,
+  isFtaReviewChoice,
+  type CoHolding,
+} from '../../types/importTrade';
 import type { PersistedTradeStatus, SavedTrade, TradeProfile } from '../../types';
 import type { TradeFormDataV3 } from '../../types/tradeFormData';
 import type { TradeDraftRow } from '../../services/draftCacheService';
@@ -404,7 +412,8 @@ export default function ImportTradeFlow({
   const [reviseReplySaved, setReviseReplySaved] = useState(false);
   const canBrowseReadOnlyResultSteps = readOnly;
   const moveToReadOnlyResultStep = (step: number) => {
-    if (!canBrowseReadOnlyResultSteps || (step !== 2 && step !== 3)) return;
+    // 화주는 2~4단계(HSK 검토 · FTA/세액 · 신고자료)를 조회 상태로 오갈 수 있다.
+    if (!canBrowseReadOnlyResultSteps || step < 2 || step > 4) return;
     setState((current) => ({ ...current, step }));
   };
   const selectedHS = useMemo(() => {
@@ -699,6 +708,43 @@ export default function ImportTradeFlow({
       ),
     }));
   };
+
+  /**
+   * 예상세액만 다시 계산한다.
+   * FTA 적용 여부나 값 선택을 바꾸면 duty를 비우는데, 그때 기본 관세율 기준 세액은 계속 보여야 한다.
+   */
+  const [dutyBusy, setDutyBusy] = useState(false);
+  const recalculateDuty = useCallback(async () => {
+    const analysis = state.analysis;
+    if (!analysis || role !== 'shipper') return;
+    const fields = analysis.extracted;
+    if (!fields.items.length) return;
+    setDutyBusy(true);
+    try {
+      const duty = await calculateEstimatedImportDuty({
+        items: fields.items,
+        invoiceCurrency: fields.currency,
+        invoiceAmount: fields.totalAmount,
+        invoiceDate: fields.invoiceDate,
+        originCountry: fields.items.map((item) => item.originCountry).filter(Boolean).join(', '),
+        destinationCountry: fields.destinationCountry,
+      });
+      setState((current) => ({ ...current, duty, dutyError: '' }));
+    } catch (error) {
+      const dutyError = error instanceof Error ? error.message : '예상세액을 계산하지 못했습니다.';
+      console.error('[Import Duty] recalculation failed', { error, dutyError });
+      setState((current) => ({ ...current, dutyError }));
+    } finally {
+      setDutyBusy(false);
+    }
+  }, [role, state.analysis]);
+
+  // 3단계(FTA·세액)에 들어왔는데 세액이 비어 있으면 기본 관세율 기준으로 다시 계산한다.
+  useEffect(() => {
+    if (state.step !== 3 || role !== 'shipper' || readOnly) return;
+    if (state.duty || state.dutyError || dutyBusy) return;
+    void recalculateDuty();
+  }, [state.step, state.duty, state.dutyError, role, readOnly, dutyBusy, recalculateDuty]);
 
   const confirmAndCalculate = async () => {
     if (!state.analysis) return;
@@ -1003,13 +1049,6 @@ export default function ImportTradeFlow({
     duty: null,
     dutyError: '',
   } : current));
-  // 카드 안에서 값을 입력해 고치면 분석 결과에 반영하고 세액은 다시 계산하게 비운다.
-  const fixRiskValue = (target: ImportRiskFixTarget, value: string) => setState((current) => (current.analysis ? {
-    ...current,
-    analysis: applyRiskFix(current.analysis, target, value),
-    duty: null,
-    dutyError: '',
-  } : current));
   // HS 미확정 카드 → 아래 G. HSK 확정 칸의 해당 품목으로 이동
   // 경고 카드에서 HS 확정하러 내려간 경우, 확정 후 그 카드로 다시 올라간다.
   const hsReturnRiskRef = useRef<string | null>(null);
@@ -1022,6 +1061,14 @@ export default function ImportTradeFlow({
   };
   // 서류 누락 카드 → 1단계(서류 업로드)로 돌아가 추가 업로드
   const goToUploadStep = () => setState((current) => ({ ...current, step: 1 }));
+
+  // FTA·원산지증명서는 3단계에서 따로 다루고, 2단계에서는 신고값만 본다.
+  const isFtaRisk = (risk: ImportRisk) => Boolean(risk.ftaChoice) || risk.id === 'missing-co' || risk.id.startsWith('co-');
+  const declarationRisks = liveRisks.filter((risk) => !isFtaRisk(risk));
+  const ftaChoice = state.analysis?.chosenValues?.[FTA_CHOICE_KEY];
+  const ftaReviewing = isFtaReviewChoice(ftaChoice);
+  const coHolding = state.analysis?.chosenValues?.[CO_HOLDING_KEY] as CoHolding | undefined;
+  const hasCertificateOfOrigin = state.documents.some((document) => document.type === 'certificate_of_origin');
   const clearRiskValue = (key: string) => setState((current) => (current.analysis ? {
     ...current,
     analysis: clearChosenValue(current.analysis, key),
@@ -1067,11 +1114,13 @@ export default function ImportTradeFlow({
       )}
       <ImportStepIndicator
         current={state.step}
-        labels={role === 'shipper' ? ['서류 업로드', '신고정보 확인 · HSK 확정', '예상세액 · 신고자료'] : ['서류 업로드', '서류 확인', '통관 처리']}
+        labels={role === 'shipper'
+          ? ['수입서류 등록', 'HSK 검토', 'FTA · 세액 확인', '신고자료 준비']
+          : ['서류 업로드', '서류 확인', '통관 처리']}
         onMove={canBrowseReadOnlyResultSteps
           ? moveToReadOnlyResultStep
           : readOnly ? undefined : (step) => setState((current) => ({ ...current, step }))}
-        canMoveTo={canBrowseReadOnlyResultSteps ? (step) => step === 2 || step === 3 : undefined}
+        canMoveTo={canBrowseReadOnlyResultSteps ? (step) => step >= 2 : undefined}
       />
       {showAnalysisConsole && (
         <div className="console-overlay">
@@ -1217,16 +1266,6 @@ export default function ImportTradeFlow({
               )}
             </section>
           )}
-          <RiskSummary
-            risks={liveRisks}
-            onToggle={readOnly ? undefined : toggleRisk}
-            onChoose={readOnly || role !== 'shipper' ? undefined : chooseRiskValue}
-            onClearChoice={readOnly || role !== 'shipper' ? undefined : clearRiskValue}
-            onFix={readOnly || role !== 'shipper' ? undefined : fixRiskValue}
-            onGoHs={readOnly || role !== 'shipper' ? undefined : goToHsItem}
-            onGoUpload={readOnly || role !== 'shipper' ? undefined : goToUploadStep}
-            collapseAdvisories={role === 'shipper'}
-          />
           <div className="import-analysis-disclaimer">
             <p>자동 분석 결과는 참고정보이며 최종 법률·통관 판단이 아닙니다.</p>
             <p>{role === 'shipper'
@@ -1245,6 +1284,21 @@ export default function ImportTradeFlow({
               dutyError: '',
             }))}
           />
+          {role === 'shipper' ? (
+            <ImportDeclarationChecklist
+              fields={state.analysis.extracted}
+              risks={declarationRisks}
+              onChoose={readOnly ? undefined : chooseRiskValue}
+              onClearChoice={readOnly ? undefined : clearRiskValue}
+              onGoHs={readOnly ? undefined : goToHsItem}
+            />
+          ) : (
+            <RiskSummary
+              risks={liveRisks}
+              onToggle={readOnly ? undefined : toggleRisk}
+              onGoUpload={readOnly ? undefined : goToUploadStep}
+            />
+          )}
           {role === 'forwarder' ? <ImportDocumentComparison rows={state.analysis.comparison} /> : (
             <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
             <section className="form-card import-card">
@@ -1332,7 +1386,7 @@ export default function ImportTradeFlow({
               onClose={onClose}
               className="import-actions"
               navigationAction={{
-                label: role === 'forwarder' ? '3단계 통관처리 보기' : '3단계 예상세액·신고자료 보기',
+                label: role === 'forwarder' ? '3단계 통관처리 보기' : '3단계 FTA·세액 확인 보기',
                 onClick: () => moveToReadOnlyResultStep(3),
               }}
             />
@@ -1340,16 +1394,99 @@ export default function ImportTradeFlow({
             <div className="import-actions">
               <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 1 }))}>이전</button>
               <button className="btn btn-primary" disabled={busy} onClick={() => void confirmAndCalculate()}>
-                {role === 'shipper' ? '분석 결과 확인 및 예상세액 계산' : '확인 및 다음 단계'}
+                {role === 'shipper' ? '다음: FTA · 세액 확인' : '확인 및 다음 단계'}
               </button>
             </div>
           )}
         </>
       )}
 
-      {state.step === 3 && state.analysis && role === 'shipper' && declarationData && (
+      {state.step === 3 && state.analysis && role === 'shipper' && (
         <>
-          <DutySummary duty={state.duty} error={state.dutyError} />
+          <section className="form-card import-card">
+            <div className="import-card-heading">
+              <div><h2>FTA 적용 여부</h2></div>
+              <p>협정세율을 적용하면 관세를 줄일 수 있습니다. 적용 안 함을 골라도 기본 관세율로 예상세액은 계산됩니다.</p>
+            </div>
+            <div className="import-fta-choices" role="group" aria-label="FTA 적용 여부">
+              <button
+                type="button"
+                className={`btn import-fta-choice${ftaChoice === 'FTA 적용 안 함' ? ' is-selected' : ''}`}
+                disabled={readOnly}
+                onClick={() => (ftaChoice === 'FTA 적용 안 함' ? clearRiskValue(FTA_CHOICE_KEY) : chooseRiskValue(FTA_CHOICE_KEY, 'FTA 적용 안 함'))}
+              >
+                적용 안 함
+              </button>
+              <button
+                type="button"
+                className={`btn import-fta-choice${ftaReviewing ? ' is-selected' : ''}`}
+                disabled={readOnly}
+                onClick={() => (ftaReviewing ? clearRiskValue(FTA_CHOICE_KEY) : chooseRiskValue(FTA_CHOICE_KEY, FTA_REVIEW_CHOICE))}
+              >
+                적용 가능 여부 확인
+              </button>
+            </div>
+
+            {ftaReviewing && (
+              <div className="import-fta-review">
+                <span className="form-label">원산지증명서(C/O) 보유</span>
+                <div className="import-fta-choices" role="group" aria-label="원산지증명서 보유 여부">
+                  {CO_HOLDING_CHOICES.map((choice) => {
+                    const selected = coHolding === choice;
+                    return (
+                      <button
+                        key={choice}
+                        type="button"
+                        className={`btn import-fta-choice${selected ? ' is-selected' : ''}`}
+                        disabled={readOnly}
+                        onClick={() => (selected ? clearRiskValue(CO_HOLDING_KEY) : chooseRiskValue(CO_HOLDING_KEY, choice))}
+                      >
+                        {choice}
+                      </button>
+                    );
+                  })}
+                </div>
+                <ul className="import-fta-checks">
+                  <li>원산지: {state.analysis.extracted.items.map((item) => item.originCountry).filter(Boolean).join(', ') || '확인 필요'}</li>
+                  <li>HSK: {state.analysis.extracted.items.map((item) => item.confirmedHSCode).filter(Boolean).join(', ') || '확정 필요'}</li>
+                  <li>협정세율: {state.duty?.ftaRate == null ? '확인 필요 (관세사 또는 관세법령정보포털)' : `${state.duty.ftaRate}%`}</li>
+                  <li>원산지증명서: {hasCertificateOfOrigin ? '첨부됨' : coHolding === '있음' ? '서류 추가 필요' : coHolding ? '발급 후 첨부하면 협정세율 적용 가능' : '보유 여부 선택 필요'}</li>
+                </ul>
+                {coHolding === '있음' && !hasCertificateOfOrigin && !readOnly && (
+                  <button type="button" className="btn btn-primary" onClick={goToUploadStep}>원산지증명서 추가하러 가기 →</button>
+                )}
+              </div>
+            )}
+
+            <p className="import-card-note">
+              {!ftaChoice
+                ? '고르지 않으면 기본 관세율로 예상세액을 계산합니다.'
+                : ftaChoice === 'FTA 적용 안 함'
+                  ? '기본 관세율로 진행합니다. 원산지증명서는 제출하지 않아도 됩니다.'
+                  : '협정 적용 요건은 이 앱이 판정하지 않습니다. 위 항목을 확인한 뒤 관세사와 최종 적용 여부를 정하세요.'}
+            </p>
+          </section>
+          <DutySummary duty={state.duty} error={state.dutyError} busy={dutyBusy} ftaReviewing={ftaReviewing} />
+          {readOnly && onClose ? (
+            <DocumentManagerReadOnlyAction
+              onClose={onClose}
+              className="import-actions"
+              navigationAction={{ label: '4단계 신고자료 준비 보기', onClick: () => moveToReadOnlyResultStep(4) }}
+            />
+          ) : (
+            <div className="import-actions">
+              <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button>
+              <button className="btn btn-primary" disabled={busy} onClick={() => setState((current) => ({ ...current, step: 4 }))}>
+                다음: 신고자료 준비
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {state.step === 4 && state.analysis && role === 'shipper' && declarationData && (
+        <>
+          <ImportDeclarationChecklist fields={state.analysis.extracted} risks={declarationRisks} summary />
           <section className="form-card import-card">
             <div className="import-card-heading"><div><h2>수입신고 의뢰서</h2></div><p>서류에서 확인된 값을 수입신고의뢰서 양식에 채웠습니다. 관세사에게 보내기 전에 빈칸과 체크 항목을 확인하세요.</p></div>
             <div className="document-preview-actions">
@@ -1375,8 +1512,8 @@ export default function ImportTradeFlow({
             onClose={onClose}
             className="import-actions"
             navigationAction={{
-              label: '2단계 이전 단계 보기',
-              onClick: () => moveToReadOnlyResultStep(2),
+              label: '3단계 FTA·세액 확인 보기',
+              onClick: () => moveToReadOnlyResultStep(3),
             }}
           /> : (
             <>
@@ -1386,7 +1523,7 @@ export default function ImportTradeFlow({
                 </p>
               )}
               <div className="import-actions">
-                <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 2 }))}>이전</button>
+                <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 3 }))}>이전</button>
                 <button className="btn btn-primary" disabled={busy} onClick={() => void complete()}>{busy ? '완료 처리 중…' : '완료'}</button>
               </div>
             </>
@@ -1427,12 +1564,22 @@ export default function ImportTradeFlow({
   );
 }
 
-function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: string }) {
+function DutySummary({ duty, error, busy = false, ftaReviewing = false }: {
+  duty: ImportDutyEstimate | null;
+  error: string;
+  busy?: boolean;
+  /** FTA 적용 가능 여부를 확인 중인지 */
+  ftaReviewing?: boolean;
+}) {
   if (!duty) return (
     <section className="form-card import-card">
-      <div className="import-card-heading"><div><h2>예상 관세액</h2></div><span className="source-badge">계산 불가</span></div>
-      <div className="form-message warning">{error || '계산에 필요한 값을 확인해 주세요.'}</div>
-      <p className="import-notice">샘플 환율·임의 관세율·0원 값을 사용하지 않았습니다.</p>
+      <div className="import-card-heading">
+        <div><h2>예상 관세액</h2></div>
+        <span className="source-badge">{busy ? '계산 중' : '계산 전'}</span>
+      </div>
+      <div className={`form-message ${busy ? 'info' : 'warning'}`} role="status">
+        {busy ? '기본 관세율로 예상세액을 계산하고 있습니다…' : error || '관세율 정보를 확인할 수 없어 예상세액을 계산하지 못했습니다.'}
+      </div>
     </section>
   );
   const krw = (value: number | null) => value == null ? '확인 필요' : `${Math.round(value).toLocaleString('ko-KR')}원`;
@@ -1450,14 +1597,20 @@ function DutySummary({ duty, error }: { duty: ImportDutyEstimate | null; error: 
         <div><dt>예상 과세가격</dt><dd>{krw(duty.customsValue)}</dd></div>
         <div><dt>기본 관세율</dt><dd>{duty.basicRate}%</dd></div>
         <div><dt>FTA 협정</dt><dd>{duty.ftaAgreement}</dd></div>
-        <div><dt>FTA 세율</dt><dd>{duty.ftaRate == null ? '확인 필요' : `${duty.ftaRate}%`}</dd></div>
+        <div><dt>FTA 세율</dt><dd>{duty.ftaRate == null ? (ftaReviewing ? '확인 필요' : '미적용') : `${duty.ftaRate}%`}</dd></div>
         <div><dt>예상 관세</dt><dd>{krw(duty.basicDuty)}</dd></div>
         <div><dt>부가가치세</dt><dd>{krw(duty.vat)}</dd></div>
         <div><dt>기타 세금</dt><dd>{krw(duty.otherTaxes)}</dd></div>
         <div><dt>총 예상세액</dt><dd>{krw(duty.totalTax)}</dd></div>
         <div><dt>예상 절감액</dt><dd>{krw(duty.estimatedSavings)}</dd></div>
       </dl>
-      <p className="import-notice">FTA 협정세율은 원산지증명서와 적용 요건 확인 전에는 적용하지 않습니다.</p>
+      <p className="import-notice">
+        {ftaReviewing
+          ? duty.ftaRate == null
+            ? '위 금액은 기본 관세율 기준입니다. 협정세율을 확인하면 FTA 적용 예상세액과 절감액을 함께 보여줍니다.'
+            : '원산지증명서와 협정 요건을 관세사와 확인한 뒤 협정세율을 적용하세요.'
+          : '위 금액은 기본 관세율 기준입니다. FTA 협정세율은 원산지증명서와 적용 요건 확인 전에는 적용하지 않습니다.'}
+      </p>
     </section>
   );
 }
@@ -1602,9 +1755,13 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [advisoriesOpen, setAdvisoriesOpen] = useState(!collapseAdvisories);
   // 수출 결과 페이지의 확인 항목과 같은 문법: 반드시 수정(high) / 확인 권장(그 외) 두 그룹.
-  const blockers = risks.filter((risk) => risk.level === 'high');
-  const advisories = risks.filter((risk) => risk.level === 'medium' || risk.level === 'low');
-  const nothingFound = blockers.length === 0 && advisories.length === 0;
+  // 값을 이미 정한 항목은 '확인 필요'에서 빼고 따로 묶는다 — 다 정했는데 4건 남은 것처럼 보이지 않게.
+  const pending = risks.filter((risk) => risk.status !== 'resolved');
+  const settled = risks.filter((risk) => risk.status === 'resolved');
+  const blockers = pending.filter((risk) => risk.level === 'high');
+  const advisories = pending.filter((risk) => risk.level === 'medium' || risk.level === 'low');
+  const nothingFound = pending.length === 0 && settled.length === 0;
+  const [settledOpen, setSettledOpen] = useState(false);
 
   let advisorySeq = 0;
   let blockerSeq = 0;
@@ -1710,29 +1867,6 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
                   </div>
                 ) : null;
               }
-              if (fix.kind === 'fta') {
-                return onFix ? (
-                  <div key={`${risk.id}-fta`} className="risk-pick">
-                    <span className="risk-pick-label">FTA 협정세율을 적용할 건가요?</span>
-                    <div className="risk-pick-choices">
-                      {FTA_CHOICES.map((choice) => {
-                        const isSelected = risk.ftaChoice === choice;
-                        return (
-                          <button
-                            key={choice}
-                            type="button"
-                            className={`risk-pick-choice${isSelected ? ' is-selected' : ''}`}
-                            aria-pressed={isSelected}
-                            onClick={() => (isSelected ? onClearChoice?.(FTA_CHOICE_KEY) : onFix({ type: 'fta' }, choice))}
-                          >
-                            {choice}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null;
-              }
               if (fix.kind === 'upload') {
                 if (risk.ftaChoice === 'FTA 적용 요청') {
                   return (
@@ -1751,7 +1885,8 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
                   </div>
                 ) : null;
               }
-              if (!onFix) return null;
+              // FTA 선택은 3단계 'FTA 적용 여부' 카드에서 다룬다 — 카드에는 값 입력만 남긴다.
+              if (fix.kind !== 'value' || !onFix) return null;
               const fixKey = `${risk.id}::fix${fixIndex}`;
               const draft = customValues[fixKey] ?? '';
               const setDraft = (value: string) => setCustomValues((current) => ({ ...current, [fixKey]: value }));
@@ -1846,7 +1981,7 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
         <div className="risk-pass">
           <CheckCircle2 size={20} />
           <div>
-            <strong>신고 전 확인할 항목이 없습니다</strong>
+            <strong>확인할 항목이 없습니다</strong>
             <p>관세사에게 보내기 전에 원본 서류와 한 번 더 대조하세요.</p>
           </div>
         </div>
@@ -1880,6 +2015,22 @@ function RiskSummary({ risks, onToggle, onChoose, onClearChoice, onFix, onGoHs, 
             </div>
           ))}
           {advisoriesOpen && advisories.map(renderCard)}
+          {settled.length > 0 && (
+            <>
+              <button
+                type="button"
+                className={`sev-section-header sev-section-toggle${settledOpen ? ' is-open' : ''}`}
+                aria-expanded={settledOpen}
+                onClick={() => setSettledOpen((open) => !open)}
+              >
+                <span className="sev-section-icon"><CheckCircle2 size={17} strokeWidth={2.4} /></span>
+                <span className="sev-section-label">정한 항목</span>
+                <span className="sev-section-count">{settled.length}</span>
+                <span className="sev-section-toggle-hint">{settledOpen ? '접기' : '펼쳐 보기'}<ChevronDown size={16} /></span>
+              </button>
+              {settledOpen && settled.map(renderCard)}
+            </>
+          )}
         </div>
       )}
     </section>

@@ -1,4 +1,4 @@
-import { FTA_CHOICE_KEY } from '../types/importTrade';
+import { CO_HOLDING_KEY, FTA_CHOICE_KEY, isFtaReviewChoice } from '../types/importTrade';
 import type {
   ImportAnalysisResult,
   ImportDocumentMeta,
@@ -353,55 +353,22 @@ export function assessImportRisks(
   const fields = analysis.extracted;
   // Importer 회사명이 로그인 회사와 달라도 신고 금액·세액에는 영향이 없어 확인 항목으로 띄우지 않는다.
   // 추출값 자체는 분석 결과 화면에서 그대로 보고 고칠 수 있다.
-  // C/O 없음: 화주가 고른 FTA 적용 여부에 따라 안내가 달라진다. C/O가 있으면 대사 규칙이 다룬다.
-  //  - FTA 적용 안 함 → 기본 관세율로 진행, 카드는 흐리게 남기고 검토 완료는 화주가 직접 누른다
-  //  - 적용 여부 미확인 → 확인 권장: 적용 여부를 확인해 달라고 안내
-  //  - FTA 적용 요청 → 반드시 수정: 원산지증명서 제출 안내
+  // C/O는 모든 수입신고의 필수서류가 아니라 FTA 협정세율을 적용할 때 필요한 조건부 서류다.
+  // 화주가 "적용 가능 여부 확인"을 고르고 C/O를 갖고 있다고 답했는데 서류가 없을 때만 추가를 안내한다.
   const ftaChoice = analysis.chosenValues?.[FTA_CHOICE_KEY];
-  if (!documents.some((document) => document.type === 'certificate_of_origin')) {
-    const base = { id: 'missing-co', relatedDocuments: ['Certificate of Origin'], ...(ftaChoice ? { ftaChoice } : {}) };
-    if (ftaChoice === 'FTA 적용 안 함') {
-      add({
-        ...base,
-        level: 'medium',
-        item: '원산지증명서 없음 (FTA 적용 안 함)',
-        cause: 'FTA 협정세율을 적용하지 않고 기본 관세율로 진행합니다. 원산지증명서는 제출하지 않아도 됩니다.',
-        recommendation: '나중에 FTA를 적용하려면 협정 요건에 맞는 원산지증명서를 받아 올리고 "FTA 적용 요청"으로 바꾸세요.',
-        fixes: [{ kind: 'fta' }],
-        status: 'unresolved',
-      });
-    } else if (ftaChoice === 'FTA 적용 요청') {
-      // 반드시 수정으로 옮기면 카드가 목록에서 사라진 것처럼 보여, 같은 자리에서 C/O 제출을 안내한다.
-      add({
-        ...base,
-        level: 'medium',
-        item: '원산지증명서 필요 (FTA 적용 요청)',
-        cause: '원산지증명서가 필요합니다. FTA 협정세율을 적용하려면 원산지증명서(Certificate of Origin)를 제출해 주세요.',
-        recommendation: '수출자에게 협정 요건에 맞는 원산지증명서를 받아 서류로 추가하세요. 제출이 어렵다면 "FTA 적용 안 함"을 고르면 기본 관세율로 진행합니다.',
-        fixes: [{ kind: 'fta' }, { kind: 'upload' }],
-        status: 'unresolved',
-      });
-    } else if (ftaChoice === '적용 여부 미확인') {
-      add({
-        ...base,
-        level: 'medium',
-        item: '원산지증명서 누락 (FTA 적용 여부 확인 필요)',
-        cause: 'FTA 적용 여부를 확인해 주세요. 수출자에게 원산지증명서 발급이 가능한지 확인한 뒤, 적용할지 아래에서 다시 골라 주세요.',
-        recommendation: '협정세율을 적용하면 관세를 줄일 수 있습니다. 원산지증명서를 받을 수 있으면 "FTA 적용 요청", 아니면 "FTA 적용 안 함"을 고르세요.',
-        fixes: [{ kind: 'fta' }, { kind: 'upload' }],
-        status: 'unresolved',
-      });
-    } else {
-      add({
-        ...base,
-        level: 'medium',
-        item: '원산지증명서 누락 (FTA 적용 여부 확인 필요)',
-        cause: 'Certificate of Origin이 첨부되지 않아 협정세율 적용 여부를 확인할 수 없습니다. FTA를 적용할지 아래에서 골라 주세요.',
-        recommendation: 'FTA 적용을 검토하려면 협정 요건에 맞는 C/O를 수출자에게 요청하세요.',
-        fixes: [{ kind: 'fta' }, { kind: 'upload' }],
-        status: 'unresolved',
-      });
-    }
+  const coHolding = analysis.chosenValues?.[CO_HOLDING_KEY];
+  const hasCoDocument = documents.some((document) => document.type === 'certificate_of_origin');
+  if (isFtaReviewChoice(ftaChoice) && coHolding === '있음' && !hasCoDocument) {
+    add({
+      id: 'missing-co',
+      relatedDocuments: ['Certificate of Origin'],
+      level: 'medium',
+      item: '원산지증명서 추가 필요',
+      cause: '원산지증명서를 갖고 있다고 하셨는데 서류가 아직 첨부되지 않았습니다.',
+      recommendation: '원산지증명서를 서류로 추가하면 협정세율 적용 가능 여부를 함께 확인할 수 있습니다.',
+      fixes: [{ kind: 'upload' }],
+      status: 'unresolved',
+    });
   }
   if (!fields.incoterms) {
     add({ id: 'missing-incoterms', level: 'medium', item: 'Incoterms 누락', cause: '운임·보험료 부담 주체와 과세가격 가산 범위를 확인할 수 없습니다.', recommendation: 'Commercial Invoice 또는 계약서에서 Incoterms와 장소를 확인하세요.', relatedDocuments: ['Commercial Invoice'], fixes: [incotermsFix], status: 'unresolved' });
