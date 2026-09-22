@@ -328,7 +328,7 @@ export function assessImportRisks(
       cause: '문서의 Importer와 로그인 회사정보가 다릅니다.',
       recommendation: '문서가 해당 회사의 거래인지 확인하세요. 문서값은 자동으로 덮어쓰지 않습니다.',
       relatedDocuments: ['Commercial Invoice', 'Bill of Lading', '회원프로필'],
-      differentValues: [fields.importerDetails.name, importerCompanyName],
+      differentValues: [`서류의 Importer: ${fields.importerDetails.name}`, `로그인 회사정보: ${importerCompanyName}`],
       fixes: [{
         kind: 'value',
         label: '맞는 Importer 고르기',

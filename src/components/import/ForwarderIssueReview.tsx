@@ -68,6 +68,12 @@ export default function ForwarderIssueReview({ issues, notes, saving, documents 
           </button>
         </div>
         <div className="fwd-review-detail" id={`fwd-review-${issue.id}`} hidden={expandedId !== issue.id}>
+          {issue.values && issue.values.length > 0 && (
+            <div className="fwd-issue-values">
+              <h3>확인된 값</h3>
+              <ul>{issue.values.map((value) => <li key={value}>{value}</li>)}</ul>
+            </div>
+          )}
           {getIssueComparisons(issue, comparisons).map((row) => {
             const outliers = comparisonOutliers(row);
             return <div className="fwd-issue-comparison" key={row.field}>

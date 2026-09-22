@@ -34,6 +34,8 @@ export interface ForwarderCaseIssue {
   severity: ForwarderIssueSeverity;
   title: string;
   detail: string;
+  /** 무엇이 어떻게 다른지 — 화주 화면과 같은 값 비교 목록(예: '서류의 Importer: A', '로그인 회사정보: B') */
+  values?: string[];
   documents: string[];
   resolved: boolean;
 }
