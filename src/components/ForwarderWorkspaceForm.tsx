@@ -5,6 +5,7 @@ import type { TradeAttachment } from '../types/tradeFormData';
 import type {
   ExportProgressStageKey,
   ExportProgressStatus,
+  ExportBookingDetails,
 } from '../types/exportForwarderCase';
 import DocumentManagerReadOnlyAction from './DocumentManagerReadOnlyAction';
 import ImportStepIndicator from './import/ImportStepIndicator';
@@ -16,7 +17,7 @@ import ExportForwarderProgressStep from './forwarder/export/ExportForwarderProgr
 import ExportForwarderBLStep from './forwarder/export/ExportForwarderBLStep';
 import ExportForwarderCompletionStep from './forwarder/export/ExportForwarderCompletionStep';
 
-const STEP_LABELS = ['의뢰 접수', 'Booking', '선적 진행', 'B/L 관리', '선적 완료'];
+const STEP_LABELS = ['화주 의뢰 확인', '선복 부킹', '반입·선적 준비', 'B/L 관리', '선적 완료'];
 
 interface Props {
   state: ForwarderFormState;
@@ -41,8 +42,11 @@ interface Props {
   appliedRequestTradeId?: string | null;
   onApplyExportRequest?: (request: ForwarderExportRequest) => void;
 
-  /** STEP 2 — Booking */
+  /** STEP 2 — 선복 부킹 */
   onSaveBooking: () => void;
+  /** 외부에서 확정받은 부킹의 부가정보(마감일·운임조건·비고) */
+  booking: ExportBookingDetails;
+  onBookingChange: (values: Partial<ExportBookingDetails>) => void;
 
   /** STEP 3 — 선적 진행 관리 */
   progress: Partial<Record<ExportProgressStageKey, ExportProgressStatus>>;
@@ -96,6 +100,8 @@ export default function ForwarderWorkspaceForm({
   appliedRequestTradeId = null,
   onApplyExportRequest,
   onSaveBooking,
+  booking,
+  onBookingChange,
   progress,
   onProgressChange,
   onNextFromProgress,
@@ -194,6 +200,12 @@ export default function ForwarderWorkspaceForm({
         <ExportForwarderBookingStep
           state={state}
           patch={patch}
+          booking={booking}
+          onBookingChange={onBookingChange}
+          userId={userId}
+          scopeId={attachmentScopeId}
+          attachments={attachments}
+          onAttachmentsChange={onAttachmentsChange}
           readOnly={readOnly}
           busy={busy}
           onSave={onSaveBooking}
@@ -220,6 +232,7 @@ export default function ForwarderWorkspaceForm({
         <ExportForwarderBLStep
           state={state}
           patch={patch}
+          booking={booking}
           userId={userId}
           scopeId={attachmentScopeId}
           attachments={attachments}
