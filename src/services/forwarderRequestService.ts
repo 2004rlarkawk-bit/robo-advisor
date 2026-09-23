@@ -52,6 +52,18 @@ export async function searchForwarderByEmail(email: string): Promise<ForwarderLo
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
 
+  // 본인 검색은 인증된 로그인 이메일과 DB의 실제 서비스 역할로 확인한다.
+  // 오래된 검색 RPC의 본인 제외 조건이나 프로필 이메일 불일치에 의존하지 않는다.
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (auth.user?.email?.trim().toLowerCase() === normalized) {
+    const { data: profile, error: profileError } = await supabase.from('user_profiles')
+      .select('id,company_name,contact_name,service_role').eq('id', auth.user.id).maybeSingle();
+    if (profileError) throw profileError;
+    if (!profile || profile.service_role !== 'integrated') return null;
+    return { id: auth.user.id, companyName: profile.company_name ?? null, contactName: profile.contact_name ?? null };
+  }
+
   const { data, error } = await supabase.rpc('find_forwarder_by_email', { p_email: normalized });
   if (error) throw error;
 
@@ -88,6 +100,10 @@ export async function sendTradeRequest(
   if (error) {
     if (error.code === UNIQUE_VIOLATION_CODE) {
       throw new Error('이미 이 포워더에게 요청을 보냈습니다.');
+    }
+    if (requesterUserId === receiverUserId && error.code === '23514'
+      && error.message?.includes('trade_requests_requester_receiver_diff')) {
+      throw new Error('서버에 본인 의뢰 허용 설정이 아직 적용되지 않았습니다. 관리자에게 DB 설정 적용을 요청해 주세요.');
     }
     throw error;
   }
