@@ -365,14 +365,14 @@ describe('UNI-PASS Edge Function 호출·응답 검증', () => {
     await expect(lookupImportCargo('BL-ERROR')).rejects.toThrow('cargo network');
   });
 
-  it('수출이행 found:false와 호출 오류는 null을 반환한다', async () => {
+  it('수출이행 결과 없음과 호출 오류를 구분한다', async () => {
     invokeMock.mockResolvedValueOnce({
       data: { success: true, found: false, declarationNo: '123456', data: null },
       error: null,
     }).mockResolvedValueOnce({ data: null, error: new Error('network') });
     await expect(getExportFulfillment('123-456')).resolves.toBeNull();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    await expect(getExportFulfillment('123-456')).resolves.toBeNull();
+    await expect(getExportFulfillment('123-456')).rejects.toThrow('network');
     expect(invokeMock).toHaveBeenCalledWith('unipass-export-fulfillment', {
       body: { declarationNo: '123456' },
     });

@@ -1,4 +1,7 @@
 import { ArrowRight, FileSignature } from 'lucide-react';
+import { useState } from 'react';
+import type { TradeAttachment } from '../../../types/tradeFormData';
+import { openOrDownloadTradeAttachment } from '../../../utils/tradeAttachmentView';
 import type { ForwarderFormState } from '../../../utils/forwarderForm';
 
 interface Props {
@@ -8,6 +11,8 @@ interface Props {
   readOnly: boolean;
   busy: boolean;
   onNext: () => void;
+  attachments?: TradeAttachment[];
+  userId?: string;
 }
 
 /** STEP 1 — 화주 의뢰 확인. 이미 접수된(받은 의뢰 또는 직접 등록) 화주 의뢰 내용을 포워더가 확인·보정한다. */
@@ -18,7 +23,19 @@ export default function ExportForwarderRequestStep({
   readOnly,
   busy,
   onNext,
+  attachments = [],
+  userId,
 }: Props) {
+  const [documentError, setDocumentError] = useState('');
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const openDocument = async (document: TradeAttachment) => {
+    if (!userId || openingId) return;
+    setOpeningId(document.id);
+    setDocumentError('');
+    try { await openOrDownloadTradeAttachment(document, userId, false); }
+    catch { setDocumentError('서류를 열지 못했습니다. 다시 시도해 주세요.'); }
+    finally { setOpeningId(null); }
+  };
   return (
     <div className="form-card forwarder-workspace-form">
       <div className="trade-section-header">
@@ -28,8 +45,23 @@ export default function ExportForwarderRequestStep({
         </div>
       </div>
 
+      <section className="fwd-export-source-docs" aria-label="접수된 첨부 서류">
+        <h3>접수된 첨부 서류 <span>{attachments.length}개</span></h3>
+        {attachments.length ? <div className="fwd-export-source-list">{attachments.map(document =>
+          <button key={document.id} type="button" className="btn btn-secondary" disabled={!userId || openingId !== null}
+            onClick={() => void openDocument(document)}>
+            <FileSignature size={16} />{document.fileName}{openingId === document.id ? ' · 여는 중…' : ' · 원본 보기'}
+          </button>)}</div> : <p>연결된 첨부 파일이 없습니다. 아래 접수 정보를 확인해 주세요.</p>}
+        {documentError && <p role="alert" className="form-message error">{documentError}</p>}
+      </section>
+      <dl className="fwd-export-summary-grid" aria-label="접수 정보 요약">
+        <div><dt>화주</dt><dd>{state.companyName || '미입력'}</dd></div>
+        <div><dt>수하인</dt><dd>{state.partnerName || '미입력'}</dd></div>
+        <div><dt>운송 구간</dt><dd>{[state.loadPort, state.dischargePort].filter(Boolean).join(' → ') || '미입력'}</dd></div>
+        <div><dt>화물</dt><dd>{state.cargoItems[0]?.descriptionOfGoods || '미입력'} · {state.cargoItems.length}품목</dd></div>
+      </dl>
       <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
-        <details className="form-section" open>
+        <details className="form-section">
           <summary className="form-section-summary">화주 운송의뢰 정보 <span className="form-section-hint">업로드 문서에서 자동입력</span></summary>
           <div className="form-grid">
             <div className="form-group"><label className="form-label">Shipper 회사명</label><input className="form-input" value={state.companyName} onChange={(e) => patch({ companyName: e.target.value })} placeholder="ABC Trading Co., Ltd." /></div>
@@ -44,7 +76,7 @@ export default function ExportForwarderRequestStep({
           </div>
         </details>
 
-        <details className="form-section" open>
+        <details className="form-section">
           <summary className="form-section-summary">화물명세 <span className="form-section-hint">업로드 문서에서 자동입력 · 다품목 지원</span></summary>
           <div className="forwarder-cargo-items">
             {state.cargoItems.map((item, index) => (

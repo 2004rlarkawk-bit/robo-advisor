@@ -226,6 +226,8 @@ export default function ForwarderWorkspaceForm({
 
       {currentStep === 1 && (
         <ExportForwarderRequestStep
+          attachments={attachments}
+          userId={userId}
           state={state}
           patch={patch}
           patchCargoItem={patchCargoItem}

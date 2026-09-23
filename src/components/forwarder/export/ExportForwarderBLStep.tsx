@@ -70,12 +70,12 @@ export default function ExportForwarderBLStep({
           <Ship size={20} className="text-primary" />
           <div>
             <h2 className="card-title">4. B/L 관리</h2>
-            <p className="forwarder-step-description">Master B/L은 선사가 발행하는 문서이므로 PortAI가 자동생성하지 않고 등록만 합니다. House B/L은 포워더가 직접 발행하므로 PortAI가 생성합니다.</p>
+            <p className="forwarder-step-description">선사 서류는 등록하고, 포워더 발행 서류는 작성·생성합니다.</p>
           </div>
         </div>
       </div>
 
-      <details className="form-section" open>
+      <details className="form-section fwd-export-bl-card is-master" open>
         <summary className="form-section-summary">Master B/L <span className="form-section-hint">선사 발행 — 파일 등록</span></summary>
         <div className="form-grid">
           <div className="form-group">
@@ -98,7 +98,7 @@ export default function ExportForwarderBLStep({
         />
       </details>
 
-      <details className="form-section" open>
+      <details className="form-section fwd-export-bl-card is-house" open>
         <summary className="form-section-summary">House B/L <span className="form-section-hint">포워더 발행 — PortAI 자동생성</span></summary>
 
         <div className="form-grid">

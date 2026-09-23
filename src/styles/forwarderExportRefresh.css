@@ -1,4 +1,16 @@
 /* 수입의 시각 규칙을 수출에만 적용한다. 업무 상태·단계 이동 규칙은 변경하지 않는다. */
+.fwd-export-source-docs { border: 1px solid #dce4ef; border-radius: 10px; padding: 18px; background: #f7faff; }
+.fwd-export-source-docs h3 { margin: 0 0 12px; font-size: 15px; }
+.fwd-export-source-docs h3 span { color: #667a94; font-size: 12px; margin-left: 8px; }
+.fwd-export-source-docs p { font-size: 13px; color: #667a94; line-height: 1.6; }
+.fwd-export-source-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.fwd-export-source-list .btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.fwd-export-refresh .fwd-export-bl-card { border-top: 3px solid #94aac7; }
+.fwd-export-refresh .fwd-export-bl-card.is-house { border-top-color: #0b57d0; }
+.fwd-export-refresh .fwd-export-bl-card > summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.fwd-export-customs-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; background: #f6f9fd; }
+.fwd-export-customs-status label { font-size: 13px; font-weight: 650; }
+.fwd-export-customs-status .form-input { width: auto; min-width: 150px; }
 .fwd-export-refresh { --export-muted: #667a94; color: #16233b; }
 .fwd-export-refresh.forwarder-export-flow { gap: 20px; }
 .fwd-export-refresh .form-card { padding: 24px; border: 1px solid #dce4ef; border-radius: 14px; box-shadow: none; margin: 0; }

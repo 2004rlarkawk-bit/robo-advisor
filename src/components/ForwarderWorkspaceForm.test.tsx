@@ -248,7 +248,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
         cargoItems: [{ id: 'a', itemNo: '', sku: '', descriptionOfGoods: 'Facial Toner', numberOfPackages: 10, kindOfPackages: 'CARTON', grossWeightKg: 100, measurementCbm: '0.5', marksAndNumbers: '', sourceDocumentIds: [] }],
       }, { currentStep: 2 });
       expect(rendered.container.textContent).toContain('선복 부킹');
-      expect(rendered.container.textContent).toContain('화주 운송의뢰 확인');
+      expect(rendered.container.textContent).toContain('접수 정보 요약');
       expect(rendered.container.textContent).toContain('Facial Toner');
       expect(rendered.container.textContent).toContain('Carrier / 선사');
       expect(rendered.container.textContent).toContain('Booking No.');
@@ -309,6 +309,29 @@ describe('수출 포워더 5단계 워크플로우', () => {
   });
 
   describe('STEP 3 — 선적 진행 관리', () => {
+    it('수동 통관 선택 대신 유니패스 조회를 제공한다', () => {
+      const onProgressChange = vi.fn();
+      const rendered = renderForm({ exportDeclarationNo: 'DECL-1' }, { currentStep: 3, onProgressChange });
+      const select = rendered.container.querySelector<HTMLSelectElement>('select[aria-label="수출통관 상태"]');
+      expect(select).toBeNull();
+      expect(rendered.container.textContent).toContain('유니패스 조회');
+      expect(onProgressChange).not.toHaveBeenCalled();
+    });
+
+    it('완료 기록에 신고번호가 없으면 안내하되 상태를 자동 변경하지 않는다', () => {
+      const onProgressChange = vi.fn();
+      const rendered = renderForm({ exportDeclarationNo: '' }, {
+        currentStep: 3, progress: { customsCleared: 'done' }, onProgressChange,
+      });
+      expect(rendered.container.textContent).toContain('기존 수동 기록은 세관 조회 결과로 표시하지 않습니다');
+      expect(onProgressChange).not.toHaveBeenCalled();
+    });
+
+    it('읽기 전용에서는 수출통관 상태를 변경할 수 없다', () => {
+      const rendered = renderForm({}, { currentStep: 3, readOnly: true });
+      expect(rendered.container.querySelector<HTMLSelectElement>('select[aria-label="수출통관 상태"]')).toBeNull();
+    });
+
     it('진행 단계 5개와 수출통관 정보 등록을 표시한다', () => {
       const rendered = renderForm({}, { currentStep: 3 });
       ['Booking 완료', '화물 반입', '수출통관', '선적', '출항'].forEach((label) => {
@@ -348,7 +371,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
     it('Master B/L(등록)과 House B/L(생성)을 분리해 표시한다', () => {
       const rendered = renderForm({ carrier: 'ONE', vesselOrFlight: 'ONE HAMBURG', voyageNo: '001E', loadPort: 'Busan Port', dischargePort: 'Tokyo Port' }, { currentStep: 4, masterBlNo: 'MBLKR0001' });
       expect(rendered.container.textContent).toContain('Master B/L');
-      expect(rendered.container.textContent).toContain('선사가 발행하는 문서');
+      expect(rendered.container.textContent).toContain('선사 발행 — 파일 등록');
       expect(rendered.container.querySelector<HTMLInputElement>('#mbl-no')?.value).toBe('MBLKR0001');
       const carrierInputs = Array.from(rendered.container.querySelectorAll<HTMLInputElement>('input[disabled]'));
       expect(carrierInputs.some((input) => input.value === 'ONE')).toBe(true);

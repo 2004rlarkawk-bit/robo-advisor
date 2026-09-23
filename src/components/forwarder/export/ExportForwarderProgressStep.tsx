@@ -8,6 +8,7 @@ import {
   type ExportProgressStatus,
 } from '../../../types/exportForwarderCase';
 import ForwarderDocumentSlot from './ForwarderDocumentSlot';
+import ExportCustomsLookup from './ExportCustomsLookup';
 
 interface Props {
   state: ForwarderFormState;
@@ -59,25 +60,15 @@ export default function ExportForwarderProgressStep({
           <ListChecks size={20} className="text-primary" />
           <div>
             <h2 className="card-title">3. 선적 진행 관리</h2>
-            <p className="forwarder-step-description">이 거래의 진행 상태를 관리합니다. 실제 통관·선적 시스템과 연동되지 않으며, 포워더가 직접 갱신합니다.</p>
+            <p className="forwarder-step-description">업무 진행을 기록하고, 수출신고·선적 이행 정보는 유니패스에서 조회합니다.</p>
           </div>
         </div>
       </div>
 
       <details className="form-section" open>
-        <summary className="form-section-summary">진행 상태</summary>
-        <div className="fwd-progress" aria-label="선적 진행 단계" style={{ marginTop: 8 }}>
-          {EXPORT_PROGRESS_STAGE_ORDER.map((stage) => {
-            const status = statusOf(stage);
-            return (
-              <span key={stage} className={`fwd-progress-step${status === 'done' ? ' is-done' : status === 'in_progress' ? ' is-current' : ''}`}>
-                {EXPORT_PROGRESS_STAGE_LABEL[stage]}
-              </span>
-            );
-          })}
-        </div>
+        <summary className="form-section-summary">업무별 진행 기록 <span className="form-section-hint">담당자 수동 기록</span></summary>
         <div className="import-document-list" style={{ marginTop: 14 }}>
-          {EXPORT_PROGRESS_STAGE_ORDER.map((stage) => (
+          {EXPORT_PROGRESS_STAGE_ORDER.filter(stage => stage !== 'customsCleared').map((stage) => (
             <div className="import-document-row" key={stage}>
               <div className="import-document-content">
                 <strong className="import-document-type">{EXPORT_PROGRESS_STAGE_LABEL[stage]}</strong>
@@ -102,13 +93,15 @@ export default function ExportForwarderProgressStep({
       </details>
 
       <details className="form-section" open>
-        <summary className="form-section-summary">수출통관 정보 <span className="form-section-hint">PortAI는 수출신고서를 생성하지 않습니다 — 완료된 신고 정보만 등록합니다</span></summary>
+        <summary className="form-section-summary">수출통관 확인 <span className="form-section-hint">UNI-PASS 수출이행 조회</span></summary>
+        <p className="form-help">PortAI는 수출신고서를 생성하지 않습니다. 신고 완료 후 발급된 번호로 수리·선적 정보를 조회합니다.</p>
         <div className="form-grid">
           <div className="form-group">
             <label className="form-label" htmlFor="progress-decl-no">수출신고번호</label>
             <input id="progress-decl-no" className="form-input" disabled={readOnly} value={state.exportDeclarationNo} onChange={(e) => patch({ exportDeclarationNo: e.target.value })} />
           </div>
         </div>
+        <ExportCustomsLookup key={scopeId + ':' + state.exportDeclarationNo} declarationNo={state.exportDeclarationNo} busy={busy} />
         <ForwarderDocumentSlot
           label="수출신고필증"
           documentType="export_declaration"

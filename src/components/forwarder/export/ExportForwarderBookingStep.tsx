@@ -82,8 +82,8 @@ export default function ExportForwarderBookingStep({
         </div>
       </div>
 
-      <details className="form-section" open>
-        <summary className="form-section-summary">화주 운송의뢰 확인 <span className="form-section-hint">1단계 화주 의뢰·화물명세 — 여기서는 참고만</span></summary>
+      <details className="form-section">
+        <summary className="form-section-summary">접수 정보 요약 <span className="form-section-hint">화주 의뢰·화물명세 확인</span></summary>
         <div className="form-grid">
           <div className="form-group"><label className="form-label">Shipper</label><input className="form-input" value={state.companyName} disabled readOnly /></div>
           <div className="form-group"><label className="form-label">Consignee</label><input className="form-input" value={state.partnerName} disabled readOnly /></div>

@@ -191,7 +191,7 @@ export async function getExportFulfillment(declarationNo: string): Promise<Expor
     };
   } catch (error) {
     console.warn('UNI-PASS 수출이행 Edge Function 호출 실패:', error);
-    return null;
+    throw error;
   }
 }
 
