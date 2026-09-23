@@ -60,7 +60,7 @@ export async function searchForwarderByEmail(email: string): Promise<ForwarderLo
     const { data: profile, error: profileError } = await supabase.from('user_profiles')
       .select('id,company_name,contact_name,service_role').eq('id', auth.user.id).maybeSingle();
     if (profileError) throw profileError;
-    if (!profile || profile.service_role !== 'integrated') return null;
+    if (!profile || (profile.service_role ?? 'integrated') !== 'integrated') return null;
     return { id: auth.user.id, companyName: profile.company_name ?? null, contactName: profile.contact_name ?? null };
   }
 
@@ -74,6 +74,19 @@ export async function searchForwarderByEmail(email: string): Promise<ForwarderLo
     companyName: row.company_name ?? null,
     contactName: row.contact_name ?? null,
   };
+}
+
+/** 현재 인증된 본인의 계정만 선택한다. 기존 프로필의 통합 역할 기본값과 동일하게 해석한다. */
+export async function getOwnForwarderAccount(): Promise<ForwarderLookupResult> {
+  const id = await getRequiredUserId();
+  const { data: profile, error } = await supabase.from('user_profiles')
+    .select('id,company_name,contact_name,service_role').eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!profile) throw new Error('본인 프로필을 찾지 못했습니다. 프로필 관리에서 정보를 저장해 주세요.');
+  if ((profile.service_role ?? 'integrated') !== 'integrated') {
+    throw new Error('본인에게 의뢰하려면 프로필 관리에서 서비스 역할을 화주·포워더 통합으로 설정해 주세요.');
+  }
+  return { id, companyName: profile.company_name ?? null, contactName: profile.contact_name ?? null };
 }
 
 /** 이미 보낸 pending 요청이 있는지 안내하기 위한 유니크 위반 코드. */

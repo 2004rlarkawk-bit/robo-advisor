@@ -16,6 +16,7 @@ vi.mock('../lib/supabase', () => ({
 
 import {
   acceptTradeRequest,
+  getOwnForwarderAccount,
   matchForwarderForTrade,
   cancelTradeRequest,
   rejectTradeRequest,
@@ -103,6 +104,25 @@ describe('sendTradeRequest', () => {
 });
 
 describe('searchForwarderByEmail', () => {
+  it.each(['integrated', null])('이메일 없이 본인 계정을 선택한다: %s', async role => {
+    const query = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn() };
+    query.select.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    query.maybeSingle.mockResolvedValue({ data: { service_role: role, company_name: 'ABC' }, error: null });
+    fromMock.mockReturnValue(query);
+    await expect(getOwnForwarderAccount()).resolves.toEqual({ id: 'shipper-1', companyName: 'ABC', contactName: null });
+    expect(query.eq).toHaveBeenCalledWith('id', 'shipper-1');
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it('화주 전용 계정의 본인 선택은 역할 설정을 안내한다', async () => {
+    const query = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn() };
+    query.select.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    query.maybeSingle.mockResolvedValue({ data: { service_role: 'shipper' }, error: null });
+    fromMock.mockReturnValue(query);
+    await expect(getOwnForwarderAccount()).rejects.toThrow('서비스 역할');
+  });
   it('통합 계정의 본인 로그인 이메일은 검색 RPC 없이 본인 프로필로 찾는다', async () => {
     getUserMock.mockResolvedValue({ data: { user: { id: 'shipper-1', email: 'Owner@Example.com' } }, error: null });
     const query = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn() };

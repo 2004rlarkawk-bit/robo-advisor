@@ -4,7 +4,7 @@ import SentConfirmation from '../common/SentConfirmation';
 import ForwarderAutoAssign from './ForwarderAutoAssign';
 import type { SavedTrade } from '../../types';
 import { ATTACHABLE_DOCUMENT_LABELS, type AttachableDocumentType } from '../../types/forwarderRequest';
-import { searchForwarderByEmail, sendTradeRequest } from '../../services/forwarderRequestService';
+import { getOwnForwarderAccount, searchForwarderByEmail, sendTradeRequest } from '../../services/forwarderRequestService';
 import { getAttachableDocumentTypes, sendExternalForwarderEmail } from '../../services/externalForwarderEmailService';
 import type { ForwarderLookupResult } from '../../types/forwarderRequest';
 import '../../styles/forwarderRequest.css';
@@ -61,6 +61,20 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
     } catch (err) {
       console.error('[ForwarderRequestModal] 포워더 검색 실패:', err);
       setSearchError('검색 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSelectOwnAccount = async () => {
+    setSearching(true);
+    setSearchError('');
+    setSearchResult(null);
+    setInternalSuccess(false);
+    try {
+      setSearchResult(await getOwnForwarderAccount());
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : '본인 계정을 확인하지 못했습니다. 다시 시도해 주세요.');
     } finally {
       setSearching(false);
     }
@@ -156,6 +170,10 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
                 }}
               />
 
+              <div className="fwd-field">
+                <button type="button" className="btn btn-secondary" disabled={searching || sendingInternal}
+                  onClick={() => void handleSelectOwnAccount()}>내 포워더 계정 선택</button>
+              </div>
               <details className="fwd-assign-manual">
                 <summary>담당자 이메일을 알고 있다면 직접 찾기</summary>
               <div className="fwd-field">
