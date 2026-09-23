@@ -107,7 +107,10 @@ describe('수출 포워더 5단계 워크플로우', () => {
   describe('Inbox 화면 (view=inbox) — 수출 포워더 첫 진입', () => {
     it('받은 의뢰 목록만 표시하고, Stepper·입력 폼·직접 등록 영역은 보이지 않는다', () => {
       const rendered = renderForm({}, { view: 'inbox', onApplyExportRequest: vi.fn() });
-      expect(rendered.container.textContent).toContain('수출 포워더 업무');
+      expect(rendered.container.textContent).not.toContain('수출 포워더 업무');
+      expect(rendered.container.querySelector('.fwd-inbox-heading-actions')?.textContent).toContain('직접 등록');
+      expect(rendered.container.querySelector('.fwd-inbox-filters')).not.toBeNull();
+      expect(rendered.container.querySelector('thead')?.textContent).toContain('화주 / 품목');
       expect(rendered.container.textContent).toContain('받은 의뢰');
       expect(rendered.container.textContent).toContain('직접 등록');
       // 업무 단계(Stepper)·입력 폼은 의뢰를 불러오기 전까지 나타나지 않는다.

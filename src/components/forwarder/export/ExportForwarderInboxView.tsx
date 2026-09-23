@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Inbox, Plus, X } from 'lucide-react';
+import { ArrowRight, Plus, X } from 'lucide-react';
 import type { ForwarderFormState } from '../../../utils/forwarderForm';
 import type { TradeAttachment } from '../../../types/tradeFormData';
 import TradeAttachmentUploader from '../../TradeAttachmentUploader';
@@ -42,12 +42,10 @@ export default function ExportForwarderInboxView({
 
   return (
     <div className="forwarder-workspace-form fwd-export-refresh fwd-export-list">
-      <div className="trade-section-header">
-        <div className="trade-section-title">
-          <Inbox size={20} className="text-primary" />
-          <h2 className="card-title">수출 포워더 업무</h2>
-        </div>
-        <button
+      <ForwarderExportRequestInbox
+        onApply={onApplyExportRequest}
+        appliedTradeId={appliedRequestTradeId ?? null}
+        headerAction={<button
           type="button"
           className="btn btn-secondary"
           onClick={() => setIsManualRegistrationOpen((open) => !open)}
@@ -55,12 +53,7 @@ export default function ExportForwarderInboxView({
         >
           {isManualRegistrationOpen ? <X size={16} /> : <Plus size={16} />}
           {isManualRegistrationOpen ? '직접 등록 닫기' : '직접 등록'}
-        </button>
-      </div>
-
-      <ForwarderExportRequestInbox
-        onApply={onApplyExportRequest}
-        appliedTradeId={appliedRequestTradeId ?? null}
+        </button>}
       />
 
       {isManualRegistrationOpen && (
