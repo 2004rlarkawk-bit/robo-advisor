@@ -157,14 +157,14 @@ describe('R10 — 패킹리스트 ↔ 상업송장 교차 대조', () => {
   const inv = (items: any[]): any => ({ items });
   const pl = (items: any[]): any => ({ items });
 
-  it('박스 내역이 인보이스 수량과 다르면 수량 불일치 warning', () => {
+  it('박스 내역이 인보이스 수량과 다르면 수량 불일치 error(사유 적고 진행은 허용)', () => {
     const invoice = inv([{ description: 'FROZEN HAIRTAIL', quantity: 100 }]);
     const packing = pl([{ description: 'FROZEN HAIRTAIL', boxes: 5, eaPerBox: 10 }]); // 50 ≠ 100
     const issues = checkPackingInvoiceConsistency(invoice, packing);
     const qty = issues.find(i => i.id === 'r10-packing-qty-mismatch')!;
     expect(qty).toBeTruthy();
-    expect(qty.severity).toBe('warning');
-    expect(qty.overridable).toBeUndefined();
+    expect(qty.severity).toBe('error');
+    expect(qty.overridable).toBe(true);
   });
 
   it('박스 내역 합계가 인보이스 수량과 같으면 통과', () => {
@@ -229,10 +229,11 @@ describe('R11 — 결제조건 ↔ L/C 필드 정합성', () => {
       .toContain('r11-payment-lc-conflict');
   });
 
-  it('L/C 결제인데 L/C 번호가 공란이면 warning', () => {
+  it('L/C 결제인데 L/C 번호가 공란이면 error(사유 적고 진행은 허용)', () => {
     const issue = find({ paymentTerms: 'L/C AT SIGHT', lcNo: '' }, 'r11-lc-missing')!;
     expect(issue).toBeTruthy();
-    expect(issue.severity).toBe('warning');
+    expect(issue.severity).toBe('error');
+    expect(issue.overridable).toBe(true);
   });
 
   it('L/C 결제 + L/C 번호 있으면 통과(모순·누락 아님)', () => {

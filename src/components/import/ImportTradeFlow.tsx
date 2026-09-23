@@ -3,6 +3,11 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Download, PenLine,
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
 import ImportAnalysisSummary from './ImportAnalysisSummary';
+import {
+  downloadImportDeclarationFormDocx,
+  mapImportDeclarationForm,
+} from '../../services/importDeclarationFormService';
+import ImportDeclarationFormPreview from './ImportDeclarationFormPreview';
 import ImportDeclarationChecklist from './ImportDeclarationChecklist';
 import ImportDocumentComparison from './ImportDocumentComparison';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
@@ -10,6 +15,7 @@ import {
   analyzeImportDocuments,
   IMPORT_DOCUMENT_TYPE_LABELS,
   normalizeImportAnalysisResult,
+  normalizeImportExtractedFields,
   syncLegacyImportFields,
 } from '../../services/importDocumentAnalysisService';
 import { calculateEstimatedImportDuty } from '../../services/importDutyService';
@@ -406,6 +412,8 @@ export default function ImportTradeFlow({
   onWorkspaceStateChangeRef.current = onWorkspaceStateChange;
   const declarationPreviewRef = useRef<HTMLDivElement | null>(null);
   const [declarationError, setDeclarationError] = useState('');
+  const [declarationFormPreview, setDeclarationFormPreview] = useState(false);
+  const [declarationFormError, setDeclarationFormError] = useState('');
   // 포워더 보완 요청에 대한 화주 회신 메모 — 요청·회신이 같은 의뢰에 남는다
   const [reviseReply, setReviseReply] = useState('');
   const [reviseReplyBusy, setReviseReplyBusy] = useState(false);
@@ -1100,6 +1108,19 @@ export default function ImportTradeFlow({
     return () => { cancelled = true; };
   }, [preview, declarationData]);
 
+  // 수입신고서(초안) — 관세청 서식에 확인된 값만 채운다.
+  const declarationFormData = useMemo(() => ({
+    fields: state.analysis?.extracted ?? normalizeImportExtractedFields({}),
+    duty: state.duty,
+    importerCompanyName,
+  }), [state.analysis, state.duty, importerCompanyName]);
+
+  /** 미리보기에 얹을 값 — 다운로드 docx와 같은 매핑을 쓴다. */
+  const declarationFormValues = useMemo(
+    () => mapImportDeclarationForm(declarationFormData),
+    [declarationFormData],
+  );
+
   return (
     <div className="import-flow">
       {/* 소개 헤더(제목·설명·단계 초기화)는 1단계(입력)에서만 노출 — 결과 페이지(2·3단계)에서는 결과에 집중 */}
@@ -1267,10 +1288,7 @@ export default function ImportTradeFlow({
             </section>
           )}
           <div className="import-analysis-disclaimer">
-            <p>자동 분석 결과는 참고정보이며 최종 법률·통관 판단이 아닙니다.</p>
-            <p>{role === 'shipper'
-              ? '아래 분석 결과에서 값을 고치면 이 목록도 즉시 다시 계산됩니다. 서류 간 불일치처럼 어느 값이 맞는지 여기서 판단하기 어려운 항목은, 제출하면 포워더가 원본 서류와 대조해 검토·판단합니다.'
-              : '아래 분석 결과와 HSK 확정에서 값을 고치면 이 목록도 즉시 다시 계산됩니다.'}</p>
+            <p>아래 분석 결과에서 값을 고치면 이 목록도 즉시 다시 계산됩니다.</p>
           </div>
           <ImportAnalysisSummary
             analysis={state.analysis}
@@ -1406,7 +1424,11 @@ export default function ImportTradeFlow({
           <section className="form-card import-card">
             <div className="import-card-heading">
               <div><h2>FTA 적용 여부</h2></div>
-              <p>협정세율을 적용하면 관세를 줄일 수 있습니다. 적용 안 함을 골라도 기본 관세율로 예상세액은 계산됩니다.</p>
+              {/* 설명은 길어서 카드 머리를 밀어내므로 TIP을 눌렀을 때만 펼친다. */}
+              <details className="import-tip">
+                <summary>TIP</summary>
+                <p>협정세율을 적용하면 관세를 줄일 수 있습니다. 적용 안 함을 골라도 기본 관세율로 예상세액은 계산됩니다.</p>
+              </details>
             </div>
             <div className="import-fta-choices" role="group" aria-label="FTA 적용 여부">
               <button
@@ -1506,6 +1528,28 @@ export default function ImportTradeFlow({
             </div>
             {declarationError && <p className="form-message error" role="alert">{declarationError}</p>}
             {preview && <div className="declaration-preview" ref={declarationPreviewRef} />}
+          </section>
+
+          {/* 수입신고서(초안) — 관세법 시행규칙 별지 제1호의3서식에 확인된 값만 채운다. */}
+          <section className="form-card import-card">
+            <div className="import-card-heading">
+              <div><h2>수입신고서(초안)</h2></div>
+              <p>관세청 서식에 확인된 값을 채웠습니다. 신고번호·부호칸과 세관기재란은 신고 후 확정되거나 관세사가 적는 자리라 비워 둡니다.</p>
+            </div>
+            <div className="document-preview-actions">
+              <button className="btn btn-secondary" onClick={() => setDeclarationFormPreview((value) => !value)}>
+                <Eye size={17} /> {declarationFormPreview ? '닫기' : '보기'}
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => void downloadImportDeclarationFormDocx(declarationFormData)
+                  .catch(() => setDeclarationFormError('수입신고서를 만들지 못했습니다. 다시 시도해 주세요.'))}
+              >
+                <Download size={17} /> DOCX 다운로드
+              </button>
+            </div>
+            {declarationFormError && <p className="form-message error" role="alert">{declarationFormError}</p>}
+            {declarationFormPreview && <ImportDeclarationFormPreview values={declarationFormValues} />}
           </section>
 
           {readOnly && onClose ? <DocumentManagerReadOnlyAction

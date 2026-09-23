@@ -27,6 +27,13 @@ function request(overrides: Partial<TransportRequestData> = {}): TransportReques
     shippingMarks: 'ABC / BUSAN',
     requestedDepartureDate: '2026-09-20',
     loadingMode: 'LCL',
+    methodOfDispatch: 'SEA',
+    containerSize: '',
+    containerQuantity: '',
+    dangerousGoods: false,
+    dangerousGoodsDetail: '',
+    temperatureControl: '',
+    services: { insurance: false, customsClearance: false, inlandHaulage: false },
     ...overrides,
   };
 }
@@ -74,6 +81,36 @@ describe('mapTransportRequestToSchema', () => {
   it('결제조건이 L/C면 신용장 여부를 YES로 표기한다', () => {
     expect(schema.letter_of_credit).toBe('NO');
     expect(mapTransportRequestToSchema(request({ paymentTerms: 'L/C at sight' })).letter_of_credit).toBe('YES');
+  });
+
+  it('FCL이면 적재 방식 칸에 컨테이너 규격·수량을 함께 적는다', () => {
+    const fcl = mapTransportRequestToSchema(request({ loadingMode: 'FCL', containerSize: '40HC', containerQuantity: 2 }));
+    expect(fcl.type_of_shipment).toBe('FCL / 2 x 40HC');
+    // LCL은 콘솔 박스를 포워더가 정하므로 컨테이너 표기를 붙이지 않는다
+    expect(schema.type_of_shipment).toBe('LCL');
+  });
+
+  it('항공 의뢰는 운송 방식을 AIR로 적는다', () => {
+    expect(schema.method_of_dispatch).toBe('SEA');
+    expect(mapTransportRequestToSchema(request({ methodOfDispatch: 'AIR' })).method_of_dispatch).toBe('AIR');
+  });
+
+  it('위험물·온도관리·요청 업무는 Special Instructions에 적고, 없으면 줄을 만들지 않는다', () => {
+    const special = mapTransportRequestToSchema(request({
+      dangerousGoods: true,
+      dangerousGoodsDetail: 'IMO Class 9 / UN3481',
+      temperatureControl: '-18°C',
+      services: { insurance: true, customsClearance: false, inlandHaulage: true },
+    }));
+    expect(special.hazardous).toBe('YES');
+    expect(special.special_instructions).toContain('Dangerous goods: YES (IMO Class 9 / UN3481)');
+    expect(special.special_instructions).toContain('Temperature control: -18°C');
+    expect(special.special_instructions).toContain('Please arrange: cargo insurance, inland haulage.');
+    // 해당 없는 항목은 "없음"을 적지 않는다
+    expect(schema.hazardous).toBe('NO');
+    expect(schema.special_instructions).not.toContain('Dangerous goods');
+    expect(schema.special_instructions).not.toContain('Please arrange');
+    expect(schema.special_instructions).toContain('Payment terms: T/T 30 days');
   });
 
   it('서명란은 수출자·담당자로 채운다', () => {

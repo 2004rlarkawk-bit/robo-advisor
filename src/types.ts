@@ -194,6 +194,17 @@ export interface TradeProfile {
   loadingMode?: ForwarderLoadingMode;
   containerSize?: ContainerSize;
   containerQuantity?: NumericInput;
+  /** 운송 방식 — 운송의뢰서(S/I)의 Method of Dispatch. 비면 해상으로 본다. */
+  methodOfDispatch?: 'SEA' | 'AIR';
+  /** 위험물 해당 여부와 근거(IMO Class·UN No.) — 포워더가 선복·적재를 다르게 잡는다. */
+  dangerousGoods?: boolean;
+  dangerousGoodsDetail?: string;
+  /** 온도관리 화물의 설정 온도(예: -18°C). 비면 일반 화물. */
+  temperatureControl?: string;
+  /** 포워더에게 함께 요청하는 업무 */
+  requestInsurance?: boolean;
+  requestCustomsClearance?: boolean;
+  requestInlandHaulage?: boolean;
 
   placeOfReceipt?: string;
   placeOfDelivery?: string;
@@ -567,6 +578,15 @@ export interface TransportRequestData {
   shippingMarks: string;
   requestedDepartureDate: string;
   loadingMode: 'FCL' | 'LCL' | '';
+  /** 해상/항공 — 비면 해상 */
+  methodOfDispatch: 'SEA' | 'AIR';
+  containerSize: string;
+  containerQuantity: number | '';
+  dangerousGoods: boolean;
+  dangerousGoodsDetail: string;
+  temperatureControl: string;
+  /** 포워더에게 함께 요청하는 업무 */
+  services: { insurance: boolean; customsClearance: boolean; inlandHaulage: boolean };
 }
 
 export interface BillOfLadingCargoItem {
