@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { fromMock } = vi.hoisted(() => ({ fromMock: vi.fn() }));
 
 vi.mock('../lib/supabase', () => ({
-  supabase: { from: fromMock },
+  supabase: { from: fromMock, auth: { getUser: async () => ({ data: { user: { id: 'user-1' } }, error: null }) } },
   isSupabaseConfigured: true,
 }));
 
@@ -19,6 +19,13 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+function mockRequests() {
+  const request = { select: vi.fn(), eq: vi.fn().mockResolvedValue({ data: [{ id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }], error: null }) };
+  request.select.mockReturnValue(request);
+  fromMock.mockReturnValueOnce(request);
+  return request;
+}
+
 describe('listNotifications', () => {
   it('최신순으로 limit개까지 조회한다', async () => {
     const query = { select: vi.fn(), order: vi.fn(), limit: vi.fn() };
@@ -33,19 +40,43 @@ describe('listNotifications', () => {
   });
 
   it('현재 역할에 필요한 알림 유형만 조회한다', async () => {
-    const query = { select: vi.fn(), order: vi.fn(), in: vi.fn(), limit: vi.fn() };
+    const request = mockRequests();
+    const query = { select: vi.fn(), order: vi.fn(), in: vi.fn(), or: vi.fn(), limit: vi.fn() };
     query.select.mockReturnValue(query);
     query.order.mockReturnValue(query);
     query.in.mockReturnValue(query);
+    query.or.mockReturnValue(query);
     query.limit.mockResolvedValue({ data: [], error: null });
     fromMock.mockReturnValue(query);
 
     await listNotifications(20, 'forwarder');
     expect(query.in).toHaveBeenCalledWith('type', ['trade_request_received', 'trade_return_replied', 'trade_message_received']);
+    expect(request.eq).toHaveBeenCalledWith('receiver_user_id', 'user-1');
+    expect(query.or).toHaveBeenCalledWith('type.neq.trade_message_received,trade_request_id.in.(aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa)');
   });
 });
 
 describe('countUnreadNotifications', () => {
+  it('현재 역할의 의뢰가 없으면 채팅 알림을 세지 않는다', async () => {
+    const request = mockRequests();
+    request.eq.mockResolvedValue({ data: [], error: null });
+    const query = { select: vi.fn(), is: vi.fn(), in: vi.fn(), or: vi.fn() };
+    query.select.mockReturnValue(query);
+    query.is.mockReturnValue(query);
+    query.in.mockReturnValue(query);
+    query.or.mockResolvedValue({ count: 0, error: null });
+    fromMock.mockReturnValue(query);
+    expect(await countUnreadNotifications('shipper')).toBe(0);
+    expect(query.or).toHaveBeenCalledWith('type.neq.trade_message_received');
+  });
+
+  it('의뢰 관계 조회 실패 시 다른 역할 알림을 읽음 처리하지 않는다', async () => {
+    const request = mockRequests();
+    request.eq.mockResolvedValue({ data: null, error: new Error('관계 조회 실패') });
+    await expect(markAllNotificationsRead('forwarder')).rejects.toThrow('관계 조회 실패');
+    expect(fromMock).toHaveBeenCalledTimes(1);
+    expect(fromMock).toHaveBeenCalledWith('trade_requests');
+  });
   it('read_at이 null인 행의 개수를 반환한다', async () => {
     const query = { select: vi.fn(), is: vi.fn() };
     query.select.mockReturnValue(query);
@@ -88,16 +119,23 @@ describe('role notification policy', () => {
     expect(notificationBelongsToRole('trade_return_requested', 'shipper')).toBe(true);
     expect(notificationBelongsToRole('trade_return_requested', 'forwarder')).toBe(false);
     expect(notificationBelongsToRole('trade_return_replied', 'forwarder')).toBe(true);
+    expect(notificationBelongsToRole('trade_message_received', 'shipper', { recipient_role: 'forwarder' })).toBe(false);
+    expect(notificationBelongsToRole('trade_message_received', 'forwarder', { recipient_role: 'forwarder' })).toBe(true);
+    expect(notificationBelongsToRole('trade_message_received', 'shipper')).toBe(false);
   });
 
   it('모두 읽음은 현재 역할의 알림만 갱신한다', async () => {
-    const query = { update: vi.fn(), is: vi.fn(), in: vi.fn() };
+    const request = mockRequests();
+    const query = { update: vi.fn(), is: vi.fn(), in: vi.fn(), or: vi.fn() };
     query.update.mockReturnValue(query);
     query.is.mockReturnValue(query);
-    query.in.mockResolvedValue({ data: null, error: null });
+    query.in.mockReturnValue(query);
+    query.or.mockResolvedValue({ data: null, error: null });
     fromMock.mockReturnValue(query);
 
     await markAllNotificationsRead('shipper');
+    expect(request.eq).toHaveBeenCalledWith('requester_user_id', 'user-1');
+    expect(query.or).toHaveBeenCalledWith('type.neq.trade_message_received,trade_request_id.in.(aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa)');
     expect(query.in).toHaveBeenCalledWith('type', [
       'trade_request_accepted',
       'trade_request_rejected',

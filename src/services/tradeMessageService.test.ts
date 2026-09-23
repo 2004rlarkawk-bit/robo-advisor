@@ -132,8 +132,9 @@ describe('subscribeToTradeMessages', () => {
     channel.subscribe.mockReturnValue(channel);
     channelMock.mockReturnValue(channel);
     const onInsert = vi.fn();
+    const onUpdate = vi.fn();
 
-    const unsubscribe = subscribeToTradeMessages('req-1', onInsert);
+    const unsubscribe = subscribeToTradeMessages('req-1', onInsert, onUpdate);
     expect(channel.on).toHaveBeenCalledWith(
       'postgres_changes',
       expect.objectContaining({ event: 'INSERT', table: 'trade_messages', filter: 'trade_request_id=eq.req-1' }),
@@ -142,6 +143,10 @@ describe('subscribeToTradeMessages', () => {
     const handler = channel.on.mock.calls[0][2] as (payload: { new: unknown }) => void;
     handler({ new: row });
     expect(onInsert).toHaveBeenCalledWith(expect.objectContaining({ id: 'msg-1', tradeRequestId: 'req-1' }));
+    expect(channel.on).toHaveBeenCalledWith('postgres_changes', expect.objectContaining({ event: 'UPDATE', filter: 'trade_request_id=eq.req-1' }), expect.any(Function));
+    const updateHandler = channel.on.mock.calls[1][2] as (payload: { new: unknown }) => void;
+    updateHandler({ new: { ...row, read_at: '2026-09-23T00:00:00Z' } });
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ readAt: '2026-09-23T00:00:00Z' }));
 
     unsubscribe();
     expect(removeChannelMock).toHaveBeenCalledWith(channel);

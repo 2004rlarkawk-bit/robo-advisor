@@ -212,7 +212,7 @@ export default function NotificationBell({
     void refresh(false);
 
     const unsubscribe = subscribeToNotifications(userId, (notification) => {
-      if (!notificationBelongsToRole(notification.type, role)) return;
+      if (!notificationBelongsToRole(notification.type, role, notification.payload)) return;
       if (knownIdsRef.current.has(notification.id)) return;
       knownIdsRef.current.add(notification.id);
       setNotifications((current) => [notification, ...current].slice(0, 30));

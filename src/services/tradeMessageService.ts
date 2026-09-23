@@ -115,6 +115,7 @@ export async function listUnreadTradeMessageCounts(): Promise<Record<string, num
 export function subscribeToTradeMessages(
   tradeRequestId: string,
   onInsert: (message: TradeMessage) => void,
+  onUpdate?: (message: TradeMessage) => void,
 ): () => void {
   if (!isSupabaseConfigured) return () => undefined;
   const channel = supabase
@@ -128,6 +129,11 @@ export function subscribeToTradeMessages(
         filter: `trade_request_id=eq.${tradeRequestId}`,
       },
       (payload) => onInsert(mapTradeMessageRow(payload.new as TradeMessageRow)),
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'trade_messages', filter: `trade_request_id=eq.${tradeRequestId}` },
+      (payload) => onUpdate?.(mapTradeMessageRow(payload.new as TradeMessageRow)),
     )
     .subscribe();
   return () => {

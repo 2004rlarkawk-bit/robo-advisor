@@ -31,14 +31,17 @@ describe('TradeMessageThread', () => {
   let container: HTMLDivElement;
   let root: Root;
   let pushRealtime: ((message: TradeMessage) => void) | null;
+  let pushRead: ((message: TradeMessage) => void) | null;
 
   beforeEach(() => {
     vi.clearAllMocks();
     pushRealtime = null;
+    pushRead = null;
     service.listTradeMessages.mockResolvedValue([theirs, mine]);
     service.markTradeMessagesRead.mockResolvedValue(undefined);
-    service.subscribeToTradeMessages.mockImplementation((_id: string, onInsert: (m: TradeMessage) => void) => {
+    service.subscribeToTradeMessages.mockImplementation((_id: string, onInsert: (m: TradeMessage) => void, onUpdate: (m: TradeMessage) => void) => {
       pushRealtime = onInsert;
+      pushRead = onUpdate;
       return vi.fn();
     });
     container = document.createElement('div');
@@ -145,5 +148,30 @@ describe('TradeMessageThread', () => {
     });
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.textContent).toContain('종료된 의뢰입니다');
+  });
+
+  it('상대가 읽으면 새로고침 없이 읽음 표시를 갱신한다', async () => {
+    service.listTradeMessages.mockResolvedValue([{ ...mine, readAt: null }]);
+    await render();
+    expect(container.querySelector('.tm-stamp b')).toBeNull();
+    await act(async () => { pushRead?.(mine); });
+    expect(container.querySelector('.tm-stamp b')?.textContent).toBe('읽음');
+    expect(service.markTradeMessagesRead).not.toHaveBeenCalled();
+  });
+
+  it('다른 의뢰의 실시간 메시지는 현재 대화에 추가하지 않는다', async () => {
+    await render();
+    await act(async () => { pushRealtime?.({ ...theirs, id: 'other', tradeRequestId: 'req-2', body: '다른 의뢰 비공개 내용' }); });
+    expect(container.textContent).not.toContain('다른 의뢰 비공개 내용');
+  });
+
+  it('의뢰 변경 후 늦게 도착한 이전 조회 결과를 무시한다', async () => {
+    let finish!: (messages: TradeMessage[]) => void;
+    service.listTradeMessages.mockImplementation((id: string) => id === 'req-1' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve([]));
+    await render();
+    await act(async () => { root.render(<TradeMessageThread tradeRequestId="req-2" currentUserId="shipper-1" counterpartLabel="새 포워더" />); });
+    await act(async () => { finish([theirs]); });
+    expect(container.textContent).not.toContain(theirs.body);
+    expect(service.markTradeMessagesRead).not.toHaveBeenCalled();
   });
 });
