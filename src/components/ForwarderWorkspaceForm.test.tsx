@@ -88,6 +88,15 @@ function renderForm(
 }
 
 describe('수출 포워더 5단계 워크플로우', () => {
+  it('수입과 같은 요약 카드 안에 거래 정보와 기존 5단계를 보여준다', () => {
+    const rendered = renderForm({ companyName: 'ABC KOREA', partnerName: 'TOKYO TRADING', bookingNo: 'BK-001', vesselOrFlight: 'OCEAN STAR' });
+    const summary = rendered.container.querySelector('[aria-label="수출 거래 요약"]');
+    expect(summary?.textContent).toContain('ABC KOREA');
+    expect(summary?.textContent).toContain('TOKYO TRADING');
+    expect(summary?.textContent).toContain('BK-001');
+    expect(summary?.querySelectorAll('.import-steps button')).toHaveLength(5);
+    expect(rendered.container.querySelector('.fwd-export-refresh')).not.toBeNull();
+  });
   it('Step 표시줄에 5단계 라벨을 모두 표시한다', () => {
     const rendered = renderForm();
     ['화주 의뢰 확인', '선복 부킹', '반입·선적 준비', 'B/L 관리', '선적 완료'].forEach((label) => {

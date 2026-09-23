@@ -41,7 +41,7 @@ export default function ExportForwarderInboxView({
   const [isManualRegistrationOpen, setIsManualRegistrationOpen] = useState(false);
 
   return (
-    <div className="form-card forwarder-workspace-form">
+    <div className="forwarder-workspace-form fwd-export-refresh fwd-export-list">
       <div className="trade-section-header">
         <div className="trade-section-title">
           <Inbox size={20} className="text-primary" />

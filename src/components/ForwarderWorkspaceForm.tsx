@@ -18,6 +18,7 @@ import ExportForwarderBookingStep from './forwarder/export/ExportForwarderBookin
 import ExportForwarderProgressStep from './forwarder/export/ExportForwarderProgressStep';
 import ExportForwarderBLStep from './forwarder/export/ExportForwarderBLStep';
 import ExportForwarderCompletionStep from './forwarder/export/ExportForwarderCompletionStep';
+import '../styles/forwarderExportRefresh.css';
 
 const STEP_LABELS = ['화주 의뢰 확인', '선복 부킹', '반입·선적 준비', 'B/L 관리', '선적 완료'];
 
@@ -197,19 +198,31 @@ export default function ForwarderWorkspaceForm({
   }
 
   return (
-    <div className="forwarder-export-flow">
+    <div className="forwarder-export-flow fwd-export-refresh">
       {!readOnly && (
         <button type="button" className="btn btn-secondary forwarder-back-to-inbox" onClick={onReturnToInbox}>
           <ArrowLeft size={16} /> 목록으로 돌아가기
         </button>
       )}
 
+      <section className="form-card fwd-export-summary" aria-label="수출 거래 요약">
+        <div className="fwd-export-summary-title">
+          <h2>{state.bookingNo || state.invoiceNo || '수출 의뢰'}</h2>
+          <span>{STEP_LABELS[currentStep - 1]}</span>
+        </div>
+        <dl className="fwd-export-summary-grid">
+          <div><dt>화주</dt><dd>{state.companyName || '미입력'}</dd></div>
+          <div><dt>수하인</dt><dd>{state.partnerName || '미입력'}</dd></div>
+          <div><dt>선박</dt><dd>{state.vesselOrFlight || '미정'}</dd></div>
+          <div><dt>출항일</dt><dd>{state.departureDate || state.requestedDepartureDate || '미정'}</dd></div>
+        </dl>
       <ImportStepIndicator
         current={currentStep}
         labels={STEP_LABELS}
         onMove={onStepChange}
         canMoveTo={canMoveTo}
       />
+      </section>
 
       {currentStep === 1 && (
         <ExportForwarderRequestStep
