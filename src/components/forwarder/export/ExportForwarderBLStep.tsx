@@ -86,7 +86,7 @@ export default function ExportForwarderBLStep({
           <div className="form-group"><label className="form-label">Vessel / Voyage</label><input className="form-input" value={[state.vesselOrFlight, state.voyageNo].filter(Boolean).join(' / ')} disabled readOnly /></div>
           <div className="form-group"><label className="form-label">POL / POD</label><input className="form-input" value={[state.loadPort, state.dischargePort].filter(Boolean).join(' → ')} disabled readOnly /></div>
         </div>
-        <p className="form-help">Carrier·Vessel/Voyage·POL/POD는 2단계 선복 부킹 입력값을 그대로 보여줍니다.</p>
+        <p className="form-help">Carrier·Vessel/Voyage·POL/POD는 2단계 선복예약 정보 등록에서 넣은 값을 그대로 보여줍니다.</p>
         <ForwarderDocumentSlot
           label="M/B/L 파일"
           documentType="bill_of_lading"
@@ -106,7 +106,7 @@ export default function ExportForwarderBLStep({
           <div className="form-group"><label className="form-label">ETD (참고)</label><input className="form-input" value={state.departureDate || '미입력'} disabled readOnly /></div>
           <div className="form-group"><label className="form-label">컨테이너 (참고)</label><input className="form-input" value={state.loadingMode === 'FCL' ? [state.containerSize, state.containerQuantity !== '' ? `${state.containerQuantity}개` : ''].filter(Boolean).join(' · ') : state.loadingMode || '미정'} disabled readOnly /></div>
         </div>
-        <p className="form-help">2단계 선복 부킹에서 등록한 값입니다. 본선 적재일(Shipped on Board)은 실제 적재일이므로 ETD로 자동 채우지 않습니다.</p>
+        <p className="form-help">2단계 선복예약 정보 등록에서 넣은 값입니다. 본선 적재일(Shipped on Board)은 실제 적재일이므로 ETD로 자동 채우지 않습니다.</p>
 
         {!readOnly && (
           <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
@@ -206,7 +206,7 @@ export default function ExportForwarderBLStep({
               )}
             </div>
           ) : !readOnly ? (
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerateHouseBillOfLading}><FileSignature size={16} /> H/B/L 생성</button>
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerateHouseBillOfLading}><FileSignature size={16} /> H/B/L 초안 생성</button>
           ) : null}
         </div>
       </details>

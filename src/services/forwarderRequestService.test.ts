@@ -212,6 +212,7 @@ describe('matchForwarderForTrade', () => {
         id: 'fwd-1', company_name: 'PortAI Forwarding', contact_name: 'Kim',
         specialties: ['route_cn', 'cargo_cold'], matched_specialties: ['route_cn'],
         active_count: 2, completed_count: 14,
+        is_partner_forwarder: true, partner_company_name: 'ABC Logistics',
       }],
       error: null,
     });
@@ -224,6 +225,7 @@ describe('matchForwarderForTrade', () => {
       id: 'fwd-1', companyName: 'PortAI Forwarding', contactName: 'Kim',
       specialties: ['route_cn', 'cargo_cold'], matchedSpecialties: ['route_cn'],
       activeCount: 2, completedCount: 14,
+      isPartner: true, partnerCompanyName: 'ABC Logistics',
     }]);
   });
 

@@ -76,7 +76,7 @@ export default function ExportForwarderBookingStep({
         <div className="trade-section-title">
           <Ship size={20} className="text-primary" />
           <div>
-            <h2 className="card-title">2. 선복 부킹</h2>
+            <h2 className="card-title">2. 선복예약 정보 등록</h2>
             <p className="forwarder-step-description">선사 홈페이지·메일·전화로 확정한 부킹 내용을 PortAI에 등록합니다. PortAI가 선사에 예약을 보내거나 부킹을 대행하지 않습니다.</p>
           </div>
         </div>
