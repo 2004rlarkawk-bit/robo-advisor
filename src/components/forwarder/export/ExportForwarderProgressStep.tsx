@@ -67,7 +67,7 @@ export default function ExportForwarderProgressStep({
 
       <details className="form-section" open>
         <summary className="form-section-summary">업무별 진행 기록 <span className="form-section-hint">담당자 수동 기록</span></summary>
-        <div className="import-document-list" style={{ marginTop: 14 }}>
+        <div className="import-document-list fwd-export-progress-compact">
           {EXPORT_PROGRESS_STAGE_ORDER.filter(stage => stage !== 'customsCleared').map((stage) => (
             <div className="import-document-row" key={stage}>
               <div className="import-document-content">
@@ -92,16 +92,17 @@ export default function ExportForwarderProgressStep({
         </div>
       </details>
 
-      <details className="form-section" open>
-        <summary className="form-section-summary">수출통관 확인 <span className="form-section-hint">UNI-PASS 수출이행 조회</span></summary>
-        <p className="form-help">PortAI는 수출신고서를 생성하지 않습니다. 신고 완료 후 발급된 번호로 수리·선적 정보를 조회합니다.</p>
-        <div className="form-grid">
-          <div className="form-group">
+      <section className="fwd-customs-panel" aria-label="수출통관 확인">
+        <header className="fwd-customs-heading">
+          <h3>수출통관 확인</h3><span>UNI-PASS</span>
+        </header>
+        <div className="fwd-customs-query">
             <label className="form-label" htmlFor="progress-decl-no">수출신고번호</label>
-            <input id="progress-decl-no" className="form-input" disabled={readOnly} value={state.exportDeclarationNo} onChange={(e) => patch({ exportDeclarationNo: e.target.value })} />
-          </div>
+            <input id="progress-decl-no" className="form-input" placeholder="수출신고번호 입력" disabled={readOnly} value={state.exportDeclarationNo} onChange={(e) => patch({ exportDeclarationNo: e.target.value })} />
+            <ExportCustomsLookup key={scopeId + ':' + state.exportDeclarationNo} declarationNo={state.exportDeclarationNo} busy={busy} />
         </div>
-        <ExportCustomsLookup key={scopeId + ':' + state.exportDeclarationNo} declarationNo={state.exportDeclarationNo} busy={busy} />
+        <details className="fwd-customs-files">
+          <summary>수출신고필증 <span>파일 보기·등록</span></summary>
         <ForwarderDocumentSlot
           label="수출신고필증"
           documentType="export_declaration"
@@ -111,7 +112,8 @@ export default function ExportForwarderProgressStep({
           onAttachmentsChange={onAttachmentsChange}
           readOnly={readOnly}
         />
-      </details>
+        </details>
+      </section>
 
       {!readOnly && (
         <div className="form-actions">

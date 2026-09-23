@@ -323,7 +323,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
       const rendered = renderForm({ exportDeclarationNo: '' }, {
         currentStep: 3, progress: { customsCleared: 'done' }, onProgressChange,
       });
-      expect(rendered.container.textContent).toContain('기존 수동 기록은 세관 조회 결과로 표시하지 않습니다');
+      expect(rendered.container.querySelector('select[aria-label="수출통관 상태"]')).toBeNull();
       expect(onProgressChange).not.toHaveBeenCalled();
     });
 
@@ -339,7 +339,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
       });
       expect(rendered.container.textContent).toContain('수출신고번호');
       expect(rendered.container.textContent).toContain('수출신고필증');
-      expect(rendered.container.textContent).toContain('PortAI는 수출신고서를 생성하지 않습니다');
+      expect(rendered.container.textContent).toContain('UNI-PASS');
     });
 
     it('진행 상태를 변경하면 onProgressChange를 호출한다', () => {

@@ -51,6 +51,6 @@ describe('수출 유니패스 조회', () => {
     act(() => root.render(<ExportCustomsLookup key="new" declarationNo="654321" />));
     await act(async () => resolve(null));
     expect(container.textContent).not.toContain('조회 결과가 없습니다');
-    expect(container.textContent).toContain('입력하고 조회');
+    expect(container.querySelector('.fwd-customs-result')?.textContent).toBe('');
   });
 });
