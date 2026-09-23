@@ -97,7 +97,7 @@ export function determineRequiredDocuments(
   if (profile.tradeType === 'export') {
     docs.push({
       id: 'transport_request',
-      name: '수출 운송의뢰서(Transport Request)',
+      name: '수출 운송의뢰서(Shipping Instruction, S/I)',
       status: 'completed',
       statusText: '초안',
       lastReviewed: timestamp,

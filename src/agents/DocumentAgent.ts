@@ -323,6 +323,18 @@ export class DocumentAgent implements Agent<{ shipment: Shipment; hsResult: HSCo
         shippingMarks: profile.shippingMarks || '',
         requestedDepartureDate: profile.departureDate || '',
         loadingMode: profile.loadingMode || '',
+        methodOfDispatch: profile.methodOfDispatch === 'AIR' ? 'AIR' : 'SEA',
+        // FCL일 때만 컨테이너 정보를 싣는다 — LCL이면 포워더가 콘솔 박스를 정한다.
+        containerSize: profile.loadingMode === 'FCL' ? (profile.containerSize || '') : '',
+        containerQuantity: profile.loadingMode === 'FCL' ? (Number(profile.containerQuantity) || '') : '',
+        dangerousGoods: profile.dangerousGoods ?? false,
+        dangerousGoodsDetail: profile.dangerousGoodsDetail || '',
+        temperatureControl: profile.temperatureControl || '',
+        services: {
+          insurance: profile.requestInsurance ?? false,
+          customsClearance: profile.requestCustomsClearance ?? false,
+          inlandHaulage: profile.requestInlandHaulage ?? false,
+        },
       };
       generatedDocs.transportRequest = transportRequest;
       logs.push(createLog(this.name, `수출 운송의뢰서 초안 조립 완료 (품목 ${items.length}건)`, 'success'));

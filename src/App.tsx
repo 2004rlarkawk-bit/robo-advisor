@@ -1314,7 +1314,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     }
   }, [issues]);
 
-  const handleInputChange = (field: keyof TradeProfile, value: string | number) => {
+  const handleInputChange = (field: keyof TradeProfile, value: string | number | boolean) => {
     setProfile(prev => {
       // 수출↔수입 전환 시 선적항·도착항 방향도 자연스럽게 뒤집는다
       // (예: 수출 부산 → 상하이를 수입으로 바꾸면 상하이 → 부산).
@@ -3668,6 +3668,125 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                         />
                       </div>
 
+                      {/* 포워더가 선복·적재를 잡을 때 필요한 값 — 운송의뢰서(S/I)에 그대로 실린다. */}
+                      <div className="form-group" data-docs="transport_request">
+                        <label className="form-label">운송 방식</label>
+                        <select
+                          className="form-input"
+                          value={profile.methodOfDispatch ?? 'SEA'}
+                          onChange={(e) => handleInputChange('methodOfDispatch', e.target.value)}
+                        >
+                          <option value="SEA">해상 (SEA)</option>
+                          <option value="AIR">항공 (AIR)</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group" data-docs="transport_request">
+                        <label className="form-label">적재 방식</label>
+                        <select
+                          className="form-input"
+                          value={profile.loadingMode ?? ''}
+                          onChange={(e) => handleInputChange('loadingMode', e.target.value)}
+                        >
+                          <option value="">선택하세요</option>
+                          <option value="FCL">FCL (컨테이너 단독)</option>
+                          <option value="LCL">LCL (혼재)</option>
+                        </select>
+                      </div>
+
+                      {profile.loadingMode === 'FCL' && (
+                        <>
+                          <div className="form-group" data-docs="transport_request">
+                            <label className="form-label">컨테이너 규격</label>
+                            <select
+                              className="form-input"
+                              value={profile.containerSize ?? ''}
+                              onChange={(e) => handleInputChange('containerSize', e.target.value)}
+                            >
+                              <option value="">선택하세요</option>
+                              <option value="20GP">20GP</option>
+                              <option value="40GP">40GP</option>
+                              <option value="40HC">40HC</option>
+                              <option value="45HC">45HC</option>
+                            </select>
+                          </div>
+
+                          <div className="form-group" data-docs="transport_request">
+                            <label className="form-label">컨테이너 수량</label>
+                            <input
+                              type="number"
+                              min={1}
+                              className="form-input"
+                              placeholder="예: 2"
+                              value={profile.containerQuantity ?? ''}
+                              onChange={(e) => handleInputChange('containerQuantity', e.target.value)}
+                            />
+                          </div>
+                        </>
+                      )}
+
+                      <div className="form-group" data-docs="transport_request">
+                        <label className="form-label">위험물 <span className="optional-label">(선택)</span></label>
+                        <label className="shipper-inline-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={profile.dangerousGoods ?? false}
+                            onChange={(e) => handleInputChange('dangerousGoods', e.target.checked)}
+                          />
+                          <span>위험물·배터리 포함</span>
+                        </label>
+                        {profile.dangerousGoods && (
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="예: IMO Class 9 / UN3481 (리튬이온 배터리)"
+                            value={profile.dangerousGoodsDetail ?? ''}
+                            onChange={(e) => handleInputChange('dangerousGoodsDetail', e.target.value)}
+                          />
+                        )}
+                      </div>
+
+                      <div className="form-group" data-docs="transport_request">
+                        <label className="form-label">온도관리 <span className="optional-label">(선택)</span></label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="예: -18°C (냉동)"
+                          value={profile.temperatureControl ?? ''}
+                          onChange={(e) => handleInputChange('temperatureControl', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group" data-docs="transport_request">
+                        <label className="form-label">포워더에게 함께 요청 <span className="optional-label">(선택)</span></label>
+                        <div className="shipper-inline-options">
+                          <label className="shipper-inline-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={profile.requestInsurance ?? false}
+                              onChange={(e) => handleInputChange('requestInsurance', e.target.checked)}
+                            />
+                            <span>적하보험</span>
+                          </label>
+                          <label className="shipper-inline-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={profile.requestCustomsClearance ?? false}
+                              onChange={(e) => handleInputChange('requestCustomsClearance', e.target.checked)}
+                            />
+                            <span>수출통관</span>
+                          </label>
+                          <label className="shipper-inline-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={profile.requestInlandHaulage ?? false}
+                              onChange={(e) => handleInputChange('requestInlandHaulage', e.target.checked)}
+                            />
+                            <span>내륙운송(집하)</span>
+                          </label>
+                        </div>
+                      </div>
+
                       <div className="form-group">
                         <label className="form-label">선박명 / 항공편명</label>
                         <input
@@ -4367,7 +4486,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     // 수입 거래는 신고를 I/D로 노출한다.
                     const abbr = doc.id === 'invoice' ? 'C/I'
                       : doc.id === 'packing_list' ? 'P/L'
-                      : doc.id === 'transport_request' ? 'T/R'
+                      : doc.id === 'transport_request' ? 'S/I'
                       : doc.id === 'bl' ? 'B/L'
                       : doc.id === 'customs_dec' ? (profile.tradeType === 'import' ? 'I/D' : 'E/D')
                       : doc.id === 'co' ? 'C/O'
@@ -5066,7 +5185,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   packing_list: '패킹리스트(Packing List)',
                   co: '원산지증명서(Certificate of Origin)',
                   bl: '선하증권(B/L)',
-                  transport_request: '수출 운송의뢰서(Transport Request)',
+                  transport_request: '수출 운송의뢰서(Shipping Instruction, S/I)',
                   customs_dec: '수출신고서(초안)',
                   insurance: '적하보험증권(Insurance Policy)',
                 } as Record<string, string>)[previewDocId ?? ''] ?? '문서')} 미리보기

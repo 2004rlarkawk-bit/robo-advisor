@@ -1544,7 +1544,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 28px 0 0;
+  margin: 12px 0 0;
   padding: 16px 20px;
   border-radius: 14px 14px 0 0;
   border-left: 4px solid transparent;
@@ -1574,7 +1574,8 @@ body {
 .sev-section-toggle-hint svg { transition: transform 0.15s; }
 .sev-section-toggle.is-open .sev-section-toggle-hint svg { transform: rotate(180deg); }
 .sev-section-header:first-child {
-  margin-top: 4px;
+  /* 위 카드(환산·요약)와 붙어 보이지 않도록 첫 섹션에도 여백을 준다 */
+  margin-top: 22px;
 }
 .sev-section-icon {
   display: inline-flex;
@@ -2633,6 +2634,19 @@ body {
 .import-drop-zone p { max-width: 560px; font-size: 13px; line-height: 1.6; }
 /* 지원 범위 안내 — 설명 문구보다 한 단계 약하게 */
 .import-scope-note { color: var(--text-light); font-size: 12px; opacity: .85; }
+/* 수입신고서(초안) 미리보기 — 서식 이미지 위에 값을 같은 좌표로 얹는다 */
+.import-decl-form-preview { position: relative; container-type: inline-size; max-width: 900px; margin: 16px auto 0; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: #fff; }
+.import-decl-form-preview img { display: block; width: 100%; height: auto; }
+.import-decl-form-value { position: absolute; color: #16325c; font-size: 1.05cqw; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 카드 머리의 TIP — 눌렀을 때만 설명을 펼친다 */
+.import-tip { margin-left: auto; }
+.import-tip > summary { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border: 1px solid var(--border-color); border-radius: 999px; background: #f8fafc; color: var(--text-light); font-size: 12px; font-weight: 700; cursor: pointer; list-style: none; white-space: nowrap; }
+.import-tip > summary::-webkit-details-marker { display: none; }
+.import-tip > summary::after { content: '?'; font-size: 11px; opacity: .7; }
+.import-tip[open] > summary { background: var(--primary-light); border-color: var(--primary-color); color: var(--primary-color); }
+.import-tip > p { max-width: 460px; margin: 8px 0 0; color: var(--text-light); font-size: 12.5px; line-height: 1.6; text-align: left; }
+
 .import-document-list { display: grid; gap: 8px; margin-top: 16px; }
 .import-document-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 11px; border: 1px solid var(--border-color); border-radius: 9px; background: #fff; }
 .import-document-icon { margin-top: 2px; color: var(--primary-color); }

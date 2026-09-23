@@ -32,6 +32,13 @@ function transportRequest(): TransportRequestData {
     shippingMarks: 'DOC-MARK',
     requestedDepartureDate: '2026-09-20',
     loadingMode: 'LCL',
+    methodOfDispatch: 'SEA',
+    containerSize: '',
+    containerQuantity: '',
+    dangerousGoods: false,
+    dangerousGoodsDetail: '',
+    temperatureControl: '',
+    services: { insurance: false, customsClearance: false, inlandHaulage: false },
   };
 }
 
