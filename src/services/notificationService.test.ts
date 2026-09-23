@@ -52,7 +52,7 @@ describe('listNotifications', () => {
     await listNotifications(20, 'forwarder');
     expect(query.in).toHaveBeenCalledWith('type', ['trade_request_received', 'trade_return_replied', 'trade_message_received']);
     expect(request.eq).toHaveBeenCalledWith('receiver_user_id', 'user-1');
-    expect(query.or).toHaveBeenCalledWith('type.neq.trade_message_received,trade_request_id.in.(aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa)');
+    expect(query.or).toHaveBeenCalledWith('type.neq.trade_message_received,and(trade_request_id.in.(aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa),or(payload->>recipient_role.eq.forwarder,payload->>recipient_role.is.null))');
   });
 });
 
@@ -135,7 +135,7 @@ describe('role notification policy', () => {
 
     await markAllNotificationsRead('shipper');
     expect(request.eq).toHaveBeenCalledWith('requester_user_id', 'user-1');
-    expect(query.or).toHaveBeenCalledWith('type.neq.trade_message_received,trade_request_id.in.(aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa)');
+    expect(query.or).toHaveBeenCalledWith('type.neq.trade_message_received,and(trade_request_id.in.(aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa),or(payload->>recipient_role.eq.shipper,payload->>recipient_role.is.null))');
     expect(query.in).toHaveBeenCalledWith('type', [
       'trade_request_accepted',
       'trade_request_rejected',

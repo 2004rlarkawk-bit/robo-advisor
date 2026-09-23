@@ -91,9 +91,9 @@ export function groupTradeMessages(messages: TradeMessage[], now: Date = new Dat
     const previous = messages[index - 1];
     const next = messages[index + 1];
     const sameDayAsPrevious = Boolean(previous) && group.items.length > 0;
-    const showSender = !sameDayAsPrevious || previous.senderUserId !== message.senderUserId;
+    const showSender = !sameDayAsPrevious || previous.senderUserId !== message.senderUserId || previous.senderRole !== message.senderRole;
 
-    const sameSenderNext = next?.senderUserId === message.senderUserId;
+    const sameSenderNext = next?.senderUserId === message.senderUserId && next?.senderRole === message.senderRole;
     const nextDate = next ? new Date(next.createdAt) : null;
     const nextValid = Boolean(nextDate) && !Number.isNaN(nextDate!.getTime());
     const sameMinuteNext = valid && nextValid && minuteKey(date) === minuteKey(nextDate!);

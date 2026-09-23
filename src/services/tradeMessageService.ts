@@ -12,6 +12,7 @@ interface TradeMessageRow {
   trade_request_id: string;
   trade_id: string;
   sender_user_id: string;
+  sender_role?: 'shipper' | 'forwarder' | null;
   kind: TradeMessageKind;
   body: string;
   created_at: string;
@@ -26,6 +27,7 @@ export function mapTradeMessageRow(row: TradeMessageRow): TradeMessage {
     tradeRequestId: row.trade_request_id,
     tradeId: row.trade_id,
     senderUserId: row.sender_user_id,
+    ...(row.sender_role !== undefined ? { senderRole: row.sender_role } : {}),
     kind: row.kind,
     body: row.body,
     createdAt: row.created_at,
@@ -61,6 +63,7 @@ export async function sendTradeMessage(
   tradeRequestId: string,
   body: string,
   kind: TradeMessageKind = 'message',
+  senderRole?: 'shipper' | 'forwarder',
 ): Promise<TradeMessage> {
   const text = body.trim();
   if (!text) throw new Error('메시지 내용을 입력해 주세요.');
@@ -70,7 +73,7 @@ export async function sendTradeMessage(
   const userId = await getRequiredUserId();
   const { data, error } = await supabase
     .from('trade_messages')
-    .insert({ trade_request_id: tradeRequestId, sender_user_id: userId, kind, body: text })
+    .insert({ trade_request_id: tradeRequestId, sender_user_id: userId, kind, body: text, ...(senderRole ? { sender_role: senderRole } : {}) })
     .select()
     .single();
   if (error) {
@@ -82,27 +85,34 @@ export async function sendTradeMessage(
 }
 
 /** 상대가 보낸 안 읽은 메시지를 모두 읽음 처리한다. 내가 보낸 것은 RLS가 막으므로 조건에서도 뺀다. */
-export async function markTradeMessagesRead(tradeRequestId: string): Promise<void> {
+export async function markTradeMessagesRead(tradeRequestId: string, role?: 'shipper' | 'forwarder'): Promise<void> {
   if (!isSupabaseConfigured) return;
   const userId = await getRequiredUserId();
-  const { error } = await supabase
+  let query = supabase
     .from('trade_messages')
     .update({ read_at: new Date().toISOString() })
-    .eq('trade_request_id', tradeRequestId)
-    .neq('sender_user_id', userId)
-    .is('read_at', null);
+    .eq('trade_request_id', tradeRequestId);
+  query = role ? query.or(`sender_role.eq.${role === 'shipper' ? 'forwarder' : 'shipper'},and(sender_role.is.null,sender_user_id.neq.${userId})`) : query.neq('sender_user_id', userId);
+  const { error } = await query.is('read_at', null);
   if (error) throw error;
 }
 
 /** 의뢰별 안 읽은 메시지 수 — 목록 화면 배지용. 내가 보낸 메시지는 세지 않는다. */
-export async function listUnreadTradeMessageCounts(): Promise<Record<string, number>> {
+export async function listUnreadTradeMessageCounts(role?: 'shipper' | 'forwarder'): Promise<Record<string, number>> {
   if (!isSupabaseConfigured) return {};
   const userId = await getRequiredUserId();
-  const { data, error } = await supabase
+  let query = supabase
     .from('trade_messages')
-    .select('trade_request_id')
-    .neq('sender_user_id', userId)
-    .is('read_at', null);
+    .select('trade_request_id');
+  if (role) {
+    const { data: requests, error: requestError } = await supabase.from('trade_requests').select('id')
+      .eq(role === 'shipper' ? 'requester_user_id' : 'receiver_user_id', userId);
+    if (requestError) throw requestError;
+    if (!requests?.length) return {};
+    query = query.in('trade_request_id', requests.map(request => request.id))
+      .or(`sender_role.eq.${role === 'shipper' ? 'forwarder' : 'shipper'},and(sender_role.is.null,sender_user_id.neq.${userId})`);
+  } else query = query.neq('sender_user_id', userId);
+  const { data, error } = await query.is('read_at', null);
   if (error) throw error;
   const counts: Record<string, number> = {};
   for (const row of (data || []) as Array<{ trade_request_id: string }>) {

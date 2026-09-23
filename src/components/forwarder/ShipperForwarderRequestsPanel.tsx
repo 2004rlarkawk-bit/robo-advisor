@@ -173,7 +173,7 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
 
   const loadUnread = useCallback(async () => {
     try {
-      setUnreadByRequest(await listUnreadTradeMessageCounts());
+      setUnreadByRequest(await listUnreadTradeMessageCounts('shipper'));
     } catch (err) {
       console.warn('안 읽은 메시지 수 조회 실패:', err);
     }
@@ -364,6 +364,7 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
         </div>
       )}
 
+
       {threadTrade && (() => {
         const internal = latestForTrade(internalRequests, threadTrade.id);
         if (!internal) return null;
@@ -380,6 +381,7 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
               <TradeMessageThread
                 tradeRequestId={internal.id}
                 currentUserId={currentUserId}
+                currentRole="shipper"
                 counterpartLabel="지정 포워더"
                 readOnly={closed}
                 onMessagesChanged={() => void loadUnread()}

@@ -79,6 +79,28 @@ describe('TradeMessageThread', () => {
     expect(container.querySelectorAll('.tm-day')).toHaveLength(1);
   });
 
+  it('통합 계정은 역할 전환 후 같은 계정의 반대 역할 메시지를 상대 메시지로 읽는다', async () => {
+    service.listTradeMessages.mockResolvedValue([
+      { ...mine, senderRole: 'shipper', readAt: null },
+      { ...theirs, senderUserId: 'shipper-1', senderRole: 'forwarder' },
+    ]);
+    await act(async () => {
+      root.render(<TradeMessageThread tradeRequestId="req-1" currentUserId="shipper-1" currentRole="shipper" counterpartLabel="포워더" />);
+    });
+    let rows = container.querySelectorAll('.tm-row');
+    expect(rows[0].classList.contains('is-mine')).toBe(true);
+    expect(rows[1].classList.contains('is-mine')).toBe(false);
+    expect(service.markTradeMessagesRead).toHaveBeenLastCalledWith('req-1', 'shipper');
+    await act(async () => {
+      root.render(<TradeMessageThread tradeRequestId="req-1" currentUserId="shipper-1" currentRole="forwarder" counterpartLabel="화주" />);
+    });
+    rows = container.querySelectorAll('.tm-row');
+    expect(rows[0].classList.contains('is-mine')).toBe(false);
+    expect(rows[1].classList.contains('is-mine')).toBe(true);
+    expect(service.markTradeMessagesRead).toHaveBeenLastCalledWith('req-1', 'forwarder');
+    expect(rows[0].querySelector('.tm-name')?.textContent).toBe('화주');
+  });
+
   const type = async (text: string) => {
     const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
     await act(async () => {

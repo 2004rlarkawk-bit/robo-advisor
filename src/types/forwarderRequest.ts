@@ -63,6 +63,7 @@ export interface TradeMessage {
   tradeRequestId: string;
   tradeId: string;
   senderUserId: string;
+  senderRole?: 'shipper' | 'forwarder' | null;
   kind: TradeMessageKind;
   body: string;
   createdAt: string;

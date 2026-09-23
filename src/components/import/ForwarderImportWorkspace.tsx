@@ -386,11 +386,13 @@ export default function ForwarderImportWorkspace({
             <TradeMessageThread
               tradeRequestId={selectedRequest.id}
               currentUserId={userId}
+              currentRole="forwarder"
               counterpartLabel={getInboxImporterName(selected) === '화주명 미입력' ? '화주 담당자' : `${getInboxImporterName(selected)} 담당자`}
               readOnly={selectedRequest.status !== 'pending' && selectedRequest.status !== 'accepted'}
             />
           </section>
         )}
+
 
         {detailTab === 'messages' && !selected.returnRequest && !selectedRequest && (
           <section className="form-card import-card fwd-message-empty">
