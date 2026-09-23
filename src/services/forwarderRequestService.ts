@@ -160,6 +160,8 @@ export async function matchForwarderForTrade(
     matchedSpecialties: Array.isArray(row.matched_specialties) ? row.matched_specialties as string[] : [],
     activeCount: Number(row.active_count ?? 0),
     completedCount: Number(row.completed_count ?? 0),
+    isPartner: row.is_partner_forwarder === true,
+    partnerCompanyName: (row.partner_company_name as string | null) ?? null,
   }));
 }
 

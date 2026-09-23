@@ -113,7 +113,7 @@ export default function ForwarderDocumentSendPanel({
           <div className="form-group">
             <span className="form-label">보낼 문서</span>
             {attachableTypes.length === 0 ? (
-              <p className="fwd-doc-empty">이 거래에는 아직 이메일로 보낼 수 있는 생성 문서가 없습니다. (H/B/L 생성 후 이용 가능)</p>
+              <p className="fwd-doc-empty">이 거래에는 아직 이메일로 보낼 수 있는 생성 문서가 없습니다. (H/B/L 초안 생성 후 이용 가능)</p>
             ) : (
               <div className="fwd-doc-checklist">
                 {attachableTypes.map((type) => (

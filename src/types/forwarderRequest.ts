@@ -87,6 +87,10 @@ export interface ForwarderMatchCandidate {
   matchedSpecialties: string[];
   activeCount: number;
   completedCount: number;
+  /** PortAI와 제휴(MOU)한 포워더 담당자 — 추천 목록에서 먼저 보여준다. */
+  isPartner: boolean;
+  /** 제휴사명이 담당자 프로필의 업체명과 다를 때만 채워진다. */
+  partnerCompanyName: string | null;
 }
 
 export interface TradeRequestPreview {
