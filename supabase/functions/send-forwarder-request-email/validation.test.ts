@@ -84,6 +84,16 @@ describe('parseSendRequest', () => {
       parseSendRequest(validBody({ documents: [validDocument(), validDocument()] })),
     ).toThrow();
   });
+
+  it('선적 안내는 H/B/L 첨부가 있어야 하며 종류를 구분한다', () => {
+    expect(() => parseSendRequest(validBody({ delivery_kind: 'shipment_notice' }))).toThrow('H/B/L');
+    const parsed = parseSendRequest(validBody({
+      delivery_kind: 'shipping_advice',
+      documents: [validDocument({ document_type: 'bill_of_lading' })],
+    }));
+    expect(parsed.deliveryKind).toBe('shipping_advice');
+    expect(() => parseSendRequest(validBody({ delivery_kind: 'unknown' }))).toThrow('지원하지 않는 이메일 종류');
+  });
 });
 
 describe('findMissingDocumentTypes', () => {

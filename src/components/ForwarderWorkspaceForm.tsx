@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { BillOfLadingData, PersistedTradeStatus, SavedTrade } from '../types';
 import { isBookingRegistered, type ForwarderFormState } from '../utils/forwarderForm';
 import type { TradeAttachment } from '../types/tradeFormData';
@@ -9,7 +9,6 @@ import type {
 } from '../types/exportForwarderCase';
 import { ArrowLeft } from 'lucide-react';
 import DocumentManagerReadOnlyAction from './DocumentManagerReadOnlyAction';
-import ImportStepIndicator from './import/ImportStepIndicator';
 import type { ForwarderExportRequest } from '../services/forwarderExportRequestService';
 import { mergeForwarderAutoFill } from '../services/forwarderDocumentAnalysisService';
 import ExportForwarderInboxView from './forwarder/export/ExportForwarderInboxView';
@@ -22,6 +21,13 @@ import ExportForwarderMessages from './forwarder/export/ExportForwarderMessages'
 import '../styles/forwarderExportRefresh.css';
 
 const STEP_LABELS = ['화주 의뢰 확인', '선복 부킹', '반입·선적 준비', 'B/L 관리', '선적 완료'];
+const STEP_HINTS = [
+  '화주 의뢰와 접수 서류를 확인하세요.',
+  '선사에서 확정된 부킹 정보를 등록하세요.',
+  '화물 반입, 통관, 선적 상태를 기록하세요.',
+  'M/B/L을 등록하고 H/B/L을 발행하세요.',
+  '완료 항목을 확인하고 관련 문서를 전달하세요.',
+];
 
 interface Props {
   state: ForwarderFormState;
@@ -77,8 +83,9 @@ interface Props {
   trade: SavedTrade | null;
   shipperNotifiedAt?: string | null;
   shippingAdviceSentAt?: string | null;
-  onShipperNotified: () => void;
-  onShippingAdviceSent: () => void;
+  completedAt?: string | null;
+  onShipperNotified: () => Promise<void>;
+  onShippingAdviceSent: () => Promise<void>;
   onCompleteShipment: () => void;
   defaultShipperEmail?: string;
   defaultShipperCompany?: string;
@@ -126,6 +133,7 @@ export default function ForwarderWorkspaceForm({
   trade,
   shipperNotifiedAt,
   shippingAdviceSentAt,
+  completedAt,
   onShipperNotified,
   onShippingAdviceSent,
   onCompleteShipment,
@@ -133,8 +141,10 @@ export default function ForwarderWorkspaceForm({
   defaultShipperCompany,
 }: Props) {
   const manuallyEditedFieldsRef = useRef(new Set<keyof ForwarderFormState>());
+  const [showMessages, setShowMessages] = useState(false);
   useEffect(() => {
     manuallyEditedFieldsRef.current.clear();
+    setShowMessages(false);
   }, [attachmentScopeId]);
 
   const patch = (values: Partial<ForwarderFormState>) => {
@@ -166,6 +176,7 @@ export default function ForwarderWorkspaceForm({
   const canMoveTo = (step: number) => readOnly || step === 1 || Boolean(status);
 
   const billOfLadingReady = Boolean(billOfLadingData) && !generationError;
+  const hasMessageTab = Boolean(appliedRequestTradeId || trade?.sourceTradeId);
 
   const handleApplyAnalysis = (
     values: Partial<ForwarderFormState>,
@@ -199,33 +210,62 @@ export default function ForwarderWorkspaceForm({
   }
 
   return (
-    <div className="forwarder-export-flow fwd-export-refresh">
-      {!readOnly && (
-        <button type="button" className="btn btn-secondary forwarder-back-to-inbox" onClick={onReturnToInbox}>
-          <ArrowLeft size={16} /> 목록으로 돌아가기
-        </button>
-      )}
+    <div className="forwarder-export-flow fwd-export-refresh fwd-workspace">
+      <div className="fwd-detail-top">
+        {(!readOnly || onClose) && (
+          <button type="button" className="btn btn-secondary forwarder-back-to-inbox"
+            onClick={readOnly ? onClose : onReturnToInbox}>
+            <ArrowLeft size={16} /> {readOnly ? '문서관리' : '업무 목록'}
+          </button>
+        )}
+        <span className={`fwd-stage-badge ${completedAt ? 'fwd-stage-done' : 'fwd-stage-received'}`}>
+          {completedAt ? '업무 완료' : STEP_LABELS[currentStep - 1]}
+        </span>
+      </div>
 
-      <section className="form-card fwd-export-summary" aria-label="수출 거래 요약">
-        <div className="fwd-export-summary-title">
-          <h2>{state.bookingNo || state.invoiceNo || '수출 의뢰'}</h2>
-          <span>{STEP_LABELS[currentStep - 1]}</span>
+      <section className="form-card import-card fwd-head-card fwd-export-summary" aria-label="수출 거래 요약">
+        <div className="fwd-head-main">
+          <h2>{state.companyName ? `${state.companyName} · ` : ''}{state.blNo ? `B/L ${state.blNo}` : state.bookingNo ? `Booking ${state.bookingNo}` : '수출 의뢰'}</h2>
+          <span className={`fwd-origin ${hasMessageTab ? 'is-request' : ''}`}>
+            {hasMessageTab ? '화주 의뢰' : '직접 등록'}
+          </span>
         </div>
-        <dl className="fwd-export-summary-grid">
+        <dl className="fwd-head-grid">
           <div><dt>화주</dt><dd>{state.companyName || '미입력'}</dd></div>
           <div><dt>수하인</dt><dd>{state.partnerName || '미입력'}</dd></div>
           <div><dt>선박</dt><dd>{state.vesselOrFlight || '미정'}</dd></div>
-          <div><dt>출항일</dt><dd>{state.departureDate || state.requestedDepartureDate || '미정'}</dd></div>
+          <div><dt>ETD</dt><dd>{state.departureDate || state.requestedDepartureDate || '미정'}</dd></div>
         </dl>
-      <ImportStepIndicator
-        current={currentStep}
-        labels={STEP_LABELS}
-        onMove={onStepChange}
-        canMoveTo={canMoveTo}
-      />
+        <div className="fwd-progress" aria-label="수출 업무 진행 단계">
+          {STEP_LABELS.map((label, index) => (
+            <span key={label} className={`fwd-progress-step${index + 1 === currentStep ? ' is-current' : ''}${index + 1 < currentStep ? ' is-done' : ''}`}>
+              {label}
+            </span>
+          ))}
+        </div>
+        {!completedAt && <p className="fwd-next-banner">다음 조치: <strong>{STEP_HINTS[currentStep - 1]}</strong></p>}
       </section>
 
-      {currentStep === 1 && (
+      <nav className="fwd-tabs" aria-label="수출 업무 상세 탭">
+        {STEP_LABELS.map((label, index) => {
+          const step = index + 1;
+          return (
+            <button key={label} type="button" className={!showMessages && currentStep === step ? 'is-active' : ''}
+              aria-current={!showMessages && currentStep === step ? 'page' : undefined}
+              disabled={!canMoveTo(step)}
+              onClick={() => { setShowMessages(false); onStepChange(step); }}>
+              {label}
+            </button>
+          );
+        })}
+        {hasMessageTab && (
+          <button type="button" className={showMessages ? 'is-active' : ''}
+            aria-current={showMessages ? 'page' : undefined}
+            onClick={() => setShowMessages(true)}>업무 메시지</button>
+        )}
+      </nav>
+
+      {!showMessages && currentStep === 1 && (
         <ExportForwarderRequestStep
           attachments={attachments}
           userId={userId}
@@ -238,7 +278,7 @@ export default function ForwarderWorkspaceForm({
         />
       )}
 
-      {currentStep === 2 && (
+      {!showMessages && currentStep === 2 && (
         <ExportForwarderBookingStep
           state={state}
           patch={patch}
@@ -254,7 +294,7 @@ export default function ForwarderWorkspaceForm({
         />
       )}
 
-      {currentStep === 3 && (
+      {!showMessages && currentStep === 3 && (
         <ExportForwarderProgressStep
           state={state}
           patch={patch}
@@ -270,7 +310,7 @@ export default function ForwarderWorkspaceForm({
         />
       )}
 
-      {currentStep === 4 && (
+      {!showMessages && currentStep === 4 && (
         <ExportForwarderBLStep
           state={state}
           patch={patch}
@@ -292,7 +332,7 @@ export default function ForwarderWorkspaceForm({
         />
       )}
 
-      {currentStep === 5 && (
+      {!showMessages && currentStep === 5 && (
         <ExportForwarderCompletionStep
           bookingRegistered={isBookingRegistered(state)}
           progress={progress}
@@ -304,6 +344,7 @@ export default function ForwarderWorkspaceForm({
           trade={trade}
           shipperNotifiedAt={shipperNotifiedAt}
           shippingAdviceSentAt={shippingAdviceSentAt}
+          completedAt={completedAt}
           onShipperNotified={onShipperNotified}
           onShippingAdviceSent={onShippingAdviceSent}
           readOnly={readOnly}
@@ -312,8 +353,9 @@ export default function ForwarderWorkspaceForm({
         />
       )}
 
-      {/* 업무 메시지 — 화주 의뢰로 들어온 건이면 모든 단계에서 화주와 대화할 수 있다 (수입과 동일한 채널) */}
-      {!readOnly && <ExportForwarderMessages trade={trade} userId={userId} />}
+      {showMessages && hasMessageTab && (
+        <ExportForwarderMessages trade={trade} userId={userId} sourceTradeId={appliedRequestTradeId} />
+      )}
 
       {readOnly && onClose && <DocumentManagerReadOnlyAction onClose={onClose} />}
     </div>

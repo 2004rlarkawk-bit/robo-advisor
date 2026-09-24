@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders, jsonResponse } from '../_shared/cors.ts';
 import { findMissingDocumentTypes, parseSendRequest } from './validation.ts';
+import { buildEmailHtml, emailSubject } from './emailContent.ts';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
@@ -8,6 +9,9 @@ interface TradeRow {
   id: string;
   user_id: string;
   direction: 'export' | 'import';
+  role: 'shipper' | 'forwarder';
+  status: string;
+  workflow_data: { exportForwarderCase?: { completedAt?: string | null } } | null;
   form_data: Record<string, unknown> | null;
   document_data: { generatedDocuments?: Record<string, unknown> } | null;
 }
@@ -19,44 +23,6 @@ function jsonPath(value: unknown, path: string[]): string {
     current = (current as Record<string, unknown>)[key];
   }
   return typeof current === 'string' ? current : '';
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function buildEmailHtml(params: {
-  requesterCompany: string;
-  direction: 'export' | 'import';
-  loadPort: string;
-  dischargePort: string;
-  itemName: string;
-  message: string;
-}): string {
-  const directionLabel = params.direction === 'export' ? '수출' : '수입';
-  const rows = [
-    ['거래 유형', directionLabel],
-    ['출발항', params.loadPort || '-'],
-    ['도착항', params.dischargePort || '-'],
-    ['품목', params.itemName || '-'],
-  ]
-    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;color:#64748b;">${label}</td><td style="padding:4px 0;font-weight:600;">${escapeHtml(value)}</td></tr>`)
-    .join('');
-
-  return `
-    <div style="font-family: -apple-system, sans-serif; color:#1e293b; line-height:1.6;">
-      <p>안녕하세요.</p>
-      <p><strong>${escapeHtml(params.requesterCompany || '화주')}</strong>에서 아래 화물의 해상운송을 의뢰드립니다.</p>
-      <table style="margin:16px 0;border-collapse:collapse;">${rows}</table>
-      ${params.message ? `<p style="white-space:pre-wrap;">${escapeHtml(params.message)}</p>` : ''}
-      <p>자세한 내용은 첨부된 의뢰서 및 거래서류를 확인해 주세요.</p>
-      <p>감사합니다.</p>
-    </div>
-  `;
 }
 
 Deno.serve(async (request) => {
@@ -94,7 +60,7 @@ Deno.serve(async (request) => {
   // 실제로 소유한 거래인지 service-role 조회로 재검증한다.
   const { data: trade, error: tradeError } = await admin
     .from('trades')
-    .select('id, user_id, direction, form_data, document_data')
+    .select('id, user_id, direction, role, status, workflow_data, form_data, document_data')
     .eq('id', parsed.tradeId)
     .eq('user_id', requesterId)
     .maybeSingle<TradeRow>();
@@ -103,6 +69,9 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: 'send_failed' }, 500);
   }
   if (!trade) return jsonResponse({ error: 'trade_not_found' }, 404);
+  if (parsed.deliveryKind !== 'forwarder_request' && (trade.direction !== 'export' || trade.role !== 'forwarder' || trade.status !== 'submitted' || !trade.workflow_data?.exportForwarderCase?.completedAt)) {
+    return jsonResponse({ error: 'shipment_not_completed' }, 400);
+  }
 
   // 요청된 각 문서가 실제 이 거래에 존재하는지 서버 데이터 기준으로 재확인한다
   // (클라이언트가 첨부했다고 주장하는 것을 그대로 믿지 않는다).
@@ -118,18 +87,23 @@ Deno.serve(async (request) => {
     .eq('id', requesterId)
     .maybeSingle<{ company_name: string | null; contact_name: string | null }>();
 
+  const historyTable = parsed.deliveryKind === 'forwarder_request'
+    ? 'external_forwarder_requests' : 'forwarder_document_deliveries';
+  const historyRow = {
+    trade_id: trade.id,
+    recipient_email: parsed.recipientEmail,
+    recipient_company: parsed.recipientCompany || null,
+    recipient_name: parsed.recipientName || null,
+    message: parsed.message || null,
+    sent_document_types: parsed.documents.map((d) => d.documentType),
+    status: 'pending',
+    ...(parsed.deliveryKind === 'forwarder_request'
+      ? { requester_user_id: requesterId }
+      : { sender_user_id: requesterId, delivery_kind: parsed.deliveryKind }),
+  };
   const { data: insertedRow, error: insertError } = await admin
-    .from('external_forwarder_requests')
-    .insert({
-      trade_id: trade.id,
-      requester_user_id: requesterId,
-      recipient_email: parsed.recipientEmail,
-      recipient_company: parsed.recipientCompany || null,
-      recipient_name: parsed.recipientName || null,
-      message: parsed.message || null,
-      sent_document_types: parsed.documents.map((d) => d.documentType),
-      status: 'pending',
-    })
+    .from(historyTable)
+    .insert(historyRow)
     .select('id')
     .single<{ id: string }>();
   if (insertError || !insertedRow) {
@@ -143,6 +117,7 @@ Deno.serve(async (request) => {
   const requesterCompany = profile?.company_name?.trim() || '';
 
   const html = buildEmailHtml({
+    deliveryKind: parsed.deliveryKind,
     requesterCompany,
     direction: trade.direction,
     loadPort,
@@ -161,7 +136,7 @@ Deno.serve(async (request) => {
       body: JSON.stringify({
         from: fromEmail,
         to: [parsed.recipientEmail],
-        subject: `[포워딩 의뢰] ${requesterCompany || '화주'} 해상운송 의뢰 건`,
+        subject: emailSubject(parsed.deliveryKind, requesterCompany),
         html,
         attachments: parsed.documents.map((document) => ({
           filename: document.fileName,
@@ -176,7 +151,7 @@ Deno.serve(async (request) => {
     }
 
     await admin
-      .from('external_forwarder_requests')
+      .from(historyTable)
       .update({ status: 'sent', sent_at: new Date().toISOString() })
       .eq('id', insertedRow.id);
 
@@ -184,7 +159,7 @@ Deno.serve(async (request) => {
   } catch (err) {
     console.error('[send-forwarder-request-email] Resend 발송 실패:', err instanceof Error ? err.message : err);
     await admin
-      .from('external_forwarder_requests')
+      .from(historyTable)
       .update({
         status: 'failed',
         failed_at: new Date().toISOString(),

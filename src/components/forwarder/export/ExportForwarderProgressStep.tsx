@@ -47,6 +47,8 @@ export default function ExportForwarderProgressStep({
   // Booking 완료 여부는 별도로 저장하지 않는다 — 2단계에서 저장한 Booking No.의 존재 여부가
   // 유일한 기준(isBookingRegistered)이며, 5단계 완료 체크리스트도 동일 기준을 쓴다.
   const bookingRegistered = isBookingRegistered(state);
+  const hasCustomsEvidence = Boolean(state.exportDeclarationNo.trim())
+    || attachments.some((attachment) => attachment.documentType === 'export_declaration' && attachment.storagePath);
 
   const statusOf = (stage: ExportProgressStageKey): ExportProgressStatus => {
     if (stage === 'booking') return bookingRegistered ? 'done' : 'pending';
@@ -65,7 +67,7 @@ export default function ExportForwarderProgressStep({
       <details className="form-section fwd-export-content-card" open>
         <summary className="form-section-summary">진행 상태</summary>
         <div className="import-document-list fwd-export-progress-compact">
-          {EXPORT_PROGRESS_STAGE_ORDER.filter(stage => stage !== 'customsCleared').map((stage) => (
+          {EXPORT_PROGRESS_STAGE_ORDER.map((stage) => (
             <div className="import-document-row" key={stage}>
               <div className="import-document-content">
                 <strong className="import-document-type">{EXPORT_PROGRESS_STAGE_LABEL[stage]}</strong>
@@ -80,12 +82,13 @@ export default function ExportForwarderProgressStep({
                 >
                   <option value="pending">{STATUS_LABEL.pending}</option>
                   <option value="in_progress">{STATUS_LABEL.in_progress}</option>
-                  <option value="done">{STATUS_LABEL.done}</option>
+                  <option value="done" disabled={stage === 'customsCleared' && !hasCustomsEvidence}>{STATUS_LABEL.done}</option>
                 </select>
               </div>
             </div>
           ))}
         </div>
+        <p className="fwd-export-inline-note">수출통관은 신고 수리 사실을 확인한 뒤 완료로 기록하세요. 신고번호 또는 수출신고필증이 필요합니다.</p>
       </details>
 
       <section className="fwd-customs-panel" aria-label="수출통관 확인">

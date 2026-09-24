@@ -51,5 +51,8 @@ export async function saveExportForwarderCaseState(
     .update({ workflow_data: { ...workflowData, exportForwarderCase: next } })
     .eq('id', tradeId);
   if (writeError) throw writeError;
+
+  // source_trade_id가 있으면 DB 트리거가 같은 트랜잭션에서 원 화주 의뢰에도
+  // exportForwarderCase를 복제한다. 실패 시 이 UPDATE 전체가 롤백된다.
   return next;
 }

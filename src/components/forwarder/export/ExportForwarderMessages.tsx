@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { MessageSquare } from 'lucide-react';
 import type { SavedTrade } from '../../../types';
 import type { TradeRequest } from '../../../types/forwarderRequest';
 import { listIncomingTradeRequests } from '../../../services/forwarderRequestService';
@@ -8,6 +7,7 @@ import TradeMessageThread from '../TradeMessageThread';
 interface Props {
   trade: SavedTrade | null;
   userId: string;
+  sourceTradeId?: string | null;
 }
 
 /**
@@ -15,35 +15,42 @@ interface Props {
  * TradeMessageThread를 재사용한다. 이 수출 건에 연결된 의뢰(내가 수신한
  * trade_request)가 있을 때만 나타나며, 직접 등록 건에서는 조용히 숨는다.
  */
-export default function ExportForwarderMessages({ trade, userId }: Props) {
+export default function ExportForwarderMessages({ trade, userId, sourceTradeId }: Props) {
   const [request, setRequest] = useState<TradeRequest | null>(null);
+  const [loading, setLoading] = useState(false);
+  const requestTradeId = sourceTradeId || trade?.sourceTradeId || trade?.id;
 
   useEffect(() => {
     let cancelled = false;
     setRequest(null);
-    if (!trade?.id) return undefined;
+    if (!requestTradeId) return undefined;
+    setLoading(true);
     listIncomingTradeRequests()
       .then((requests) => {
         if (cancelled) return;
-        const mine = requests.filter((item) => item.tradeId === trade.id);
+        const mine = requests.filter((item) => item.tradeId === requestTradeId);
         setRequest(mine.find((item) => item.status === 'accepted') ?? mine[0] ?? null);
       })
-      .catch((err) => console.warn('수출 업무 메시지 의뢰 조회 실패:', err));
+      .catch((err) => console.warn('수출 업무 메시지 의뢰 조회 실패:', err))
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [trade?.id]);
+  }, [requestTradeId]);
 
-  if (!request) return null;
+  if (!request) {
+    return <section className="form-card import-card fwd-export-message-empty" role="status">
+      {loading ? '업무 메시지를 불러오는 중…' : '이 의뢰에 연결된 업무 메시지가 없습니다.'}
+    </section>;
+  }
 
   const counterpart = trade?.profile.companyName ? `${trade.profile.companyName} 담당자` : '화주 담당자';
   return (
-    <details className="form-card fwd-export-messages">
-      <summary><MessageSquare size={16} aria-hidden="true" /> 업무 메시지 <span>화주와 주고받은 대화</span></summary>
+    <section className="form-card import-card fwd-export-message-panel">
       <TradeMessageThread
         tradeRequestId={request.id}
         currentUserId={userId}
         counterpartLabel={counterpart}
         readOnly={request.status !== 'pending' && request.status !== 'accepted'}
       />
-    </details>
+    </section>
   );
 }

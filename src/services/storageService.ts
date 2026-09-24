@@ -27,6 +27,7 @@ const SETTINGS_KEY = 'portai_settings';
 // [EDIT: Trade Persistence] Supabase trades 테이블에서 읽어오는 row 형태입니다.
 interface TradeRow {
   id: string;
+  source_trade_id?: string | null;
   direction: TradeType;
   role: TradeRole;
   forwarder_user_id?: string | null;
@@ -73,6 +74,7 @@ function mapTradeRow(row: TradeRow): SavedTrade {
   const generatedDocuments = row.document_data?.generatedDocuments;
   return {
     id: row.id,
+    sourceTradeId: row.source_trade_id ?? null,
     tradeDirection: row.direction,
     tradeRole: row.role,
     forwarderUserId: row.forwarder_user_id ?? null,
@@ -135,6 +137,7 @@ export function getSavedTrades(): SavedTrade[] {
 
 export interface GeneratedTradeData {
   profile: TradeProfile;
+  sourceTradeId?: string;
   tradeDirection?: TradeType;
   tradeRole?: TradeRole;
   attachments?: TradeAttachment[];
@@ -264,6 +267,7 @@ function generatedTradePayload(data: GeneratedTradeData) {
   const direction = data.tradeDirection ?? data.profile.tradeType;
   const role = data.tradeRole ?? 'shipper';
   return {
+    ...(data.sourceTradeId ? { source_trade_id: data.sourceTradeId } : {}),
     direction,
     role,
     schema_version: 3,
