@@ -7,17 +7,30 @@ const {
   downloadMock,
   moveMock,
   getPublicUrlMock,
+  tradeQueryMock,
 } = vi.hoisted(() => ({
   getSessionMock: vi.fn(),
   getUserMock: vi.fn(),
   downloadMock: vi.fn(),
   moveMock: vi.fn(),
   getPublicUrlMock: vi.fn(),
+  // trades 조회 결과 — 배정 포워더 판단에 쓴다. { data, error } 를 돌려준다.
+  tradeQueryMock: vi.fn(),
 }));
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
     auth: { getSession: getSessionMock, getUser: getUserMock },
+    // .from('trades').select(...).eq(...)[.maybeSingle()] 체인을 흉내낸다.
+    from: vi.fn(() => {
+      const builder: Record<string, unknown> = {};
+      const chain = () => builder;
+      builder.select = chain;
+      builder.eq = chain;
+      builder.maybeSingle = () => tradeQueryMock();
+      builder.then = (resolve: (value: unknown) => unknown) => Promise.resolve(tradeQueryMock()).then(resolve);
+      return builder;
+    }),
     storage: {
       from: vi.fn(() => ({
         download: downloadMock,
@@ -50,6 +63,7 @@ const attachment: TradeAttachment = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  tradeQueryMock.mockReturnValue({ data: null, error: null });
   getSessionMock.mockResolvedValue({
     data: { session: { access_token: 'masked', user: { id: 'user-secret' } } },
     error: null,
@@ -217,5 +231,97 @@ describe('draft → trade attachment move', () => {
       'user-secret/trade-1/commercial_invoice/attachment-1.pdf',
       attachment.storagePath,
     );
+  });
+});
+
+/**
+ * 화주가 올린 원본 파일을 누가 열 수 있는지 — 올린 화주 본인과
+ * 그 거래에 배정된 포워더만 통과해야 한다(최종 차단은 Storage RLS).
+ */
+describe('배정 포워더의 화주 업로드 파일 열람', () => {
+  const shipperFile: TradeAttachment = {
+    ...attachment,
+    storagePath: 'shipper-uid/2f1c4b2e-3a5d-4f6a-8b7c-9d0e1f2a3b4c/commercial_invoice/ci.pdf',
+  };
+  const forwarderSession = () => {
+    getSessionMock.mockResolvedValue({
+      data: { session: { access_token: 'masked', user: { id: 'forwarder-uid' } } },
+      error: null,
+    });
+  };
+
+  it('Case A — 화주 본인은 자기 파일을 그대로 연다 (거래 조회 없이)', async () => {
+    getSessionMock.mockResolvedValue({
+      data: { session: { access_token: 'masked', user: { id: 'shipper-uid' } } },
+      error: null,
+    });
+    downloadMock.mockResolvedValue({ data: new Blob(['pdf'], { type: 'application/pdf' }), error: null });
+
+    const file = await loadTradeAttachmentFile(shipperFile, 'shipper-uid');
+
+    expect(file.name).toBe('invoice.pdf');
+    expect(tradeQueryMock).not.toHaveBeenCalled();
+  });
+
+  it('Case B — 아직 수락하지 않아 배정이 안 된 포워더는 열 수 없다', async () => {
+    forwarderSession();
+    // 미배정 거래는 RLS로 조회되지 않는다 → data 없음
+    tradeQueryMock.mockReturnValue({ data: null, error: null });
+
+    await expect(loadTradeAttachmentFile(shipperFile, 'forwarder-uid')).rejects.toMatchObject({
+      code: 'STORAGE_PATH_USER_MISMATCH',
+    });
+    expect(downloadMock).not.toHaveBeenCalled();
+  });
+
+  it('Case C — 수락해 배정된 포워더는 그 거래 파일을 연다', async () => {
+    forwarderSession();
+    tradeQueryMock.mockReturnValue({ data: { forwarder_user_id: 'forwarder-uid' }, error: null });
+    downloadMock.mockResolvedValue({ data: new Blob(['pdf'], { type: 'application/pdf' }), error: null });
+
+    const file = await loadTradeAttachmentFile(shipperFile, 'forwarder-uid');
+
+    expect(file).toBeInstanceOf(File);
+    expect(downloadMock).toHaveBeenCalledWith(shipperFile.storagePath);
+  });
+
+  it('Case D — 다른 포워더가 배정된 거래의 파일은 열 수 없다', async () => {
+    forwarderSession();
+    tradeQueryMock.mockReturnValue({ data: { forwarder_user_id: 'another-forwarder' }, error: null });
+
+    await expect(loadTradeAttachmentFile(shipperFile, 'forwarder-uid')).rejects.toMatchObject({
+      code: 'STORAGE_PATH_USER_MISMATCH',
+    });
+    expect(downloadMock).not.toHaveBeenCalled();
+  });
+
+  it('Case E — 배정이 해제되면 기존 포워더도 더 이상 열 수 없다', async () => {
+    forwarderSession();
+    tradeQueryMock.mockReturnValue({ data: { forwarder_user_id: null }, error: null });
+
+    await expect(loadTradeAttachmentFile(shipperFile, 'forwarder-uid')).rejects.toMatchObject({
+      code: 'STORAGE_PATH_USER_MISMATCH',
+    });
+    expect(downloadMock).not.toHaveBeenCalled();
+  });
+
+  it('거래 저장 전(draft) 경로는 배정받은 거래의 첨부 목록에 있을 때만 연다', async () => {
+    forwarderSession();
+    const draftFile: TradeAttachment = {
+      ...attachment,
+      storagePath: 'shipper-uid/draft/commercial_invoice/ci.pdf',
+    };
+    tradeQueryMock.mockReturnValue({
+      data: [{ form_data: { attachments: [{ storagePath: draftFile.storagePath }] } }],
+      error: null,
+    });
+    downloadMock.mockResolvedValue({ data: new Blob(['pdf'], { type: 'application/pdf' }), error: null });
+
+    await expect(loadTradeAttachmentFile(draftFile, 'forwarder-uid')).resolves.toBeInstanceOf(File);
+
+    tradeQueryMock.mockReturnValue({ data: [{ form_data: { attachments: [] } }], error: null });
+    await expect(loadTradeAttachmentFile(draftFile, 'forwarder-uid')).rejects.toMatchObject({
+      code: 'STORAGE_PATH_USER_MISMATCH',
+    });
   });
 });

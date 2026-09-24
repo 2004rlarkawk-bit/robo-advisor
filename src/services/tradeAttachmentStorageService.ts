@@ -83,10 +83,70 @@ export function normalizeStorageObjectPath(bucket: string, storagePath: string):
   return normalizedPath;
 }
 
+function storagePathOwner(storagePath: string): string {
+  return storagePath.split('/')[0] ?? '';
+}
+
+/** 파일을 옮기는 작업은 올린 화주 본인만 한다 — 포워더에게는 열람만 허용한다. */
 function assertStoragePathOwner(storagePath: string, userId: string): void {
-  if (storagePath.split('/')[0] !== userId) {
+  if (storagePathOwner(storagePath) !== userId) {
     throw new Error('첨부파일 Storage 경로의 사용자 범위가 일치하지 않습니다.');
   }
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * 이 파일이 "내가 배정받은 거래"의 첨부인지 확인한다.
+ *
+ * trades는 RLS로 본인 거래와 배정된 거래만 읽히므로(trades_select_assigned_forwarder),
+ * 조회에서 내 uid가 forwarder_user_id로 확인되면 그 거래의 첨부를 열 권한이 있다.
+ * 포워더 역할이라는 이유만으로는 통과하지 않는다 — 그 거래의 배정자여야 한다.
+ */
+async function isAssignedForwarderAttachment(
+  storagePath: string,
+  authenticatedUserId: string,
+): Promise<boolean> {
+  const scope = storagePath.split('/')[1] ?? '';
+  try {
+    // 거래 저장 후 올린 파일: 경로 두 번째 칸이 거래 id다.
+    if (UUID_PATTERN.test(scope)) {
+      const { data, error } = await supabase
+        .from('trades')
+        .select('forwarder_user_id')
+        .eq('id', scope)
+        .maybeSingle();
+      if (error) return false;
+      return data?.forwarder_user_id === authenticatedUserId;
+    }
+    // 거래 저장 전(draft) 올린 파일: 배정받은 거래의 첨부 목록에 실려 있는지 본다.
+    const { data, error } = await supabase
+      .from('trades')
+      .select('form_data')
+      .eq('forwarder_user_id', authenticatedUserId);
+    if (error || !data) return false;
+    return data.some((row) => {
+      const attachments = (row as { form_data?: { attachments?: unknown } }).form_data?.attachments;
+      return Array.isArray(attachments)
+        && attachments.some((item) => (item as { storagePath?: string })?.storagePath === storagePath);
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 첨부파일을 열 수 있는 사람 — 올린 화주 본인, 또는 그 거래에 배정된 포워더.
+ * 최종 차단은 Storage RLS가 하고, 여기서는 같은 기준으로 미리 걸러 낸다.
+ */
+async function assertStoragePathAccess(
+  storagePath: string,
+  authenticatedUserId: string,
+): Promise<void> {
+  // 본인이 올린 파일은 그대로 열린다.
+  if (storagePathOwner(storagePath) === authenticatedUserId) return;
+  if (await isAssignedForwarderAttachment(storagePath, authenticatedUserId)) return;
+  throw new Error('첨부파일 Storage 경로의 사용자 범위가 일치하지 않습니다.');
 }
 
 async function resolveAuthenticatedStorageUserId(): Promise<string> {
@@ -214,7 +274,7 @@ export async function loadTradeAttachmentFile(
     });
   }
   try {
-    assertStoragePathOwner(storagePath, authenticatedUserId);
+    await assertStoragePathAccess(storagePath, authenticatedUserId);
   } catch (error) {
     throw new TradeAttachmentDownloadError({
       cause: error,
