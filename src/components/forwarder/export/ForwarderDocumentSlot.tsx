@@ -81,11 +81,11 @@ export default function ForwarderDocumentSlot({
 
   return (
     <div className="forwarder-document-slot">
-      <div className="forwarder-document-slot-head">
-        <span className="form-label">{label}</span>
+      {(label || hint) && <div className="forwarder-document-slot-head">
+        {label && <span className="form-label">{label}</span>}
         {hint && <span className="form-section-hint">{hint}</span>}
-      </div>
-      {items.length === 0 ? (
+      </div>}
+      {items.length === 0 && readOnly ? (
         <p className="import-empty">등록된 파일이 없습니다.</p>
       ) : (
         <div className="import-document-list">
@@ -110,8 +110,9 @@ export default function ForwarderDocumentSlot({
       )}
       {!readOnly && (
         <>
-          <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => inputRef.current?.click()}>
-            <FileUp size={15} /> {busy ? '처리 중…' : '파일 등록'}
+          <button type="button" className="btn btn-secondary fwd-export-file-upload" disabled={busy} onClick={() => inputRef.current?.click()}>
+            <FileUp size={18} />
+            <span>{busy ? '처리 중…' : '파일 등록'}<small>PDF · PNG · JPG</small></span>
           </button>
           <input
             ref={inputRef}

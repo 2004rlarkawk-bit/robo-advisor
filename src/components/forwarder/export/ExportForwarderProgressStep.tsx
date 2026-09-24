@@ -1,4 +1,4 @@
-import { ArrowRight, ListChecks } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { isBookingRegistered, type ForwarderFormState } from '../../../utils/forwarderForm';
 import type { TradeAttachment } from '../../../types/tradeFormData';
 import {
@@ -8,6 +8,7 @@ import {
   type ExportProgressStatus,
 } from '../../../types/exportForwarderCase';
 import ForwarderDocumentSlot from './ForwarderDocumentSlot';
+import ExportCustomsLookup from './ExportCustomsLookup';
 
 interface Props {
   state: ForwarderFormState;
@@ -53,35 +54,21 @@ export default function ExportForwarderProgressStep({
   };
 
   return (
-    <div className="form-card forwarder-workspace-form">
-      <div className="trade-section-header">
-        <div className="trade-section-title">
-          <ListChecks size={20} className="text-primary" />
-          <div>
-            <h2 className="card-title">3. 선적 진행 관리</h2>
-            <p className="forwarder-step-description">이 거래의 진행 상태를 관리합니다. 실제 통관·선적 시스템과 연동되지 않으며, 포워더가 직접 갱신합니다.</p>
-          </div>
+    <div className="form-card forwarder-workspace-form fwd-export-stage">
+      <div className="trade-section-header fwd-export-step-heading">
+        <div>
+          <span className="fwd-section-kicker">03 · 선적 준비</span>
+          <h2 className="card-title">반입과 선적 진행</h2>
         </div>
       </div>
 
-      <details className="form-section" open>
+      <details className="form-section fwd-export-content-card" open>
         <summary className="form-section-summary">진행 상태</summary>
-        <div className="fwd-progress" aria-label="선적 진행 단계" style={{ marginTop: 8 }}>
-          {EXPORT_PROGRESS_STAGE_ORDER.map((stage) => {
-            const status = statusOf(stage);
-            return (
-              <span key={stage} className={`fwd-progress-step${status === 'done' ? ' is-done' : status === 'in_progress' ? ' is-current' : ''}`}>
-                {EXPORT_PROGRESS_STAGE_LABEL[stage]}
-              </span>
-            );
-          })}
-        </div>
-        <div className="import-document-list" style={{ marginTop: 14 }}>
-          {EXPORT_PROGRESS_STAGE_ORDER.map((stage) => (
+        <div className="import-document-list fwd-export-progress-compact">
+          {EXPORT_PROGRESS_STAGE_ORDER.filter(stage => stage !== 'customsCleared').map((stage) => (
             <div className="import-document-row" key={stage}>
               <div className="import-document-content">
                 <strong className="import-document-type">{EXPORT_PROGRESS_STAGE_LABEL[stage]}</strong>
-                {stage === 'booking' && <span className="import-document-meta">2단계 Booking No. 저장 여부로 자동 판정됩니다.</span>}
               </div>
               <div className="import-document-actions">
                 <select
@@ -101,16 +88,19 @@ export default function ExportForwarderProgressStep({
         </div>
       </details>
 
-      <details className="form-section" open>
-        <summary className="form-section-summary">수출통관 정보 <span className="form-section-hint">PortAI는 수출신고서를 생성하지 않습니다 — 완료된 신고 정보만 등록합니다</span></summary>
-        <div className="form-grid">
-          <div className="form-group">
+      <section className="fwd-customs-panel" aria-label="수출통관 확인">
+        <header className="fwd-customs-heading">
+          <h3>수출통관 확인</h3><span>UNI-PASS</span>
+        </header>
+        <div className="fwd-customs-query">
             <label className="form-label" htmlFor="progress-decl-no">수출신고번호</label>
-            <input id="progress-decl-no" className="form-input" disabled={readOnly} value={state.exportDeclarationNo} onChange={(e) => patch({ exportDeclarationNo: e.target.value })} />
-          </div>
+            <input id="progress-decl-no" className="form-input" placeholder="수출신고번호 입력" disabled={readOnly} value={state.exportDeclarationNo} onChange={(e) => patch({ exportDeclarationNo: e.target.value })} />
+            <ExportCustomsLookup key={scopeId + ':' + state.exportDeclarationNo} declarationNo={state.exportDeclarationNo} busy={busy} />
         </div>
+        <details className="fwd-customs-files">
+          <summary>수출신고필증</summary>
         <ForwarderDocumentSlot
-          label="수출신고필증"
+          label=""
           documentType="export_declaration"
           userId={userId}
           scopeId={scopeId}
@@ -118,7 +108,8 @@ export default function ExportForwarderProgressStep({
           onAttachmentsChange={onAttachmentsChange}
           readOnly={readOnly}
         />
-      </details>
+        </details>
+      </section>
 
       {!readOnly && (
         <div className="form-actions">

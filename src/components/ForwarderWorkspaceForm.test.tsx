@@ -99,7 +99,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
   });
   it('Step 표시줄에 5단계 라벨을 모두 표시한다', () => {
     const rendered = renderForm();
-    ['화주 의뢰 확인', '선복예약 정보 등록', '반입·선적 준비', 'B/L 관리', '선적 완료'].forEach((label) => {
+    ['화주 의뢰 확인', '선복 부킹', '반입·선적 준비', 'B/L 관리', '선적 완료'].forEach((label) => {
       expect(rendered.container.textContent).toContain(label);
     });
   });
@@ -166,8 +166,8 @@ describe('수출 포워더 5단계 워크플로우', () => {
   describe('STEP 1 — 화주 의뢰 확인', () => {
     it('화주 운송의뢰 정보와 화물명세를 표시한다(입력 폼만 — 업로드/AI 분석 UI 없음)', () => {
       const rendered = renderForm({}, { currentStep: 1 });
-      expect(rendered.container.textContent).toContain('1. 화주 의뢰 확인');
-      expect(rendered.container.textContent).toContain('화주 운송의뢰 정보');
+      expect(rendered.container.textContent).toContain('화주 의뢰와 서류');
+      expect(rendered.container.textContent).toContain('운송의뢰 정보');
       expect(rendered.container.textContent).toContain('화물명세');
       // 받은 의뢰함·직접 등록은 Inbox 화면(view=inbox)의 몫이지, STEP 1에는 없다.
       expect(rendered.container.textContent).not.toContain('받은 의뢰');
@@ -177,9 +177,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
       // 초기화 버튼은 제거되었다 — "목록으로 돌아가기"가 같은 역할을 한다.
       expect(rendered.container.textContent).not.toContain('초기화');
       // Booking/컨테이너/B/L 발행정보는 이제 1단계에 없다 — 2·4단계로 이동했다.
-      // (단계 이름 '선복예약 정보 등록'은 Step 표시줄·다음 버튼에 나오므로 2단계 고유 입력으로 확인한다.)
-      expect(rendered.container.textContent).not.toContain('Booking No.');
-      expect(rendered.container.textContent).not.toContain('Carrier / 선사');
+      expect(rendered.container.textContent).not.toContain('선복예약');
       expect(rendered.container.textContent).not.toContain('컨테이너 정보');
       expect(rendered.container.textContent).not.toContain('선하증권 발행 정보');
     });
@@ -224,11 +222,11 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(rendered.container.querySelector<HTMLInputElement>('#cargo-weight-2')?.value).toBe('300');
     });
 
-    it('다음: 선복예약 정보 등록 클릭 시 onNextFromRequest를 호출한다', () => {
+    it('다음: 선복 부킹 클릭 시 onNextFromRequest를 호출한다', () => {
       const onNextFromRequest = vi.fn();
       const rendered = renderForm({}, { currentStep: 1, onNextFromRequest });
       const button = Array.from(rendered.container.querySelectorAll('button'))
-        .find((candidate) => candidate.textContent?.includes('다음: 선복예약 정보 등록')) as HTMLButtonElement;
+        .find((candidate) => candidate.textContent?.includes('다음: 선복 부킹')) as HTMLButtonElement;
       act(() => button.click());
       expect(onNextFromRequest).toHaveBeenCalledOnce();
     });
@@ -249,13 +247,13 @@ describe('수출 포워더 5단계 워크플로우', () => {
         loadingMode: 'FCL',
         cargoItems: [{ id: 'a', itemNo: '', sku: '', descriptionOfGoods: 'Facial Toner', numberOfPackages: 10, kindOfPackages: 'CARTON', grossWeightKg: 100, measurementCbm: '0.5', marksAndNumbers: '', sourceDocumentIds: [] }],
       }, { currentStep: 2 });
-      expect(rendered.container.textContent).toContain('선복예약 정보 등록');
-      expect(rendered.container.textContent).toContain('화주 운송의뢰 확인');
+      expect(rendered.container.textContent).toContain('선복 부킹');
+      expect(rendered.container.textContent).toContain('의뢰 요약');
       expect(rendered.container.textContent).toContain('Facial Toner');
       expect(rendered.container.textContent).toContain('Carrier / 선사');
       expect(rendered.container.textContent).toContain('Booking No.');
       expect(rendered.container.textContent).toContain('컨테이너 규격');
-      expect(rendered.container.textContent).toContain('PortAI가 선사에 예약을 보내거나 부킹을 대행하지 않습니다');
+      expect(rendered.container.textContent).not.toContain('PortAI가 선사에 예약을 보내거나 부킹을 대행하지 않습니다');
       expect(rendered.container.textContent).toContain('Cargo Closing Date');
       expect(rendered.container.textContent).toContain('Freight Terms');
       expect(rendered.container.textContent).toContain('Booking Confirmation');
@@ -281,7 +279,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
         .find((candidate) => candidate.textContent?.includes('부킹 확정 정보 등록')) as HTMLButtonElement;
       expect(button.disabled).toBe(true);
       expect(rendered.container.textContent).toContain('부킹 대기');
-      expect(rendered.container.textContent).toContain('선박명(Vessel), 항차번호(Voyage No.)가 필요합니다');
+      expect(rendered.container.textContent).toContain('필수 입력: 선박명 · 항차번호');
       act(() => button.click());
       expect(onSaveBooking).not.toHaveBeenCalled();
     });
@@ -311,6 +309,29 @@ describe('수출 포워더 5단계 워크플로우', () => {
   });
 
   describe('STEP 3 — 선적 진행 관리', () => {
+    it('수동 통관 선택 대신 유니패스 조회를 제공한다', () => {
+      const onProgressChange = vi.fn();
+      const rendered = renderForm({ exportDeclarationNo: 'DECL-1' }, { currentStep: 3, onProgressChange });
+      const select = rendered.container.querySelector<HTMLSelectElement>('select[aria-label="수출통관 상태"]');
+      expect(select).toBeNull();
+      expect(rendered.container.textContent).toContain('유니패스 조회');
+      expect(onProgressChange).not.toHaveBeenCalled();
+    });
+
+    it('완료 기록에 신고번호가 없으면 안내하되 상태를 자동 변경하지 않는다', () => {
+      const onProgressChange = vi.fn();
+      const rendered = renderForm({ exportDeclarationNo: '' }, {
+        currentStep: 3, progress: { customsCleared: 'done' }, onProgressChange,
+      });
+      expect(rendered.container.querySelector('select[aria-label="수출통관 상태"]')).toBeNull();
+      expect(onProgressChange).not.toHaveBeenCalled();
+    });
+
+    it('읽기 전용에서는 수출통관 상태를 변경할 수 없다', () => {
+      const rendered = renderForm({}, { currentStep: 3, readOnly: true });
+      expect(rendered.container.querySelector<HTMLSelectElement>('select[aria-label="수출통관 상태"]')).toBeNull();
+    });
+
     it('진행 단계 5개와 수출통관 정보 등록을 표시한다', () => {
       const rendered = renderForm({}, { currentStep: 3 });
       ['Booking 완료', '화물 반입', '수출통관', '선적', '출항'].forEach((label) => {
@@ -318,7 +339,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
       });
       expect(rendered.container.textContent).toContain('수출신고번호');
       expect(rendered.container.textContent).toContain('수출신고필증');
-      expect(rendered.container.textContent).toContain('PortAI는 수출신고서를 생성하지 않습니다');
+      expect(rendered.container.textContent).toContain('UNI-PASS');
     });
 
     it('진행 상태를 변경하면 onProgressChange를 호출한다', () => {
@@ -350,13 +371,13 @@ describe('수출 포워더 5단계 워크플로우', () => {
     it('Master B/L(등록)과 House B/L(생성)을 분리해 표시한다', () => {
       const rendered = renderForm({ carrier: 'ONE', vesselOrFlight: 'ONE HAMBURG', voyageNo: '001E', loadPort: 'Busan Port', dischargePort: 'Tokyo Port' }, { currentStep: 4, masterBlNo: 'MBLKR0001' });
       expect(rendered.container.textContent).toContain('Master B/L');
-      expect(rendered.container.textContent).toContain('선사가 발행하는 문서');
+      expect(rendered.container.textContent).not.toContain('선사 발행 — 파일 등록');
       expect(rendered.container.querySelector<HTMLInputElement>('#mbl-no')?.value).toBe('MBLKR0001');
       const carrierInputs = Array.from(rendered.container.querySelectorAll<HTMLInputElement>('input[disabled]'));
       expect(carrierInputs.some((input) => input.value === 'ONE')).toBe(true);
       expect(rendered.container.textContent).toContain('House B/L');
       expect(rendered.container.textContent).toContain('생성 대기');
-      expect(rendered.container.textContent).toContain('H/B/L 초안 생성');
+      expect(rendered.container.textContent).toContain('H/B/L 생성');
     });
 
     it('H/B/L 생성 완료 시 완료 상태·B/L 번호·보기/다운로드/재생성 버튼을 표시한다', () => {
@@ -380,12 +401,12 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(onDownloadBillOfLading).toHaveBeenCalledOnce();
     });
 
-    it('생성 전(읽기전용 아님)에는 보기/다운로드 대신 H/B/L 초안 생성 버튼만 표시한다', () => {
+    it('생성 전(읽기전용 아님)에는 보기/다운로드 대신 H/B/L 생성 버튼만 표시한다', () => {
       const rendered = renderForm({}, { currentStep: 4 });
       const buttons = Array.from(rendered.container.querySelectorAll('button'));
       expect(buttons.some((button) => button.textContent?.trim() === '보기')).toBe(false);
       expect(buttons.some((button) => button.textContent?.trim() === '다운로드')).toBe(false);
-      expect(buttons.some((button) => button.textContent?.includes('H/B/L 초안 생성'))).toBe(true);
+      expect(buttons.some((button) => button.textContent?.includes('H/B/L 생성'))).toBe(true);
     });
 
     it('조회모드에서 생성 완료된 H/B/L은 보기/다운로드만 가능하고 재생성은 숨긴다', () => {
@@ -398,7 +419,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(buttons.some((button) => button.textContent?.trim() === '보기')).toBe(true);
       expect(buttons.some((button) => button.textContent?.trim() === '다운로드')).toBe(true);
       expect(buttons.some((button) => button.textContent?.includes('재생성'))).toBe(false);
-      expect(buttons.some((button) => button.textContent?.includes('H/B/L 초안 생성'))).toBe(false);
+      expect(buttons.some((button) => button.textContent?.includes('H/B/L 생성'))).toBe(false);
     });
 
     it('H/B/L 생성 실패 시 생성 실패 상태와 오류 메시지를 유지한다', () => {
@@ -415,7 +436,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
     it('완료 체크리스트를 표시하고 미완료 시 완료 처리를 막는다', () => {
       const onCompleteShipment = vi.fn();
       const rendered = renderForm({}, { currentStep: 5, onCompleteShipment, trade: FIXTURE_TRADE });
-      expect(rendered.container.textContent).toContain('선적 완료 확인');
+      expect(rendered.container.textContent).toContain('완료 체크');
       const button = Array.from(rendered.container.querySelectorAll('button'))
         .find((candidate) => candidate.textContent?.trim() === '선적 완료 처리') as HTMLButtonElement;
       expect(button.disabled).toBe(true);

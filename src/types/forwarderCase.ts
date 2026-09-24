@@ -11,7 +11,7 @@ import type { TradeAttachment } from './tradeFormData';
 import type { ArrivalNoticeMeta, ImportTradeSnapshot } from './importTrade';
 import type { SavedTrade } from '../types';
 
-/** 업무 단계 — 의뢰 접수 → 서류 대사·보완 → 통관·운송 → 업무 완료 */
+/** 업무 단계 — 의뢰 접수 → 서류 확인 → 신고·통관 진행 → 업무 완료 */
 export type ForwarderCaseStage = 'received' | 'review' | 'clearance' | 'done';
 
 export const FORWARDER_STAGE_ORDER: ForwarderCaseStage[] = ['received', 'review', 'clearance', 'done'];
@@ -84,6 +84,19 @@ export interface ForwarderImportOperationsState {
   doDocument?: TradeAttachment | null;
 }
 
+export const IMPORT_DECLARATION_STATUS_LABEL: Record<ForwarderImportOperationsState['declarationStatus'], string> = {
+  preparing: '자료 준비',
+  handed_over: '관세사 전달',
+  filed: '신고 접수',
+  cleared: '수입신고 수리',
+};
+
+export const IMPORT_DO_STATUS_LABEL: Record<ForwarderImportOperationsState['doStatus'], string> = {
+  waiting: '미요청',
+  requested: '발급 요청',
+  received: '수령 완료',
+};
+
 export interface ForwarderImportCase {
   tradeId: string;
   origin: ForwarderCaseOrigin;
@@ -98,7 +111,7 @@ export interface ForwarderImportCase {
   blockerCount: number;
   /** 미해결 확인 필요 이슈 수 */
   checkCount: number;
-  /** '다음 해야 할 일' 한 줄 — 목록·상세 공통 */
+  /** 다음 조치 요약. 현재 목록·상세 화면은 각각 상태별 안내 문구를 표시한다. */
   nextAction: string;
   requestedAt: string;
   updatedAt: string;

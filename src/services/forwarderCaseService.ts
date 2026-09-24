@@ -107,15 +107,19 @@ function deriveNextAction(
     if (returnRequest.resolvedAt) return '재검토 필요 — 수정본 확인';
     return shipperEditing ? '화주 수정 중 — 재제출 대기' : '화주 보완 대기';
   }
-  // 화면의 '다음 할 일'은 forwarderInbox.getInboxState가 담당한다 — 여기 문구는
-  // nextAction 필드를 소비하는 코드가 다시 생겼을 때를 대비해 새 흐름 기준으로 유지한다.
   switch (stage) {
     case 'received':
-      return '제출 서류·추출 정보 확인';
+      return '제출 서류 확인';
     case 'review':
-      return blockerCount > 0 ? `확인 필요 ${blockerCount}건 검토` : '신고자료 준비';
+      return blockerCount > 0 ? `확인 필요 ${blockerCount}건 검토` : '서류 확인 후 신고자료 준비';
     case 'clearance':
-      return hasArrivalNotice ? '신고·D/O 진행 기록 후 완료 처리' : '신고·D/O 진행 기록';
+      if (state?.importOperations?.declarationStatus === 'cleared') {
+        if (!hasArrivalNotice) return '도착 안내(A/N) 확인';
+        return state.importOperations.doStatus === 'received' ? '완료 전 기록 확인' : 'D/O 수령 확인';
+      }
+      if (state?.importOperations?.declarationStatus === 'filed') return '신고 수리 여부 확인';
+      if (state?.importOperations?.declarationStatus === 'handed_over') return '신고 진행 확인';
+      return '신고자료 준비';
     case 'done':
       return '완료';
   }

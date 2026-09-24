@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, PackageCheck } from 'lucide-react';
+import { CheckCircle2, Circle } from 'lucide-react';
 import type { PersistedTradeStatus, SavedTrade } from '../../../types';
 import {
   EXPORT_PROGRESS_STAGE_LABEL,
@@ -58,19 +58,16 @@ export default function ExportForwarderCompletionStep({
   const isCompleted = status === 'submitted';
 
   return (
-    <div className="form-card forwarder-workspace-form">
-      <div className="trade-section-header">
-        <div className="trade-section-title">
-          <PackageCheck size={20} className="text-primary" />
-          <div>
-            <h2 className="card-title">5. 선적 완료 및 문서 전달</h2>
-            <p className="forwarder-step-description">진행 상태와 B/L 발행을 확인하고, 화주와 해외 파트너 포워더에게 문서를 전달합니다.</p>
-          </div>
+    <div className="form-card forwarder-workspace-form fwd-export-stage">
+      <div className="trade-section-header fwd-export-step-heading">
+        <div>
+          <span className="fwd-section-kicker">05 · 완료</span>
+          <h2 className="card-title">선적 완료와 문서 전달</h2>
         </div>
       </div>
 
-      <details className="form-section" open>
-        <summary className="form-section-summary">선적 완료 확인</summary>
+      <details className="form-section fwd-export-content-card fwd-export-accent-green" open>
+        <summary className="form-section-summary">완료 체크</summary>
         <ul className="forwarder-completion-checklist">
           {checklist.map((item) => (
             <li key={item.label} className={item.done ? 'is-done' : ''}>
@@ -84,7 +81,7 @@ export default function ExportForwarderCompletionStep({
             <button type="button" className="btn btn-primary" disabled={busy || isCompleted || !allDone} onClick={onComplete}>
               {isCompleted ? '선적 완료 처리됨' : '선적 완료 처리'}
             </button>
-            {!allDone && !isCompleted && <p className="fwd-action-hint">위 체크리스트를 모두 완료하면 선적 완료 처리를 할 수 있습니다.</p>}
+            {!allDone && !isCompleted && <p className="fwd-action-hint">미완료 항목을 먼저 확인해 주세요.</p>}
           </div>
         )}
       </details>

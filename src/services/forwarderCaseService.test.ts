@@ -62,7 +62,7 @@ describe('deriveForwarderCase', () => {
     expect(result?.origin).toBe('shipper_request');
     expect(result?.stage).toBe('received');
     expect(result?.blNo).toBe('MBLKR2026001');
-    expect(result?.nextAction).toBe('제출 서류·추출 정보 확인');
+    expect(result?.nextAction).toBe('제출 서류 확인');
   });
 
   it('화주가 아직 제출하지 않은 거래와 수출 거래는 제외한다', () => {
@@ -98,7 +98,20 @@ describe('deriveForwarderCase', () => {
     };
     const resolved = deriveForwarderCase(makeTrade({ snapshot, forwarderCase: resolvedState }));
     expect(resolved?.blockerCount).toBe(0);
-    expect(resolved?.nextAction).toBe('신고자료 준비');
+    expect(resolved?.nextAction).toBe('서류 확인 후 신고자료 준비');
+  });
+
+  it('신고·통관 단계의 다음 조치는 저장된 신고·A/N·D/O 상태를 따른다', () => {
+    const state: ForwarderCaseState = {
+      stage: 'clearance', updatedAt: '2026-09-03T00:00:00.000Z',
+      importOperations: {
+        brokerName: '테스트 관세법인', declarationNo: 'TEST-001', declarationStatus: 'handed_over',
+        doStatus: 'waiting', doNumber: '', doIssuer: '',
+      },
+    };
+    expect(deriveForwarderCase(makeTrade({ forwarderCase: state }))?.nextAction).toBe('신고 진행 확인');
+    const cleared = { ...state, importOperations: { ...state.importOperations!, declarationStatus: 'cleared' as const } };
+    expect(deriveForwarderCase(makeTrade({ forwarderCase: cleared }))?.nextAction).toBe('도착 안내(A/N) 확인');
   });
 });
 
