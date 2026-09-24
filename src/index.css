@@ -5018,3 +5018,38 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .lc-leftover-clear:hover { background: #ffedd5; }
 .form-group.lc-leftover .form-label { color: var(--warning-color); font-weight: 700; }
 .form-group.lc-leftover .form-input { border-color: var(--warning-color); background: #fff7ed; }
+
+/* UNI-PASS 전자신고 전송(시연) */
+.unipass-submit .import-card-heading h2 { display: flex; align-items: center; gap: 8px; }
+.unipass-demo-badge {
+  font-size: 11px; font-weight: 700; letter-spacing: .02em; padding: 2px 7px; border-radius: 999px;
+  background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
+}
+.unipass-submit-summary { display: grid; gap: 8px; margin: 14px 0 0; }
+.unipass-submit-summary > div { display: flex; gap: 12px; font-size: 14px; }
+.unipass-submit-summary dt { flex: 0 0 96px; color: var(--text-secondary); }
+.unipass-submit-summary dd { margin: 0; color: var(--text-primary); font-weight: 500; }
+
+.unipass-submit-steps { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; }
+.unipass-submit-steps li {
+  display: flex; align-items: center; gap: 8px; font-size: 14px;
+  color: var(--text-secondary); opacity: .5; transition: opacity .2s, color .2s;
+}
+.unipass-submit-steps li.is-active { opacity: 1; color: var(--text-primary); }
+.unipass-submit-steps li.is-done { opacity: 1; color: #15803d; }
+.unipass-step-icon { display: inline-flex; width: 16px; }
+.unipass-submit-steps .spin { animation: unipass-spin 1s linear infinite; }
+@keyframes unipass-spin { to { transform: rotate(360deg); } }
+
+.unipass-submit-result {
+  margin: 16px 0 0; padding: 14px 16px; border-radius: 8px;
+  background: #f0fdf4; border: 1px solid #bbf7d0;
+}
+.unipass-result-title { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; font-weight: 700; color: #15803d; }
+.unipass-submit-result dl { display: grid; gap: 6px; margin: 0; }
+.unipass-submit-result dl > div { display: flex; gap: 12px; font-size: 14px; }
+.unipass-submit-result dt { flex: 0 0 76px; color: var(--text-secondary); }
+.unipass-submit-result dd { margin: 0; }
+.unipass-submit-result strong { font-size: 16px; letter-spacing: .02em; }
+
+.unipass-submit-note { margin: 14px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); }
