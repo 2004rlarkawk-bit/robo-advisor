@@ -68,6 +68,11 @@ export default function ExportForwarderBookingStep({
   const invalidSchedule = isEtaBeforeEtd(state.departureDate, state.arrivalDate);
   const bookingRegistered = isBookingRegistered(state);
   const missingFields = missingBookingFields(state);
+  const missingFieldSummary = missingFields.map((field) => ({
+    'Booking No.': '부킹 번호',
+    '선박명(Vessel)': '선박명',
+    '항차번호(Voyage No.)': '항차번호',
+  }[field] ?? field));
   const cargoSummary = state.cargoItems.filter((item) => item.descriptionOfGoods.trim());
 
   return (
@@ -133,21 +138,21 @@ export default function ExportForwarderBookingStep({
             </div>
           </div>
           <div className="form-group"><label className="form-label" htmlFor="booking-remarks">비고</label><textarea id="booking-remarks" className="form-input" rows={2} value={booking.remarks ?? ''} onChange={(e) => onBookingChange({ remarks: e.target.value })} placeholder="선사 안내사항, 반입지, 특이사항 등" /></div>
-          <div className={`form-message ${bookingRegistered ? 'info' : ''}`} role="status">
-            {bookingRegistered ? '부킹 완료' : '부킹 대기'}
-            {!bookingRegistered && missingFields.length > 0 ? ` — ${missingFields.join(', ')}가 필요합니다.` : ''}
+          <div className={`fwd-export-booking-state ${bookingRegistered ? 'is-complete' : ''}`} role="status">
+            <strong>{bookingRegistered ? '부킹 완료' : '부킹 대기'}</strong>
+            {!bookingRegistered && missingFieldSummary.length > 0 && <span>필수 입력: {missingFieldSummary.join(' · ')}</span>}
           </div>
           {invalidSchedule && <div className="form-message error" role="alert">ETA는 ETD보다 빠를 수 없습니다.</div>}
         </details>
 
         <details className="form-section fwd-export-content-card" open>
-          <summary className="form-section-summary">컨테이너 정보</summary>
+          <summary className="form-section-summary">컨테이너 입력</summary>
           {state.loadingMode === 'FCL' ? <div className="form-grid">
             <div className="form-group"><label className="form-label">컨테이너 규격</label><select className="form-input" value={state.containerSize} onChange={(e) => patch({ containerSize: e.target.value as ContainerSize })}>{!CONTAINER_SIZE_OPTIONS.includes(state.containerSize) && <option value={state.containerSize}>{state.containerSize} (기존값)</option>}{CONTAINER_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}</select></div>
             <div className="form-group"><label className="form-label">컨테이너 수량</label><input type="number" min="0" className="form-input" value={state.containerQuantity} onChange={(e) => patch({ containerQuantity: numericValue(e.target.value) })} /></div>
             <div className="form-group"><label className="form-label">컨테이너 번호 (선택)</label><input className="form-input" value={state.containerNo} onChange={(e) => patch({ containerNo: e.target.value })} /></div>
             <div className="form-group"><label className="form-label">Seal 번호 (선택)</label><input className="form-input" value={state.sealNo} onChange={(e) => patch({ sealNo: e.target.value })} /></div>
-          </div> : <div className="form-message info" role="status">{state.loadingMode === 'LCL' ? 'LCL 운송은 컨테이너 정보를 입력하지 않아도 됩니다.' : '운송방식이 정해지면 FCL 컨테이너 정보를 입력할 수 있습니다.'}</div>}
+          </div> : state.loadingMode === 'LCL' ? <p className="fwd-export-inline-note" role="status">LCL 운송은 컨테이너 입력이 필요하지 않습니다.</p> : null}
         </details>
 
         <details className="form-section fwd-export-booking-document" open>

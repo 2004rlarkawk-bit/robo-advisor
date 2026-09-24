@@ -279,7 +279,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
         .find((candidate) => candidate.textContent?.includes('부킹 확정 정보 등록')) as HTMLButtonElement;
       expect(button.disabled).toBe(true);
       expect(rendered.container.textContent).toContain('부킹 대기');
-      expect(rendered.container.textContent).toContain('선박명(Vessel), 항차번호(Voyage No.)가 필요합니다');
+      expect(rendered.container.textContent).toContain('필수 입력: 선박명 · 항차번호');
       act(() => button.click());
       expect(onSaveBooking).not.toHaveBeenCalled();
     });

@@ -1,33 +1,33 @@
 /* 수입 포워더의 카드·간격·색상 규칙을 수출 화면에 맞춘다. 업무 로직은 변경하지 않는다. */
-.fwd-export-refresh { --export-muted: #667a94; color: #16233b; }
+.fwd-export-refresh { --export-muted: #667a94; color: #16233b; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif; }
 .fwd-export-refresh.forwarder-export-flow { gap: 20px; }
 .fwd-export-refresh .form-card { padding: 24px; border: 1px solid #dce4ef; border-radius: 14px; box-shadow: none; margin: 0; }
 .fwd-export-refresh .forwarder-workspace-form.fwd-export-stage { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .fwd-export-refresh .trade-section-header { margin-bottom: 16px; gap: 16px; align-items: center; }
 .fwd-export-refresh .fwd-export-step-heading { margin: 8px 0 16px; }
 .fwd-export-refresh .fwd-export-step-heading .card-title { font-size: 20px; }
-.fwd-export-refresh .fwd-section-kicker { display: block; margin-bottom: 7px; color: #5076ac; font-size: 11px; font-weight: 750; letter-spacing: .4px; }
-.fwd-export-refresh .card-title { margin: 0; font-size: 17px; line-height: 1.5; font-weight: 750; }
+.fwd-export-refresh .fwd-section-kicker { display: block; margin-bottom: 7px; color: #64748b; font-size: 11px; font-weight: 700; letter-spacing: .4px; }
+.fwd-export-refresh .card-title { margin: 0; font-size: 17px; line-height: 1.5; font-weight: 700; }
 .fwd-export-refresh .btn { min-height: 40px; padding: 10px 14px; border-radius: 8px; font-size: 13px; box-shadow: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .fwd-export-refresh .btn-primary { background: #0b57d0; border-color: #0b57d0; color: #fff; }
 .fwd-export-refresh .btn-secondary { background: #fff; border-color: #d7e0ed; color: #49617f; }
 .fwd-export-refresh .forwarder-back-to-inbox { justify-self: start; }
-.fwd-export-refresh .form-label { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #49617f; }
+.fwd-export-refresh .form-label { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #475569; }
 .fwd-export-refresh .form-input { min-height: 42px; padding: 10px 12px; font-size: 13px; border-color: #d7e0ed; border-radius: 7px; }
 .fwd-export-refresh .form-grid { gap: 16px 24px; }
 .fwd-export-refresh .form-section { border-color: #dce4ef; border-radius: 14px; margin-top: 16px; box-shadow: none; background: #fff; overflow: hidden; }
-.fwd-export-refresh .form-section-summary { min-height: 62px; font-size: 16px; font-weight: 700; color: #24344c; background: #fff; padding: 18px 22px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.fwd-export-refresh .form-section-summary { min-height: 62px; font-size: 16px; font-weight: 700; color: #1e293b; background: #fff; padding: 18px 22px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .fwd-export-refresh .form-section-summary::after { margin-left: auto; color: #8b9bb0; }
 .fwd-export-refresh .form-section-hint { font-size: 12px; font-weight: 400; color: var(--export-muted); background: none; padding: 0; border-radius: 0; }
 .fwd-export-refresh .form-help { font-size: 12px; line-height: 1.6; color: #718198; }
 .fwd-export-refresh .form-group { min-width: 0; gap: 6px; }
 .fwd-export-refresh .form-input:disabled { background: #f7f9fc; color: #667a94; }
 .fwd-export-refresh .btn:disabled { background: #edf1f6; border-color: #e0e6ef; color: #8a99ad; cursor: not-allowed; box-shadow: none; }
-.fwd-export-refresh .fwd-export-content-card { border-top: 3px solid #93b4df; }
-.fwd-export-refresh .fwd-export-accent-blue { border-top-color: #527bc1; }
-.fwd-export-refresh .fwd-export-accent-green { border-top-color: #92bda9; }
+.fwd-export-refresh .fwd-export-content-card,
+.fwd-export-refresh .fwd-export-accent-blue,
+.fwd-export-refresh .fwd-export-accent-green { border-top-color: #dce4ef; }
 
-.fwd-export-source-docs { padding: 20px 22px; border: 1px solid #dce4ef; border-top: 3px solid #93b4df; border-radius: 14px; background: #fff; }
+.fwd-export-source-docs { padding: 20px 22px; border: 1px solid #dce4ef; border-radius: 14px; background: #fff; }
 .fwd-export-source-docs h3 { margin: 0 0 14px; font-size: 16px; }
 .fwd-export-source-docs h3 span { color: #667a94; font-size: 12px; margin-left: 8px; }
 .fwd-export-source-docs p { margin: 0; font-size: 12px; color: #667a94; line-height: 1.6; }
@@ -35,10 +35,10 @@
 .fwd-export-source-list .btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; }
 .fwd-export-refresh .fwd-export-intake-summary { margin: 16px 0 0; padding: 20px 22px; border: 1px solid #dce4ef; border-radius: 14px; background: #fff; }
 
-.fwd-export-refresh .fwd-export-bl-card { border-top: 3px solid #92bda9; }
-.fwd-export-refresh .fwd-export-bl-card.is-house { border-top-color: #edc76f; }
+.fwd-export-refresh .fwd-export-bl-card,
+.fwd-export-refresh .fwd-export-bl-card.is-house { border-top-color: #dce4ef; }
 .fwd-export-refresh .fwd-export-bl-card > summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-.fwd-export-refresh .fwd-export-booking-document { border-top: 3px solid #93b4df; }
+.fwd-export-refresh .fwd-export-booking-document { border-top-color: #dce4ef; }
 .fwd-export-refresh .fwd-export-bl-card > .form-grid,
 .fwd-export-refresh .fwd-export-booking-document > .form-grid { padding-left: 22px; padding-right: 22px; }
 .fwd-export-refresh .fwd-export-bl-card > .forwarder-document-slot,
@@ -48,7 +48,7 @@
 .fwd-export-refresh .fwd-export-file-upload:hover:not(:disabled) { background: #edf4fc; border-color: #8baad0; }
 .fwd-export-refresh .forwarder-document-slot .import-document-row { background: #f8fafc; border-color: #e2e9f1; border-radius: 8px; }
 
-.fwd-export-refresh .fwd-customs-panel { margin-top: 16px; padding: 22px; border: 1px solid #dce4ef; border-top: 3px solid #93b4df; border-radius: 14px; background: #fff; }
+.fwd-export-refresh .fwd-customs-panel { margin-top: 16px; padding: 22px; border: 1px solid #dce4ef; border-radius: 14px; background: #fff; }
 .fwd-customs-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
 .fwd-customs-heading h3 { margin: 0; font-size: 16px; font-weight: 700; }
 .fwd-customs-heading > span { font-size: 10px; font-weight: 650; letter-spacing: .04em; color: #526f98; background: #edf3fb; border-radius: 4px; padding: 4px 7px; }
@@ -68,6 +68,11 @@
 .fwd-export-refresh .fwd-export-progress-compact .import-document-row { border: 0; border-bottom: 1px solid #edf1f6; border-radius: 0; padding: 12px 18px; }
 .fwd-export-progress-compact .import-document-row:last-child { border-bottom: 0; }
 .fwd-export-progress-compact .import-document-actions { flex: 0 0 130px; }
+.fwd-export-booking-state { display: flex; align-items: center; gap: 10px; margin: 4px 22px 20px; padding-top: 14px; border-top: 1px solid #edf1f6; color: #64748b; font-size: 12px; }
+.fwd-export-booking-state strong { color: #334155; font-size: 13px; }
+.fwd-export-booking-state span { color: #7a899e; }
+.fwd-export-booking-state.is-complete strong { color: #287553; }
+.fwd-export-inline-note { margin: 0 22px 20px; color: #64748b; font-size: 12px; }
 .fwd-export-refresh .form-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
 .fwd-export-refresh .fwd-export-summary { border-top: 3px solid #527bc1; }
 .fwd-export-summary-title { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
@@ -81,8 +86,8 @@
 .fwd-export-refresh .import-steps button { min-height: 44px; padding: 10px 12px; font-size: 12.5px; }
 .fwd-export-refresh .import-steps li.current { background: #eef4ff; }
 .fwd-export-refresh .import-steps li.current button { color: #0b57d0; background: #eef4ff; }
-.fwd-export-refresh .import-steps li.done { background: #f0fdf4; }
-.fwd-export-refresh .import-steps li.done button { color: #15803d; }
+.fwd-export-refresh .import-steps li.done { background: #f7f9fc; }
+.fwd-export-refresh .import-steps li.done button { color: #526987; }
 .fwd-export-refresh .forwarder-generated-document-card.is-pending { border-color: #dce4ef; background: #f8fafc; }
 .fwd-export-refresh .forwarder-generated-document-card.is-pending .forwarder-generated-document-icon { color: #49617f; background: #eaf0f7; }
 .fwd-export-refresh .forwarder-generated-document-card.is-pending .forwarder-generated-document-status,
