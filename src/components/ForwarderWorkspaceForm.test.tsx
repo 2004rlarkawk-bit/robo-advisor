@@ -94,7 +94,9 @@ describe('수출 포워더 5단계 워크플로우', () => {
     expect(summary?.textContent).toContain('ABC KOREA');
     expect(summary?.textContent).toContain('TOKYO TRADING');
     expect(summary?.textContent).toContain('BK-001');
-    expect(summary?.querySelectorAll('.import-steps button')).toHaveLength(5);
+    expect(summary?.querySelectorAll('.fwd-progress-step')).toHaveLength(5);
+    expect(rendered.container.querySelectorAll('.fwd-tabs button')).toHaveLength(5);
+    expect(summary?.classList.contains('fwd-head-card')).toBe(true);
     expect(rendered.container.querySelector('.fwd-export-refresh')).not.toBeNull();
   });
   it('Step 표시줄에 5단계 라벨을 모두 표시한다', () => {
@@ -110,11 +112,11 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(rendered.container.textContent).not.toContain('수출 포워더 업무');
       expect(rendered.container.querySelector('.fwd-inbox-heading-actions')?.textContent).toContain('직접 등록');
       expect(rendered.container.querySelector('.fwd-inbox-filters')).not.toBeNull();
-      expect(rendered.container.querySelector('thead')?.textContent).toContain('화주 / 품목');
+      expect(rendered.container.textContent).toContain('운송의뢰를 불러오는 중');
       expect(rendered.container.textContent).toContain('받은 의뢰');
       expect(rendered.container.textContent).toContain('직접 등록');
       // 업무 단계(Stepper)·입력 폼은 의뢰를 불러오기 전까지 나타나지 않는다.
-      expect(rendered.container.querySelector('.import-steps')).toBeNull();
+      expect(rendered.container.querySelector('.fwd-tabs')).toBeNull();
       expect(rendered.container.textContent).not.toContain('화주 의뢰 확인');
       expect(rendered.container.textContent).not.toContain('화주 운송의뢰 정보');
       expect(rendered.container.textContent).not.toContain('화물명세');
@@ -169,12 +171,12 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(rendered.container.textContent).toContain('화주 의뢰와 서류');
       expect(rendered.container.textContent).toContain('운송의뢰 정보');
       expect(rendered.container.textContent).toContain('화물명세');
-      // 받은 의뢰함·직접 등록은 Inbox 화면(view=inbox)의 몫이지, STEP 1에는 없다.
+      // 받은 의뢰함·업로드 영역은 Inbox 화면(view=inbox)의 몫이다.
       expect(rendered.container.textContent).not.toContain('받은 의뢰');
-      expect(rendered.container.textContent).not.toContain('직접 등록');
+      expect(rendered.container.querySelector('.fwd-origin')?.textContent).toBe('직접 등록');
       expect(rendered.container.textContent).not.toContain('여러 파일 선택');
       expect(rendered.container.textContent).not.toContain('AI 분석 및 빈 필드 자동입력');
-      // 초기화 버튼은 제거되었다 — "목록으로 돌아가기"가 같은 역할을 한다.
+      // 초기화 버튼은 제거되었다 — "업무 목록"이 같은 역할을 한다.
       expect(rendered.container.textContent).not.toContain('초기화');
       // Booking/컨테이너/B/L 발행정보는 이제 1단계에 없다 — 2·4단계로 이동했다.
       expect(rendered.container.textContent).not.toContain('선복예약');
@@ -231,11 +233,11 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(onNextFromRequest).toHaveBeenCalledOnce();
     });
 
-    it('업무 화면 상단에서 [목록으로 돌아가기] 클릭 시 onReturnToInbox를 호출한다', () => {
+    it('업무 화면 상단에서 [업무 목록] 클릭 시 onReturnToInbox를 호출한다', () => {
       const onReturnToInbox = vi.fn();
       const rendered = renderForm({}, { currentStep: 1, onReturnToInbox });
       const button = Array.from(rendered.container.querySelectorAll('button'))
-        .find((candidate) => candidate.textContent?.includes('목록으로 돌아가기')) as HTMLButtonElement;
+        .find((candidate) => candidate.textContent?.includes('업무 목록')) as HTMLButtonElement;
       act(() => button.click());
       expect(onReturnToInbox).toHaveBeenCalledOnce();
     });
@@ -501,7 +503,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
       const rendered = renderForm({}, { currentStep: 1, readOnly: true, onClose });
       expect(rendered.container.textContent).not.toContain('초기화');
       expect(rendered.container.textContent).not.toContain('다음: 선복 부킹');
-      expect(rendered.container.textContent).not.toContain('목록으로 돌아가기');
+      expect(rendered.container.textContent).not.toContain('업무 목록');
       expect(rendered.container.querySelector('fieldset')?.disabled).toBe(true);
       const closeButton = Array.from(rendered.container.querySelectorAll('button'))
         .find((candidate) => candidate.textContent?.trim() === '닫기') as HTMLButtonElement;
@@ -509,10 +511,10 @@ describe('수출 포워더 5단계 워크플로우', () => {
       expect(onClose).toHaveBeenCalledOnce();
     });
 
-    it('조회모드에서도 Step 표시줄로 모든 단계를 이동할 수 있다', () => {
+    it('조회모드에서도 상세 탭으로 모든 단계를 이동할 수 있다', () => {
       const onStepChange = vi.fn();
       const rendered = renderForm({}, { currentStep: 1, readOnly: true, onStepChange, status: 'submitted' });
-      const stepButtons = Array.from(rendered.container.querySelectorAll('.import-steps button'));
+      const stepButtons = Array.from(rendered.container.querySelectorAll('.fwd-tabs button'));
       expect(stepButtons.every((button) => !(button as HTMLButtonElement).disabled)).toBe(true);
       act(() => (stepButtons[4] as HTMLButtonElement).click());
       expect(onStepChange).toHaveBeenCalledWith(5);
@@ -520,9 +522,15 @@ describe('수출 포워더 5단계 워크플로우', () => {
 
     it('거래가 아직 저장되지 않은 편집모드에서는 1단계 외 이동을 막는다', () => {
       const rendered = renderForm({}, { currentStep: 1, status: null });
-      const stepButtons = Array.from(rendered.container.querySelectorAll('.import-steps button'));
+      const stepButtons = Array.from(rendered.container.querySelectorAll('.fwd-tabs button'));
       expect((stepButtons[0] as HTMLButtonElement).disabled).toBe(false);
       expect((stepButtons[1] as HTMLButtonElement).disabled).toBe(true);
     });
+  });
+
+  it('화주 의뢰로 들어온 건은 수입과 같이 업무 메시지 탭을 표시한다', () => {
+    const rendered = renderForm({}, { appliedRequestTradeId: 'shipper-trade-1', trade: FIXTURE_TRADE });
+    expect(rendered.container.querySelector('.fwd-origin')?.textContent).toBe('화주 의뢰');
+    expect(rendered.container.querySelector('.fwd-tabs')?.textContent).toContain('업무 메시지');
   });
 });

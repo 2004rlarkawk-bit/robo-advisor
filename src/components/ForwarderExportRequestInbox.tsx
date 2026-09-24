@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { FolderOpen, RefreshCw, Ship } from 'lucide-react';
+import { ArrowRight, Inbox, RefreshCw } from 'lucide-react';
 import {
   listForwarderExportRequests,
   type ForwarderExportRequest,
@@ -31,8 +31,10 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId, h
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | 'new' | 'loaded'>('all');
+  const [pickedId, setPickedId] = useState<string | null>(null);
   const loadedCount = requests.filter(request => request.tradeId === appliedTradeId).length;
   const visibleRequests = requests.filter(request => filter === 'all' || (filter === 'loaded' ? request.tradeId === appliedTradeId : request.tradeId !== appliedTradeId));
+  const picked = visibleRequests.find(request => request.tradeId === pickedId) ?? visibleRequests[0] ?? null;
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -50,7 +52,8 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId, h
   useEffect(() => { void load(); }, [load]);
 
   return (
-    <section className="fwd-inbox-panel fwd-inbox">
+    <section className="fwd-inbox">
+      <div className="fwd-inbox-panel" aria-busy={isLoading}>
       <div className="fwd-inbox-panel-heading">
         <h2>받은 의뢰 <span>{requests.length}건</span></h2>
         <div className="fwd-inbox-heading-actions">
@@ -66,72 +69,77 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId, h
         </button>
         </div>
       </div>
-      <nav className="fwd-inbox-filters" aria-label="수출 의뢰 필터">
+      <div className="fwd-inbox-filters" role="group" aria-label="수출 의뢰 필터">
         {([
           ['all', '전체', requests.length],
           ['new', '신규', requests.length - loadedCount],
           ['loaded', '불러옴', loadedCount],
         ] as const).map(([value, label, count]) => (
           <button key={value} type="button" className={filter === value ? 'is-active' : undefined}
-            aria-pressed={filter === value} onClick={() => setFilter(value)}>
+            aria-pressed={filter === value} onClick={() => { setFilter(value); setPickedId(null); }}>
             {label}<span>{count}</span>
           </button>
         ))}
-      </nav>
+      </div>
 
-      {error && <div className="form-message error" role="alert">{error}</div>}
+      {error && <p className="form-message error" role="alert">{error}</p>}
 
-        <div className="fwd-inbox-table-scroll">
+      {isLoading && !error ? <p className="fwd-inbox-empty" role="status">운송의뢰를 불러오는 중…</p>
+        : !error && requests.length === 0 ? <div className="fwd-inbox-empty"><Inbox size={28} aria-hidden="true" /><p>아직 받은 의뢰가 없습니다.</p><span>화주가 운송의뢰서를 제출하면 여기에 표시됩니다.</span></div>
+        : !error && visibleRequests.length === 0 ? <p className="fwd-inbox-empty">이 상태의 의뢰가 없습니다.</p>
+        : visibleRequests.length > 0 && <div className="fwd-inbox-table-scroll">
           <table className="fwd-inbox-table fwd-export-inbox-table">
+            <caption className="fwd-inbox-sr">받은 수출 의뢰 목록. 의뢰를 선택한 후 하단의 열기 버튼을 누르세요.</caption>
             <thead>
               <tr>
-                <th>화주 / 품목</th>
-                <th>구간</th>
-                <th>희망 출항일</th>
-                <th>상태</th>
-                <th aria-label="동작" />
+                <th scope="col"><span className="fwd-inbox-sr">선택</span></th>
+                <th scope="col">화주 / 품목</th>
+                <th scope="col">희망 출항일</th>
+                <th scope="col">상태</th>
+                <th scope="col">다음 할 일</th>
               </tr>
             </thead>
             <tbody>
-              {(isLoading || visibleRequests.length === 0) && <tr><td colSpan={5}>
-                <div className="fwd-inbox-empty">
-                  {isLoading ? '운송의뢰를 불러오는 중입니다.' : error ? '목록을 불러오지 못했습니다. 새로고침해 주세요.' : <>
-                    <FolderOpen size={30} aria-hidden="true" /><br />
-                    {requests.length === 0 ? '아직 도착한 운송의뢰가 없습니다.' : '해당 상태의 의뢰가 없습니다.'}<br />
-                    {requests.length === 0 && <span>화주가 운송의뢰서를 제출하면 여기에 표시됩니다.</span>}
-                  </>}
-                </div>
-              </td></tr>}
-              {!isLoading && visibleRequests.map((request) => {
+              {visibleRequests.map((request) => {
                 const applied = appliedTradeId === request.tradeId;
                 const route = [request.loadPort, request.dischargePort].filter(Boolean).join(' → ');
                 return (
-                  <tr key={request.tradeId} className={applied ? 'is-selected' : undefined}>
-                    <td>
-                      <div className="fwd-inbox-party">
+                  <tr key={request.tradeId} className={picked?.tradeId === request.tradeId ? 'is-selected' : undefined}
+                    onClick={() => setPickedId(request.tradeId)}>
+                    <td><input type="radio" name="forwarder-export-request"
+                      aria-label={`${request.exporterName || '화주명 미입력'} · ${request.requestNo} 선택`}
+                      checked={picked?.tradeId === request.tradeId}
+                      onChange={() => setPickedId(request.tradeId)} /></td>
+                    <td className="fwd-inbox-party">
                         <strong>{request.exporterName || '화주명 미입력'}</strong>
-                        <span>{request.itemSummary}</span>
+                        <span>{request.itemSummary} · {route || '구간 미입력'}</span>
                         <small>{request.requestNo} · 접수 {formatDate(request.requestedAt)}</small>
-                      </div>
                     </td>
-                    <td>{[route, request.incoterms].filter(Boolean).join(' · ') || '—'}</td>
                     <td className="fwd-inbox-eta">{request.requestedDepartureDate || '미정'}</td>
                     <td>
                       {applied
                         ? <span className="fwd-inbox-badge is-done">불러옴</span>
                         : <span className="fwd-inbox-badge is-new">신규</span>}
                     </td>
-                    <td>
-                      <button type="button" className="btn btn-primary" onClick={() => onApply(request)}>
-                        <Ship size={15} /> 의뢰 불러오기
-                      </button>
-                    </td>
+                    <td>{applied ? '의뢰 내용 확인' : '부킹 정보 등록'}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-        </div>
+        </div>}
+      {picked && <div className="fwd-inbox-selection" aria-live="polite">
+        <strong>{picked.exporterName || '화주명 미입력'}</strong>
+        <span>· {picked.itemSummary}</span>
+        <div className="fwd-inbox-documents"><span title="운송의뢰서">S/R</span></div>
+      </div>}
+      </div>
+      <footer className="fwd-inbox-footer">
+        <button type="button" className="btn btn-primary" disabled={!picked || isLoading || Boolean(error)}
+          onClick={() => { if (picked) onApply(picked); }}>
+          선택한 의뢰 열기 <ArrowRight size={18} aria-hidden="true" />
+        </button>
+      </footer>
     </section>
   );
 }

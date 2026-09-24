@@ -2895,6 +2895,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   // 5단계(선적 완료) 문서 전달 패널이 쓸 최소 SavedTrade — 생성된 H/B/L 등 이미 만들어진 문서만 참조한다.
   const currentForwarderTrade: SavedTrade | null = currentTradeId ? {
     id: currentTradeId,
+    sourceTradeId: appliedExportRequestId,
     profile: forwarderFormToTradeProfile(forwarderForm),
     tradeDirection: 'export',
     tradeRole: 'forwarder',
