@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, CornerUpLeft, ExternalLink, Mail } from 'lucide-react';
 import {
+  FORWARDER_STAGE_LABEL,
   FORWARDER_STAGE_ORDER,
   type ForwarderCaseStage,
   type ForwarderCaseState,
@@ -67,7 +68,6 @@ const STAGE_BADGE_CLASS: Record<ForwarderCaseStage, string> = {
   done: 'fwd-stage-done',
 };
 
-const IMPORT_STAGE_LABEL = { received: '의뢰 접수', review: '서류 확인', clearance: '신고·통관 진행', done: '업무 완료' };
 type DetailTab = 'review' | 'messages' | 'clearance';
 
 /** 원본 미리보기 하단의 서류 약칭. */
@@ -290,10 +290,16 @@ export default function ForwarderImportWorkspace({
   };
 
   const finishClearance = (caseItem: ForwarderImportCase) => {
-    const arrivalNoticeNote = caseItem.arrivalNotice?.storagePath
-      ? ''
-      : '\n\n도착통지서(A/N)가 첨부되지 않았습니다.';
-    if (window.confirm(`이 건의 포워더 업무를 완료 처리할까요?${arrivalNoticeNote}\n\n이 처리는 실제 세관 신고·화물 반출 상태를 변경하지 않습니다. 완료 후에는 업무 큐의 업무 완료 목록으로 이동합니다.`)) {
+    // 완료 전 미비 사항을 모아 보여준다 — 실수 완료 방지용 안내이며 강제 차단은 아니다.
+    const operations = (caseItem.trade.forwarderCase as ForwarderCaseState | undefined)?.importOperations;
+    const pending = [
+      !caseItem.arrivalNotice?.storagePath && '도착통지서(A/N) 미첨부',
+      operations?.declarationStatus !== 'cleared'
+        && `수입신고 ${operations ? { preparing: '자료 준비', handed_over: '관세사 전달', filed: '신고 접수' }[operations.declarationStatus] ?? '자료 준비' : '자료 준비'} 단계`,
+      operations?.doStatus !== 'received' && `D/O ${operations?.doStatus === 'requested' ? '발급 요청' : '미요청'} 상태`,
+    ].filter(Boolean);
+    const pendingNote = pending.length ? `\n\n아직 남아 있는 항목:\n- ${pending.join('\n- ')}` : '';
+    if (window.confirm(`이 건의 포워더 업무를 완료 처리할까요?${pendingNote}\n\n이 처리는 실제 세관 신고·화물 반출 상태를 변경하지 않습니다. 완료 후에는 업무 큐의 업무 완료 목록으로 이동합니다.`)) {
       void moveToStage(caseItem, 'done', 'clearance');
     }
   };
@@ -319,7 +325,7 @@ export default function ForwarderImportWorkspace({
             <ArrowLeft size={15} /> 업무 목록
           </button>
           <span className={`fwd-stage-badge ${STAGE_BADGE_CLASS[selected.stage]}`}>
-            {IMPORT_STAGE_LABEL[selected.stage]}
+            {FORWARDER_STAGE_LABEL[selected.stage]}
           </span>
         </div>
 
@@ -350,7 +356,7 @@ export default function ForwarderImportWorkspace({
                 key={stage}
                 className={`fwd-progress-step${index === stageIndex ? ' is-current' : ''}${index < stageIndex ? ' is-done' : ''}`}
               >
-                {IMPORT_STAGE_LABEL[stage]}
+                {FORWARDER_STAGE_LABEL[stage]}
               </span>
             ))}
           </div>

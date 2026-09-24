@@ -148,7 +148,10 @@ export function mapBillOfLadingToSchema(bl: BillOfLadingData): BillOfLadingSchem
     freight_prepaid_at: prepaid ? text(bl.freightPrepaidAt) : '',
     freight_payable_at: collect ? text(bl.freightPayableAt) : '',
     total_prepaid_in: prepaid ? text(bl.totalPrepaid) : '',
-    no_of_original_bl: bl.numberOfOriginals > 0 ? packagesInWords(bl.numberOfOriginals, '').replace(' ONLY', '') : '',
+    // Surrender는 원본 회수(전신 인도)라 ZERO(0)+SURRENDERED, Sea Waybill은 비유통 문서 표기가 실무 관행이다.
+    no_of_original_bl: bl.releaseType === 'SURRENDER' ? 'ZERO (0) — SURRENDERED'
+      : bl.releaseType === 'SEAWAY' ? 'SEA WAYBILL — NON-NEGOTIABLE'
+      : bl.numberOfOriginals > 0 ? packagesInWords(bl.numberOfOriginals, '').replace(' ONLY', '') : '',
     place_and_date_of_issue: issueParts.join(', '),
     laden_on_board_date: text(bl.shippedOnBoardDate),
     issuer_name: text(bl.issuerName),

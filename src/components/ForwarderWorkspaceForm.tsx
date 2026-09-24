@@ -18,6 +18,7 @@ import ExportForwarderBookingStep from './forwarder/export/ExportForwarderBookin
 import ExportForwarderProgressStep from './forwarder/export/ExportForwarderProgressStep';
 import ExportForwarderBLStep from './forwarder/export/ExportForwarderBLStep';
 import ExportForwarderCompletionStep from './forwarder/export/ExportForwarderCompletionStep';
+import ExportForwarderMessages from './forwarder/export/ExportForwarderMessages';
 import '../styles/forwarderExportRefresh.css';
 
 const STEP_LABELS = ['화주 의뢰 확인', '선복예약 정보 등록', '반입·선적 준비', 'B/L 관리', '선적 완료'];
@@ -308,6 +309,9 @@ export default function ForwarderWorkspaceForm({
           defaultShipperCompany={defaultShipperCompany}
         />
       )}
+
+      {/* 업무 메시지 — 화주 의뢰로 들어온 건이면 모든 단계에서 화주와 대화할 수 있다 (수입과 동일한 채널) */}
+      {!readOnly && <ExportForwarderMessages trade={trade} userId={userId} />}
 
       {readOnly && onClose && <DocumentManagerReadOnlyAction onClose={onClose} />}
     </div>

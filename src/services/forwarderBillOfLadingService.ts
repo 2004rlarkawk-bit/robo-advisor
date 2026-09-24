@@ -41,7 +41,10 @@ export function validateForwarderBillOfLading(
     if (!String(value ?? '').trim()) missingLabels.push(label);
   });
 
-  if (Number(state.numberOfOriginals) <= 0) missingLabels.push('No. of Original B/L (발행 통수)');
+  // Surrender·Sea Waybill은 원본을 발행하지 않으므로 통수 검증을 건너뛴다.
+  if (state.blReleaseType === 'ORIGINAL' && Number(state.numberOfOriginals) <= 0) {
+    missingLabels.push('No. of Original B/L (발행 통수)');
+  }
 
   // 경고 — 발행은 가능하나 실무상 확인 필요
   if (!state.shippedOnBoardDate.trim()) {
@@ -97,7 +100,8 @@ export function createForwarderBillOfLadingDraft(
     sealNo: state.sealNo.trim(),
     freightTerms: state.freightTerms,
     freightAndCharges: state.freightAndCharges.trim(),
-    numberOfOriginals: Number(state.numberOfOriginals) || 3,
+    numberOfOriginals: state.blReleaseType === 'ORIGINAL' ? (Number(state.numberOfOriginals) || 3) : 0,
+    releaseType: state.blReleaseType,
     placeOfIssue: state.placeOfIssue.trim(),
     dateOfIssue: issueDate,
     shippedOnBoardDate: state.shippedOnBoardDate,

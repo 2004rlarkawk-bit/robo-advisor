@@ -62,7 +62,7 @@ describe('deriveForwarderCase', () => {
     expect(result?.origin).toBe('shipper_request');
     expect(result?.stage).toBe('received');
     expect(result?.blNo).toBe('MBLKR2026001');
-    expect(result?.nextAction).toBe('서류 대사 결과 확인');
+    expect(result?.nextAction).toBe('제출 서류·추출 정보 확인');
   });
 
   it('화주가 아직 제출하지 않은 거래와 수출 거래는 제외한다', () => {
@@ -89,7 +89,7 @@ describe('deriveForwarderCase', () => {
     const unresolvedState: ForwarderCaseState = { stage: 'review', updatedAt: '2026-09-03T00:00:00.000Z' };
     const unresolved = deriveForwarderCase(makeTrade({ snapshot, forwarderCase: unresolvedState }));
     expect(unresolved?.blockerCount).toBe(1);
-    expect(unresolved?.nextAction).toBe('차단 이슈 1건 해결');
+    expect(unresolved?.nextAction).toBe('확인 필요 1건 검토');
 
     const resolvedState: ForwarderCaseState = {
       stage: 'review',
@@ -98,7 +98,7 @@ describe('deriveForwarderCase', () => {
     };
     const resolved = deriveForwarderCase(makeTrade({ snapshot, forwarderCase: resolvedState }));
     expect(resolved?.blockerCount).toBe(0);
-    expect(resolved?.nextAction).toBe('검토 완료 — 통관 진행으로 이동');
+    expect(resolved?.nextAction).toBe('신고자료 준비');
   });
 });
 
