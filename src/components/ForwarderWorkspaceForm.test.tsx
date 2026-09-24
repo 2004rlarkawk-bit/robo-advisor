@@ -166,8 +166,8 @@ describe('수출 포워더 5단계 워크플로우', () => {
   describe('STEP 1 — 화주 의뢰 확인', () => {
     it('화주 운송의뢰 정보와 화물명세를 표시한다(입력 폼만 — 업로드/AI 분석 UI 없음)', () => {
       const rendered = renderForm({}, { currentStep: 1 });
-      expect(rendered.container.textContent).toContain('1. 화주 의뢰 확인');
-      expect(rendered.container.textContent).toContain('화주 운송의뢰 정보');
+      expect(rendered.container.textContent).toContain('화주 의뢰와 서류');
+      expect(rendered.container.textContent).toContain('운송의뢰 정보');
       expect(rendered.container.textContent).toContain('화물명세');
       // 받은 의뢰함·직접 등록은 Inbox 화면(view=inbox)의 몫이지, STEP 1에는 없다.
       expect(rendered.container.textContent).not.toContain('받은 의뢰');
@@ -248,12 +248,12 @@ describe('수출 포워더 5단계 워크플로우', () => {
         cargoItems: [{ id: 'a', itemNo: '', sku: '', descriptionOfGoods: 'Facial Toner', numberOfPackages: 10, kindOfPackages: 'CARTON', grossWeightKg: 100, measurementCbm: '0.5', marksAndNumbers: '', sourceDocumentIds: [] }],
       }, { currentStep: 2 });
       expect(rendered.container.textContent).toContain('선복 부킹');
-      expect(rendered.container.textContent).toContain('접수 정보 요약');
+      expect(rendered.container.textContent).toContain('의뢰 요약');
       expect(rendered.container.textContent).toContain('Facial Toner');
       expect(rendered.container.textContent).toContain('Carrier / 선사');
       expect(rendered.container.textContent).toContain('Booking No.');
       expect(rendered.container.textContent).toContain('컨테이너 규격');
-      expect(rendered.container.textContent).toContain('PortAI가 선사에 예약을 보내거나 부킹을 대행하지 않습니다');
+      expect(rendered.container.textContent).not.toContain('PortAI가 선사에 예약을 보내거나 부킹을 대행하지 않습니다');
       expect(rendered.container.textContent).toContain('Cargo Closing Date');
       expect(rendered.container.textContent).toContain('Freight Terms');
       expect(rendered.container.textContent).toContain('Booking Confirmation');
@@ -371,7 +371,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
     it('Master B/L(등록)과 House B/L(생성)을 분리해 표시한다', () => {
       const rendered = renderForm({ carrier: 'ONE', vesselOrFlight: 'ONE HAMBURG', voyageNo: '001E', loadPort: 'Busan Port', dischargePort: 'Tokyo Port' }, { currentStep: 4, masterBlNo: 'MBLKR0001' });
       expect(rendered.container.textContent).toContain('Master B/L');
-      expect(rendered.container.textContent).toContain('선사 발행 — 파일 등록');
+      expect(rendered.container.textContent).not.toContain('선사 발행 — 파일 등록');
       expect(rendered.container.querySelector<HTMLInputElement>('#mbl-no')?.value).toBe('MBLKR0001');
       const carrierInputs = Array.from(rendered.container.querySelectorAll<HTMLInputElement>('input[disabled]'));
       expect(carrierInputs.some((input) => input.value === 'ONE')).toBe(true);
@@ -436,7 +436,7 @@ describe('수출 포워더 5단계 워크플로우', () => {
     it('완료 체크리스트를 표시하고 미완료 시 완료 처리를 막는다', () => {
       const onCompleteShipment = vi.fn();
       const rendered = renderForm({}, { currentStep: 5, onCompleteShipment, trade: FIXTURE_TRADE });
-      expect(rendered.container.textContent).toContain('선적 완료 확인');
+      expect(rendered.container.textContent).toContain('완료 체크');
       const button = Array.from(rendered.container.querySelectorAll('button'))
         .find((candidate) => candidate.textContent?.trim() === '선적 완료 처리') as HTMLButtonElement;
       expect(button.disabled).toBe(true);

@@ -1,4 +1,4 @@
-import { ArrowRight, ListChecks } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { isBookingRegistered, type ForwarderFormState } from '../../../utils/forwarderForm';
 import type { TradeAttachment } from '../../../types/tradeFormData';
 import {
@@ -54,25 +54,21 @@ export default function ExportForwarderProgressStep({
   };
 
   return (
-    <div className="form-card forwarder-workspace-form">
-      <div className="trade-section-header">
-        <div className="trade-section-title">
-          <ListChecks size={20} className="text-primary" />
-          <div>
-            <h2 className="card-title">3. 선적 진행 관리</h2>
-            <p className="forwarder-step-description">업무 진행을 기록하고, 수출신고·선적 이행 정보는 유니패스에서 조회합니다.</p>
-          </div>
+    <div className="form-card forwarder-workspace-form fwd-export-stage">
+      <div className="trade-section-header fwd-export-step-heading">
+        <div>
+          <span className="fwd-section-kicker">03 · 선적 준비</span>
+          <h2 className="card-title">반입과 선적 진행</h2>
         </div>
       </div>
 
-      <details className="form-section" open>
-        <summary className="form-section-summary">업무별 진행 기록 <span className="form-section-hint">담당자 수동 기록</span></summary>
+      <details className="form-section fwd-export-content-card" open>
+        <summary className="form-section-summary">진행 상태</summary>
         <div className="import-document-list fwd-export-progress-compact">
           {EXPORT_PROGRESS_STAGE_ORDER.filter(stage => stage !== 'customsCleared').map((stage) => (
             <div className="import-document-row" key={stage}>
               <div className="import-document-content">
                 <strong className="import-document-type">{EXPORT_PROGRESS_STAGE_LABEL[stage]}</strong>
-                {stage === 'booking' && <span className="import-document-meta">2단계 Booking No. 저장 여부로 자동 판정됩니다.</span>}
               </div>
               <div className="import-document-actions">
                 <select
@@ -102,9 +98,9 @@ export default function ExportForwarderProgressStep({
             <ExportCustomsLookup key={scopeId + ':' + state.exportDeclarationNo} declarationNo={state.exportDeclarationNo} busy={busy} />
         </div>
         <details className="fwd-customs-files">
-          <summary>수출신고필증 <span>파일 보기·등록</span></summary>
+          <summary>수출신고필증</summary>
         <ForwarderDocumentSlot
-          label="수출신고필증"
+          label=""
           documentType="export_declaration"
           userId={userId}
           scopeId={scopeId}
