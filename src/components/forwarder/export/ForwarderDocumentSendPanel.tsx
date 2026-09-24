@@ -3,7 +3,7 @@ import { Send } from 'lucide-react';
 import SentConfirmation from '../../common/SentConfirmation';
 import type { SavedTrade } from '../../../types';
 import { ATTACHABLE_DOCUMENT_LABELS, type AttachableDocumentType } from '../../../types/forwarderRequest';
-import { getAttachableDocumentTypes, sendExternalForwarderEmail } from '../../../services/externalForwarderEmailService';
+import { getAttachableDocumentTypes, sendForwarderDocumentEmail } from '../../../services/externalForwarderEmailService';
 import '../../../styles/forwarderRequest.css';
 
 interface Props {
@@ -15,15 +15,14 @@ interface Props {
   defaultRecipientEmail?: string;
   defaultRecipientCompany?: string;
   defaultRecipientName?: string;
+  deliveryKind: 'shipment_notice' | 'shipping_advice';
   /** 전송 완료 시각 등 기록을 남기려는 호출부에서 사용 */
-  onSent?: () => void;
+  onSent?: () => Promise<void>;
 }
 
 /**
  * 생성된 거래 문서(H/B/L 등)를 이메일로 전달하는 공용 패널.
- * 화주가 포워더에게 의뢰할 때 쓰는 ForwarderRequestModal의 "외부 이메일 전송" 로직
- * (externalForwarderEmailService.sendExternalForwarderEmail)을 그대로 재사용하되,
- * 포워더 → 화주 / 포워더 → 해외 파트너처럼 방향이 반대인 화면에 맞춰 라벨만 바꾼다.
+ * 수출 포워더의 선적완료 알림과 Shipping Advice를 별도 발송 종류로 기록한다.
  */
 export default function ForwarderDocumentSendPanel({
   trade,
@@ -34,6 +33,7 @@ export default function ForwarderDocumentSendPanel({
   defaultRecipientEmail = '',
   defaultRecipientCompany = '',
   defaultRecipientName = '',
+  deliveryKind,
   onSent,
 }: Props) {
   const attachableTypes = getAttachableDocumentTypes(trade);
@@ -45,6 +45,7 @@ export default function ForwarderDocumentSendPanel({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [recordWarning, setRecordWarning] = useState('');
 
   const toggleDocType = (type: AttachableDocumentType) => {
     setSelectedDocTypes((current) =>
@@ -53,6 +54,7 @@ export default function ForwarderDocumentSendPanel({
 
   const handleSend = async () => {
     setError('');
+    setRecordWarning('');
     if (!recipientEmail.trim()) {
       setError('받는 사람 이메일을 입력해 주세요.');
       return;
@@ -61,10 +63,15 @@ export default function ForwarderDocumentSendPanel({
       setError('보낼 문서를 하나 이상 선택해 주세요.');
       return;
     }
+    if (!selectedDocTypes.includes('bill_of_lading')) {
+      setError('H/B/L을 첨부해 주세요.');
+      return;
+    }
     setSending(true);
     try {
-      await sendExternalForwarderEmail({
+      await sendForwarderDocumentEmail({
         trade,
+        deliveryKind,
         recipientEmail,
         recipientCompany,
         recipientName,
@@ -72,7 +79,11 @@ export default function ForwarderDocumentSendPanel({
         documentTypes: selectedDocTypes,
       });
       setSuccess(true);
-      onSent?.();
+      try {
+        await onSent?.();
+      } catch {
+        setRecordWarning('이메일은 발송됐지만 화면의 전달 이력을 갱신하지 못했습니다. 다시 발송하지 말고 새로고침 후 확인해 주세요.');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '이메일 전송에 실패했습니다.');
     } finally {
@@ -85,11 +96,14 @@ export default function ForwarderDocumentSendPanel({
       <summary className="form-section-summary">{title}</summary>
       <p className="forwarder-step-description">{description}</p>
       {success ? (
-        <SentConfirmation
-          title="이메일을 보냈어요"
-          message={`${recipientCompany.trim() || recipientEmail.trim()}에게 선택한 서류를 보냈어요.`}
-          actions={<button type="button" className="btn btn-secondary" onClick={() => setSuccess(false)}>다시 보내기</button>}
-        />
+        <>
+          <SentConfirmation
+            title="이메일을 보냈어요"
+            message={`${recipientCompany.trim() || recipientEmail.trim()}에게 선택한 서류를 보냈어요.`}
+            actions={<button type="button" className="btn btn-secondary" onClick={() => setSuccess(false)}>다시 보내기</button>}
+          />
+          {recordWarning && <p className="form-message error" role="alert">{recordWarning}</p>}
+        </>
       ) : (
         <>
           <div className="form-grid">

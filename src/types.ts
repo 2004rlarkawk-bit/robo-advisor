@@ -769,6 +769,8 @@ export interface GeneratedDocuments {
 
 export interface SavedTrade {
   id: string;
+  /** 포워더가 화주 의뢰에서 만든 거래의 원본 화주 거래 ID. */
+  sourceTradeId?: string | null;
   profile: TradeProfile;
   tradeDirection?: TradeType;
   tradeRole?: TradeRole;

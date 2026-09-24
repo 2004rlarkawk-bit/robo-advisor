@@ -27,7 +27,7 @@ vi.mock('./transportRequestDocxService', () => ({
   buildTransportRequestDocx: vi.fn(async () => new Blob(['sr'], { type: 'application/octet-stream' })),
 }));
 
-import { getAttachableDocumentTypes, sendExternalForwarderEmail } from './externalForwarderEmailService';
+import { getAttachableDocumentTypes, sendExternalForwarderEmail, sendForwarderDocumentEmail } from './externalForwarderEmailService';
 
 function makeTrade(generatedDocs: SavedTrade['generatedDocs']): SavedTrade {
   return {
@@ -115,6 +115,18 @@ describe('sendExternalForwarderEmail', () => {
         headers: { Authorization: 'Bearer token-123' },
       }),
     );
+  });
+
+  it('수출 포워더 선적완료 알림은 운송의뢰와 다른 메일 종류로 보낸다', async () => {
+    invokeMock.mockResolvedValue({ data: { ok: true }, error: null });
+    const trade = makeTrade({ billOfLading: {} as never });
+    await sendForwarderDocumentEmail({
+      trade, deliveryKind: 'shipment_notice', recipientEmail: 'shipper@example.com',
+      recipientCompany: '화주', recipientName: '', message: '선적 완료', documentTypes: ['bill_of_lading'],
+    });
+    expect(invokeMock).toHaveBeenCalledWith('send-forwarder-request-email', expect.objectContaining({
+      body: expect.objectContaining({ delivery_kind: 'shipment_notice', recipient_email: 'shipper@example.com' }),
+    }));
   });
 
   it('문서를 하나도 선택하지 않으면 Edge Function을 호출하지 않고 에러를 던진다', async () => {

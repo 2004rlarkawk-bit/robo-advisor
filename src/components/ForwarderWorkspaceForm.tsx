@@ -77,8 +77,9 @@ interface Props {
   trade: SavedTrade | null;
   shipperNotifiedAt?: string | null;
   shippingAdviceSentAt?: string | null;
-  onShipperNotified: () => void;
-  onShippingAdviceSent: () => void;
+  completedAt?: string | null;
+  onShipperNotified: () => Promise<void>;
+  onShippingAdviceSent: () => Promise<void>;
   onCompleteShipment: () => void;
   defaultShipperEmail?: string;
   defaultShipperCompany?: string;
@@ -126,6 +127,7 @@ export default function ForwarderWorkspaceForm({
   trade,
   shipperNotifiedAt,
   shippingAdviceSentAt,
+  completedAt,
   onShipperNotified,
   onShippingAdviceSent,
   onCompleteShipment,
@@ -304,6 +306,7 @@ export default function ForwarderWorkspaceForm({
           trade={trade}
           shipperNotifiedAt={shipperNotifiedAt}
           shippingAdviceSentAt={shippingAdviceSentAt}
+          completedAt={completedAt}
           onShipperNotified={onShipperNotified}
           onShippingAdviceSent={onShippingAdviceSent}
           readOnly={readOnly}

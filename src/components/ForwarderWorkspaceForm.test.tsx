@@ -309,27 +309,29 @@ describe('수출 포워더 5단계 워크플로우', () => {
   });
 
   describe('STEP 3 — 선적 진행 관리', () => {
-    it('수동 통관 선택 대신 유니패스 조회를 제공한다', () => {
+    it('신고번호가 있으면 통관 완료 기록과 유니패스 조회를 제공한다', () => {
       const onProgressChange = vi.fn();
       const rendered = renderForm({ exportDeclarationNo: 'DECL-1' }, { currentStep: 3, onProgressChange });
       const select = rendered.container.querySelector<HTMLSelectElement>('select[aria-label="수출통관 상태"]');
-      expect(select).toBeNull();
+      expect(select).not.toBeNull();
+      expect(select?.querySelector<HTMLOptionElement>('option[value="done"]')?.disabled).toBe(false);
       expect(rendered.container.textContent).toContain('유니패스 조회');
       expect(onProgressChange).not.toHaveBeenCalled();
     });
 
-    it('완료 기록에 신고번호가 없으면 안내하되 상태를 자동 변경하지 않는다', () => {
+    it('신고번호·필증이 없으면 통관 완료를 새로 선택할 수 없다', () => {
       const onProgressChange = vi.fn();
       const rendered = renderForm({ exportDeclarationNo: '' }, {
         currentStep: 3, progress: { customsCleared: 'done' }, onProgressChange,
       });
-      expect(rendered.container.querySelector('select[aria-label="수출통관 상태"]')).toBeNull();
+      const select = rendered.container.querySelector<HTMLSelectElement>('select[aria-label="수출통관 상태"]');
+      expect(select?.querySelector<HTMLOptionElement>('option[value="done"]')?.disabled).toBe(true);
       expect(onProgressChange).not.toHaveBeenCalled();
     });
 
     it('읽기 전용에서는 수출통관 상태를 변경할 수 없다', () => {
       const rendered = renderForm({}, { currentStep: 3, readOnly: true });
-      expect(rendered.container.querySelector<HTMLSelectElement>('select[aria-label="수출통관 상태"]')).toBeNull();
+      expect(rendered.container.querySelector<HTMLSelectElement>('select[aria-label="수출통관 상태"]')?.disabled).toBe(true);
     });
 
     it('진행 단계 5개와 수출통관 정보 등록을 표시한다', () => {
@@ -458,9 +460,23 @@ describe('수출 포워더 5단계 워크플로우', () => {
     });
 
     it('화주 알림과 해외 파트너 Shipping Advice 전달 패널을 표시한다', () => {
-      const rendered = renderForm({}, { currentStep: 5, trade: FIXTURE_TRADE });
+      const rendered = renderForm({}, { currentStep: 5, trade: FIXTURE_TRADE, status: 'submitted', completedAt: '2026-09-24T00:00:00.000Z', readOnly: true });
       expect(rendered.container.textContent).toContain('화주에게 선적완료 알림');
       expect(rendered.container.textContent).toContain('해외 파트너 포워더 Shipping Advice');
+    });
+
+    it('선적 완료 전에는 완료 알림을 보내지 않고 완료 이력 저장 실패 시 재시도한다', () => {
+      const before = renderForm({}, { currentStep: 5, trade: FIXTURE_TRADE });
+      expect(before.container.querySelectorAll('[data-testid="forwarder-document-send-panel"]')).toHaveLength(0);
+      const retry = renderForm({ bookingNo: 'BK-100', vesselOrFlight: 'HMM ALGECIRAS', voyageNo: '0012E' }, {
+        currentStep: 5, trade: FIXTURE_TRADE, status: 'submitted', readOnly: true,
+        billOfLadingData: FIXTURE_BILL_OF_LADING, masterBlNo: 'MBLKR0001',
+        progress: { cargoReceived: 'done', customsCleared: 'done', loaded: 'done', departed: 'done' },
+      });
+      expect(retry.container.querySelectorAll('[data-testid="forwarder-document-send-panel"]')).toHaveLength(0);
+      const retryButton = Array.from(retry.container.querySelectorAll<HTMLButtonElement>('button'))
+        .find((button) => button.textContent?.trim() === '완료 기록 다시 저장');
+      expect(retryButton?.disabled).toBe(false);
     });
 
     it('Booking 완료는 exportForwarderCase.progress가 아니라 2단계 Booking No. 저장 여부로 판정한다', () => {

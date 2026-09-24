@@ -20,8 +20,9 @@ interface Props {
   trade: SavedTrade | null;
   shipperNotifiedAt?: string | null;
   shippingAdviceSentAt?: string | null;
-  onShipperNotified: () => void;
-  onShippingAdviceSent: () => void;
+  completedAt?: string | null;
+  onShipperNotified: () => Promise<void>;
+  onShippingAdviceSent: () => Promise<void>;
   readOnly: boolean;
   defaultShipperEmail?: string;
   defaultShipperCompany?: string;
@@ -39,6 +40,7 @@ export default function ExportForwarderCompletionStep({
   trade,
   shipperNotifiedAt,
   shippingAdviceSentAt,
+  completedAt,
   onShipperNotified,
   onShippingAdviceSent,
   readOnly,
@@ -55,7 +57,8 @@ export default function ExportForwarderCompletionStep({
     { label: 'H/B/L 발행', done: billOfLadingReady },
   ];
   const allDone = checklist.every((item) => item.done);
-  const isCompleted = status === 'submitted';
+  const isCompleted = status === 'submitted' && Boolean(completedAt);
+  const needsCompletionRetry = status === 'submitted' && !completedAt;
 
   return (
     <div className="form-card forwarder-workspace-form fwd-export-stage">
@@ -76,10 +79,10 @@ export default function ExportForwarderCompletionStep({
             </li>
           ))}
         </ul>
-        {!readOnly && (
+        {(!readOnly || needsCompletionRetry) && (
           <div className="form-actions">
             <button type="button" className="btn btn-primary" disabled={busy || isCompleted || !allDone} onClick={onComplete}>
-              {isCompleted ? '선적 완료 처리됨' : '선적 완료 처리'}
+              {isCompleted ? '선적 완료 처리됨' : needsCompletionRetry ? '완료 기록 다시 저장' : '선적 완료 처리'}
             </button>
             {!allDone && !isCompleted && <p className="fwd-action-hint">미완료 항목을 먼저 확인해 주세요.</p>}
           </div>
@@ -89,10 +92,11 @@ export default function ExportForwarderCompletionStep({
       {shipperNotifiedAt && <p className="form-message success">화주에게 전달 완료 — {new Date(shipperNotifiedAt).toLocaleString('ko-KR')}</p>}
       {shippingAdviceSentAt && <p className="form-message success">해외 파트너 포워더에게 전달 완료 — {new Date(shippingAdviceSentAt).toLocaleString('ko-KR')}</p>}
 
-      {trade && !readOnly && (
+      {trade && isCompleted && (
         <>
           <ForwarderDocumentSendPanel
             trade={trade}
+            deliveryKind="shipment_notice"
             title="화주에게 선적완료 알림"
             description="House B/L 등 생성된 문서를 화주 이메일로 전달합니다."
             sendButtonLabel="화주에게 선적완료 알림"
@@ -104,6 +108,7 @@ export default function ExportForwarderCompletionStep({
 
           <ForwarderDocumentSendPanel
             trade={trade}
+            deliveryKind="shipping_advice"
             title="해외 파트너 포워더 Shipping Advice"
             description="현지 통관·인도를 담당하는 해외 파트너 포워더에게 Shipping Advice와 관련 서류를 전달합니다."
             sendButtonLabel="Shipping Advice 전달"

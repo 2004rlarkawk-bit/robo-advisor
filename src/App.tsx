@@ -128,6 +128,7 @@ import {
 import {
   createEmptyForwarderFormState,
   forwarderFormToTradeProfile,
+  isBookingRegistered,
   isEtaBeforeEtd,
   missingBookingFields,
   tradeProfileToForwarderFormState,
@@ -961,6 +962,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       : undefined;
     const data = {
       profile: savedProfile,
+      sourceTradeId: appliedExportRequestId ?? undefined,
       tradeDirection: 'export' as const,
       tradeRole: 'forwarder' as const,
       attachments: forwarderAttachments,
@@ -1041,17 +1043,13 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
           ...bookingDetailsDraft,
           confirmedAt: exportForwarderCase?.booking?.confirmedAt ?? new Date().toISOString(),
         };
-        try {
-          const nextCase = await saveExportForwarderCaseState(
-            saved.id,
-            { booking: bookingDetails, progress: { booking: 'done' } },
-            [exportForwarderCase?.booking?.confirmedAt ? '부킹 정보 수정' : '부킹 확정 정보 등록'],
-          );
-          setExportForwarderCase(nextCase);
-          setBookingDetailsDraft({});
-        } catch (caseError) {
-          console.warn('[Forwarder Export] 부킹 부가정보 저장 실패:', caseError);
-        }
+        const nextCase = await saveExportForwarderCaseState(
+          saved.id,
+          { booking: bookingDetails, progress: { booking: 'done' } },
+          [exportForwarderCase?.booking?.confirmedAt ? '부킹 정보 수정' : '부킹 확정 정보 등록'],
+        );
+        setExportForwarderCase(nextCase);
+        setBookingDetailsDraft({});
         // H/B/L 운임조건이 비어 있을 때만 부킹 값으로 채운다 — 이미 적어 둔 값은 덮어쓰지 않는다.
         if (bookingDetails.freightTerms && !forwarderForm.freightTerms) {
           setForwarderForm((current) => current.freightTerms
@@ -1087,6 +1085,12 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const handleForwarderProgressChange = async (stage: ExportProgressStageKey, status: ExportProgressStatus) => {
     if (!currentTradeId) {
       alert('먼저 1단계에서 정보를 저장해 주세요.');
+      return;
+    }
+    if (stage === 'customsCleared' && status === 'done'
+      && !forwarderForm.exportDeclarationNo.trim()
+      && !forwarderAttachments.some((attachment) => attachment.documentType === 'export_declaration' && attachment.storagePath)) {
+      alert('수출통관 완료를 기록하려면 신고번호 또는 수출신고필증이 필요합니다.');
       return;
     }
     try {
@@ -1172,37 +1176,49 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   };
 
   const handleSubmitForwarderTrade = async () => {
-    if (isDocumentManagerReadOnlyView) return;
+    if (isDocumentManagerReadOnlyView && currentTradeStatus !== 'submitted') return;
     const tradeId = currentTradeId;
-    if (!tradeId || currentTradeStatus !== 'generated' || isForwarderSaving) return;
+    if (!tradeId || (currentTradeStatus !== 'generated' && currentTradeStatus !== 'submitted') || isForwarderSaving) return;
+    if (currentTradeStatus === 'submitted' && exportForwarderCase?.completedAt) return;
     if (!billOfLadingData || forwarderGenerationError) {
       alert('H/B/L을 먼저 생성해주세요.');
       return;
     }
+    if (!isBookingRegistered(forwarderForm)
+      || !exportForwarderCase?.masterBlNo?.trim()
+      || (['cargoReceived', 'customsCleared', 'loaded', 'departed'] as const).some((stage) => exportForwarderCase.progress[stage] !== 'done')) {
+      alert('부킹·선적 진행·M/B/L 등록을 완료한 뒤 선적 완료 처리해 주세요.');
+      return;
+    }
     setIsForwarderSaving(true);
     try {
-      await markTradeAsSubmitted(tradeId, {
-        profile: forwarderFormToTradeProfile(forwarderForm),
-        tradeRole: 'forwarder',
-        attachments: forwarderAttachments,
-        documents,
-        issues,
-        generatedDocs: {
-          billOfLading: billOfLadingData,
-          htmlTemplates,
-        },
-      });
+      if (currentTradeStatus === 'generated') {
+        await markTradeAsSubmitted(tradeId, {
+          profile: forwarderFormToTradeProfile(forwarderForm),
+          tradeRole: 'forwarder',
+          attachments: forwarderAttachments,
+          documents,
+          issues,
+          generatedDocs: {
+            billOfLading: billOfLadingData,
+            htmlTemplates,
+          },
+        });
+        setCurrentTradeStatus('submitted');
+      }
+      let completedCase: ExportForwarderCaseState;
       try {
-        await saveExportForwarderCaseState(
+        completedCase = await saveExportForwarderCaseState(
           tradeId,
           { progress: { departed: 'done' }, completedAt: new Date().toISOString() },
           ['선적 완료 처리'],
         );
       } catch (progressError) {
-        // 전송 자체는 완료되었으므로 진행상태 기록 실패로 전체 흐름을 막지 않는다.
-        console.warn('[Forwarder Export] 완료 상태 기록 실패:', progressError);
+        console.error('[Forwarder Export] 완료 상태 기록 실패:', progressError);
+        alert('거래는 제출됐지만 완료 이력을 저장하지 못했습니다. 이 화면에서 완료 기록을 다시 저장해 주세요.');
+        return;
       }
-      setCurrentTradeStatus('submitted');
+      setExportForwarderCase(completedCase);
       hasSubmittedTradeRef.current = true;
       try {
         await completeDraft();
@@ -1211,7 +1227,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       }
       clearExportAuthoringStateAfterSubmission();
       setActiveMenu('docs');
-      alert('선적 완료로 처리되었습니다. 문서관리에서 확인할 수 있습니다.');
+      alert('선적 완료로 처리되었습니다. 문서관리에서 거래를 열어 화주 알림과 Shipping Advice를 보낼 수 있습니다.');
     } catch (error) {
       console.error('[Forwarder Export] submitted 저장 실패:', error);
       alert('선적 완료 처리를 저장하지 못했습니다.');
@@ -1222,30 +1238,22 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
 
   // STEP 5 — 화주에게 선적완료 알림 / 해외 파트너 포워더 Shipping Advice 전달 이력 기록
   const handleForwarderShipperNotified = async () => {
-    if (!currentTradeId) return;
-    try {
-      const next = await saveExportForwarderCaseState(
-        currentTradeId,
-        { shipperNotifiedAt: new Date().toISOString() },
-        ['화주에게 선적완료 알림 이메일 전송'],
-      );
-      setExportForwarderCase(next);
-    } catch (error) {
-      console.warn('[Forwarder Export] 화주 알림 기록 실패(이메일 전송 자체는 완료됨):', error);
-    }
+    if (!currentTradeId) throw new Error('거래를 찾지 못했습니다.');
+    const next = await saveExportForwarderCaseState(
+      currentTradeId,
+      { shipperNotifiedAt: new Date().toISOString() },
+      ['화주에게 선적완료 알림 이메일 전송'],
+    );
+    setExportForwarderCase(next);
   };
   const handleForwarderShippingAdviceSent = async () => {
-    if (!currentTradeId) return;
-    try {
-      const next = await saveExportForwarderCaseState(
-        currentTradeId,
-        { shippingAdviceSentAt: new Date().toISOString() },
-        ['해외 파트너 포워더에게 Shipping Advice 전달'],
-      );
-      setExportForwarderCase(next);
-    } catch (error) {
-      console.warn('[Forwarder Export] Shipping Advice 기록 실패(이메일 전송 자체는 완료됨):', error);
-    }
+    if (!currentTradeId) throw new Error('거래를 찾지 못했습니다.');
+    const next = await saveExportForwarderCaseState(
+      currentTradeId,
+      { shippingAdviceSentAt: new Date().toISOString() },
+      ['해외 파트너 포워더에게 Shipping Advice 전달'],
+    );
+    setExportForwarderCase(next);
   };
 
   const handleResetForwarderTrade = () => {
@@ -1261,6 +1269,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setBillOfLadingData(null);
     setForwarderGenerationError('');
     setExportForwarderCase(null);
+    setBookingDetailsDraft({});
     setAppliedExportRequestId(null);
     setAppliedExportRequestShipperContact(null);
     hasSubmittedTradeRef.current = false;
@@ -1648,7 +1657,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       setForwarderGenerationError('');
       setExportForwarderCase((t.exportForwarderCase as ExportForwarderCaseState | null) ?? null);
       setBookingDetailsDraft({});
-      setAppliedExportRequestId(null);
+      setAppliedExportRequestId(t.sourceTradeId ?? null);
       setAppliedExportRequestShipperContact(null);
       hasSubmittedTradeRef.current = t.status === 'submitted';
       // 문서관리 조회·거래관리 이어서 작성은 Inbox를 거치지 않고 바로 업무 화면으로 연다.
@@ -3125,8 +3134,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 trade={currentForwarderTrade}
                 shipperNotifiedAt={exportForwarderCase?.shipperNotifiedAt}
                 shippingAdviceSentAt={exportForwarderCase?.shippingAdviceSentAt}
-                onShipperNotified={() => void handleForwarderShipperNotified()}
-                onShippingAdviceSent={() => void handleForwarderShippingAdviceSent()}
+                completedAt={exportForwarderCase?.completedAt}
+                onShipperNotified={handleForwarderShipperNotified}
+                onShippingAdviceSent={handleForwarderShippingAdviceSent}
                 onCompleteShipment={() => void handleSubmitForwarderTrade()}
                 defaultShipperEmail={appliedExportRequestShipperContact?.email}
                 defaultShipperCompany={appliedExportRequestShipperContact?.company}

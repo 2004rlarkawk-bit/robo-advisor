@@ -125,6 +125,8 @@ export interface SendExternalForwarderEmailInput {
   recipientName: string;
   message: string;
   documentTypes: AttachableDocumentType[];
+  /** 생략하면 기존 화주 → 외부 포워더 운송의뢰 메일이다. */
+  deliveryKind?: 'shipment_notice' | 'shipping_advice';
 }
 
 /** 프론트에는 항상 이 고정 문구만 노출하고, 실제 오류는 서버 로그에서만 확인한다. */
@@ -151,6 +153,7 @@ export async function sendExternalForwarderEmail(input: SendExternalForwarderEma
       recipient_name: input.recipientName.trim(),
       message: input.message.trim(),
       documents,
+      ...(input.deliveryKind ? { delivery_kind: input.deliveryKind } : {}),
     },
     headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
   });
@@ -159,4 +162,11 @@ export async function sendExternalForwarderEmail(input: SendExternalForwarderEma
     console.error('[externalForwarderEmailService] 이메일 전송 실패:', error);
     throw new Error(GENERIC_SEND_ERROR);
   }
+}
+
+/** 포워더가 완료된 수출 거래의 H/B/L을 화주 또는 해외 파트너에게 전달한다. */
+export function sendForwarderDocumentEmail(
+  input: SendExternalForwarderEmailInput & { deliveryKind: 'shipment_notice' | 'shipping_advice' },
+): Promise<void> {
+  return sendExternalForwarderEmail(input);
 }

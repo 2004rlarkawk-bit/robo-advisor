@@ -12,6 +12,7 @@ export const ATTACHABLE_DOCUMENT_TYPES = [
 ] as const;
 
 export type AttachableDocumentType = (typeof ATTACHABLE_DOCUMENT_TYPES)[number];
+export type DeliveryKind = 'forwarder_request' | 'shipment_notice' | 'shipping_advice';
 
 /** trade.document_data.generatedDocuments 안에서 각 문서 타입이 실제로 있는지 확인할 키. */
 export const DOCUMENT_TYPE_TO_GENERATED_KEY: Record<AttachableDocumentType, string> = {
@@ -35,6 +36,7 @@ export interface RequestDocument {
 }
 
 export interface ParsedSendRequest {
+  deliveryKind: DeliveryKind;
   tradeId: string;
   recipientEmail: string;
   recipientCompany: string;
@@ -63,19 +65,27 @@ function isUuid(value: string): boolean {
 export function parseSendRequest(value: unknown): ParsedSendRequest {
   if (!isRecord(value)) throw new Error('요청 형식이 올바르지 않습니다.');
 
+  const deliveryKind = value.delivery_kind ?? 'forwarder_request';
+  if (deliveryKind !== 'forwarder_request' && deliveryKind !== 'shipment_notice' && deliveryKind !== 'shipping_advice') {
+    throw new Error('지원하지 않는 이메일 종류입니다.');
+  }
+
   const tradeId = cleanString(value.trade_id, 100);
   if (!tradeId || !isUuid(tradeId)) throw new Error('거래 정보가 올바르지 않습니다.');
 
   const recipientEmail = cleanString(value.recipient_email, MAX_RECIPIENT_TEXT_LENGTH).toLowerCase();
-  if (!recipientEmail || !isValidEmail(recipientEmail)) throw new Error('포워더 이메일 주소가 올바르지 않습니다.');
+  if (!recipientEmail || !isValidEmail(recipientEmail)) throw new Error('받는 사람 이메일 주소가 올바르지 않습니다.');
 
   const recipientCompany = cleanString(value.recipient_company, MAX_RECIPIENT_TEXT_LENGTH);
   const recipientName = cleanString(value.recipient_name, MAX_RECIPIENT_TEXT_LENGTH);
   const message = cleanString(value.message, MAX_MESSAGE_LENGTH);
 
   const documents = parseDocuments(value.documents);
+  if (deliveryKind !== 'forwarder_request' && !documents.some((document) => document.documentType === 'bill_of_lading')) {
+    throw new Error('선적 안내에는 H/B/L을 첨부해야 합니다.');
+  }
 
-  return { tradeId, recipientEmail, recipientCompany, recipientName, message, documents };
+  return { deliveryKind, tradeId, recipientEmail, recipientCompany, recipientName, message, documents };
 }
 
 function parseDocuments(value: unknown): RequestDocument[] {
