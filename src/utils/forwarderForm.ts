@@ -61,6 +61,8 @@ export interface ForwarderFormState extends ForwarderTradeFields {
   freightAndCharges: string;
   /** 원본 발행 통수 — 기본 3통 */
   numberOfOriginals: NumericInput;
+  /** B/L 발행 방식 — 원본 발행 / Surrender(전신 인도) / Sea Waybill */
+  blReleaseType: 'ORIGINAL' | 'SURRENDER' | 'SEAWAY';
   placeOfIssue: string;
   dateOfIssue: string;
   /** 본선 적재일 — 값이 있으면 선적선하증권(On Board) */
@@ -148,6 +150,7 @@ export function createEmptyForwarderFormState(): ForwarderFormState {
     freightTerms: '',
     freightAndCharges: '',
     numberOfOriginals: 3,
+    blReleaseType: 'ORIGINAL',
     placeOfIssue: '',
     dateOfIssue: '',
     shippedOnBoardDate: '',

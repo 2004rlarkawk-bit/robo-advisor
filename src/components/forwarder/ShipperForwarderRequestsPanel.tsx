@@ -12,7 +12,11 @@ import {
   X,
 } from 'lucide-react';
 import type { SavedTrade } from '../../types';
-import type { ExportForwarderCaseState } from '../../types/exportForwarderCase';
+import {
+  EXPORT_PROGRESS_STAGE_LABEL,
+  EXPORT_PROGRESS_STAGE_ORDER,
+  type ExportForwarderCaseState,
+} from '../../types/exportForwarderCase';
 import { FORWARDER_STAGE_LABEL, type ForwarderCaseState } from '../../types/forwarderCase';
 import type { ExternalForwarderRequest, TradeRequest } from '../../types/forwarderRequest';
 import { listExternalForwarderRequests } from '../../services/externalForwarderEmailService';
@@ -102,11 +106,16 @@ export function deriveTradeRequestView(
     const completed = direction === 'import'
       ? importState?.stage === 'done'
       : Boolean(exportState?.completedAt);
+    // 수출도 수입처럼 현재 진행 단계를 이름으로 보여준다 — 가장 뒤에 있는 진행·완료 단계 기준.
+    const exportStage = [...EXPORT_PROGRESS_STAGE_ORDER].reverse()
+      .find((key) => exportState?.progress?.[key] === 'in_progress' || exportState?.progress?.[key] === 'done');
     const statusLabel = completed
       ? '업무 완료'
       : direction === 'import' && importState?.stage
         ? FORWARDER_STAGE_LABEL[importState.stage]
-        : '포워더 진행 중';
+        : exportStage
+          ? `${EXPORT_PROGRESS_STAGE_LABEL[exportStage]}${exportState?.progress?.[exportStage] === 'in_progress' ? ' 진행 중' : ''}`
+          : '포워더 진행 중';
     return {
       category: completed ? 'done' : 'progress',
       statusLabel,
@@ -313,7 +322,8 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
                   </div>
                   <div className="shipper-request-forwarder">
                     <div><strong>{view.forwarderLabel}</strong><span className={`shipper-request-status is-${view.statusTone}`}>{view.statusLabel}</span></div>
-                    {view.requestedAt && <span>의뢰 {formatDate(view.requestedAt)}</span>}
+                    {/* 의뢰일이 없어도 줄을 유지해 행마다 라벨 높이가 어긋나지 않게 한다 */}
+                    <span>{view.requestedAt ? `의뢰 ${formatDate(view.requestedAt)}` : ' '}</span>
                   </div>
                   <div className="shipper-request-next">
                     {internal && (

@@ -48,3 +48,11 @@
   .fwd-export-summary-grid { grid-template-columns: 1fr; }
   .fwd-export-refresh .form-section-hint { display: block; margin-top: 5px; }
 }
+
+/* 업무 메시지 — 단계 화면 아래 접이식 카드 (수입 요청·회신 탭과 같은 채널) */
+.fwd-export-messages { padding: 0; overflow: hidden; }
+.fwd-export-messages > summary { display: flex; align-items: center; gap: 8px; padding: 14px 18px; cursor: pointer; font-size: 14px; font-weight: 700; color: #16233b; list-style: none; }
+.fwd-export-messages > summary::-webkit-details-marker { display: none; }
+.fwd-export-messages > summary span { font-size: 12.5px; font-weight: 500; color: #64748b; }
+.fwd-export-messages[open] > summary { border-bottom: 1px solid #edf1f5; }
+.fwd-export-messages > *:not(summary) { padding: 14px 18px; }

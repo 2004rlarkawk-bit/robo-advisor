@@ -16,10 +16,11 @@ export type ForwarderCaseStage = 'received' | 'review' | 'clearance' | 'done';
 
 export const FORWARDER_STAGE_ORDER: ForwarderCaseStage[] = ['received', 'review', 'clearance', 'done'];
 
+// 포워더 상세(ForwarderImportWorkspace)와 화주의 포워더 의뢰 화면이 같은 이름을 쓴다.
 export const FORWARDER_STAGE_LABEL: Record<ForwarderCaseStage, string> = {
   received: '의뢰 접수',
-  review: '서류 검토',
-  clearance: '통관·운송',
+  review: '서류 확인',
+  clearance: '신고·통관 진행',
   done: '업무 완료',
 };
 

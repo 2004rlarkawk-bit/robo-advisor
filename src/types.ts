@@ -643,6 +643,8 @@ export interface BillOfLadingData {
   freightAndCharges: string;
   /** 발행 원본 통수 — 통상 3통(Three/3). 유통증권이라 통수 기재가 필수다. */
   numberOfOriginals: number;
+  /** 발행 방식 — SURRENDER(전신 인도, 원본 0통)·SEAWAY(비유통 화물운송장)면 원본 통수 없이 발행한다. */
+  releaseType?: 'ORIGINAL' | 'SURRENDER' | 'SEAWAY';
   /** 법정 기재사항 '발행지' */
   placeOfIssue: string;
   /** 법정 기재사항 '발행일자' */
