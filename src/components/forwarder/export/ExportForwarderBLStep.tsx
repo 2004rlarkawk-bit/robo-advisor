@@ -135,7 +135,17 @@ export default function ExportForwarderBLStep({
                 )}
               </div>
               <div className="form-group"><label className="form-label" htmlFor="bl-charges">운임·부대비용 명세 (선택)</label><input id="bl-charges" className="form-input" value={state.freightAndCharges} onChange={(e) => patch({ freightAndCharges: e.target.value })} placeholder="비우면 AS ARRANGED로 표기" /></div>
-              <div className="form-group"><label className="form-label" htmlFor="bl-originals">원본 발행 통수</label><input id="bl-originals" type="number" min="1" max="5" className="form-input" value={state.numberOfOriginals} onChange={(e) => patch({ numberOfOriginals: numericValue(e.target.value) })} /></div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="bl-release">발행 방식</label>
+                <select id="bl-release" className="form-input" value={state.blReleaseType} onChange={(e) => patch({ blReleaseType: e.target.value as ForwarderFormState['blReleaseType'] })}>
+                  <option value="ORIGINAL">Original B/L (원본 발행)</option>
+                  <option value="SURRENDER">Surrender B/L (원본 회수 — 전신 인도)</option>
+                  <option value="SEAWAY">Sea Waybill (비유통 화물운송장)</option>
+                </select>
+                {state.blReleaseType === 'SURRENDER' && <small className="form-help">원본 없이 SURRENDERED로 표기됩니다. 한·중·일 단거리 구간에서 수하인이 원본 제시 없이 화물을 인수할 때 씁니다.</small>}
+                {state.blReleaseType === 'SEAWAY' && <small className="form-help">비유통(Non-Negotiable) 문서로 표기됩니다. 기명 수하인만 인수할 수 있습니다.</small>}
+              </div>
+              <div className="form-group"><label className="form-label" htmlFor="bl-originals">원본 발행 통수</label><input id="bl-originals" type="number" min="1" max="5" className="form-input" value={state.numberOfOriginals} onChange={(e) => patch({ numberOfOriginals: numericValue(e.target.value) })} disabled={state.blReleaseType !== 'ORIGINAL'} />{state.blReleaseType !== 'ORIGINAL' && <small className="form-help">원본을 발행하지 않는 방식이라 통수는 0으로 기재됩니다.</small>}</div>
               <div className="form-group"><label className="form-label" htmlFor="bl-onboard">본선 적재일 (Shipped on Board)</label><input id="bl-onboard" type="date" className="form-input" value={state.shippedOnBoardDate} onChange={(e) => patch({ shippedOnBoardDate: e.target.value })} /><small className="form-help">비우면 수취선하증권(Received B/L)으로 발행됩니다.</small></div>
               <div className="form-group"><label className="form-label" htmlFor="bl-issuer">발행자 상호</label><input id="bl-issuer" className="form-input" value={state.issuerName} onChange={(e) => patch({ issuerName: e.target.value })} placeholder="포워더 상호" /></div>
               <div className="form-group">
