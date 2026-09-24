@@ -145,15 +145,17 @@ export default function ExportForwarderBookingStep({
           {invalidSchedule && <div className="form-message error" role="alert">ETA는 ETD보다 빠를 수 없습니다.</div>}
         </details>
 
-        <details className="form-section fwd-export-content-card" open>
-          <summary className="form-section-summary">컨테이너 입력</summary>
-          {state.loadingMode === 'FCL' ? <div className="form-grid">
-            <div className="form-group"><label className="form-label">컨테이너 규격</label><select className="form-input" value={state.containerSize} onChange={(e) => patch({ containerSize: e.target.value as ContainerSize })}>{!CONTAINER_SIZE_OPTIONS.includes(state.containerSize) && <option value={state.containerSize}>{state.containerSize} (기존값)</option>}{CONTAINER_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">컨테이너 수량</label><input type="number" min="0" className="form-input" value={state.containerQuantity} onChange={(e) => patch({ containerQuantity: numericValue(e.target.value) })} /></div>
-            <div className="form-group"><label className="form-label">컨테이너 번호 (선택)</label><input className="form-input" value={state.containerNo} onChange={(e) => patch({ containerNo: e.target.value })} /></div>
-            <div className="form-group"><label className="form-label">Seal 번호 (선택)</label><input className="form-input" value={state.sealNo} onChange={(e) => patch({ sealNo: e.target.value })} /></div>
-          </div> : state.loadingMode === 'LCL' ? <p className="fwd-export-inline-note" role="status">LCL 운송은 컨테이너 입력이 필요하지 않습니다.</p> : null}
-        </details>
+        {state.loadingMode && (
+          <details className="form-section fwd-export-content-card" open>
+            <summary className="form-section-summary">컨테이너 입력</summary>
+            {state.loadingMode === 'FCL' ? <div className="form-grid">
+              <div className="form-group"><label className="form-label">컨테이너 규격</label><select className="form-input" value={state.containerSize} onChange={(e) => patch({ containerSize: e.target.value as ContainerSize })}>{!CONTAINER_SIZE_OPTIONS.includes(state.containerSize) && <option value={state.containerSize}>{state.containerSize} (기존값)</option>}{CONTAINER_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}</option>)}</select></div>
+              <div className="form-group"><label className="form-label">컨테이너 수량</label><input type="number" min="0" className="form-input" value={state.containerQuantity} onChange={(e) => patch({ containerQuantity: numericValue(e.target.value) })} /></div>
+              <div className="form-group"><label className="form-label">컨테이너 번호 (선택)</label><input className="form-input" value={state.containerNo} onChange={(e) => patch({ containerNo: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label">Seal 번호 (선택)</label><input className="form-input" value={state.sealNo} onChange={(e) => patch({ sealNo: e.target.value })} /></div>
+            </div> : <p className="fwd-export-inline-note" role="status">LCL 운송은 컨테이너 입력이 필요하지 않습니다.</p>}
+          </details>
+        )}
 
         <details className="form-section fwd-export-booking-document" open>
           <summary className="form-section-summary">Booking Confirmation</summary>

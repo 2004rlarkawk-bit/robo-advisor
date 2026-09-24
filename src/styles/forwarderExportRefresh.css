@@ -15,6 +15,8 @@
 .fwd-export-refresh .form-label { font-size: 12px; font-weight: 600; margin-bottom: 8px; color: #475569; }
 .fwd-export-refresh .form-input { min-height: 42px; padding: 10px 12px; font-size: 13px; border-color: #d7e0ed; border-radius: 7px; }
 .fwd-export-refresh .form-grid { gap: 16px 24px; }
+.fwd-export-refresh .form-section > .form-group { margin: 0; padding: 0 22px 18px; }
+.fwd-export-refresh .form-section > .form-group textarea { display: block; resize: vertical; }
 .fwd-export-refresh .form-section { border-color: #dce4ef; border-radius: 14px; margin-top: 16px; box-shadow: none; background: #fff; overflow: hidden; }
 .fwd-export-refresh .form-section-summary { min-height: 62px; font-size: 16px; font-weight: 700; color: #1e293b; background: #fff; padding: 18px 22px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .fwd-export-refresh .form-section-summary::after { margin-left: auto; color: #8b9bb0; }
