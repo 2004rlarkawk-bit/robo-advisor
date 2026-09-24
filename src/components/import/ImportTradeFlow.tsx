@@ -10,6 +10,8 @@ import {
 import ImportDeclarationFormPreview from './ImportDeclarationFormPreview';
 import ImportUnipassSubmit from './ImportUnipassSubmit';
 import ImportDeclarationChecklist from './ImportDeclarationChecklist';
+import ImportHandoffReadyCard from './ImportHandoffReadyCard';
+import { scrollPageToTop } from '../../utils/scrollPageToTop';
 import ImportDocumentComparison from './ImportDocumentComparison';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 import {
@@ -399,8 +401,9 @@ export default function ImportTradeFlow({
   }, []);
 
   // 단계 전환 시 스크롤이 하단에 남지 않도록 항상 페이지 맨 위에서 시작
+  // (창 스크롤만 올리면 본문 컨테이너가 내려가 있는 경우 그대로 남는다)
   useEffect(() => {
-    window.scrollTo({ top: 0 });
+    scrollPageToTop();
   }, [state.step]);
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState(false);
@@ -1071,9 +1074,6 @@ export default function ImportTradeFlow({
   // 서류 누락 카드 → 1단계(서류 업로드)로 돌아가 추가 업로드
   const goToUploadStep = () => setState((current) => ({ ...current, step: 1 }));
 
-  // FTA·원산지증명서는 3단계에서 따로 다루고, 2단계에서는 신고값만 본다.
-  const isFtaRisk = (risk: ImportRisk) => Boolean(risk.ftaChoice) || risk.id === 'missing-co' || risk.id.startsWith('co-');
-  const declarationRisks = liveRisks.filter((risk) => !isFtaRisk(risk));
   const ftaChoice = state.analysis?.chosenValues?.[FTA_CHOICE_KEY];
   const ftaReviewing = isFtaReviewChoice(ftaChoice);
   const coHolding = state.analysis?.chosenValues?.[CO_HOLDING_KEY] as CoHolding | undefined;
@@ -1316,13 +1316,7 @@ export default function ImportTradeFlow({
             }))}
           />
           {role === 'shipper' ? (
-            <ImportDeclarationChecklist
-              fields={state.analysis.extracted}
-              risks={declarationRisks}
-              onChoose={readOnly ? undefined : chooseRiskValue}
-              onClearChoice={readOnly ? undefined : clearRiskValue}
-              onGoHs={readOnly ? undefined : goToHsItem}
-            />
+            <ImportDeclarationChecklist fields={state.analysis.extracted} />
           ) : (
             <RiskSummary
               risks={liveRisks}
@@ -1521,7 +1515,12 @@ export default function ImportTradeFlow({
 
       {state.step === 4 && state.analysis && role === 'shipper' && declarationData && (
         <>
-          <ImportDeclarationChecklist fields={state.analysis.extracted} risks={declarationRisks} summary />
+          <ImportDeclarationChecklist fields={state.analysis.extracted} summary />
+          <ImportHandoffReadyCard
+            documentTypes={state.documents.map((document) => document.type)}
+            fields={state.analysis.extracted}
+            confirmedHsCodes={state.analysis.extracted.items.map((item) => item.confirmedHSCode)}
+          />
           <section className="form-card import-card">
             <div className="import-card-heading"><div><h2>수입신고 의뢰서</h2></div><p>서류에서 확인된 값을 수입신고의뢰서 양식에 채웠습니다. 관세사에게 보내기 전에 빈칸과 체크 항목을 확인하세요.</p></div>
             <div className="document-preview-actions">
@@ -1569,7 +1568,6 @@ export default function ImportTradeFlow({
             seed={declarationFormValues.bl_no ?? ''}
             customsOffice={declarationFormValues.customs_office}
             summary={unipassSummary}
-            pendingCount={liveRisks.filter((risk) => risk.status !== 'resolved').length}
           />
 
           {readOnly && onClose ? <DocumentManagerReadOnlyAction
@@ -1581,11 +1579,6 @@ export default function ImportTradeFlow({
             }}
           /> : (
             <>
-              {liveRisks.some((risk) => risk.status !== 'resolved') && (
-                <p className="import-card-note">
-                  남은 확인 항목 {liveRisks.filter((risk) => risk.status !== 'resolved').length}건은 제출 후 포워더가 원본 서류와 대조합니다.
-                </p>
-              )}
               <div className="import-actions">
                 <button className="btn btn-secondary" onClick={() => setState((current) => ({ ...current, step: 3 }))}>이전</button>
                 <button className="btn btn-primary" disabled={busy} onClick={() => void complete()}>{busy ? '완료 처리 중…' : '완료'}</button>

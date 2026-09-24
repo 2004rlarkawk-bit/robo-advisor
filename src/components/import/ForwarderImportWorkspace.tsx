@@ -6,8 +6,8 @@
  *  - 상세: 서류 확인 / 업무 진행 / 업무 메시지 (상태 변경 규칙은 유지)
  * 운영 상태는 forwarderCaseService를 통해 workflow_data.forwarderCase에 저장한다.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CheckCircle2, CornerUpLeft, ExternalLink, Mail } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, CheckCircle2, ExternalLink, Mail } from 'lucide-react';
 import {
   FORWARDER_STAGE_ORDER,
   FORWARDER_STAGE_LABEL,
@@ -31,12 +31,11 @@ import ForwarderExtractedSummary from './ForwarderExtractedSummary';
 import { IMPORT_DOCUMENT_TYPE_LABELS } from '../../services/importDocumentAnalysisService';
 import { loadTradeAttachmentFile } from '../../services/tradeAttachmentStorageService';
 import { downloadArrivalNoticeDocx } from '../../services/arrivalNoticeDocxService';
-import ImportDocumentComparison from './ImportDocumentComparison';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 import ForwarderImportInbox from './ForwarderImportInbox';
-import ForwarderIssueReview from './ForwarderIssueReview';
+import ImportHandoffReadyCard from './ImportHandoffReadyCard';
+import { scrollPageToTop } from '../../utils/scrollPageToTop';
 import ForwarderDocumentThumbnail from './ForwarderDocumentThumbnail';
-import ForwarderReturnRequestContent, { buildReturnRequestLetter } from './ForwarderReturnRequestContent';
 import ForwarderRequestMessages from './ForwarderRequestMessages';
 import TradeMessageThread from '../forwarder/TradeMessageThread';
 import { listIncomingTradeRequests } from '../../services/forwarderRequestService';
@@ -121,22 +120,8 @@ export default function ForwarderImportWorkspace({
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [returnFormOpen, setReturnFormOpen] = useState(false);
-  // 보완 요청 전송 완료 안내 — 업무 메시지 탭으로 넘어간 뒤 그 위에 띄운다.
+  // 이미 보낸 보완 요청의 전송 완료 안내 — 기존 데이터 표시용으로만 남긴다.
   const [returnSentOpen, setReturnSentOpen] = useState(false);
-  const returnFormRef = useRef<HTMLDivElement>(null);
-  const [returnFormFocusKey, setReturnFormFocusKey] = useState(0);
-  useEffect(() => {
-    if (returnFormFocusKey > 0 && returnFormOpen) {
-      returnFormRef.current?.scrollIntoView({ block: 'nearest' });
-      returnFormRef.current?.focus({ preventScroll: true });
-    }
-  }, [returnFormFocusKey, returnFormOpen]);
-  // 보완 요청은 이슈를 골라 보낸다 — 선택된 이슈가 곧 요청 내용, 메모는 부가 안내.
-  const [returnPicks, setReturnPicks] = useState<Record<string, boolean>>({});
-  const [returnMemo, setReturnMemo] = useState('');
-  const [finishReviewOpen, setFinishReviewOpen] = useState(false);
-  const [finishReviewReason, setFinishReviewReason] = useState('');
   const [detailTab, setDetailTab] = useState<DetailTab>('review');
   const [docBusyId, setDocBusyId] = useState<string | null>(null);
   const [anBusy, setAnBusy] = useState(false);
@@ -283,12 +268,8 @@ export default function ForwarderImportWorkspace({
 
   const openCase = (tradeId: string) => {
     setSelectedId(tradeId);
-    setFinishReviewOpen(false);
-    setFinishReviewReason('');
-    setReturnFormOpen(false);
-    setReturnPicks({});
-    setReturnMemo('');
     setDetailTab('review');
+    scrollPageToTop();
   };
 
   const finishClearance = (caseItem: ForwarderImportCase) => {
@@ -313,13 +294,7 @@ export default function ForwarderImportWorkspace({
   // ---------- 상세 화면 ----------
   if (selected) {
     const stageIndex = FORWARDER_STAGE_ORDER.indexOf(selected.stage);
-    const blockers = selected.issues.filter((issue) => issue.severity === 'blocker');
-    const checks = selected.issues.filter((issue) => issue.severity === 'check');
-    const infos = selected.issues.filter((issue) => issue.severity === 'info');
     const sourceDocs = selected.snapshot.documents.filter((doc) => doc.storagePath);
-    const pendingIssues = selected.issues.filter(issue => !issue.resolved);
-    const pendingBlockers = pendingIssues.filter(issue => issue.severity === 'blocker');
-    const pickedIssues = pendingIssues.filter(issue => issue.severity !== 'info' && returnPicks[issue.id]);
     const returnPending = Boolean(selected.returnRequest && !selected.returnRequest.resolvedAt);
     const documentsLocked = stageIndex < FORWARDER_STAGE_ORDER.indexOf('clearance') || returnPending;
     const documentLockReason = returnPending ? '화주 회신·재검토 후 사용 가능' : '서류 검토 후 사용 가능';
@@ -411,7 +386,7 @@ export default function ForwarderImportWorkspace({
             <span className="fwd-message-empty-icon" aria-hidden="true"><Mail size={22} /></span>
             <div className="fwd-message-empty-copy">
               <h2>아직 보낸 요청이 없습니다.</h2>
-              <p>서류 검토에서 필요한 항목을 선택하면 보완 요청을 보낼 수 있어요.</p>
+              <p>화주와 주고받은 대화가 여기에 모입니다.</p>
             </div>
             <button type="button" className="btn btn-secondary" onClick={() => setDetailTab('review')}>서류 확인으로 이동 <span aria-hidden="true">→</span></button>
           </section>
@@ -453,85 +428,26 @@ export default function ForwarderImportWorkspace({
 
         {detailTab === 'review' && <ForwarderExtractedSummary item={selected} />}
 
-        {detailTab === 'review' && (blockers.length > 0 || checks.length > 0 || infos.length > 0) && (
-          <details className="form-card import-card fwd-check-disclosure">
-            <summary><div><strong>{pendingIssues.length ? `확인 필요 ${pendingIssues.length}건` : '서류 확인 내역'}</strong><span>불일치·누락의 근거 확인과 보완 요청</span></div><span className="fwd-check-open">항목 보기</span></summary>
-            <ForwarderIssueReview
-              key={selected.tradeId}
-              issues={selected.issues}
-              notes={selected.issueNotes}
-              saving={saving}
-              comparisons={selected.snapshot.analysis.comparison}
-              documents={selected.snapshot.documents}
-              documentBusyId={docBusyId}
-              onOpenDocument={(document) => void openSourceDocument(document)}
-              requestPicks={returnPicks}
-              onToggleRequest={!selected.returnRequest && (selected.stage === 'received' || selected.stage === 'review') ? (issue, checked) => {
-                setReturnPicks(current => ({ ...current, [issue.id]: checked }));
-                setFinishReviewOpen(false);
-              } : undefined}
-              onResolve={(issue, note) => persist(
-                selected,
-                { issueResolutions: { [issue.id]: true }, ...(note ? { issueNotes: { [issue.id]: note } } : {}) },
-                [`'${issue.title}' 확인 종결${note ? ` — ${note}` : ''}`],
-              )}
-              onReopen={(issue) => persist(
-                selected,
-                { issueResolutions: { [issue.id]: false } },
-                [`'${issue.title}' 종결 취소`],
-              )}
-            />
-          </details>
+        {detailTab === 'review' && (
+          <ImportHandoffReadyCard
+            documentTypes={selected.snapshot.documents.map((document) => document.type)}
+            fields={selected.snapshot.analysis.extracted}
+            readyTitle="전달 자료 확인 완료"
+            readyNote="필요한 서류와 신고 준비 정보가 모두 있습니다. 통관 업무를 진행하세요."
+          />
         )}
 
-
         {detailTab === 'review' && !selected.returnRequest && (selected.stage === 'received' || selected.stage === 'review') && (
-          <section className="fwd-batch-review" aria-label="검토 후 다음 작업">
-            {!finishReviewOpen && !returnFormOpen && <div className="fwd-batch-toolbar">
-              <span>{pickedIssues.length ? `보완 요청 ${pickedIssues.length}건 선택` : '원본과 추출 정보를 확인했나요?'}</span>
+          <section className="fwd-batch-review" aria-label="다음 업무로 이동">
+            <div className="fwd-batch-toolbar">
+              <span>서류와 추출 정보를 확인했으면 통관 업무로 넘어갑니다.</span>
               <div>
-                <button type="button" className={`btn ${pickedIssues.length ? 'btn-primary' : 'btn-secondary'}`} disabled={saving || pickedIssues.length === 0} onClick={() => { setReturnFormOpen(true); setFinishReviewOpen(false); setReturnFormFocusKey(current => current + 1); }}>선택한 {pickedIssues.length}건 보완 요청</button>
-                <button type="button" className="btn btn-primary" disabled={saving || pickedIssues.length > 0} onClick={() => { setFinishReviewOpen(true); setReturnFormOpen(false); }}>확인 완료 · 신고자료 준비</button>
+                <button type="button" className="btn btn-primary" disabled={saving} onClick={async () => {
+                  if (saving) return;
+                  if (await persist(selected, { stage: 'clearance' }, ['전달 자료 확인 완료'])) setDetailTab('clearance');
+                }}>{saving ? '처리 중…' : '확인 완료 · 업무 진행'}</button>
               </div>
-            </div>}
-            {returnFormOpen && (() => {
-              const sections = [
-                pickedIssues.filter(issue => issue.severity === 'blocker').length ? '[반드시 수정]\n' + pickedIssues.filter(issue => issue.severity === 'blocker').map(issue => `· ${issue.title} — ${issue.detail}`).join('\n') : '',
-                pickedIssues.filter(issue => issue.severity === 'check').length ? '[함께 확인 요청]\n' + pickedIssues.filter(issue => issue.severity === 'check').map(issue => `· ${issue.title} — ${issue.detail}`).join('\n') : '',
-                returnMemo.trim() ? '(추가 안내) ' + returnMemo.trim() : '',
-              ].filter(Boolean);
-              const reason = buildReturnRequestLetter(sections.join('\n\n'), issuerName, senderContactName);
-              return <div className="fwd-batch-composer" ref={returnFormRef} tabIndex={-1} aria-label="보완 요청문 확인">
-                <h3>보완 요청문 · {pickedIssues.length}건</h3>
-                <ForwarderReturnRequestContent reason={reason} />
-                <label className="form-group"><span className="form-label">추가 안내 (선택)</span><textarea className="form-input fwd-return-textarea" rows={2} value={returnMemo} onChange={event => setReturnMemo(event.target.value)} /></label>
-                <div className="fwd-return-actions">
-                  <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => setReturnFormOpen(false)}>닫기</button>
-                  <button type="button" className="btn btn-primary" disabled={saving || pickedIssues.length === 0} onClick={async () => {
-                    if (saving || pickedIssues.length === 0 || selected.returnRequest) return;
-                    const saved = await persist(selected, { stage: 'review', returnRequest: { reason, issueTitles: pickedIssues.map(issue => issue.title), requestedAt: new Date().toISOString() } }, [`화주에게 보완 요청 (${pickedIssues.length}건: ${pickedIssues.map(issue => issue.title).join(', ')})`]);
-                    if (saved) { setReturnFormOpen(false); setReturnPicks({}); setReturnMemo(''); setDetailTab('messages'); setReturnSentOpen(true); }
-                  }}><CornerUpLeft size={15} />{saving ? '보내는 중…' : `보완 요청 보내기 (${pickedIssues.length}건)`}</button>
-                </div>
-              </div>;
-            })()}
-            {finishReviewOpen && <div className="fwd-batch-confirm" role="region" aria-label="전체 검토 완료 확인">
-              <h3>서류 검토 완료 확인</h3>
-              {pendingBlockers.length > 0
-                ? <><p>확인할 항목이 남아 있습니다. 원본과 확인한 내용을 기록해 주세요.</p><div className="fwd-batch-outstanding"><strong>남은 확인 항목 · {pendingBlockers.length}건</strong><ul>{pendingBlockers.map(issue => <li key={issue.id}><b>{issue.title}</b><span>{issue.detail}</span></li>)}</ul></div></>
-                : <p>서류 검토를 완료하고 다음 업무로 이동합니다.</p>}
-              <label className="form-group"><span className="form-label">{pendingBlockers.length ? '검토 근거 (필수)' : '검토 메모 (선택)'}</span><textarea className="form-input" aria-label="전체 검토 근거" rows={2} value={finishReviewReason} onChange={event => setFinishReviewReason(event.target.value)} placeholder="원본이나 담당자에게 확인한 내용과 보완이 필요 없는 이유" /></label>
-              <div className="fwd-return-actions">
-                <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => setFinishReviewOpen(false)}>계속 검토</button>
-                <button type="button" className="btn btn-primary" disabled={saving || pickedIssues.length > 0 || (pendingBlockers.length > 0 && !finishReviewReason.trim())} onClick={async () => {
-                  if (saving || selected.returnRequest || pickedIssues.length || (pendingBlockers.length && !finishReviewReason.trim())) return;
-                  const note = finishReviewReason.trim();
-                  if (await persist(selected, { stage: 'clearance', issueResolutions: Object.fromEntries(pendingIssues.map(issue => [issue.id, true])), ...(note ? { issueNotes: Object.fromEntries(pendingIssues.map(issue => [issue.id, [selected.issueNotes[issue.id], note].filter(Boolean).join('\n')])) } : {}) }, [`전체 서류 검토 완료${note ? ' — ' + note : ''}`])) {
-                    setFinishReviewOpen(false); setFinishReviewReason(''); setDetailTab('clearance');
-                  }
-                }}>확인 완료 · 업무 진행으로</button>
-              </div>
-            </div>}
+            </div>
           </section>
         )}
 
@@ -548,14 +464,6 @@ export default function ForwarderImportWorkspace({
                 </li>
               ))}
             </ol>
-          </section>
-        )}
-
-        {detailTab === 'review' && <details className="fwd-all-comparisons"><summary>전체 비교 결과 보기 · {selected.snapshot.analysis.comparison.length}개 항목</summary><ImportDocumentComparison title="서류 간 정보 비교" rows={selected.snapshot.analysis.comparison} /></details>}
-
-        {detailTab === 'review' && blockers.length === 0 && checks.length === 0 && infos.length === 0 && (
-          <section className="form-card import-card fwd-clear-overview">
-            <CheckCircle2 size={20} /> <div><strong>지금 확인할 이슈가 없습니다.</strong><span>다음 조치를 진행해 주세요.</span></div>
           </section>
         )}
 

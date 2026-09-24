@@ -1,4 +1,5 @@
 import { exportDeclarationFobNotice } from './utils/exportDeclarationFob';
+import { scrollPageToTop } from './utils/scrollPageToTop';
 import {
   Fragment,
   Suspense,
@@ -552,17 +553,20 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   // 입력 폼에서 아래로 스크롤한 상태로 생성해도 스크롤 위치가 하단에 남지 않도록 초기화.
   useEffect(() => {
     if (!hasGenerated) return;
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-    document.querySelector('.content-body')?.scrollTo?.(0, 0);
+    scrollPageToTop();
   }, [hasGenerated]);
+
+  // 수출 포워더 5단계를 넘길 때, 의뢰함↔업무 화면을 오갈 때도 새 화면의 맨 위부터 보이게 한다.
+  useEffect(() => {
+    scrollPageToTop();
+  }, [workspaceCurrentStep, exportForwarderView]);
 
   // 사이드바 메뉴 전환 시 항상 페이지 최상단부터 보이게 한다.
   // (AI 통관 작업실 등에서 아래로 스크롤한 채 다른 메뉴를 눌러도 이전 위치가 남지 않도록)
   // 문서관리 조회 복귀의 스크롤 복원(handleDocumentManagerListReady)은 이 초기화 뒤에
   // requestAnimationFrame으로 실행되므로 충돌하지 않는다.
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-    document.querySelector('.content-body')?.scrollTo?.(0, 0);
+    scrollPageToTop();
   }, [activeMenu]);
   
   const [documents, setDocuments] = useState<DocumentStatus[]>([]);
