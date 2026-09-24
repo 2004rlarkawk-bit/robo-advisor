@@ -93,6 +93,13 @@ describe('sendTradeMessage', () => {
     expect(fromMock).not.toHaveBeenCalled();
   });
 
+  it('통합 계정의 실제 발신 역할을 저장한다', async () => {
+    const query = insertQuery({ data: { ...row, sender_role: 'forwarder' }, error: null });
+    const message = await sendTradeMessage('req-1', '확인했습니다.', 'message', 'forwarder');
+    expect(query.insert).toHaveBeenCalledWith(expect.objectContaining({ sender_role: 'forwarder', sender_user_id: 'shipper-1' }));
+    expect(message.senderRole).toBe('forwarder');
+  });
+
   it('RLS 위반(종료된 의뢰)은 사용자에게 읽히는 문구로 바꾼다', async () => {
     insertQuery({ data: null, error: { code: '42501', message: 'new row violates row-level security policy' } });
     await expect(sendTradeMessage('req-1', '안녕하세요')).rejects.toThrow('종료된 의뢰이거나 대화 권한이 없어');
@@ -100,6 +107,16 @@ describe('sendTradeMessage', () => {
 });
 
 describe('markTradeMessagesRead', () => {
+  it('역할이 있으면 같은 계정도 반대 역할의 메시지만 읽는다', async () => {
+    const query = { update: vi.fn(), eq: vi.fn(), or: vi.fn(), is: vi.fn() };
+    query.update.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    query.or.mockReturnValue(query);
+    query.is.mockResolvedValue({ error: null });
+    fromMock.mockReturnValue(query);
+    await markTradeMessagesRead('req-1', 'forwarder');
+    expect(query.or).toHaveBeenCalledWith('sender_role.eq.shipper,and(sender_role.is.null,sender_user_id.neq.shipper-1)');
+  });
   it('상대가 보낸 안 읽은 메시지만 읽음 처리한다', async () => {
     const query = { update: vi.fn(), eq: vi.fn(), neq: vi.fn(), is: vi.fn() };
     query.update.mockReturnValue(query);

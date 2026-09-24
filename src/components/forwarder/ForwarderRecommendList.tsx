@@ -18,8 +18,6 @@ import {
 
 interface Props {
   trade: SavedTrade;
-  /** 겸용 계정이 자기 자신을 고른 경우를 알려주려고 받는다. */
-  currentUserId?: string;
   /** 화주가 고른 포워더가 바뀔 때마다 호출. 고른 후보가 없으면 null. */
   onSelected: (candidate: ForwarderMatchCandidate | null) => void;
 }
@@ -36,7 +34,7 @@ function candidateCompany(candidate: ForwarderMatchCandidate): string {
  * 거래 조건에 맞는 포워더를 추천한다. PortAI는 추천 순서만 정하고 확정은 화주가 한다.
  * 제휴 포워더를 먼저 보여주고(서버 정렬), 일반 가입 담당자는 후순위 후보로 붙는다.
  */
-export default function ForwarderRecommendList({ trade, currentUserId, onSelected }: Props) {
+export default function ForwarderRecommendList({ trade, onSelected }: Props) {
   const [suggestions, setSuggestions] = useState<SpecialtySuggestion[] | null>(null);
   const [selectedSpecialties, setSelectedSpecialties] = useState<ForwarderSpecialtyKey[]>([]);
   const [candidates, setCandidates] = useState<ForwarderMatchCandidate[] | null>(null);
@@ -189,7 +187,6 @@ export default function ForwarderRecommendList({ trade, currentUserId, onSelecte
             ? '조건과 일치하는 특화 담당자가 없어, 업무 여유가 있는 담당자를 먼저 추천했습니다. '
             : '조건을 고르지 않아, 업무 여유가 있는 담당자를 먼저 추천했습니다. ')}
           {preferExperienced && `서류 검증에서 확인 항목이 ${issueCount}건 있어 처리 경험이 많은 담당자를 우선했습니다. `}
-          {currentUserId && picked.id === currentUserId && '다른 포워더 담당자가 없어 본인(겸용) 계정이 추천됩니다.'}
         </p>
       )}
     </div>

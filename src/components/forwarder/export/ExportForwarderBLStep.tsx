@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Download, Eye, FileSignature, RefreshCw, Ship } from 'lucide-react';
+import { ArrowRight, Download, Eye, FileSignature, RefreshCw } from 'lucide-react';
 import type { BillOfLadingData, BillOfLadingKind, BillOfLadingSignerCapacity, FreightTerms, NumericInput } from '../../../types';
 import { deriveFreightTerms, isFreightTermsUnusual, FREIGHT_TERMS_LABEL } from '../../../utils/freightTerms';
 import type { ForwarderFormState } from '../../../utils/forwarderForm';
@@ -64,19 +64,16 @@ export default function ExportForwarderBLStep({
   const freightTermsDiffersFromBooking = Boolean(bookingFreightTerms && state.freightTerms && bookingFreightTerms !== state.freightTerms);
 
   return (
-    <div className="form-card forwarder-workspace-form">
-      <div className="trade-section-header">
-        <div className="trade-section-title">
-          <Ship size={20} className="text-primary" />
-          <div>
-            <h2 className="card-title">4. B/L 관리</h2>
-            <p className="forwarder-step-description">Master B/L은 선사가 발행하는 문서이므로 PortAI가 자동생성하지 않고 등록만 합니다. House B/L은 포워더가 직접 발행하므로 PortAI가 생성합니다.</p>
-          </div>
+    <div className="form-card forwarder-workspace-form fwd-export-stage">
+      <div className="trade-section-header fwd-export-step-heading">
+        <div>
+          <span className="fwd-section-kicker">04 · 선적 서류</span>
+          <h2 className="card-title">B/L 관리</h2>
         </div>
       </div>
 
-      <details className="form-section" open>
-        <summary className="form-section-summary">Master B/L <span className="form-section-hint">선사 발행 — 파일 등록</span></summary>
+      <details className="form-section fwd-export-bl-card is-master" open>
+        <summary className="form-section-summary">Master B/L</summary>
         <div className="form-grid">
           <div className="form-group">
             <label className="form-label" htmlFor="mbl-no">M/B/L No.</label>
@@ -86,9 +83,8 @@ export default function ExportForwarderBLStep({
           <div className="form-group"><label className="form-label">Vessel / Voyage</label><input className="form-input" value={[state.vesselOrFlight, state.voyageNo].filter(Boolean).join(' / ')} disabled readOnly /></div>
           <div className="form-group"><label className="form-label">POL / POD</label><input className="form-input" value={[state.loadPort, state.dischargePort].filter(Boolean).join(' → ')} disabled readOnly /></div>
         </div>
-        <p className="form-help">Carrier·Vessel/Voyage·POL/POD는 2단계 선복예약 정보 등록에서 넣은 값을 그대로 보여줍니다.</p>
         <ForwarderDocumentSlot
-          label="M/B/L 파일"
+          label=""
           documentType="bill_of_lading"
           userId={userId}
           scopeId={scopeId}
@@ -98,15 +94,14 @@ export default function ExportForwarderBLStep({
         />
       </details>
 
-      <details className="form-section" open>
-        <summary className="form-section-summary">House B/L <span className="form-section-hint">포워더 발행 — PortAI 자동생성</span></summary>
+      <details className="form-section fwd-export-bl-card is-house" open>
+        <summary className="form-section-summary">House B/L</summary>
 
         <div className="form-grid">
-          <div className="form-group"><label className="form-label">Booking No. (참고)</label><input className="form-input" value={state.bookingNo || '미등록'} disabled readOnly /></div>
-          <div className="form-group"><label className="form-label">ETD (참고)</label><input className="form-input" value={state.departureDate || '미입력'} disabled readOnly /></div>
-          <div className="form-group"><label className="form-label">컨테이너 (참고)</label><input className="form-input" value={state.loadingMode === 'FCL' ? [state.containerSize, state.containerQuantity !== '' ? `${state.containerQuantity}개` : ''].filter(Boolean).join(' · ') : state.loadingMode || '미정'} disabled readOnly /></div>
+          <div className="form-group"><label className="form-label">Booking No.</label><input className="form-input" value={state.bookingNo || '미등록'} disabled readOnly /></div>
+          <div className="form-group"><label className="form-label">ETD</label><input className="form-input" value={state.departureDate || '미입력'} disabled readOnly /></div>
+          <div className="form-group"><label className="form-label">컨테이너</label><input className="form-input" value={state.loadingMode === 'FCL' ? [state.containerSize, state.containerQuantity !== '' ? `${state.containerQuantity}개` : ''].filter(Boolean).join(' · ') : state.loadingMode || '미정'} disabled readOnly /></div>
         </div>
-        <p className="form-help">2단계 선복예약 정보 등록에서 넣은 값입니다. 본선 적재일(Shipped on Board)은 실제 적재일이므로 ETD로 자동 채우지 않습니다.</p>
 
         {!readOnly && (
           <fieldset className="workspace-readonly-fieldset" disabled={readOnly}>
@@ -140,17 +135,7 @@ export default function ExportForwarderBLStep({
                 )}
               </div>
               <div className="form-group"><label className="form-label" htmlFor="bl-charges">운임·부대비용 명세 (선택)</label><input id="bl-charges" className="form-input" value={state.freightAndCharges} onChange={(e) => patch({ freightAndCharges: e.target.value })} placeholder="비우면 AS ARRANGED로 표기" /></div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="bl-release">발행 방식</label>
-                <select id="bl-release" className="form-input" value={state.blReleaseType} onChange={(e) => patch({ blReleaseType: e.target.value as ForwarderFormState['blReleaseType'] })}>
-                  <option value="ORIGINAL">Original B/L (원본 발행)</option>
-                  <option value="SURRENDER">Surrender B/L (원본 회수 — 전신 인도)</option>
-                  <option value="SEAWAY">Sea Waybill (비유통 화물운송장)</option>
-                </select>
-                {state.blReleaseType === 'SURRENDER' && <small className="form-help">원본 없이 SURRENDERED로 표기됩니다. 한·중·일 단거리 구간에서 수하인이 원본 제시 없이 화물을 인수할 때 씁니다.</small>}
-                {state.blReleaseType === 'SEAWAY' && <small className="form-help">비유통(Non-Negotiable) 문서로 표기됩니다. 기명 수하인만 인수할 수 있습니다.</small>}
-              </div>
-              <div className="form-group"><label className="form-label" htmlFor="bl-originals">원본 발행 통수</label><input id="bl-originals" type="number" min="1" max="5" className="form-input" value={state.numberOfOriginals} onChange={(e) => patch({ numberOfOriginals: numericValue(e.target.value) })} disabled={state.blReleaseType !== 'ORIGINAL'} />{state.blReleaseType !== 'ORIGINAL' && <small className="form-help">원본을 발행하지 않는 방식이라 통수는 0으로 기재됩니다.</small>}</div>
+              <div className="form-group"><label className="form-label" htmlFor="bl-originals">원본 발행 통수</label><input id="bl-originals" type="number" min="1" max="5" className="form-input" value={state.numberOfOriginals} onChange={(e) => patch({ numberOfOriginals: numericValue(e.target.value) })} /></div>
               <div className="form-group"><label className="form-label" htmlFor="bl-onboard">본선 적재일 (Shipped on Board)</label><input id="bl-onboard" type="date" className="form-input" value={state.shippedOnBoardDate} onChange={(e) => patch({ shippedOnBoardDate: e.target.value })} /><small className="form-help">비우면 수취선하증권(Received B/L)으로 발행됩니다.</small></div>
               <div className="form-group"><label className="form-label" htmlFor="bl-issuer">발행자 상호</label><input id="bl-issuer" className="form-input" value={state.issuerName} onChange={(e) => patch({ issuerName: e.target.value })} placeholder="포워더 상호" /></div>
               <div className="form-group">
@@ -165,7 +150,7 @@ export default function ExportForwarderBLStep({
             </div>
 
             <details className="form-section" data-form-section="6" style={{ marginTop: 14 }}>
-              <summary className="form-section-summary">운임·기타 기재란 <span className="form-section-hint">무역협회 서식 ⑩⑫⑲⑳㉑㉔㉕ · 선택</span></summary>
+              <summary className="form-section-summary">운임·기타 기재란</summary>
               <div className="form-grid">
                 <div className="form-group"><label className="form-label" htmlFor="bl-precarriage">Pre-Carriage by</label><input id="bl-precarriage" className="form-input" value={state.preCarriageBy} onChange={(e) => patch({ preCarriageBy: e.target.value })} placeholder="TRUCK, RAIL 등" /></div>
                 <div className="form-group"><label className="form-label" htmlFor="bl-final">최종 목적지 (Final Destination)</label><input id="bl-final" className="form-input" value={state.finalDestination} onChange={(e) => patch({ finalDestination: e.target.value })} placeholder="비우면 인도지와 동일" /></div>
@@ -190,7 +175,7 @@ export default function ExportForwarderBLStep({
           </fieldset>
         )}
 
-        <div className={`forwarder-generated-document-card ${billOfLadingReady ? 'is-complete' : 'is-failed'}`} style={{ marginTop: 14 }}>
+        <div className={`forwarder-generated-document-card ${billOfLadingReady ? 'is-complete' : generationError ? 'is-failed' : 'is-pending'}`} style={{ marginTop: 14 }}>
           <div className="forwarder-generated-document-summary">
             <div className="forwarder-generated-document-icon" aria-hidden="true">B/L</div>
             <div>
@@ -216,7 +201,7 @@ export default function ExportForwarderBLStep({
               )}
             </div>
           ) : !readOnly ? (
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerateHouseBillOfLading}><FileSignature size={16} /> H/B/L 초안 생성</button>
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerateHouseBillOfLading}><FileSignature size={16} /> H/B/L 생성</button>
           ) : null}
         </div>
       </details>

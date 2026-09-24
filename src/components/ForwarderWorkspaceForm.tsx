@@ -21,7 +21,7 @@ import ExportForwarderCompletionStep from './forwarder/export/ExportForwarderCom
 import ExportForwarderMessages from './forwarder/export/ExportForwarderMessages';
 import '../styles/forwarderExportRefresh.css';
 
-const STEP_LABELS = ['화주 의뢰 확인', '선복예약 정보 등록', '반입·선적 준비', 'B/L 관리', '선적 완료'];
+const STEP_LABELS = ['화주 의뢰 확인', '선복 부킹', '반입·선적 준비', 'B/L 관리', '선적 완료'];
 
 interface Props {
   state: ForwarderFormState;
@@ -227,6 +227,8 @@ export default function ForwarderWorkspaceForm({
 
       {currentStep === 1 && (
         <ExportForwarderRequestStep
+          attachments={attachments}
+          userId={userId}
           state={state}
           patch={patch}
           patchCargoItem={patchCargoItem}

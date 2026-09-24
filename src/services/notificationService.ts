@@ -43,7 +43,9 @@ async function messageRoleFilter(role: WorkspaceRole): Promise<string> {
     .eq(role === 'shipper' ? 'requester_user_id' : 'receiver_user_id', auth.user.id);
   if (error) throw error;
   const ids = (data ?? []).map(row => row.id as string).filter(id => /^[0-9a-f-]{36}$/i.test(id));
-  return ids.length ? `type.neq.trade_message_received,trade_request_id.in.(${ids.join(',')})` : 'type.neq.trade_message_received';
+  return ids.length
+    ? `type.neq.trade_message_received,and(trade_request_id.in.(${ids.join(',')}),or(payload->>recipient_role.eq.${role},payload->>recipient_role.is.null))`
+    : 'type.neq.trade_message_received';
 }
 
 function mapNotificationRow(row: NotificationRow): NotificationRecord {
@@ -136,7 +138,7 @@ export function subscribeToNotifications(
       },
       (payload) => {
         const notification = mapNotificationRow(payload.new as NotificationRow);
-        if (notification.type !== 'trade_message_received') {
+        if (notification.type !== 'trade_message_received' || notification.payload.recipient_role === 'shipper' || notification.payload.recipient_role === 'forwarder') {
           if (active) onInsert(notification);
           return;
         }
@@ -145,7 +147,7 @@ export function subscribeToNotifications(
           const { data, error } = await supabase.from('trade_requests')
             .select('requester_user_id,receiver_user_id').eq('id', notification.tradeRequestId!).maybeSingle();
           if (error || !data || !active) return; // 다음 주기 조회에서 재시도
-          const role = data.requester_user_id === userId ? 'shipper' : data.receiver_user_id === userId ? 'forwarder' : null;
+          const role = data.requester_user_id === data.receiver_user_id ? null : data.requester_user_id === userId ? 'shipper' : data.receiver_user_id === userId ? 'forwarder' : null;
           if (role) onInsert({ ...notification, payload: { ...notification.payload, recipient_role: role } });
         })().catch(() => undefined);
       },

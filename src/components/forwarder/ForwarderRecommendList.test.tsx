@@ -139,10 +139,4 @@ describe('ForwarderRecommendList', () => {
     expect(container.textContent).toContain('이메일로 직접 찾아 주세요');
     expect(onSelected).toHaveBeenLastCalledWith(null);
   });
-
-  it('겸용 계정 본인이 추천되면 그 사실을 알린다', async () => {
-    requestService.matchForwarderForTrade.mockResolvedValue([{ ...partner, id: 'me' }]);
-    await render({ currentUserId: 'me' });
-    expect(container.textContent).toContain('본인(겸용) 계정이 추천됩니다');
-  });
 });

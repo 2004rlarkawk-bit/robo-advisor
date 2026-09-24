@@ -81,7 +81,7 @@ export default function ForwarderDocumentSendPanel({
   };
 
   return (
-    <details className="form-section" data-testid="forwarder-document-send-panel">
+    <details className="form-section fwd-export-send-panel" data-testid="forwarder-document-send-panel">
       <summary className="form-section-summary">{title}</summary>
       <p className="forwarder-step-description">{description}</p>
       {success ? (

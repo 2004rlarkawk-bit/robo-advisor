@@ -8,6 +8,7 @@ import {
   mapImportDeclarationForm,
 } from '../../services/importDeclarationFormService';
 import ImportDeclarationFormPreview from './ImportDeclarationFormPreview';
+import ImportUnipassSubmit from './ImportUnipassSubmit';
 import ImportDeclarationChecklist from './ImportDeclarationChecklist';
 import ImportDocumentComparison from './ImportDocumentComparison';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
@@ -1121,6 +1122,18 @@ export default function ImportTradeFlow({
     [declarationFormData],
   );
 
+  /** UNI-PASS 전송 전에 확인시킬 요약 — 신고서에 들어간 값을 그대로 보여준다. */
+  const unipassSummary = useMemo(() => {
+    const form = declarationFormValues;
+    return [
+      { label: 'B/L 번호', value: form.bl_no ?? '' },
+      { label: '신고 물품', value: form.first_goods_name ?? '' },
+      { label: 'HSK', value: form.first_hs_code ?? '' },
+      { label: '총 과세가격', value: form.total_customs_value_krw ? `${form.total_customs_value_krw}원` : '' },
+      { label: '총 예상세액', value: form.total_tax ? `${form.total_tax}원` : '' },
+    ];
+  }, [declarationFormValues]);
+
   return (
     <div className="import-flow">
       {/* 소개 헤더(제목·설명·단계 초기화)는 1단계(입력)에서만 노출 — 결과 페이지(2·3단계)에서는 결과에 집중 */}
@@ -1551,6 +1564,13 @@ export default function ImportTradeFlow({
             {declarationFormError && <p className="form-message error" role="alert">{declarationFormError}</p>}
             {declarationFormPreview && <ImportDeclarationFormPreview values={declarationFormValues} />}
           </section>
+
+          <ImportUnipassSubmit
+            seed={declarationFormValues.bl_no ?? ''}
+            customsOffice={declarationFormValues.customs_office}
+            summary={unipassSummary}
+            pendingCount={liveRisks.filter((risk) => risk.status !== 'resolved').length}
+          />
 
           {readOnly && onClose ? <DocumentManagerReadOnlyAction
             onClose={onClose}
