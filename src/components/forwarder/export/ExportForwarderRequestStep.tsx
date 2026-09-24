@@ -74,7 +74,7 @@ export default function ExportForwarderRequestStep({
       {!readOnly && (
         <div className="form-actions">
           <button type="button" className="btn btn-primary" disabled={busy} onClick={onNext}>
-            다음: 선복 부킹 <ArrowRight size={16} />
+            다음: 선복예약 정보 등록 <ArrowRight size={16} />
           </button>
         </div>
       )}

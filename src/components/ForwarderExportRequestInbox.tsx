@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { FolderOpen, RefreshCw, Ship } from 'lucide-react';
 import {
   listForwarderExportRequests,
@@ -11,6 +11,7 @@ interface Props {
   onApply: (request: ForwarderExportRequest) => void;
   /** 이미 불러온 의뢰 — 목록에서 '불러옴'으로 표시 */
   appliedTradeId?: string | null;
+  headerAction?: ReactNode;
 }
 
 function formatDate(iso: string): string {
@@ -25,10 +26,13 @@ function formatDate(iso: string): string {
  * 의뢰를 불러오면 당사자·화물·구간 정보가 채워지고,
  * 포워더는 부킹 결과(선사·선박·항차·컨테이너)만 이어서 입력하면 된다.
  */
-export default function ForwarderExportRequestInbox({ onApply, appliedTradeId }: Props) {
+export default function ForwarderExportRequestInbox({ onApply, appliedTradeId, headerAction }: Props) {
   const [requests, setRequests] = useState<ForwarderExportRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filter, setFilter] = useState<'all' | 'new' | 'loaded'>('all');
+  const loadedCount = requests.filter(request => request.tradeId === appliedTradeId).length;
+  const visibleRequests = requests.filter(request => filter === 'all' || (filter === 'loaded' ? request.tradeId === appliedTradeId : request.tradeId !== appliedTradeId));
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -48,7 +52,9 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId }:
   return (
     <section className="fwd-inbox-panel fwd-inbox">
       <div className="fwd-inbox-panel-heading">
-        <h3>받은 의뢰 <span>{requests.length}건</span></h3>
+        <h2>받은 의뢰 <span>{requests.length}건</span></h2>
+        <div className="fwd-inbox-heading-actions">
+        {headerAction}
         <button
           type="button"
           className="btn btn-secondary fwd-inbox-refresh"
@@ -58,19 +64,23 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId }:
         >
           <RefreshCw size={16} />
         </button>
+        </div>
       </div>
+      <nav className="fwd-inbox-filters" aria-label="수출 의뢰 필터">
+        {([
+          ['all', '전체', requests.length],
+          ['new', '신규', requests.length - loadedCount],
+          ['loaded', '불러옴', loadedCount],
+        ] as const).map(([value, label, count]) => (
+          <button key={value} type="button" className={filter === value ? 'is-active' : undefined}
+            aria-pressed={filter === value} onClick={() => setFilter(value)}>
+            {label}<span>{count}</span>
+          </button>
+        ))}
+      </nav>
 
       {error && <div className="form-message error" role="alert">{error}</div>}
 
-      {isLoading ? (
-        <p className="fwd-inbox-empty">운송의뢰를 불러오는 중입니다.</p>
-      ) : requests.length === 0 ? (
-        <p className="fwd-inbox-empty">
-          <FolderOpen size={30} /><br />
-          아직 도착한 운송의뢰가 없습니다.<br />
-          <span>화주가 운송의뢰서를 제출하면 여기에 표시됩니다.</span>
-        </p>
-      ) : (
         <div className="fwd-inbox-table-scroll">
           <table className="fwd-inbox-table fwd-export-inbox-table">
             <thead>
@@ -83,7 +93,16 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId }:
               </tr>
             </thead>
             <tbody>
-              {requests.map((request) => {
+              {(isLoading || visibleRequests.length === 0) && <tr><td colSpan={5}>
+                <div className="fwd-inbox-empty">
+                  {isLoading ? '운송의뢰를 불러오는 중입니다.' : error ? '목록을 불러오지 못했습니다. 새로고침해 주세요.' : <>
+                    <FolderOpen size={30} aria-hidden="true" /><br />
+                    {requests.length === 0 ? '아직 도착한 운송의뢰가 없습니다.' : '해당 상태의 의뢰가 없습니다.'}<br />
+                    {requests.length === 0 && <span>화주가 운송의뢰서를 제출하면 여기에 표시됩니다.</span>}
+                  </>}
+                </div>
+              </td></tr>}
+              {!isLoading && visibleRequests.map((request) => {
                 const applied = appliedTradeId === request.tradeId;
                 const route = [request.loadPort, request.dischargePort].filter(Boolean).join(' → ');
                 return (
@@ -113,7 +132,6 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId }:
             </tbody>
           </table>
         </div>
-      )}
     </section>
   );
 }

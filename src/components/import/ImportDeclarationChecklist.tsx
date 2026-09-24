@@ -123,9 +123,6 @@ export default function ImportDeclarationChecklist({ fields, risks, onChoose, on
     <section className="form-card import-card import-checklist" id="import-declaration-checklist">
       <div className="import-card-heading">
         <div><h2>{summary ? '신고자료 요약' : '수입신고 준비 현황'}</h2></div>
-        <p>{summary
-          ? '수입신고의뢰서에 들어가는 값입니다. 고칠 값이 있으면 이전 단계에서 수정하세요.'
-          : '수입신고서에 들어갈 항목입니다. 준비되지 않은 항목만 확인하면 됩니다.'}</p>
       </div>
       {!summary && (
         <div className="import-checklist-progress">

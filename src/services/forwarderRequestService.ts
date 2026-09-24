@@ -52,6 +52,18 @@ export async function searchForwarderByEmail(email: string): Promise<ForwarderLo
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
 
+  // 본인 검색은 인증된 로그인 이메일과 DB의 실제 서비스 역할로 확인한다.
+  // 오래된 검색 RPC의 본인 제외 조건이나 프로필 이메일 불일치에 의존하지 않는다.
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (auth.user?.email?.trim().toLowerCase() === normalized) {
+    const { data: profile, error: profileError } = await supabase.from('user_profiles')
+      .select('id,company_name,contact_name,service_role').eq('id', auth.user.id).maybeSingle();
+    if (profileError) throw profileError;
+    if (!profile || (profile.service_role ?? 'integrated') !== 'integrated') return null;
+    return { id: auth.user.id, companyName: profile.company_name ?? null, contactName: profile.contact_name ?? null };
+  }
+
   const { data, error } = await supabase.rpc('find_forwarder_by_email', { p_email: normalized });
   if (error) throw error;
 
@@ -62,6 +74,19 @@ export async function searchForwarderByEmail(email: string): Promise<ForwarderLo
     companyName: row.company_name ?? null,
     contactName: row.contact_name ?? null,
   };
+}
+
+/** 현재 인증된 본인의 계정만 선택한다. 기존 프로필의 통합 역할 기본값과 동일하게 해석한다. */
+export async function getOwnForwarderAccount(): Promise<ForwarderLookupResult> {
+  const id = await getRequiredUserId();
+  const { data: profile, error } = await supabase.from('user_profiles')
+    .select('id,company_name,contact_name,service_role').eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!profile) throw new Error('본인 프로필을 찾지 못했습니다. 프로필 관리에서 정보를 저장해 주세요.');
+  if ((profile.service_role ?? 'integrated') !== 'integrated') {
+    throw new Error('본인에게 의뢰하려면 프로필 관리에서 서비스 역할을 화주·포워더 통합으로 설정해 주세요.');
+  }
+  return { id, companyName: profile.company_name ?? null, contactName: profile.contact_name ?? null };
 }
 
 /** 이미 보낸 pending 요청이 있는지 안내하기 위한 유니크 위반 코드. */
@@ -88,6 +113,10 @@ export async function sendTradeRequest(
   if (error) {
     if (error.code === UNIQUE_VIOLATION_CODE) {
       throw new Error('이미 이 포워더에게 요청을 보냈습니다.');
+    }
+    if (requesterUserId === receiverUserId && error.code === '23514'
+      && error.message?.includes('trade_requests_requester_receiver_diff')) {
+      throw new Error('서버에 본인 의뢰 허용 설정이 아직 적용되지 않았습니다. 관리자에게 DB 설정 적용을 요청해 주세요.');
     }
     throw error;
   }
@@ -131,6 +160,8 @@ export async function matchForwarderForTrade(
     matchedSpecialties: Array.isArray(row.matched_specialties) ? row.matched_specialties as string[] : [],
     activeCount: Number(row.active_count ?? 0),
     completedCount: Number(row.completed_count ?? 0),
+    isPartner: row.is_partner_forwarder === true,
+    partnerCompanyName: (row.partner_company_name as string | null) ?? null,
   }));
 }
 

@@ -30,10 +30,12 @@ export const RULE_POLICY = {
   'r7-nonlatin-lc':           { severity: 'error',   overridable: true },
   'r7-nonlatin':              { severity: 'warning', overridable: false },
   'r8-amount-arithmetic':     { severity: 'error',   overridable: false },
-  'r10-packing-qty-mismatch': { severity: 'warning', overridable: false },
+  // 수량이 어긋나면 세관·은행 심사에서 바로 걸리므로 반드시 수정 대상으로 둔다(사유 적고 진행은 허용).
+  'r10-packing-qty-mismatch': { severity: 'error',   overridable: true },
   'r10-packing-desc-mismatch':{ severity: 'warning', overridable: false },
   'r11-payment-lc-conflict':  { severity: 'error',   overridable: true },
-  'r11-lc-missing':           { severity: 'warning', overridable: false },
+  // L/C 결제인데 신용장 번호가 없으면 서류가 은행에서 거절되므로 반드시 수정 대상.
+  'r11-lc-missing':           { severity: 'error',   overridable: true },
   'r11-lc-date-missing':      { severity: 'warning', overridable: false },
   'r12-buyer-address-missing':{ severity: 'warning', overridable: false },
   'r12-buyer-name-missing':   { severity: 'warning', overridable: false },

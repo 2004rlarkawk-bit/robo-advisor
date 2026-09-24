@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import SentConfirmation from '../common/SentConfirmation';
-import ForwarderAutoAssign from './ForwarderAutoAssign';
+import ForwarderRecommendList from './ForwarderRecommendList';
 import type { SavedTrade } from '../../types';
 import { ATTACHABLE_DOCUMENT_LABELS, type AttachableDocumentType } from '../../types/forwarderRequest';
-import { searchForwarderByEmail, sendTradeRequest } from '../../services/forwarderRequestService';
+import { getOwnForwarderAccount, searchForwarderByEmail, sendTradeRequest } from '../../services/forwarderRequestService';
 import { getAttachableDocumentTypes, sendExternalForwarderEmail } from '../../services/externalForwarderEmailService';
 import type { ForwarderLookupResult } from '../../types/forwarderRequest';
 import '../../styles/forwarderRequest.css';
@@ -64,6 +64,20 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
     } catch (err) {
       console.error('[ForwarderRequestModal] 포워더 검색 실패:', err);
       setSearchError('검색 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSelectOwnAccount = async () => {
+    setSearching(true);
+    setSearchError('');
+    setSearchResult(null);
+    setInternalSuccess(false);
+    try {
+      setSearchResult(await getOwnForwarderAccount());
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : '본인 계정을 확인하지 못했습니다. 다시 시도해 주세요.');
     } finally {
       setSearching(false);
     }
@@ -149,20 +163,32 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
 
         {tab === 'internal' ? (
           internalSuccess ? (
-            <SentConfirmation title="요청을 보냈어요" message="포워더가 수락하면 알려드릴게요." actions={sentActions} />
+            <SentConfirmation
+              title="운송의뢰를 전달했어요"
+              message={`${searchResult?.companyName?.trim() || searchResult?.contactName?.trim() || '선택한 포워더'}에 운송의뢰를 전달했습니다. 포워더의 수락을 기다리고 있습니다.`}
+              actions={sentActions}
+            />
           ) : (
             <>
-              <ForwarderAutoAssign
+              <ForwarderRecommendList
                 trade={trade}
                 currentUserId={currentUserId}
-                onAssigned={(candidate) => {
+                onSelected={(candidate) => {
                   setSearchError('');
                   setSearchResult(candidate
-                    ? { id: candidate.id, companyName: candidate.companyName, contactName: candidate.contactName }
+                    ? {
+                      id: candidate.id,
+                      companyName: candidate.partnerCompanyName || candidate.companyName,
+                      contactName: candidate.contactName,
+                    }
                     : null);
                 }}
               />
 
+              <div className="fwd-field">
+                <button type="button" className="btn btn-secondary" disabled={searching || sendingInternal}
+                  onClick={() => void handleSelectOwnAccount()}>내 포워더 계정 선택</button>
+              </div>
               <details className="fwd-assign-manual">
                 <summary>담당자 이메일을 알고 있다면 직접 찾기</summary>
               <div className="fwd-field">
@@ -205,7 +231,7 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
                 <button type="button" className="btn btn-secondary" onClick={onClose}>닫기</button>
                 {searchResult && (
                   <button type="button" className="btn btn-primary" disabled={sendingInternal} onClick={() => void handleSendInternalRequest()}>
-                    {sendingInternal ? '전송 중…' : '이 포워더에게 요청'}
+                    {sendingInternal ? '전달 중…' : '선택한 포워더에게 전달'}
                   </button>
                 )}
               </div>

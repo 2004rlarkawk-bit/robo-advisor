@@ -33,7 +33,9 @@ const KIND_LABEL: Record<Exclude<TradeMessageKind, 'message'>, string> = {
 const COUNTER_VISIBLE_FROM = 200;
 
 function appendUnique(list: TradeMessage[], incoming: TradeMessage): TradeMessage[] {
-  return list.some((item) => item.id === incoming.id) ? list : [...list, incoming];
+  return list.some((item) => item.id === incoming.id)
+    ? list.map(item => item.id === incoming.id ? { ...incoming, readAt: incoming.readAt ?? item.readAt } : item)
+    : [...list, incoming];
 }
 
 function initialOf(label: string): string {
@@ -60,6 +62,8 @@ export default function TradeMessageThread({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const changedRef = useRef(onMessagesChanged);
   changedRef.current = onMessagesChanged;
+  const activeRequest = useRef(tradeRequestId);
+  activeRequest.current = tradeRequestId;
 
   const markRead = useCallback(async () => {
     try {
@@ -74,10 +78,12 @@ export default function TradeMessageThread({
     setError('');
     try {
       const list = await listTradeMessages(tradeRequestId);
+      if (activeRequest.current !== tradeRequestId) return;
       setMessages(list);
       changedRef.current?.(list);
       if (list.some((item) => item.senderUserId !== currentUserId && !item.readAt)) await markRead();
     } catch (err) {
+      if (activeRequest.current !== tradeRequestId) return;
       console.error('[대화] 메시지 조회 실패:', err);
       setError('대화를 불러오지 못했습니다. 새로고침을 눌러 다시 시도해 주세요.');
       setMessages((current) => current ?? []);
@@ -91,12 +97,16 @@ export default function TradeMessageThread({
   }, [load]);
 
   useEffect(() => subscribeToTradeMessages(tradeRequestId, (incoming) => {
+    if (activeRequest.current !== tradeRequestId || incoming.tradeRequestId !== tradeRequestId) return;
     setMessages((current) => {
       const next = appendUnique(current ?? [], incoming);
       changedRef.current?.(next);
       return next;
     });
     if (incoming.senderUserId !== currentUserId) void markRead();
+  }, (incoming) => {
+    if (activeRequest.current !== tradeRequestId || incoming.tradeRequestId !== tradeRequestId) return;
+    setMessages(current => current?.map(item => item.id === incoming.id ? { ...item, readAt: incoming.readAt ?? item.readAt } : item) ?? null);
   }), [tradeRequestId, currentUserId, markRead]);
 
   useEffect(() => {
@@ -119,6 +129,7 @@ export default function TradeMessageThread({
     setError('');
     try {
       const sent = await sendTradeMessage(tradeRequestId, text);
+      if (activeRequest.current !== tradeRequestId) return;
       setMessages((current) => {
         const next = appendUnique(current ?? [], sent);
         changedRef.current?.(next);

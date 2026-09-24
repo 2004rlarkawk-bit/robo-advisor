@@ -16,6 +16,7 @@ vi.mock('../lib/supabase', () => ({
 
 import {
   acceptTradeRequest,
+  getOwnForwarderAccount,
   matchForwarderForTrade,
   cancelTradeRequest,
   rejectTradeRequest,
@@ -45,6 +46,24 @@ function updateQuery() {
 }
 
 describe('sendTradeRequest', () => {
+  it('본인 의뢰도 같은 trade_requests에 저장한다', async () => {
+    const query = insertQuery();
+    query.single.mockResolvedValue({ data: {
+      id: 'self-request', trade_id: 'trade-1', requester_user_id: 'shipper-1',
+      receiver_user_id: 'shipper-1', status: 'pending',
+    }, error: null });
+    const result = await sendTradeRequest('trade-1', 'shipper-1', '의뢰합니다.');
+    expect(query.insert).toHaveBeenCalledWith(expect.objectContaining({
+      requester_user_id: 'shipper-1', receiver_user_id: 'shipper-1', trade_id: 'trade-1',
+    }));
+    expect(result.receiverUserId).toBe(result.requesterUserId);
+  });
+
+  it('과거 DB의 본인 의뢰 금지는 성공으로 숨기지 않고 설정 필요를 안내한다', async () => {
+    const query = insertQuery();
+    query.single.mockResolvedValue({ data: null, error: { code: '23514', message: 'trade_requests_requester_receiver_diff' } });
+    await expect(sendTradeRequest('trade-1', 'shipper-1', '')).rejects.toThrow('본인 의뢰 허용 설정');
+  });
   it('이미 보낸 pending 요청이 있으면 우호적인 에러 메시지를 던진다', async () => {
     const query = insertQuery();
     query.single.mockResolvedValue({ data: null, error: { code: '23505', message: 'duplicate key' } });
@@ -85,6 +104,47 @@ describe('sendTradeRequest', () => {
 });
 
 describe('searchForwarderByEmail', () => {
+  it.each(['integrated', null])('이메일 없이 본인 계정을 선택한다: %s', async role => {
+    const query = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn() };
+    query.select.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    query.maybeSingle.mockResolvedValue({ data: { service_role: role, company_name: 'ABC' }, error: null });
+    fromMock.mockReturnValue(query);
+    await expect(getOwnForwarderAccount()).resolves.toEqual({ id: 'shipper-1', companyName: 'ABC', contactName: null });
+    expect(query.eq).toHaveBeenCalledWith('id', 'shipper-1');
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it('화주 전용 계정의 본인 선택은 역할 설정을 안내한다', async () => {
+    const query = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn() };
+    query.select.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    query.maybeSingle.mockResolvedValue({ data: { service_role: 'shipper' }, error: null });
+    fromMock.mockReturnValue(query);
+    await expect(getOwnForwarderAccount()).rejects.toThrow('서비스 역할');
+  });
+  it('통합 계정의 본인 로그인 이메일은 검색 RPC 없이 본인 프로필로 찾는다', async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: 'shipper-1', email: 'Owner@Example.com' } }, error: null });
+    const query = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn() };
+    query.select.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    query.maybeSingle.mockResolvedValue({ data: { id: 'shipper-1', service_role: 'integrated', company_name: 'ABC', contact_name: 'Kim' }, error: null });
+    fromMock.mockReturnValue(query);
+    await expect(searchForwarderByEmail(' owner@example.com ')).resolves.toEqual({ id: 'shipper-1', companyName: 'ABC', contactName: 'Kim' });
+    expect(query.eq).toHaveBeenCalledWith('id', 'shipper-1');
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it('화주 전용 계정은 본인 이메일로 포워더 검색 결과를 만들지 않는다', async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: 'shipper-1', email: 'owner@example.com' } }, error: null });
+    const query = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn() };
+    query.select.mockReturnValue(query);
+    query.eq.mockReturnValue(query);
+    query.maybeSingle.mockResolvedValue({ data: { service_role: 'shipper' }, error: null });
+    fromMock.mockReturnValue(query);
+    await expect(searchForwarderByEmail('owner@example.com')).resolves.toBeNull();
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
   it('일치하는 포워더가 없으면 null을 반환한다', async () => {
     rpcMock.mockResolvedValue({ data: [], error: null });
     const result = await searchForwarderByEmail('nobody@example.com');
@@ -152,6 +212,7 @@ describe('matchForwarderForTrade', () => {
         id: 'fwd-1', company_name: 'PortAI Forwarding', contact_name: 'Kim',
         specialties: ['route_cn', 'cargo_cold'], matched_specialties: ['route_cn'],
         active_count: 2, completed_count: 14,
+        is_partner_forwarder: true, partner_company_name: 'ABC Logistics',
       }],
       error: null,
     });
@@ -164,6 +225,7 @@ describe('matchForwarderForTrade', () => {
       id: 'fwd-1', companyName: 'PortAI Forwarding', contactName: 'Kim',
       specialties: ['route_cn', 'cargo_cold'], matchedSpecialties: ['route_cn'],
       activeCount: 2, completedCount: 14,
+      isPartner: true, partnerCompanyName: 'ABC Logistics',
     }]);
   });
 

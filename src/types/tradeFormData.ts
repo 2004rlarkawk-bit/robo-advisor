@@ -140,6 +140,12 @@ export interface TradeFormShipment {
   otherReferences: string;
   issuePlace: string;
   issueDate: string;
+  /** 운송 방식 — 비면 해상 */
+  methodOfDispatch?: string;
+  /** 포워더에게 함께 요청하는 업무 */
+  requestInsurance?: boolean;
+  requestCustomsClearance?: boolean;
+  requestInlandHaulage?: boolean;
 }
 
 export interface TradeFormPackaging {
@@ -158,6 +164,11 @@ export interface TradeFormPackaging {
   shippingMarks: string;
   containerSize: string;
   containerQuantity: NumericInput | string;
+  /** 위험물 여부와 근거 — 운송의뢰서에 그대로 실린다. 기존 저장분에는 키가 없다. */
+  dangerousGoods?: boolean;
+  dangerousGoodsDetail?: string;
+  /** 온도관리 설정값(예: -18°C) */
+  temperatureControl?: string;
 }
 
 export interface TradeFormDataV3 {

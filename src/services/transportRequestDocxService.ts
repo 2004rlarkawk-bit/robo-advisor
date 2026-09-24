@@ -58,6 +58,34 @@ function countryFromAddress(address: string): string {
   return parts.length > 1 ? parts[parts.length - 1] : '';
 }
 
+/** FCL 컨테이너 표기 — "2 x 40HC". 규격이나 수량이 없으면 있는 값만 적는다. */
+function containerText(sr: TransportRequestData): string {
+  const quantity = Number(sr.containerQuantity) || 0;
+  const size = text(sr.containerSize);
+  if (!size) return '';
+  return quantity > 0 ? `${quantity} x ${size}` : size;
+}
+
+/**
+ * Special Instructions — 포워더가 선복·적재·부대업무를 잡을 때 필요한 내용만 적는다.
+ * 값이 없는 항목은 줄 자체를 만들지 않는다("없음"을 적지 않는다).
+ */
+function specialInstructions(sr: TransportRequestData): string {
+  const lines: string[] = [];
+  if (sr.dangerousGoods) {
+    lines.push(`Dangerous goods: YES${text(sr.dangerousGoodsDetail) ? ` (${text(sr.dangerousGoodsDetail)})` : ''}`);
+  }
+  if (text(sr.temperatureControl)) lines.push(`Temperature control: ${text(sr.temperatureControl)}`);
+  const services = [
+    sr.services?.insurance ? 'cargo insurance' : '',
+    sr.services?.customsClearance ? 'export customs clearance' : '',
+    sr.services?.inlandHaulage ? 'inland haulage' : '',
+  ].filter(Boolean);
+  if (services.length) lines.push(`Please arrange: ${services.join(', ')}.`);
+  if (text(sr.paymentTerms)) lines.push(`Payment terms: ${text(sr.paymentTerms)}`);
+  return joinLines(lines);
+}
+
 export function mapTransportRequestToSchema(sr: TransportRequestData): ShippingInstructionSchema {
   const totalPackages = sr.items.reduce((sum, item) => sum + (Number(item.packageCount) || 0), 0);
   const totalGross = sr.items.reduce((sum, item) => sum + (Number(item.grossWeight) || 0), 0);
@@ -98,8 +126,9 @@ export function mapTransportRequestToSchema(sr: TransportRequestData): ShippingI
     // 운송인은 포워더가 부킹 후 확정하므로 화주 단계에서는 비워 둔다.
     carrier: '',
     notify_party: joinLines([sr.notifyParty?.name, sr.notifyParty?.address, sr.notifyParty?.contact]),
-    method_of_dispatch: 'SEA',
-    type_of_shipment: text(sr.loadingMode),
+    method_of_dispatch: sr.methodOfDispatch === 'AIR' ? 'AIR' : 'SEA',
+    // FCL이면 컨테이너 규격·수량까지 한 줄로 적는다(예: FCL / 2 x 40HC).
+    type_of_shipment: [text(sr.loadingMode), containerText(sr)].filter(Boolean).join(' / '),
     country_of_origin: countryFromAddress(text(sr.exporter.address)),
     country_of_final_destination: countryFromAddress(
       text(sr.placeOfDelivery) || text(sr.consignee.address),
@@ -122,9 +151,9 @@ export function mapTransportRequestToSchema(sr: TransportRequestData): ShippingI
     measurement: totalCbm > 0 ? totalCbm.toLocaleString('en-US') : '',
     total_this_page: summary,
     consignment_total: summary,
-    hazardous: 'NO',
+    hazardous: sr.dangerousGoods ? 'YES' : 'NO',
     letter_of_credit: /l\/?c/i.test(text(sr.paymentTerms)) ? 'YES' : 'NO',
-    special_instructions: text(sr.paymentTerms) ? `Payment Terms: ${text(sr.paymentTerms)}` : '',
+    special_instructions: specialInstructions(sr),
     place_and_date_of_issue: text(sr.requestDate),
     signatory_company: text(sr.exporter.name),
     authorized_signatory: text(sr.requesterName),
