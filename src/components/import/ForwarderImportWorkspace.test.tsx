@@ -204,6 +204,62 @@ describe('forwarder task tabs', () => {
     expect(text).toContain('실제 세관·반출 상태는 변경되지 않습니다.');
     expect(container.textContent).not.toContain('배차 의뢰');
   });
+
+  it('완료 전 미기록 신고·D/O와 미첨부 A/N을 경고한다', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    await open(fixture({ stage: 'clearance', blockerCount: 0, issues: [] }));
+    await click('업무 진행');
+    await click('포워더 업무 완료');
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('도착통지서(A/N): 미첨부'));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('신고 상태: 미기록'));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('D/O 상태: 미기록'));
+    expect(saveForwarderCaseState).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it('저장된 관세사 전달·D/O 발급 요청 상태를 알리고 확인 후에만 완료한다', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const item = fixture({ stage: 'clearance', blockerCount: 0, issues: [] });
+    item.arrivalNotice = { storagePath: 'arrival-notice.docx' } as ForwarderImportCase['arrivalNotice'];
+    item.trade.forwarderCase = {
+      stage: 'clearance', updatedAt: '2026-09-24T00:00:00.000Z',
+      importOperations: {
+        brokerName: '테스트 관세법인', declarationNo: '', declarationStatus: 'handed_over',
+        doStatus: 'requested', doNumber: '', doIssuer: '',
+      },
+    };
+    await open(item);
+    await click('업무 진행');
+    await click('포워더 업무 완료');
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('신고 상태: 관세사 전달'));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('D/O 상태: 발급 요청 (미수령)'));
+    expect(confirm.mock.calls[0][0]).not.toContain('도착통지서(A/N): 미첨부');
+    expect(saveForwarderCaseState).not.toHaveBeenCalled();
+    confirm.mockReturnValue(true);
+    await click('포워더 업무 완료');
+    expect(saveForwarderCaseState).toHaveBeenCalledWith('case-1', { stage: 'done' }, ['포워더 업무 완료']);
+    confirm.mockRestore();
+  });
+
+  it('A/N·신고 수리·D/O 수령을 모두 기록했으면 미완료 경고를 띄우지 않는다', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const item = fixture({ stage: 'clearance', blockerCount: 0, issues: [] });
+    item.arrivalNotice = { storagePath: 'arrival-notice.docx' } as ForwarderImportCase['arrivalNotice'];
+    item.trade.forwarderCase = {
+      stage: 'clearance', updatedAt: '2026-09-24T00:00:00.000Z',
+      importOperations: {
+        brokerName: '테스트 관세법인', declarationNo: 'TEST-001', declarationStatus: 'cleared',
+        doStatus: 'received', doNumber: 'DO-001', doIssuer: '테스트 선사',
+      },
+    };
+    await open(item);
+    await click('업무 진행');
+    await click('포워더 업무 완료');
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0][0]).not.toContain('완료 전 확인할 항목');
+    expect(confirm.mock.calls[0][0]).toContain('실제 세관 신고·화물 반출 상태를 변경하지 않습니다.');
+    confirm.mockRestore();
+  });
 });
 
 it('links only matching field names, never an unrelated comparison on the same documents', () => {

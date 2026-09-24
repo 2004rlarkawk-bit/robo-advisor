@@ -3,13 +3,16 @@
  *
  * 화주의 3단계 위저드와 달리 진행 상태·다음 조치 중심으로 구성한다.
  *  - 목록: ETA·수입 건·상태·다음 조치
- *  - 상세: 서류 검토 / 요청·회신 / 통관·운송 (상태 변경 규칙은 유지)
+ *  - 상세: 서류 확인 / 업무 진행 / 업무 메시지 (상태 변경 규칙은 유지)
  * 운영 상태는 forwarderCaseService를 통해 workflow_data.forwarderCase에 저장한다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, CornerUpLeft, ExternalLink, Mail } from 'lucide-react';
 import {
   FORWARDER_STAGE_ORDER,
+  FORWARDER_STAGE_LABEL,
+  IMPORT_DECLARATION_STATUS_LABEL,
+  IMPORT_DO_STATUS_LABEL,
   type ForwarderCaseStage,
   type ForwarderCaseState,
   type ForwarderImportCase,
@@ -67,7 +70,6 @@ const STAGE_BADGE_CLASS: Record<ForwarderCaseStage, string> = {
   done: 'fwd-stage-done',
 };
 
-const IMPORT_STAGE_LABEL = { received: '의뢰 접수', review: '서류 확인', clearance: '신고·통관 진행', done: '업무 완료' };
 type DetailTab = 'review' | 'messages' | 'clearance';
 
 /** 원본 미리보기 하단의 서류 약칭. */
@@ -228,7 +230,7 @@ export default function ForwarderImportWorkspace({
   ) => {
     const STAGE_ACTIVITY: Record<ForwarderCaseStage, string> = {
       received: '의뢰 접수 단계로 이동',
-      review: '서류 검토 시작',
+      review: '서류 확인 시작',
       clearance: '신고·통관 업무 시작',
       done: '포워더 업무 완료',
     };
@@ -290,10 +292,20 @@ export default function ForwarderImportWorkspace({
   };
 
   const finishClearance = (caseItem: ForwarderImportCase) => {
-    const arrivalNoticeNote = caseItem.arrivalNotice?.storagePath
-      ? ''
-      : '\n\n도착통지서(A/N)가 첨부되지 않았습니다.';
-    if (window.confirm(`이 건의 포워더 업무를 완료 처리할까요?${arrivalNoticeNote}\n\n이 처리는 실제 세관 신고·화물 반출 상태를 변경하지 않습니다. 완료 후에는 업무 큐의 업무 완료 목록으로 이동합니다.`)) {
+    const operations = (caseItem.trade.forwarderCase as ForwarderCaseState | null)?.importOperations;
+    const declarationStatus = operations?.declarationStatus;
+    const doStatus = operations?.doStatus;
+    const warnings = [
+      ...(!caseItem.arrivalNotice?.storagePath ? ['도착통지서(A/N): 미첨부'] : []),
+      ...(declarationStatus !== 'cleared'
+        ? [`신고 상태: ${declarationStatus ? IMPORT_DECLARATION_STATUS_LABEL[declarationStatus] : '미기록'}`]
+        : []),
+      ...(doStatus !== 'received'
+        ? [`D/O 상태: ${doStatus ? `${IMPORT_DO_STATUS_LABEL[doStatus]} (미수령)` : '미기록'}`]
+        : []),
+    ];
+    const warningNote = warnings.length ? `\n\n완료 전 확인할 항목:\n${warnings.map((warning) => `• ${warning}`).join('\n')}` : '';
+    if (window.confirm(`이 건의 포워더 업무를 완료 처리할까요?${warningNote}\n\n이 처리는 실제 세관 신고·화물 반출 상태를 변경하지 않습니다. 완료 후에는 업무 큐의 업무 완료 목록으로 이동합니다.`)) {
       void moveToStage(caseItem, 'done', 'clearance');
     }
   };
@@ -319,7 +331,7 @@ export default function ForwarderImportWorkspace({
             <ArrowLeft size={15} /> 업무 목록
           </button>
           <span className={`fwd-stage-badge ${STAGE_BADGE_CLASS[selected.stage]}`}>
-            {IMPORT_STAGE_LABEL[selected.stage]}
+            {FORWARDER_STAGE_LABEL[selected.stage]}
           </span>
         </div>
 
@@ -350,7 +362,7 @@ export default function ForwarderImportWorkspace({
                 key={stage}
                 className={`fwd-progress-step${index === stageIndex ? ' is-current' : ''}${index < stageIndex ? ' is-done' : ''}`}
               >
-                {IMPORT_STAGE_LABEL[stage]}
+                {FORWARDER_STAGE_LABEL[stage]}
               </span>
             ))}
           </div>

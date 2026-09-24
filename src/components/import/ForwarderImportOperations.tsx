@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CheckCircle2, Download, FileText, Paperclip, X } from 'lucide-react';
-import type { ForwarderCaseState, ForwarderImportCase, ForwarderImportOperationsState } from '../../types/forwarderCase';
+import {
+  IMPORT_DECLARATION_STATUS_LABEL as DECLARATION_LABELS,
+  IMPORT_DO_STATUS_LABEL as DO_LABELS,
+  type ForwarderCaseState,
+  type ForwarderImportCase,
+  type ForwarderImportOperationsState,
+} from '../../types/forwarderCase';
 import {
   buildImportDeclarationDocx, downloadImportDeclarationDocx, renderImportDeclarationPreview,
 } from '../../services/importDeclarationService';
@@ -15,9 +21,6 @@ interface Props {
   arrivalNotice: ReactNode;
   onSave: (state: ForwarderImportOperationsState, activity: string) => Promise<boolean>;
 }
-
-const DECLARATION_LABELS = { preparing: '자료 준비', handed_over: '관세사 전달', filed: '신고 접수', cleared: '수입신고 수리' };
-const DO_LABELS = { waiting: '미요청', requested: '발급 요청', received: '수령 완료' };
 
 /** 준비한 자료와 외부에서 처리한 신고·D/O의 기록을 구분한다. */
 export default function ForwarderImportOperations({ item, userId, saving, locked, arrivalNotice, onSave }: Props) {
