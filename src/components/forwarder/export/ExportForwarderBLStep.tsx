@@ -54,11 +54,18 @@ export default function ExportForwarderBLStep({
   onNext,
 }: Props) {
   const [mblDraft, setMblDraft] = useState(masterBlNo);
+  // 화주가 고른 운송 방식에 따라 같은 단계에서 선하증권 또는 항공화물운송장을 다룬다.
+  const isAir = state.methodOfDispatch === 'AIR';
+  const masterLabel = isAir ? 'Master AWB' : 'Master B/L';
+  const houseLabel = isAir ? 'House AWB' : 'House B/L';
+  const houseDocLabel = isAir ? 'H/AWB' : 'H/B/L';
   const suggestedFreightTerms = deriveFreightTerms(state.incoterms ?? '');
   const freightTermsUnusual = isFreightTermsUnusual(state.incoterms ?? '', state.freightTerms);
   const hasBillOfLading = Boolean(billOfLadingData);
   const billOfLadingReady = hasBillOfLading && !generationError;
-  const houseBillOfLadingNo = billOfLadingData?.blNo?.trim() || billOfLadingData?.draftNo || '';
+  const houseBillOfLadingNo = (state.methodOfDispatch === 'AIR'
+    ? billOfLadingData?.awbNo?.trim()
+    : billOfLadingData?.blNo?.trim()) || billOfLadingData?.draftNo || '';
   // 2단계 부킹 값과 H/B/L 입력값이 다를 때만 알려준다. 자동으로 덮어쓰지 않는다.
   const bookingFreightTerms = booking.freightTerms ?? '';
   const freightTermsDiffersFromBooking = Boolean(bookingFreightTerms && state.freightTerms && bookingFreightTerms !== state.freightTerms);
@@ -68,20 +75,20 @@ export default function ExportForwarderBLStep({
       <div className="trade-section-header fwd-export-step-heading">
         <div>
           <span className="fwd-section-kicker">04 · 선적 서류</span>
-          <h2 className="card-title">B/L 관리</h2>
+          <h2 className="card-title">{isAir ? 'AWB 관리' : 'B/L 관리'}</h2>
         </div>
       </div>
 
       <details className="form-section fwd-export-bl-card is-master" open>
-        <summary className="form-section-summary">Master B/L</summary>
+        <summary className="form-section-summary">{masterLabel}</summary>
         <div className="form-grid">
           <div className="form-group">
-            <label className="form-label" htmlFor="mbl-no">M/B/L No.</label>
-            <input id="mbl-no" className="form-input" disabled={readOnly} value={mblDraft} onChange={(e) => setMblDraft(e.target.value)} onBlur={() => { if (mblDraft !== masterBlNo) onSaveMasterBl(mblDraft); }} />
+            <label className="form-label" htmlFor="mbl-no">{isAir ? 'M/AWB No.' : 'M/B/L No.'}</label>
+            <input id="mbl-no" className="form-input" disabled={readOnly} value={mblDraft} onChange={(e) => setMblDraft(e.target.value)} onBlur={() => { if (mblDraft !== masterBlNo) onSaveMasterBl(mblDraft); }} placeholder={isAir ? '180-12345675' : ''} />
           </div>
-          <div className="form-group"><label className="form-label">Carrier</label><input className="form-input" value={state.carrier} disabled readOnly /></div>
-          <div className="form-group"><label className="form-label">Vessel / Voyage</label><input className="form-input" value={[state.vesselOrFlight, state.voyageNo].filter(Boolean).join(' / ')} disabled readOnly /></div>
-          <div className="form-group"><label className="form-label">POL / POD</label><input className="form-input" value={[state.loadPort, state.dischargePort].filter(Boolean).join(' → ')} disabled readOnly /></div>
+          <div className="form-group"><label className="form-label">{isAir ? '항공사 (Carrier)' : 'Carrier'}</label><input className="form-input" value={state.carrier} disabled readOnly /></div>
+          <div className="form-group"><label className="form-label">{isAir ? 'Flight No. / 출발일' : 'Vessel / Voyage'}</label><input className="form-input" value={(isAir ? [state.vesselOrFlight, state.flightDate] : [state.vesselOrFlight, state.voyageNo]).filter(Boolean).join(' / ')} disabled readOnly /></div>
+          <div className="form-group"><label className="form-label">{isAir ? '출발 / 도착 공항' : 'POL / POD'}</label><input className="form-input" value={[state.loadPort, state.dischargePort].filter(Boolean).join(' → ')} disabled readOnly /></div>
         </div>
         <ForwarderDocumentSlot
           label=""
@@ -95,12 +102,16 @@ export default function ExportForwarderBLStep({
       </details>
 
       <details className="form-section fwd-export-bl-card is-house" open>
-        <summary className="form-section-summary">House B/L</summary>
+        <summary className="form-section-summary">{houseLabel}</summary>
 
         <div className="form-grid">
           <div className="form-group"><label className="form-label">Booking No.</label><input className="form-input" value={state.bookingNo || '미등록'} disabled readOnly /></div>
           <div className="form-group"><label className="form-label">ETD</label><input className="form-input" value={state.departureDate || '미입력'} disabled readOnly /></div>
-          <div className="form-group"><label className="form-label">컨테이너</label><input className="form-input" value={state.loadingMode === 'FCL' ? [state.containerSize, state.containerQuantity !== '' ? `${state.containerQuantity}개` : ''].filter(Boolean).join(' · ') : state.loadingMode || '미정'} disabled readOnly /></div>
+          {isAir ? (
+            <div className="form-group"><label className="form-label">총중량</label><input className="form-input" value={state.cargoTotals.grossWeightKg !== '' ? `${state.cargoTotals.grossWeightKg} kg` : '미입력'} disabled readOnly /></div>
+          ) : (
+            <div className="form-group"><label className="form-label">컨테이너</label><input className="form-input" value={state.loadingMode === 'FCL' ? [state.containerSize, state.containerQuantity !== '' ? `${state.containerQuantity}개` : ''].filter(Boolean).join(' · ') : state.loadingMode || '미정'} disabled readOnly /></div>
+          )}
         </div>
 
         {!readOnly && (
@@ -109,13 +120,22 @@ export default function ExportForwarderBLStep({
               <div className="form-group">
                 <label className="form-label" htmlFor="bl-kind">증권 종류</label>
                 <select id="bl-kind" className="form-input" value={state.blKind} onChange={(e) => patch({ blKind: e.target.value as BillOfLadingKind })}>
-                  <option value="house">House B/L (포워더 → 화주 발행)</option>
-                  <option value="master">Master B/L (선사 → 포워더 발행)</option>
+                  <option value="house">{isAir ? 'House AWB (포워더 → 화주 발행)' : 'House B/L (포워더 → 화주 발행)'}</option>
+                  <option value="master">{isAir ? 'Master AWB (항공사 → 포워더 발행)' : 'Master B/L (선사 → 포워더 발행)'}</option>
                 </select>
               </div>
-              <div className="form-group"><label className="form-label" htmlFor="bl-no">B/L 번호 (선택)</label><input id="bl-no" className="form-input" value={state.blNo} onChange={(e) => patch({ blNo: e.target.value })} placeholder="비우면 초안 번호로 표기" /></div>
-              <div className="form-group"><label className="form-label" htmlFor="bl-receipt">화물 인수지 (Place of Receipt)</label><input id="bl-receipt" className="form-input" value={state.placeOfReceipt} onChange={(e) => patch({ placeOfReceipt: e.target.value })} placeholder="비우면 선적항과 동일" /></div>
-              <div className="form-group"><label className="form-label" htmlFor="bl-delivery">화물 인도지 (Place of Delivery)</label><input id="bl-delivery" className="form-input" value={state.placeOfDelivery} onChange={(e) => patch({ placeOfDelivery: e.target.value })} placeholder="비우면 도착항과 동일" /></div>
+              {isAir ? (
+                <>
+                  <div className="form-group"><label className="form-label" htmlFor="awb-no">AWB 번호 (선택)</label><input id="awb-no" className="form-input" value={state.awbNo} onChange={(e) => patch({ awbNo: e.target.value })} placeholder="180-12345675 · 비우면 초안 번호로 표기" /><small className="form-help">항공사 부호 3자리 + 일련번호 8자리입니다.</small></div>
+                  <div className="form-group"><label className="form-label" htmlFor="awb-flight-date">항공편 출발일 (Flight Date)</label><input id="awb-flight-date" type="date" className="form-input" value={state.flightDate} onChange={(e) => patch({ flightDate: e.target.value })} /></div>
+                </>
+              ) : (
+                <>
+                  <div className="form-group"><label className="form-label" htmlFor="bl-no">B/L 번호 (선택)</label><input id="bl-no" className="form-input" value={state.blNo} onChange={(e) => patch({ blNo: e.target.value })} placeholder="비우면 초안 번호로 표기" /></div>
+                  <div className="form-group"><label className="form-label" htmlFor="bl-receipt">화물 인수지 (Place of Receipt)</label><input id="bl-receipt" className="form-input" value={state.placeOfReceipt} onChange={(e) => patch({ placeOfReceipt: e.target.value })} placeholder="비우면 선적항과 동일" /></div>
+                  <div className="form-group"><label className="form-label" htmlFor="bl-delivery">화물 인도지 (Place of Delivery)</label><input id="bl-delivery" className="form-input" value={state.placeOfDelivery} onChange={(e) => patch({ placeOfDelivery: e.target.value })} placeholder="비우면 도착항과 동일" /></div>
+                </>
+              )}
               <div className="form-group">
                 <label className="form-label" htmlFor="bl-freight">운임 지급조건 (Freight)</label>
                 <select id="bl-freight" className="form-input" value={state.freightTerms} onChange={(e) => patch({ freightTerms: e.target.value as FreightTerms })}>
@@ -135,6 +155,14 @@ export default function ExportForwarderBLStep({
                 )}
               </div>
               <div className="form-group"><label className="form-label" htmlFor="bl-charges">운임·부대비용 명세 (선택)</label><input id="bl-charges" className="form-input" value={state.freightAndCharges} onChange={(e) => patch({ freightAndCharges: e.target.value })} placeholder="비우면 AS ARRANGED로 표기" /></div>
+              {isAir ? (
+                <>
+                  <div className="form-group"><label className="form-label" htmlFor="awb-declared-carriage">운송신고가격 (Declared Value for Carriage)</label><input id="awb-declared-carriage" className="form-input" value={state.declaredValueCarriage} onChange={(e) => patch({ declaredValueCarriage: e.target.value })} placeholder="비우면 NVD로 표기" /></div>
+                  <div className="form-group"><label className="form-label" htmlFor="awb-declared-customs">세관신고가격 (Declared Value for Customs)</label><input id="awb-declared-customs" className="form-input" value={state.declaredValueCustoms} onChange={(e) => patch({ declaredValueCustoms: e.target.value })} placeholder="비우면 NCV로 표기" /></div>
+                  <div className="form-group"><label className="form-label" htmlFor="awb-handling">취급 정보 (Handling Information)</label><input id="awb-handling" className="form-input" value={state.handlingInformation} onChange={(e) => patch({ handlingInformation: e.target.value })} placeholder="KEEP DRY, FRAGILE 등" /></div>
+                </>
+              ) : (
+              <>
               <div className="form-group">
                 <label className="form-label" htmlFor="bl-release">발행 방식</label>
                 <select id="bl-release" className="form-input" value={state.blReleaseType} onChange={(e) => patch({ blReleaseType: e.target.value as ForwarderFormState['blReleaseType'] })}>
@@ -147,12 +175,14 @@ export default function ExportForwarderBLStep({
               </div>
               <div className="form-group"><label className="form-label" htmlFor="bl-originals">원본 발행 통수</label><input id="bl-originals" type="number" min="1" max="5" className="form-input" value={state.numberOfOriginals} onChange={(e) => patch({ numberOfOriginals: numericValue(e.target.value) })} disabled={state.blReleaseType !== 'ORIGINAL'} />{state.blReleaseType !== 'ORIGINAL' && <small className="form-help">원본을 발행하지 않는 방식이라 통수는 0으로 기재됩니다.</small>}</div>
               <div className="form-group"><label className="form-label" htmlFor="bl-onboard">본선 적재일 (Shipped on Board)</label><input id="bl-onboard" type="date" className="form-input" value={state.shippedOnBoardDate} onChange={(e) => patch({ shippedOnBoardDate: e.target.value })} /><small className="form-help">비우면 수취선하증권(Received B/L)으로 발행됩니다.</small></div>
+              </>
+              )}
               <div className="form-group"><label className="form-label" htmlFor="bl-issuer">발행자 상호</label><input id="bl-issuer" className="form-input" value={state.issuerName} onChange={(e) => patch({ issuerName: e.target.value })} placeholder="포워더 상호" /></div>
               <div className="form-group">
                 <label className="form-label" htmlFor="bl-capacity">발행 자격</label>
                 <select id="bl-capacity" className="form-input" value={state.signerCapacity} onChange={(e) => patch({ signerCapacity: e.target.value as BillOfLadingSignerCapacity })}>
-                  <option value="AS_CARRIER">as Carrier (운송인 자격 — House B/L 통상)</option>
-                  <option value="AS_AGENT_FOR_CARRIER">as Agent for the Carrier (선사 대리인 자격)</option>
+                  <option value="AS_CARRIER">{isAir ? 'as Carrier (운송인 자격 — House AWB 통상)' : 'as Carrier (운송인 자격 — House B/L 통상)'}</option>
+                  <option value="AS_AGENT_FOR_CARRIER">{isAir ? 'as Agent for the Carrier (항공사 대리인 자격)' : 'as Agent for the Carrier (선사 대리인 자격)'}</option>
                 </select>
               </div>
               <div className="form-group"><label className="form-label" htmlFor="bl-place">발행지 (Place of Issue)</label><input id="bl-place" className="form-input" value={state.placeOfIssue} onChange={(e) => patch({ placeOfIssue: e.target.value })} placeholder="Seoul, Korea" /></div>
@@ -164,10 +194,10 @@ export default function ExportForwarderBLStep({
               <div className="form-grid">
                 <div className="form-group"><label className="form-label" htmlFor="bl-precarriage">Pre-Carriage by</label><input id="bl-precarriage" className="form-input" value={state.preCarriageBy} onChange={(e) => patch({ preCarriageBy: e.target.value })} placeholder="TRUCK, RAIL 등" /></div>
                 <div className="form-group"><label className="form-label" htmlFor="bl-final">최종 목적지 (Final Destination)</label><input id="bl-final" className="form-input" value={state.finalDestination} onChange={(e) => patch({ finalDestination: e.target.value })} placeholder="비우면 인도지와 동일" /></div>
-                <div className="form-group"><label className="form-label" htmlFor="bl-flag">선박 국적 (Flag)</label><input id="bl-flag" className="form-input" value={state.flag} onChange={(e) => patch({ flag: e.target.value })} placeholder="PANAMA 등" /></div>
-                <div className="form-group"><label className="form-label" htmlFor="bl-revenue">Revenue tons</label><input id="bl-revenue" className="form-input" value={state.revenueTons} onChange={(e) => patch({ revenueTons: e.target.value })} placeholder="운임 산정 톤수" /></div>
+                {!isAir && <div className="form-group"><label className="form-label" htmlFor="bl-flag">선박 국적 (Flag)</label><input id="bl-flag" className="form-input" value={state.flag} onChange={(e) => patch({ flag: e.target.value })} placeholder="PANAMA 등" /></div>}
+                <div className="form-group"><label className="form-label" htmlFor="bl-revenue">{isAir ? 'Chargeable Weight (운임 적용 중량)' : 'Revenue tons'}</label><input id="bl-revenue" className="form-input" value={state.revenueTons} onChange={(e) => patch({ revenueTons: e.target.value })} placeholder={isAir ? '실중량·부피중량 중 큰 값' : '운임 산정 톤수'} /></div>
                 <div className="form-group"><label className="form-label" htmlFor="bl-rate">Rate (운임 요율)</label><input id="bl-rate" className="form-input" value={state.freightRate} onChange={(e) => patch({ freightRate: e.target.value })} placeholder="USD 85.00" /></div>
-                <div className="form-group"><label className="form-label" htmlFor="bl-per">Per (요율 단위)</label><input id="bl-per" className="form-input" value={state.freightPer} onChange={(e) => patch({ freightPer: e.target.value })} placeholder="CBM, R/T 등" /></div>
+                <div className="form-group"><label className="form-label" htmlFor="bl-per">Per (요율 단위)</label><input id="bl-per" className="form-input" value={state.freightPer} onChange={(e) => patch({ freightPer: e.target.value })} placeholder={isAir ? 'KG 등' : 'CBM, R/T 등'} /></div>
                 {state.freightTerms === 'PREPAID' && (
                   <>
                     <div className="form-group"><label className="form-label" htmlFor="bl-prepaid-at">Freight prepaid at (선불 지급지)</label><input id="bl-prepaid-at" className="form-input" value={state.freightPrepaidAt} onChange={(e) => patch({ freightPrepaidAt: e.target.value })} /></div>
@@ -187,17 +217,17 @@ export default function ExportForwarderBLStep({
 
         <div className={`forwarder-generated-document-card ${billOfLadingReady ? 'is-complete' : generationError ? 'is-failed' : 'is-pending'}`} style={{ marginTop: 14 }}>
           <div className="forwarder-generated-document-summary">
-            <div className="forwarder-generated-document-icon" aria-hidden="true">B/L</div>
+            <div className="forwarder-generated-document-icon" aria-hidden="true">{isAir ? 'AWB' : 'B/L'}</div>
             <div>
-              <strong>House 선하증권 (H/B/L)</strong>
+              <strong>{isAir ? 'House 항공화물운송장 (H/AWB)' : 'House 선하증권 (H/B/L)'}</strong>
               <span className={`forwarder-generated-document-status ${billOfLadingReady ? 'is-complete' : 'is-failed'}`}>
                 {billOfLadingReady ? '생성 완료' : generationError ? '생성 실패' : '생성 대기'}
               </span>
               {billOfLadingReady ? (
-                <p role="status" className="forwarder-generated-document-meta">H/B/L No. {houseBillOfLadingNo}</p>
+                <p role="status" className="forwarder-generated-document-meta">{houseDocLabel} No. {houseBillOfLadingNo}</p>
               ) : (
                 <p role={generationError ? 'alert' : 'status'}>
-                  {generationError || '생성된 H/B/L이 없습니다.'}
+                  {generationError || `생성된 ${houseDocLabel}이 없습니다.`}
                 </p>
               )}
             </div>
@@ -211,7 +241,7 @@ export default function ExportForwarderBLStep({
               )}
             </div>
           ) : !readOnly ? (
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerateHouseBillOfLading}><FileSignature size={16} /> H/B/L 생성</button>
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={onGenerateHouseBillOfLading}><FileSignature size={16} /> {houseDocLabel} 생성</button>
           ) : null}
         </div>
       </details>

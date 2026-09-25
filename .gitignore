@@ -47,6 +47,7 @@ supabase/backups/
 !templates/import_dispatch_request_template.docx
 !templates/import_declaration_request_template.docx
 !templates/import_declaration_template.docx
+!templates/air_waybill_template.docx
 
 # 샘플 생성 스크립트 산출물(generate-packing-sample.ts) — 커밋 대상 아님
 packing_sample_*.xlsx
