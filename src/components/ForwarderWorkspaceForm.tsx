@@ -20,12 +20,19 @@ import ExportForwarderCompletionStep from './forwarder/export/ExportForwarderCom
 import ExportForwarderMessages from './forwarder/export/ExportForwarderMessages';
 import '../styles/forwarderExportRefresh.css';
 
-const STEP_LABELS = ['화주 의뢰 확인', '선복 부킹', '반입·선적 준비', 'B/L 관리', '선적 완료'];
-const STEP_HINTS = [
+// 4단계 이름은 운송 방식에 따라 선하증권(해상)과 항공화물운송장(항공)으로 갈린다.
+const stepLabels = (isAir: boolean) => [
+  '화주 의뢰 확인',
+  isAir ? '항공 부킹' : '선복 부킹',
+  '반입·선적 준비',
+  isAir ? 'AWB 관리' : 'B/L 관리',
+  '선적 완료',
+];
+const stepHints = (isAir: boolean) => [
   '화주 의뢰와 접수 서류를 확인하세요.',
-  '선사에서 확정된 부킹 정보를 등록하세요.',
+  isAir ? '항공사에서 확정된 부킹 정보를 등록하세요.' : '선사에서 확정된 부킹 정보를 등록하세요.',
   '화물 반입, 통관, 선적 상태를 기록하세요.',
-  'M/B/L을 등록하고 H/B/L을 발행하세요.',
+  isAir ? 'M/AWB를 등록하고 H/AWB를 발행하세요.' : 'M/B/L을 등록하고 H/B/L을 발행하세요.',
   '완료 항목을 확인하고 관련 문서를 전달하세요.',
 ];
 
@@ -208,6 +215,10 @@ export default function ForwarderWorkspaceForm({
       />
     );
   }
+
+  const isAirShipment = state.methodOfDispatch === 'AIR';
+  const STEP_LABELS = stepLabels(isAirShipment);
+  const STEP_HINTS = stepHints(isAirShipment);
 
   return (
     <div className="forwarder-export-flow fwd-export-refresh fwd-workspace">

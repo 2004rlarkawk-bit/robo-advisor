@@ -41,6 +41,8 @@ type ForwarderTradeFields = Required<Pick<
 >>;
 
 export interface ForwarderFormState extends ForwarderTradeFields {
+  /** 해상(B/L)·항공(AWB) — 화주 의뢰의 운송 방식을 이어받는다. 비면 해상. */
+  methodOfDispatch: 'SEA' | 'AIR';
   exportDeclarationNo: string;
   bookingNo: string;
   bookingStatus: BookingStatus;
@@ -81,6 +83,17 @@ export interface ForwarderFormState extends ForwarderTradeFields {
   freightPayableAt: string;
   totalPrepaid: string;
   collectAmount: string;
+  // ── 항공화물운송장(AWB) 전용 기재사항 ─────────────────────────
+  /** 운송장 번호 — 비어 있으면 초안 번호로 대체 표기 */
+  awbNo: string;
+  /** 탑재 항공편 출발일 */
+  flightDate: string;
+  /** 취급 정보 — 냉장, 위험물, 통지처 요청 등 */
+  handlingInformation: string;
+  /** 운송신고가격 — 비우면 NVD */
+  declaredValueCarriage: string;
+  /** 세관신고가격 — 비우면 NCV */
+  declaredValueCustoms: string;
 }
 
 export function createEmptyForwarderCargoItem(id = 'cargo-1'): ForwarderCargoItem {
@@ -166,6 +179,12 @@ export function createEmptyForwarderFormState(): ForwarderFormState {
     freightPayableAt: '',
     totalPrepaid: '',
     collectAmount: '',
+    methodOfDispatch: 'SEA',
+    awbNo: '',
+    flightDate: '',
+    handlingInformation: '',
+    declaredValueCarriage: '',
+    declaredValueCustoms: '',
   };
 }
 
@@ -248,6 +267,7 @@ export function forwarderFormToTradeProfile(state: ForwarderFormState): TradePro
     loadingMode: state.loadingMode || undefined,
     containerSize: state.containerSize,
     containerQuantity: state.containerQuantity,
+    methodOfDispatch: state.methodOfDispatch,
   };
 }
 
@@ -293,6 +313,8 @@ export function tradeProfileToForwarderFormState(profile: TradeProfile): Forward
       vesselOrFlight: profile.vesselOrFlight ?? '',
       voyageNo: profile.voyageNo ?? '',
     }) ? 'confirmed' : 'requested',
+    // 화주가 고른 운송 방식을 그대로 이어받는다 — 항공이면 4단계가 AWB 발행으로 바뀐다.
+    methodOfDispatch: profile.methodOfDispatch === 'AIR' ? 'AIR' : 'SEA',
     loadingMode: profile.loadingMode
       ?? (profile.containerNo || profile.sealNo || profile.containerQuantity ? 'FCL' : ''),
     containerSize: profile.containerSize ?? '20GP',

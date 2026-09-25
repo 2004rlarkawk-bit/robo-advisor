@@ -615,6 +615,25 @@ export type BillOfLadingSignerCapacity = 'AS_CARRIER' | 'AS_AGENT_FOR_CARRIER';
 export interface BillOfLadingData {
   draftNo: string;
   generatedAt: string;
+  /**
+   * 해상(선하증권)·항공(항공화물운송장) 구분 — 비어 있으면 해상.
+   * 항공은 유통증권이 아니라서 원본 통수·Surrender·본선적재일 대신 아래 항공 항목을 쓴다.
+   */
+  transportMode?: 'SEA' | 'AIR';
+  /** 항공 — 운송장 번호(항공사 부호 3자리 + 일련번호 8자리). 초안에서는 비어 있을 수 있다. */
+  awbNo?: string;
+  /** 항공 — 탑재 항공편 출발일 */
+  flightDate?: string;
+  /** 항공 — 취급 정보(Handling Information) */
+  handlingInformation?: string;
+  /** 항공 — 연결된 Master AWB 번호(항공사 발행). 운송장에 참조로 적는다. */
+  masterDocumentNo?: string;
+  /** 항공 — 인코텀즈. 운송장 참조란에 적는다. */
+  incoterms?: string;
+  /** 항공 — 운송신고가격. 비우면 문서에 NVD(No Value Declared)로 표기한다. */
+  declaredValueCarriage?: string;
+  /** 항공 — 세관신고가격. 비우면 문서에 NCV(No Customs Value)로 표기한다. */
+  declaredValueCustoms?: string;
   /** House / Master 구분 — 화면·문서 제목과 서명 자격 표기에 쓰인다. */
   kind: BillOfLadingKind;
   /** 발행 B/L 번호. 초안 단계에서 비어 있을 수 있다(그때는 draftNo로 대체 표기). */

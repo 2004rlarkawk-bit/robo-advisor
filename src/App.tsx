@@ -137,6 +137,11 @@ import {
   validateForwarderBillOfLading,
 } from './services/forwarderBillOfLadingService';
 import {
+  createForwarderAirWaybillDraft,
+  transportDocumentLabel,
+  validateForwarderAirWaybill,
+} from './services/forwarderAirWaybillService';
+import {
   applyExportRequestToForwarderForm,
   type ForwarderExportRequest,
 } from './services/forwarderExportRequestService';
@@ -574,8 +579,10 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     if (!billOfLadingData) return null;
     const sig = JSON.stringify(billOfLadingData);
     if (blDocxCacheRef.current?.sig === sig) return blDocxCacheRef.current.blob;
-    const { buildBillOfLadingDocx } = await import('./services/billOfLadingDocxService');
-    const blob = await buildBillOfLadingDocx(billOfLadingData);
+    // 항공 건은 같은 자리에서 항공화물운송장 서식으로 만든다.
+    const blob = billOfLadingData.transportMode === 'AIR'
+      ? await (await import('./services/airWaybillDocxService')).buildAirWaybillDocx(billOfLadingData)
+      : await (await import('./services/billOfLadingDocxService')).buildBillOfLadingDocx(billOfLadingData);
     blDocxCacheRef.current = { sig, blob };
     return blob;
   };
@@ -1042,18 +1049,26 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     }
   };
 
-  // STEP 4 — House B/L 생성. Master B/L(선사 발행)과 달리 포워더가 발행하는 문서이므로 PortAI가 생성한다.
+  /**
+   * STEP 4 — House 운송서류 생성. 선사·항공사가 발행하는 Master 문서와 달리
+   * 포워더가 발행하는 문서이므로 PortAI가 생성한다.
+   * 화주가 고른 운송 방식에 따라 해상은 H/B/L, 항공은 H/AWB를 만든다.
+   */
   const handleGenerateHouseBillOfLading = async () => {
     if (isForwarderSaving) return;
-    const validation = validateForwarderBillOfLading(forwarderForm);
+    const isAirShipment = forwarderForm.methodOfDispatch === 'AIR';
+    const docShortLabel = isAirShipment ? 'H/AWB' : 'H/B/L';
+    const validation = isAirShipment
+      ? validateForwarderAirWaybill(forwarderForm)
+      : validateForwarderBillOfLading(forwarderForm);
     if (!validation.valid) {
-      alert(`H/B/L 생성에 필요한 정보가 부족합니다. 다음 항목을 입력해 주세요:\n\n· ${validation.missingLabels.join('\n· ')}`);
+      alert(`${docShortLabel} 생성에 필요한 정보가 부족합니다. 다음 항목을 입력해 주세요:\n\n· ${validation.missingLabels.join('\n· ')}`);
       return;
     }
     // 발행은 가능하지만 실무상 확인이 필요한 항목은 진행 여부를 사용자가 정하게 한다.
     if (validation.warningLabels.length > 0) {
       const proceed = window.confirm(
-        `아래 항목을 확인해 주세요.\n\n· ${validation.warningLabels.join('\n· ')}\n\n이대로 H/B/L을 생성할까요?`,
+        `아래 항목을 확인해 주세요.\n\n· ${validation.warningLabels.join('\n· ')}\n\n이대로 ${docShortLabel}을 생성할까요?`,
       );
       if (!proceed) return;
     }
@@ -1062,10 +1077,17 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     try {
       const saved = await persistForwarderProfile(4);
       if (!saved) return;
-      const generatedBill = createForwarderBillOfLadingDraft(forwarderForm, saved.id);
+      const generatedBill = isAirShipment
+        ? createForwarderAirWaybillDraft(forwarderForm, saved.id, undefined, exportForwarderCase?.masterBlNo ?? '')
+        : createForwarderBillOfLadingDraft(forwarderForm, saved.id);
       const generatedDocuments = [
         ...documents.filter((document) => document.id !== 'bl'),
-        { id: 'bl' as const, name: '선하증권(B/L)', status: 'completed' as const, statusText: '초안' },
+        {
+          id: 'bl' as const,
+          name: transportDocumentLabel(isAirShipment ? 'AIR' : 'SEA'),
+          status: 'completed' as const,
+          statusText: '초안',
+        },
       ];
       // 선하증권은 무역협회 표준 서식 docx에서 생성·미리보기하므로 HTML을 만들지 않는다.
       const generatedTemplates = { ...htmlTemplates };
@@ -1086,11 +1108,11 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       setHtmlTemplates(generatedTemplates);
       setDocuments(generatedDocuments);
       setForwarderGenerationError('');
-      alert('H/B/L이 생성되었습니다.');
+      alert(`${docShortLabel}이 생성되었습니다.`);
     } catch (error) {
-      console.error('[Forwarder Export] H/B/L 생성 실패:', error);
-      setForwarderGenerationError('H/B/L 생성에 실패했습니다. 저장된 입력값은 유지됩니다. 다시 시도해주세요.');
-      alert('H/B/L 생성에 실패했습니다. 다시 시도해주세요.');
+      console.error(`[Forwarder Export] ${docShortLabel} 생성 실패:`, error);
+      setForwarderGenerationError(`${docShortLabel} 생성에 실패했습니다. 저장된 입력값은 유지됩니다. 다시 시도해주세요.`);
+      alert(`${docShortLabel} 생성에 실패했습니다. 다시 시도해주세요.`);
     } finally {
       setIsForwarderSaving(false);
     }
@@ -1102,7 +1124,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     if (!tradeId || (currentTradeStatus !== 'generated' && currentTradeStatus !== 'submitted') || isForwarderSaving) return;
     if (currentTradeStatus === 'submitted' && exportForwarderCase?.completedAt) return;
     if (!billOfLadingData || forwarderGenerationError) {
-      alert('H/B/L을 먼저 생성해주세요.');
+      alert(`${forwarderForm.methodOfDispatch === 'AIR' ? 'H/AWB' : 'H/B/L'}을 먼저 생성해주세요.`);
       return;
     }
     if (!isBookingRegistered(forwarderForm)
@@ -2314,7 +2336,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = getDocFileName('bl').replace(/\.pdf$/i, '.docx');
+      a.download = getDocFileName(billOfLadingData?.transportMode === 'AIR' ? 'awb' : 'bl').replace(/\.pdf$/i, '.docx');
       document.body.appendChild(a);
       a.click();
       a.remove();

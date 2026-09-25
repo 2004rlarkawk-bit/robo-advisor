@@ -9,6 +9,7 @@ export const PORTAI_DOCUMENT_NAMES = {
   import_declaration: 'import.declaration',
   import_declaration_request: 'import.declaration.request',
   bl: 'bill.of.lading',
+  awb: 'air.waybill',
   transport_request: 'shipping.instruction',
   co: 'certificate.of.origin',
   insurance: 'insurance.policy',
