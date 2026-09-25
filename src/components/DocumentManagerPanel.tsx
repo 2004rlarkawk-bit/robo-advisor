@@ -6,6 +6,7 @@ import type { ForwarderCaseState } from '../types/forwarderCase';
 import { deleteSavedTrade, fetchSubmittedTrades } from '../services/storageService';
 import { filterDocumentManagerTrades } from '../services/tradeListPolicy';
 import { hasActiveShipperReturnRequest } from '../services/forwarderCaseService';
+import { formatKstDateTime } from '../utils/formatDate';
 
 interface Props {
   onLoad: (trade: SavedTrade) => void;
@@ -205,25 +206,8 @@ export default function DocumentManagerPanel({
     sortKey === 'oldest' ? tradeTime(a) - tradeTime(b) : tradeTime(b) - tradeTime(a)
   );
 
-  const formatDate = (trade: SavedTrade) => {
-    const created = new Date(
-      trade.submittedAt ?? trade.createdAt
-    );
-
-    if (Number.isNaN(created.getTime())) {
-      return trade.createdAt;
-    }
-
-    return `${created.getFullYear()}.${String(
-      created.getMonth() + 1
-    ).padStart(2, '0')}.${String(
-      created.getDate()
-    ).padStart(2, '0')} ${String(
-      created.getHours()
-    ).padStart(2, '0')}:${String(
-      created.getMinutes()
-    ).padStart(2, '0')}`;
-  };
+  const formatDate = (trade: SavedTrade) =>
+    formatKstDateTime(trade.submittedAt ?? trade.createdAt);
 
   return (
     <section className="doc-panel">

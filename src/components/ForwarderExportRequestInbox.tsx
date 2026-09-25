@@ -5,6 +5,7 @@ import {
   type ForwarderExportRequest,
 } from '../services/forwarderExportRequestService';
 import '../styles/forwarderImportInbox.css';
+import { formatKstDateTime } from '../utils/formatDate';
 
 interface Props {
   /** 선택한 의뢰를 포워더 입력 폼에 반영 */
@@ -12,12 +13,6 @@ interface Props {
   /** 이미 불러온 의뢰 — 목록에서 '불러옴'으로 표시 */
   appliedTradeId?: string | null;
   headerAction?: ReactNode;
-}
-
-function formatDate(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return `${date.getMonth() + 1}월 ${date.getDate()}일 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 /**
@@ -113,7 +108,7 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId, h
                     <td className="fwd-inbox-party">
                         <strong>{request.exporterName || '화주명 미입력'}</strong>
                         <span>{request.itemSummary} · {route || '구간 미입력'}</span>
-                        <small>{request.requestNo} · 접수 {formatDate(request.requestedAt)}</small>
+                        <small>{request.requestNo} · 접수 {formatKstDateTime(request.requestedAt)}</small>
                     </td>
                     <td className="fwd-inbox-eta">{request.requestedDepartureDate || '미정'}</td>
                     <td>

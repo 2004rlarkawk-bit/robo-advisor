@@ -11,6 +11,7 @@ import type {
 // 고정 docx 템플릿(수입신고의뢰서) — 서식은 그대로 두고 {{placeholder}} 값만 주입한다.
 import templateUrl from '../../templates/import_declaration_request_template.docx?url';
 import { portaiFileName } from '../utils/documentFileName';
+import { formatKstDateSpaced } from '../utils/formatDate';
 
 export interface ImportDeclarationData {
   fields: ImportExtractedFields;
@@ -95,10 +96,8 @@ const text = (value: unknown) => String(value ?? '').trim();
 const joinFilled = (values: unknown[], separator: string) => values.map(text).filter(Boolean).join(separator);
 
 function formatDate(value: string | Date): string {
-  const date = value instanceof Date ? value : new Date(text(value));
-  if (Number.isNaN(date.getTime())) return text(value);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}. ${pad(date.getMonth() + 1)}. ${pad(date.getDate())}`;
+  // 서식 칸은 비워 두는 편이 낫다 — 읽을 수 없는 값을 그대로 찍지 않는다.
+  return formatKstDateSpaced(value, '');
 }
 
 function requestNo(date: Date, tradeId?: string): string {

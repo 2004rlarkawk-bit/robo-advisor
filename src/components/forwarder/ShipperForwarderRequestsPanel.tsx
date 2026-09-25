@@ -26,6 +26,7 @@ import { fetchSubmittedTrades } from '../../services/storageService';
 import { filterDocumentManagerTrades } from '../../services/tradeListPolicy';
 import ForwarderRequestModal from './ForwarderRequestModal';
 import TradeMessageThread from './TradeMessageThread';
+import { formatKstDate } from '../../utils/formatDate';
 import '../../styles/forwarderRequest.css';
 
 type RequestFilter = 'all' | 'ready' | 'active' | 'done';
@@ -60,13 +61,6 @@ function timeValue(iso: string | null | undefined): number {
   if (!iso) return 0;
   const value = new Date(iso).getTime();
   return Number.isNaN(value) ? 0 : value;
-}
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '-';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
 }
 
 function latestForTrade<T extends { tradeId: string; createdAt: string }>(items: T[], tradeId: string): T | null {
@@ -318,12 +312,12 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
                       <span className={`trade-type-badge ${direction}`}>{direction === 'export' ? '수출' : '수입'}</span>
                       <strong>{profile.itemName || '품목명 미입력'}</strong>
                     </div>
-                    <span>{reference} · 제출 {formatDate(trade.submittedAt ?? trade.createdAt)}</span>
+                    <span>{reference} · 제출 {formatKstDate(trade.submittedAt ?? trade.createdAt)}</span>
                   </div>
                   <div className="shipper-request-forwarder">
                     <div><strong>{view.forwarderLabel}</strong><span className={`shipper-request-status is-${view.statusTone}`}>{view.statusLabel}</span></div>
                     {/* 의뢰일이 없어도 줄을 유지해 행마다 라벨 높이가 어긋나지 않게 한다 */}
-                    <span>{view.requestedAt ? `의뢰 ${formatDate(view.requestedAt)}` : ' '}</span>
+                    <span>{view.requestedAt ? `의뢰 ${formatKstDate(view.requestedAt)}` : ' '}</span>
                   </div>
                   <div className="shipper-request-next">
                     {internal && (
@@ -365,7 +359,7 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
                   <span className={`trade-type-badge ${trade.tradeDirection ?? trade.profile.tradeType}`}>
                     {(trade.tradeDirection ?? trade.profile.tradeType) === 'export' ? '수출' : '수입'}
                   </span>
-                  <span><strong>{trade.profile.itemName || '품목명 미입력'}</strong><small>{trade.profile.blNo || trade.profile.invoiceNo || `제출 ${formatDate(trade.submittedAt)}`}</small></span>
+                  <span><strong>{trade.profile.itemName || '품목명 미입력'}</strong><small>{trade.profile.blNo || trade.profile.invoiceNo || `제출 ${formatKstDate(trade.submittedAt)}`}</small></span>
                   <ArrowRight size={17} />
                 </button>
               ))}
