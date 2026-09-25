@@ -8,13 +8,8 @@ import {
   rejectTradeRequest,
 } from '../../services/forwarderRequestService';
 import { subscribeToNotifications } from '../../services/notificationService';
+import { formatKstDate } from '../../utils/formatDate';
 import '../../styles/forwarderRequest.css';
-
-function formatDate(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
-}
 
 interface RequestCardProps {
   request: TradeRequest;
@@ -90,7 +85,7 @@ function RequestCard({ request, onDecided, onAccepted }: RequestCardProps) {
           <span className="incoming-request-alert-icon"><BellRing size={19} /></span>
           <div>
             <strong>새 포워더 의뢰가 도착했습니다</strong>
-            <span>{preview.requesterCompany || '알 수 없는 업체'} · {formatDate(preview.createdAt)}</span>
+            <span>{preview.requesterCompany || '알 수 없는 업체'} · {formatKstDate(preview.createdAt)}</span>
           </div>
         </div>
         <span className="incoming-request-unread"><span aria-hidden="true" />읽지 않음</span>
