@@ -1,3 +1,5 @@
+import { verifyRequestUser } from '../_shared/auth.ts';
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -1209,6 +1211,19 @@ export default {
           error: "POST 요청만 허용됩니다.",
         },
         405,
+      );
+    }
+
+    // 로그인한 사용자만 — 유료 API(OpenAI)를 부르므로 익명 호출을 막는다.
+    // 같은 OpenAI를 쓰는 import-document-analysis와 정책을 맞춘다.
+    const user = await verifyRequestUser(req);
+    if (!user) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "로그인이 필요합니다.",
+        },
+        401,
       );
     }
 

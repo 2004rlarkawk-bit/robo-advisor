@@ -2,15 +2,37 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import handler from './index';
 
 const openAIFetchMock = vi.fn();
+/** Auth API(/auth/v1/user) 응답 — 기본은 로그인한 사용자. 테스트에서 바꿔 401을 흉내낸다. */
+let authResponse: Response;
+
+/** 함수가 인증 확인(fetch)과 OpenAI 호출(fetch)을 모두 하므로 URL로 갈라 준다. */
+function routedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  if (url.includes('/auth/v1/user')) return Promise.resolve(authResponse.clone());
+  return openAIFetchMock(input, init) as Promise<Response>;
+}
+
+const ENV: Record<string, string> = {
+  OPENAI_API_KEY: 'test-key',
+  SUPABASE_URL: 'http://supabase.test',
+  SUPABASE_ANON_KEY: 'anon-key',
+};
+
+/** 로그인한 사용자의 요청 — Authorization 헤더가 붙는다. */
+function authedRequest(body: unknown): Request {
+  return new Request('http://local.test', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer user-token' },
+    body: JSON.stringify(body),
+  });
+}
 
 beforeEach(() => {
   openAIFetchMock.mockReset();
-  vi.stubGlobal('fetch', openAIFetchMock);
+  authResponse = new Response(JSON.stringify({ id: 'user-1', email: 'shipper@example.com' }), { status: 200 });
+  vi.stubGlobal('fetch', routedFetch);
   vi.stubGlobal('Deno', {
-    env: {
-      get: (key: string) =>
-        key === 'OPENAI_API_KEY' ? 'test-key' : undefined,
-    },
+    env: { get: (key: string) => ENV[key] },
   });
 });
 
@@ -34,13 +56,10 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
       reasoning: '휴대용 컴퓨터',
     }]));
 
-    const response = await handler.fetch(new Request('http://local.test', {
-      method: 'POST',
-      body: JSON.stringify({
+    const response = await handler.fetch(authedRequest({
         action: 'suggest-hs-code',
         itemName: '노트북',
-      }),
-    }));
+      }));
     const body = await response.json();
 
     expect(body.success).toBe(true);
@@ -60,15 +79,12 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
       requiredAdditionalInfo: [],
     }));
 
-    const response = await handler.fetch(new Request('http://local.test', {
-      method: 'POST',
-      body: JSON.stringify({
+    const response = await handler.fetch(authedRequest({
         action: 'suggest-hs-code',
         itemName: 'Laptop computer',
         candidateCodes: [],
         discoveryMode: true,
-      }),
-    }));
+      }));
     const body = await response.json();
 
     expect(body.suggestedPrefixes).toEqual(['847130', '8215']);
@@ -88,9 +104,7 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
       requiredAdditionalInfo: ['재질'],
     }));
 
-    const response = await handler.fetch(new Request('http://local.test', {
-      method: 'POST',
-      body: JSON.stringify({
+    const response = await handler.fetch(authedRequest({
         action: 'suggest-hs-code',
         itemName: '산업용 제품',
         candidateCodes: [{
@@ -98,8 +112,7 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
           koreanName: '휴대용 자동자료처리기계',
           englishName: 'Portable automatic data processing machines',
         }],
-      }),
-    }));
+      }));
     const body = await response.json();
 
     expect(body.suggestions).toEqual([]);
@@ -119,9 +132,7 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
       requiredAdditionalInfo: [],
     }));
 
-    const response = await handler.fetch(new Request('http://local.test', {
-      method: 'POST',
-      body: JSON.stringify({
+    const response = await handler.fetch(authedRequest({
         action: 'suggest-hs-code',
         itemName: '휴대용 노트북 컴퓨터',
         candidateCodes: [{
@@ -129,8 +140,7 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
           koreanName: '휴대용 자동자료처리기계',
           englishName: 'Portable automatic data processing machines',
         }],
-      }),
-    }));
+      }));
     const body = await response.json();
 
     expect(body.suggestions).toEqual([{
@@ -181,14 +191,11 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
       classificationName: '(직물제 의류)',
     }));
 
-    const response = await handler.fetch(new Request('http://local.test', {
-      method: 'POST',
-      body: JSON.stringify({
+    const response = await handler.fetch(authedRequest({
         action: 'suggest-hs-code',
         itemName: "Women's woven cashmere overcoat",
         candidateCodes,
-      }),
-    }));
+      }));
     const body = await response.json();
 
     expect(body.suggestions).toEqual([{
@@ -219,9 +226,7 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
       requiredAdditionalInfo: ['성인용 또는 아동용 여부'],
     }));
 
-    const response = await handler.fetch(new Request('http://local.test', {
-      method: 'POST',
-      body: JSON.stringify({
+    const response = await handler.fetch(authedRequest({
         action: 'suggest-hs-code',
         itemName: "Men's cotton knitted T-shirt",
         candidateCodes: [{
@@ -230,8 +235,7 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
           englishName: 'Of cotton',
           classificationName: '(티셔츠)',
         }],
-      }),
-    }));
+      }));
     const body = await response.json();
 
     expect(body.suggestions).toHaveLength(1);
@@ -241,5 +245,41 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
       '성인용 또는 아동용 여부',
       '주된 겉감의 재질인지와 정확한 섬유 조성비',
     ]);
+  });
+});
+
+describe('openai-assistant 인증', () => {
+  const body = { action: 'suggest-hs-code', itemName: '노트북' };
+
+  it('Authorization 헤더가 없으면 401이고 OpenAI를 부르지 않는다', async () => {
+    const response = await handler.fetch(new Request('http://local.test', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }));
+
+    expect(response.status).toBe(401);
+    expect((await response.json()).error).toContain('로그인');
+    expect(openAIFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('사용자 토큰이 아니면(anon 키 등) 401이고 OpenAI를 부르지 않는다', async () => {
+    // Auth API는 anon 키로 물으면 사용자를 돌려주지 않는다.
+    authResponse = new Response(JSON.stringify({ message: 'invalid claim' }), { status: 401 });
+
+    const response = await handler.fetch(authedRequest(body));
+
+    expect(response.status).toBe(401);
+    expect(openAIFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('로그인한 사용자는 평소처럼 통과한다', async () => {
+    openAIFetchMock.mockResolvedValue(openAIResponse([{
+      code: '8471.30.0000', description: '휴대용 자동자료처리기계', confidence: '높음', reasoning: '휴대용 컴퓨터',
+    }]));
+
+    const response = await handler.fetch(authedRequest(body));
+
+    expect(response.status).toBe(200);
+    expect(openAIFetchMock).toHaveBeenCalled();
   });
 });

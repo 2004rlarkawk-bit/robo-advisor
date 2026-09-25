@@ -73,7 +73,9 @@ entrypoint = "./functions/nts-business/index.ts"
 
 [functions.openai-assistant]
 enabled = true
-verify_jwt = false
+# 함수 안에서도 사용자 토큰을 직접 검증한다(_shared/auth.ts) — anon 키는 공개돼 있어
+# verify_jwt만으로는 익명 호출을 막지 못하기 때문이다. 이 값은 그 위의 1차 방어선이다.
+verify_jwt = true
 import_map = "./functions/openai-assistant/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
