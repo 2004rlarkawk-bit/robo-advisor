@@ -211,6 +211,7 @@ describe('matchForwarderForTrade', () => {
       data: [{
         id: 'fwd-1', company_name: 'PortAI Forwarding', contact_name: 'Kim',
         specialties: ['route_cn', 'cargo_cold'], matched_specialties: ['route_cn'],
+        custom_specialties: ['삼국간 무역'],
         active_count: 2, completed_count: 14,
         is_partner_forwarder: true, partner_company_name: 'ABC Logistics',
       }],
@@ -224,6 +225,7 @@ describe('matchForwarderForTrade', () => {
     expect(result).toEqual([{
       id: 'fwd-1', companyName: 'PortAI Forwarding', contactName: 'Kim',
       specialties: ['route_cn', 'cargo_cold'], matchedSpecialties: ['route_cn'],
+      customSpecialties: ['삼국간 무역'],
       activeCount: 2, completedCount: 14,
       isPartner: true, partnerCompanyName: 'ABC Logistics',
     }]);

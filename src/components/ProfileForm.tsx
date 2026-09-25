@@ -9,8 +9,11 @@ import { normalizeCountryValue } from '../constants/countries';
 import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS, normalizePortValue } from '../constants/ports';
 import CountrySelect from './CountrySelect';
 import {
+  CUSTOM_SPECIALTY_MAX_COUNT,
+  CUSTOM_SPECIALTY_MAX_LENGTH,
   FORWARDER_SPECIALTIES,
   FORWARDER_SPECIALTY_GROUP_LABEL,
+  normalizeCustomSpecialties,
   type ForwarderSpecialtyGroup,
   type ForwarderSpecialtyKey,
 } from '../utils/forwarderSpecialty';
@@ -43,6 +46,7 @@ const formValues = (p: UserProfile, requireExplicitServiceRole: boolean): UserPr
   default_load_port: normalizePortValue(p.default_load_port), default_discharge_port: normalizePortValue(p.default_discharge_port), default_incoterm: p.default_incoterm ?? '',
   service_role: requireExplicitServiceRole ? undefined : p.service_role,
   forwarder_specialties: p.forwarder_specialties ?? [],
+  forwarder_specialties_custom: p.forwarder_specialties_custom ?? [],
 });
 
 const SPECIALTY_GROUPS: ForwarderSpecialtyGroup[] = ['route', 'cargo'];
@@ -50,12 +54,33 @@ const SPECIALTY_GROUPS: ForwarderSpecialtyGroup[] = ['route', 'cargo'];
 export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, requireExplicitServiceRole = false, secondaryAction }: Props) {
   const [values, setValues] = useState<UserProfileUpdate>(() => formValues(profile, requireExplicitServiceRole));
   const [message, setMessage] = useState('');
+  // 직접 입력 칸은 "추가"를 눌러야 칩이 된다 — 타자 중인 글자가 저장되지 않게.
+  const [customDraft, setCustomDraft] = useState('');
   useEffect(() => setValues(formValues(profile, requireExplicitServiceRole)), [profile, requireExplicitServiceRole]);
   const set = (field: keyof UserProfileUpdate, value: string) => setValues((v) => ({ ...v, [field]: value }));
   const toggleSpecialty = (key: ForwarderSpecialtyKey) => setValues((v) => {
     const current = v.forwarder_specialties ?? [];
     return { ...v, forwarder_specialties: current.includes(key) ? current.filter((item) => item !== key) : [...current, key] };
   });
+  const customSpecialties = values.forwarder_specialties_custom ?? [];
+  const customLimitReached = customSpecialties.length >= CUSTOM_SPECIALTY_MAX_COUNT;
+
+  const addCustomSpecialty = () => {
+    const [added] = normalizeCustomSpecialties([customDraft]);
+    if (!added || customLimitReached) return;
+    // 이미 있는 말이면 칩을 늘리지 않고 입력칸만 비운다.
+    setValues((v) => ({
+      ...v,
+      forwarder_specialties_custom: normalizeCustomSpecialties([...(v.forwarder_specialties_custom ?? []), added]),
+    }));
+    setCustomDraft('');
+  };
+
+  const removeCustomSpecialty = (value: string) => setValues((v) => ({
+    ...v,
+    forwarder_specialties_custom: (v.forwarder_specialties_custom ?? []).filter((item) => item !== value),
+  }));
+
   // 포워더 업무를 하는 계정에만 특화 분야를 묻는다. 화주 전용으로 바꾸면 저장 시 비운다.
   const handlesForwarding = values.service_role === 'forwarder' || values.service_role === 'integrated';
   const submit = async (event: React.FormEvent) => {
@@ -69,7 +94,16 @@ export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, 
     if (requireExplicitServiceRole && (!values.contact_name?.trim() || !values.phone?.trim() || !values.country?.trim())) {
       setMessage('담당자명, 회사 연락처, 국가는 필수 정보입니다.'); return;
     }
-    try { await onSubmit({ ...values, forwarder_specialties: handlesForwarding ? values.forwarder_specialties ?? [] : [] }); } catch (e) { setMessage(e instanceof Error ? e.message : '프로필을 저장하지 못했습니다.'); }
+    try {
+      await onSubmit({
+        ...values,
+        forwarder_specialties: handlesForwarding ? values.forwarder_specialties ?? [] : [],
+        // 입력칸에 쓰다 만 글자도 버리지 않고 저장한다 — "추가"를 안 눌렀다고 사라지면 당황스럽다.
+        forwarder_specialties_custom: handlesForwarding
+          ? normalizeCustomSpecialties([...customSpecialties, customDraft])
+          : [],
+      });
+    } catch (e) { setMessage(e instanceof Error ? e.message : '프로필을 저장하지 못했습니다.'); }
   };
   return (
     <form className={'profile-form'} onSubmit={submit}>
@@ -121,6 +155,56 @@ export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, 
               </div>
             </div>
           ))}
+          <div className={'profile-specialty-group'} role={'group'} aria-label={'직접 입력한 특화 분야'}>
+            <span className={'profile-specialty-group-label'}>직접 입력</span>
+            <p className={'profile-specialty-custom-hint'}>
+              위 목록에 없는 분야는 직접 적어 주세요. 화주에게 &lsquo;그 외 취급 분야&rsquo;로 보이며,
+              자동 배정 조건에는 쓰이지 않습니다. 최대 {CUSTOM_SPECIALTY_MAX_COUNT}개.
+            </p>
+            {customSpecialties.length > 0 && (
+              <div className={'profile-specialty-chips'}>
+                {customSpecialties.map((item) => (
+                  <span key={item} className={'fwd-cond-chip is-on profile-specialty-custom-chip'}>
+                    {item}
+                    <button
+                      type={'button'}
+                      className={'profile-specialty-custom-remove'}
+                      aria-label={`${item} 삭제`}
+                      onClick={() => removeCustomSpecialty(item)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className={'profile-specialty-custom-row'}>
+              <input
+                type={'text'}
+                className={'login-input'}
+                value={customDraft}
+                maxLength={CUSTOM_SPECIALTY_MAX_LENGTH}
+                placeholder={customLimitReached ? `최대 ${CUSTOM_SPECIALTY_MAX_COUNT}개까지 등록할 수 있습니다` : '예: 반송·재수출, 삼국간 무역, 전시화물'}
+                disabled={customLimitReached}
+                aria-label={'직접 입력할 특화 분야'}
+                onChange={(event) => setCustomDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  // 폼 안의 입력칸이라 Enter가 저장 버튼을 누르는 걸 막고 칩 추가로 돌린다.
+                  if (event.key !== 'Enter') return;
+                  event.preventDefault();
+                  addCustomSpecialty();
+                }}
+              />
+              <button
+                type={'button'}
+                className={'profile-specialty-custom-add'}
+                onClick={addCustomSpecialty}
+                disabled={customLimitReached || !customDraft.trim()}
+              >
+                추가
+              </button>
+            </div>
+          </div>
         </section>
       )}
       <section className={'profile-form-section'}>

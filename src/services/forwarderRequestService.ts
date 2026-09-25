@@ -158,6 +158,7 @@ export async function matchForwarderForTrade(
     contactName: (row.contact_name as string | null) ?? null,
     specialties: Array.isArray(row.specialties) ? row.specialties as string[] : [],
     matchedSpecialties: Array.isArray(row.matched_specialties) ? row.matched_specialties as string[] : [],
+    customSpecialties: Array.isArray(row.custom_specialties) ? row.custom_specialties as string[] : [],
     activeCount: Number(row.active_count ?? 0),
     completedCount: Number(row.completed_count ?? 0),
     isPartner: row.is_partner_forwarder === true,

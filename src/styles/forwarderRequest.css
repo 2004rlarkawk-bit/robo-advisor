@@ -1120,3 +1120,78 @@
   font-size: 11px; font-weight: 700;
 }
 .fwd-basis-chip.is-match { background: #eff5ff; color: #1759c9; }
+
+/* 프로필 — 목록에 없는 특화 분야를 직접 적는 칸 */
+.profile-specialty-custom-hint {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #64748b;
+  /* 조사·어미가 혼자 다음 줄로 넘어가지 않게 어절 단위로 끊는다. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.profile-specialty-custom-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 520px;
+}
+
+.profile-specialty-custom-row .login-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.profile-specialty-custom-add {
+  flex: 0 0 auto;
+  padding: 0 18px;
+  height: 42px;
+  border: 1px solid #1d4ed8;
+  border-radius: 8px;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.profile-specialty-custom-add:disabled {
+  border-color: #cbd5e1;
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.profile-specialty-custom-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  word-break: keep-all;
+}
+
+.profile-specialty-custom-remove {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.profile-specialty-custom-remove:hover {
+  opacity: 1;
+}
+
+@media (max-width: 480px) {
+  .profile-specialty-custom-row {
+    flex-wrap: wrap;
+  }
+
+  .profile-specialty-custom-add {
+    width: 100%;
+  }
+}

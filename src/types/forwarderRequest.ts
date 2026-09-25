@@ -86,6 +86,8 @@ export interface ForwarderMatchCandidate {
   specialties: string[];
   /** 그중 이번 거래 조건과 겹친 것 */
   matchedSpecialties: string[];
+  /** 목록에 없어 담당자가 직접 적은 분야. 보여주기만 하고 배정 점수에는 들어가지 않는다. */
+  customSpecialties: string[];
   activeCount: number;
   completedCount: number;
   /** PortAI와 제휴(MOU)한 포워더 담당자 — 추천 목록에서 먼저 보여준다. */

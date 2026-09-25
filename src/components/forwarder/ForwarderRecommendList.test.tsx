@@ -29,12 +29,12 @@ const trade = {
 
 const partner: ForwarderMatchCandidate = {
   id: 'fwd-abc', companyName: 'ABC Logistics', contactName: 'Kim', specialties: ['route_cn', 'cargo_cold'],
-  matchedSpecialties: ['route_cn', 'cargo_cold'], activeCount: 2, completedCount: 14,
+  matchedSpecialties: ['route_cn', 'cargo_cold'], customSpecialties: ['삼국간 무역'], activeCount: 2, completedCount: 14,
   isPartner: true, partnerCompanyName: null,
 };
 const plain: ForwarderMatchCandidate = {
   id: 'fwd-ks', companyName: 'Korea Shipping', contactName: 'Lee', specialties: ['route_cn'],
-  matchedSpecialties: ['route_cn'], activeCount: 0, completedCount: 3,
+  matchedSpecialties: ['route_cn'], customSpecialties: [], activeCount: 0, completedCount: 3,
   isPartner: false, partnerCompanyName: null,
 };
 
@@ -92,6 +92,7 @@ describe('ForwarderRecommendList', () => {
     const [first] = rows();
     expect(first.textContent).toContain('중국 항로');
     expect(first.textContent).toContain('콜드체인');
+    expect(first.textContent).toContain('삼국간 무역');
     expect(first.textContent).toContain('담당 Kim');
     expect(first.textContent).toContain('현재 진행 2건');
     expect(first.textContent).toContain('완료 14건');

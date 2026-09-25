@@ -169,6 +169,10 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
                       {candidate.matchedSpecialties.map((key) => (
                         <span key={key} className="fwd-basis-chip is-match">{specialtyLabel(key)}</span>
                       ))}
+                      {/* 직접 적은 분야 — 배정 점수와 무관해 일치 칩과 다르게 보인다. */}
+                      {(candidate.customSpecialties ?? []).map((label) => (
+                        <span key={`custom-${label}`} className="fwd-basis-chip">{label}</span>
+                      ))}
                       <span className="fwd-basis-chip">담당 {candidateName(candidate)}</span>
                       <span className="fwd-basis-chip">현재 진행 {candidate.activeCount}건</span>
                       <span className="fwd-basis-chip">완료 {candidate.completedCount}건</span>
