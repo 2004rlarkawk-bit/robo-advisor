@@ -779,16 +779,17 @@ export default function ImportTradeFlow({
         return setMessage('모든 품목의 대한민국 HSK 10자리 코드를 공식 후보에서 선택하거나 직접 입력해 확정해 주세요.');
       }
     }
-    // 세액·의뢰서·리스크 산출도 Pipeline Runner 콘솔로 진행 상황을 보여준다.
+    // 세액·신고자료 산출도 Pipeline Runner 콘솔로 진행 상황을 보여준다.
+    // 문구는 새 전제(검증이 아니라 신고자료 준비)를 따른다 — '불일치 점검' 표현을 쓰지 않는다.
     setAnalysisLogs([]);
     setShowAnalysisConsole(true);
-    pushAnalysisLog('Orchestrator Agent', '세액·의뢰서·리스크 산출 파이프라인 가동 시작...');
+    pushAnalysisLog('Orchestrator Agent', '세액·신고자료 산출 파이프라인 가동 시작...');
     pushAnalysisLog('HSCode Agent', `품목 ${fields.items.length}건 HSK 코드 확정값 검증 완료`, 'success');
     {
       const stages = [
         '관세율 조회 · 예상세액 계산 중...',
-        '운송의뢰서 초안 구성 중...',
-        '리스크 점검 중 (서류 누락 · 값 불일치)...',
+        '수입신고 의뢰서 초안 구성 중...',
+        '신고자료 완성도 점검 중 (필수 항목 채움 확인)...',
         '결과 저장 · 정리 중...',
       ];
       let stageIndex = 0;
