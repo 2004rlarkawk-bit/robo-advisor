@@ -2,7 +2,11 @@ import type { Incoterms, TradeProfile } from '../types';
 import { supabase } from '../lib/supabase';
 import { normalizeCountryValue } from '../constants/countries';
 import { normalizePortValue } from '../constants/ports';
-import { normalizeSpecialties, type ForwarderSpecialtyKey } from '../utils/forwarderSpecialty';
+import {
+  normalizeCustomSpecialties,
+  normalizeSpecialties,
+  type ForwarderSpecialtyKey,
+} from '../utils/forwarderSpecialty';
 
 export const INCOTERM_OPTIONS: Exclude<Incoterms, ''>[] = [
   'FOB',
@@ -57,6 +61,9 @@ export interface UserProfile {
   /** 포워더 담당자 특화 분야(route_*, cargo_*). 화주→포워더 자동 배정에만 쓴다. */
   forwarder_specialties: ForwarderSpecialtyKey[];
 
+  /** 목록에 없어 담당자가 직접 적은 분야. 화주에게 보여만 주고 자동 배정에는 쓰지 않는다. */
+  forwarder_specialties_custom: string[];
+
   created_at?: string;
   updated_at?: string;
 }
@@ -79,6 +86,7 @@ export type UserProfileUpdate = Partial<
     | 'default_incoterm'
     | 'service_role'
     | 'forwarder_specialties'
+    | 'forwarder_specialties_custom'
   >
 >;
 
@@ -88,12 +96,13 @@ export type UserProfileUpdate = Partial<
  */
 type UserProfileRow = Omit<
   UserProfile,
-  'service_role' | 'customs_clearance_code' | 'forwarder_specialties'
+  'service_role' | 'customs_clearance_code' | 'forwarder_specialties' | 'forwarder_specialties_custom'
 > & {
   service_role?: ServiceRole | null;
   customs_clearance_code?: string | null;
   /** 컬럼 추가 전에 저장된 세션 캐시에는 없을 수 있다. */
   forwarder_specialties?: unknown;
+  forwarder_specialties_custom?: unknown;
 };
 
 /**
@@ -161,6 +170,9 @@ export function normalizeUserProfile(
 
     forwarder_specialties:
       normalizeSpecialties(profile.forwarder_specialties),
+
+    forwarder_specialties_custom:
+      normalizeCustomSpecialties(profile.forwarder_specialties_custom),
   };
 }
 

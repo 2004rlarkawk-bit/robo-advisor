@@ -15,11 +15,30 @@ export interface SpecialtySuggestion {
   reason: string;
 }
 
+/** 한 나라만 쓰는 노선은 여기서 바로 정한다. */
 const ROUTE_BY_COUNTRY: Record<string, ForwarderSpecialtyKey> = { CN: 'route_cn', US: 'route_us', JP: 'route_jp', VN: 'route_vn' };
-const EU_COUNTRIES = new Set([
-  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE',
-  'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE',
-]);
+
+/**
+ * 여러 나라를 묶는 노선. 위에서부터 찾아 처음 걸리는 것을 쓴다.
+ * 베트남은 동남아지만 물량이 많아 따로 두므로 ROUTE_BY_COUNTRY가 먼저 잡는다.
+ */
+const ROUTE_BY_REGION: { key: ForwarderSpecialtyKey; countries: Set<string> }[] = [
+  { key: 'route_eu', countries: new Set([
+    'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE',
+    'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE',
+    'GB', 'NO', 'CH',
+  ]) },
+  { key: 'route_twhk', countries: new Set(['TW', 'HK', 'MO']) },
+  { key: 'route_sea', countries: new Set(['TH', 'ID', 'MY', 'SG', 'PH', 'MM', 'KH', 'LA', 'BN']) },
+  { key: 'route_in', countries: new Set(['IN', 'PK', 'BD', 'LK', 'NP']) },
+  { key: 'route_me', countries: new Set(['AE', 'SA', 'QA', 'KW', 'OM', 'BH', 'IQ', 'IR', 'JO', 'IL', 'TR', 'EG']) },
+  { key: 'route_cis', countries: new Set(['RU', 'KZ', 'UZ', 'BY', 'KG', 'TJ', 'TM', 'AZ', 'GE', 'AM']) },
+  { key: 'route_latam', countries: new Set(['BR', 'MX', 'CL', 'PE', 'AR', 'CO', 'EC', 'UY', 'PA', 'CR', 'GT']) },
+];
+
+function routeForCountry(country: string): ForwarderSpecialtyKey | undefined {
+  return ROUTE_BY_COUNTRY[country] ?? ROUTE_BY_REGION.find((region) => region.countries.has(country))?.key;
+}
 
 /** 육류·수산물·낙농품은 류(HS 2자리)만으로 온도 관리 화물로 본다. */
 const COLD_CHAPTERS_ALWAYS = new Set(['02', '03', '04']);
@@ -46,10 +65,11 @@ export function suggestSpecialtiesForTrade(
   const counterpartPort = direction === 'import' ? profile.loadPort : profile.dischargePort;
   const portRole = direction === 'import' ? '선적항' : '도착항';
   const country = countryOf(counterpartPort);
-  const routeKey = country ? ROUTE_BY_COUNTRY[country] ?? (EU_COUNTRIES.has(country) ? 'route_eu' : undefined) : undefined;
+  const routeKey = country ? routeForCountry(country) : undefined;
   if (routeKey && counterpartPort) suggestions.push({ key: routeKey, reason: `${portRole} ${counterpartPort}` });
 
   if (profile.loadingMode === 'LCL') suggestions.push({ key: 'cargo_lcl', reason: '적재 방식 LCL' });
+  if (profile.loadingMode === 'FCL') suggestions.push({ key: 'cargo_fcl', reason: '적재 방식 FCL' });
 
   const itemName = String(profile.itemName ?? '');
   const hsDigits = String(profile.hsCode ?? '').replace(/\D/g, '');
