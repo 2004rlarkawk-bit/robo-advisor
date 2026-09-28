@@ -48,6 +48,7 @@ export default function ExportForwarderMessages({ trade, userId, sourceTradeId }
       <TradeMessageThread
         tradeRequestId={request.id}
         currentUserId={userId}
+        currentRole="forwarder"
         counterpartLabel={counterpart}
         readOnly={request.status !== 'pending' && request.status !== 'accepted'}
       />
