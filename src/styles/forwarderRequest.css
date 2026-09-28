@@ -1017,7 +1017,10 @@
 .sent-confirmation-body { display: flex; flex-direction: column; align-items: center; padding: 22px 8px 26px; text-align: center; }
 .sent-confirmation-icon { display: grid; place-items: center; width: 76px; height: 76px; margin-bottom: 18px; border-radius: 50%; background: #eef4ff; color: #0b57d0; }
 .sent-confirmation-body h3 { margin: 0 0 8px; color: #0f172a; font-size: 22px; font-weight: 800; }
-.sent-confirmation-body p { margin: 0; color: #334155; font-size: 15px; line-height: 1.6; }
+/* 문장마다 <p> 하나. 마지막 줄에 한 어절만 남는 걸 피하려고 text-wrap: pretty를 함께 쓴다
+   (지원하지 않는 브라우저는 무시하고 기본 줄바꿈으로 떨어진다). */
+.sent-confirmation-body p { margin: 0; color: #334155; font-size: 15px; line-height: 1.6; text-wrap: pretty; }
+.sent-confirmation-body p + p { margin-top: 4px; }
 .sent-confirmation-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 18px; border-top: 1px solid var(--border-color, #e2e8f0); }
 .sent-confirmation-actions .btn { min-width: 96px; padding: 11px 20px; font-size: 14.5px; font-weight: 700; }
 
