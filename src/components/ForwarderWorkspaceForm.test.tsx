@@ -13,6 +13,8 @@ import {
 import { createForwarderBillOfLadingDraft } from '../services/forwarderBillOfLadingService';
 import type { SavedTrade } from '../types';
 
+vi.mock('../services/forwarderRequestService', () => ({ listIncomingTradeRequests: vi.fn().mockResolvedValue([]) }));
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 let root: Root | null = null;
@@ -532,5 +534,27 @@ describe('수출 포워더 5단계 워크플로우', () => {
     const rendered = renderForm({}, { appliedRequestTradeId: 'shipper-trade-1', trade: FIXTURE_TRADE });
     expect(rendered.container.querySelector('.fwd-origin')?.textContent).toBe('화주 의뢰');
     expect(rendered.container.querySelector('.fwd-tabs')?.textContent).toContain('업무 메시지');
+  });
+
+  it('업무메시지 알림을 눌러 들어오면 업무 메시지 탭을 자동으로 열고 onMessagesOpened를 호출한다', async () => {
+    const onMessagesOpened = vi.fn();
+    const rendered = renderForm({}, {
+      appliedRequestTradeId: 'shipper-trade-1',
+      trade: FIXTURE_TRADE,
+      openMessagesOnLoad: true,
+      onMessagesOpened,
+    });
+    await act(async () => {});
+    const tabs = Array.from(rendered.container.querySelectorAll('.fwd-tabs button'));
+    const messagesTab = tabs.find((btn) => btn.textContent === '업무 메시지') as HTMLButtonElement | undefined;
+    expect(messagesTab?.className).toContain('is-active');
+    expect(onMessagesOpened).toHaveBeenCalledTimes(1);
+  });
+
+  it('openMessagesOnLoad가 없으면 기존처럼 STEP 1이 기본으로 열린다(회귀 방지)', () => {
+    const rendered = renderForm({}, { appliedRequestTradeId: 'shipper-trade-1', trade: FIXTURE_TRADE });
+    const tabs = Array.from(rendered.container.querySelectorAll('.fwd-tabs button'));
+    const messagesTab = tabs.find((btn) => btn.textContent === '업무 메시지') as HTMLButtonElement | undefined;
+    expect(messagesTab?.className ?? '').not.toContain('is-active');
   });
 });

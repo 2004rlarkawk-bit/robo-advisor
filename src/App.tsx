@@ -82,6 +82,7 @@ import {
   createGeneratedTrade,
   createGeneratedImportTrade,
   createCompletedImportTrade,
+  fetchForwarderTradeBySourceId,
   fetchSavedTradeById,
   fetchTradeDirection,
   markTradeAsSubmitted,
@@ -366,6 +367,15 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [forwarderDirectUpload, setForwarderDirectUpload] = useState(false);
   const [notificationTradeId, setNotificationTradeId] = useState<string | null>(null);
   const [notificationTab, setNotificationTab] = useState<'review' | 'messages'>('messages');
+  // 수출 업무메시지 알림 클릭 — 거래를 연 다음 ForwarderWorkspaceForm에 "업무 메시지" 탭을 열라고 알린다.
+  const [openExportMessagesOnLoad, setOpenExportMessagesOnLoad] = useState(false);
+  // 알림이 가리키는 거래를 더 이상 찾을 수 없을 때만 쓰는 안내 배너.
+  const [notificationTargetError, setNotificationTargetError] = useState('');
+  useEffect(() => {
+    if (!notificationTargetError) return;
+    const timeout = window.setTimeout(() => setNotificationTargetError(''), 6000);
+    return () => window.clearTimeout(timeout);
+  }, [notificationTargetError]);
   useEffect(() => {
     setForwarderDirectUpload(false);
   }, [tradeDirection, workspaceRole]);
@@ -1841,9 +1851,24 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       // 쓴다 — 그 뒤에 들어온 새 의뢰는 목록에 없어 열리지 않는다(첫 클릭만 되는 것처럼 보임).
       // 의뢰 수락 시(onAccepted)와 같은 방법으로 강제 리마운트해 최신 목록으로 다시 연다.
       setImportWorkspaceVersion((version) => version + 1);
+      return;
     }
-    // 수출은 건별 상세 화면이 없어(포워더가 의뢰를 자기 폼으로 가져와 작업), 수출 작업실(의뢰
-    // 수신함이 있는 화면)까지만 연다 — tradeId는 쓰지 않는다.
+    // 수출 포워더는 화주 원본 거래를 직접 열지 않고, "의뢰 불러오기"로 만든 자기 소유의 별도
+    // 거래(같은 source_trade_id)에서 작업한다. 알림의 tradeId는 화주 원본 거래 id이므로,
+    // 먼저 그 id를 source_trade_id로 갖는 내 포워더 거래를 찾아 기존 "이어서 작업" 경로로 연다.
+    void fetchForwarderTradeBySourceId(tradeId)
+      .then((trade) => {
+        if (!trade) {
+          setNotificationTargetError('해당 업무메시지의 거래를 찾을 수 없습니다.');
+          return;
+        }
+        handleLoadSavedTrade(trade, 'normal');
+        if (tab === 'messages') setOpenExportMessagesOnLoad(true);
+      })
+      .catch((err) => {
+        console.warn('[알림] 수출 거래 조회 실패:', err);
+        setNotificationTargetError('해당 업무메시지의 거래를 찾을 수 없습니다.');
+      });
   };
 
   const handleOpenNotification = (notification: NotificationRecord, menu: AppMenu) => {
@@ -2730,6 +2755,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
           onLogout={() => void handleLogout()}
         />
 
+        {notificationTargetError && (
+          <div className="notif-nav-error-toast" role="alert">{notificationTargetError}</div>
+        )}
+
         <main className="content-body">
           {/* 서비스 소개는 히어로가 화면을 꽉 채우는 디자인이라 폭 제한(1000px) 예외 */}
           <div className={`workspace-area${activeMenu === 'about' ? ' workspace-area--full' : ''}`}>
@@ -2908,6 +2937,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 view={exportForwarderView}
                 onReturnToInbox={handleReturnToExportForwarderInbox}
                 onEnterWorkflow={handleEnterExportForwarderWorkflow}
+                openMessagesOnLoad={openExportMessagesOnLoad}
+                onMessagesOpened={() => setOpenExportMessagesOnLoad(false)}
                 onNextFromRequest={() => void handleForwarderStep1Next()}
                 appliedRequestTradeId={appliedExportRequestId}
                 onApplyExportRequest={handleApplyExportRequest}

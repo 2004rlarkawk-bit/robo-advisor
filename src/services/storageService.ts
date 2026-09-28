@@ -367,6 +367,27 @@ export async function fetchSavedTradeById(id: string): Promise<SavedTrade | null
 }
 
 /**
+ * 원본 화주 거래 id(source_trade_id)로 내가 "의뢰 불러오기"로 만든 내 포워더 거래를 찾는다.
+ * 수출 업무메시지 알림의 trade_id는 화주의 원본 거래를 가리키는데, 수출 포워더는 그 거래를
+ * 직접 여는 게 아니라 자기 소유의 별도 거래(같은 source_trade_id)에서 작업하기 때문이다.
+ */
+export async function fetchForwarderTradeBySourceId(sourceTradeId: string): Promise<SavedTrade | null> {
+  const userId = await getRequiredUserId();
+
+  const { data, error } = await supabase
+    .from('trades')
+    .select('*')
+    .eq('source_trade_id', sourceTradeId)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapTradeRow(data) : null;
+}
+
+/**
  * 거래의 수출/수입 방향만 조회한다. fetchSavedTradeById와 달리 소유자 조건을 걸지 않아,
  * 나에게 배정된(forwarder_user_id) 화주 거래도 읽힌다. 볼 권한이 없으면 RLS가 null을 돌려준다.
  */

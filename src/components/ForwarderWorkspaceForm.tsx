@@ -58,6 +58,9 @@ interface Props {
   onReturnToInbox: () => void;
   /** 직접 등록에서 서류 확인을 마치고 STEP 1(화주 의뢰 확인)로 진입 */
   onEnterWorkflow: () => void;
+  /** 업무메시지 알림을 눌러 들어온 경우 "업무 메시지" 탭을 바로 연다. */
+  openMessagesOnLoad?: boolean;
+  onMessagesOpened?: () => void;
 
   /** STEP 1 — 의뢰 접수 */
   onNextFromRequest: () => void;
@@ -120,6 +123,8 @@ export default function ForwarderWorkspaceForm({
   view,
   onReturnToInbox,
   onEnterWorkflow,
+  openMessagesOnLoad = false,
+  onMessagesOpened,
   onNextFromRequest,
   appliedRequestTradeId = null,
   onApplyExportRequest,
@@ -153,6 +158,12 @@ export default function ForwarderWorkspaceForm({
     manuallyEditedFieldsRef.current.clear();
     setShowMessages(false);
   }, [attachmentScopeId]);
+  // 업무메시지 알림 클릭으로 들어온 경우 — 거래 전환 리셋(위) 다음에 "업무 메시지" 탭을 강제로 연다.
+  useEffect(() => {
+    if (!openMessagesOnLoad) return;
+    setShowMessages(true);
+    onMessagesOpened?.();
+  }, [openMessagesOnLoad, onMessagesOpened]);
 
   const patch = (values: Partial<ForwarderFormState>) => {
     (Object.keys(values) as Array<keyof ForwarderFormState>).forEach((field) => {
