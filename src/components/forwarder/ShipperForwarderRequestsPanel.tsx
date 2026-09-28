@@ -193,7 +193,10 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
       ]);
       setTrades(
         filterDocumentManagerTrades(loadedTrades)
-          .filter((trade) => (trade.tradeRole ?? 'shipper') === 'shipper')
+          // RLS는 내가 화주로서 낸 거래뿐 아니라 forwarder_user_id로 배정받은 남의 거래도 함께 돌려준다.
+          // tradeRole은 "누가 어떤 화면에서 이 거래를 만들었는지"만 기록하므로, 남의 거래에도 그대로
+          // 'shipper'로 남아 있다. 실제 소유자(userId)가 나 자신인 거래만 "내 의뢰" 목록에 남긴다.
+          .filter((trade) => (trade.tradeRole ?? 'shipper') === 'shipper' && trade.userId === currentUserId)
           .sort((a, b) => timeValue(b.submittedAt ?? b.createdAt) - timeValue(a.submittedAt ?? a.createdAt)),
       );
       setInternalRequests(internal);

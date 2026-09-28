@@ -27,6 +27,7 @@ const SETTINGS_KEY = 'portai_settings';
 // [EDIT: Trade Persistence] Supabase trades 테이블에서 읽어오는 row 형태입니다.
 interface TradeRow {
   id: string;
+  user_id: string;
   source_trade_id?: string | null;
   direction: TradeType;
   role: TradeRole;
@@ -74,6 +75,7 @@ function mapTradeRow(row: TradeRow): SavedTrade {
   const generatedDocuments = row.document_data?.generatedDocuments;
   return {
     id: row.id,
+    userId: row.user_id,
     sourceTradeId: row.source_trade_id ?? null,
     tradeDirection: row.direction,
     tradeRole: row.role,

@@ -15,6 +15,8 @@ interface Props {
   onRevise?: (trade: SavedTrade) => void;
   /** 현재 선택된 역할의 거래만 표시 — 화주·포워더 거래가 섞여 보이지 않게 한다 */
   roleFilter?: 'shipper' | 'forwarder';
+  /** roleFilter가 'shipper'일 때, 내가 실제 소유한 거래인지 확인하는 데 쓴다(배정받은 남의 거래 제외). */
+  currentUserId: string;
   onListReady?: () => void;
   /** 문서 관리 상단 수출/수입 필터 */
   typeFilter?: TradeTypeFilter;
@@ -128,6 +130,7 @@ export default function DocumentManagerPanel({
   onCopy,
   onRevise,
   roleFilter,
+  currentUserId,
   onListReady,
   typeFilter = 'all',
   onTypeCounts,
@@ -145,8 +148,13 @@ export default function DocumentManagerPanel({
 
     try {
       const fetched = filterDocumentManagerTrades(await fetchSubmittedTrades());
+      // RLS는 내 소유 거래뿐 아니라 forwarder_user_id로 배정받은 남의 거래도 함께 돌려준다.
+      // tradeRole은 "어느 화면에서 작성됐는지"만 기록하므로 남의 화주 거래도 'shipper'로 남아 있다 —
+      // 화주 문서함(roleFilter='shipper')에서는 실제 소유자(userId)까지 확인해야 남의 거래가 안 섞인다.
       const loaded = roleFilter
-        ? fetched.filter((trade) => (trade.tradeRole ?? 'shipper') === roleFilter)
+        ? fetched.filter((trade) =>
+          (trade.tradeRole ?? 'shipper') === roleFilter
+          && (roleFilter !== 'shipper' || trade.userId === currentUserId))
         : fetched;
       setTrades(loaded);
       // 포워더 보완 요청이 걸린 거래가 있으면 화주가 바로 볼 수 있게 패널을 자동으로 펼친다.
@@ -164,7 +172,7 @@ export default function DocumentManagerPanel({
       setIsLoading(false);
       onListReady?.();
     }
-  }, [onListReady, roleFilter]);
+  }, [onListReady, roleFilter, currentUserId]);
 
   useEffect(() => {
     void loadTrades();

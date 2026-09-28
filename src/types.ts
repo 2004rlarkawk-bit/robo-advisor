@@ -795,6 +795,12 @@ export interface SavedTrade {
   tradeRole?: TradeRole;
   /** 의뢰 요청이 수락되어 이 거래를 넘겨받은 포워더 계정의 사용자 id (없으면 미배정). */
   forwarderUserId?: string | null;
+  /**
+   * 이 거래를 실제로 소유한(생성한) 화주 계정의 사용자 id. RLS는 본인 소유 거래뿐 아니라
+   * forwarder_user_id로 배정된 거래도 함께 돌려주므로, "내가 화주로서 보낸 의뢰"인지
+   * "내가 포워더로 배정받은 남의 거래"인지 구분할 때는 tradeRole이 아니라 이 값을 써야 한다.
+   */
+  userId?: string;
   attachments?: import('./types/tradeFormData').TradeAttachment[];
   arrivalNotice?: object | null;
   analysisResult?: object;

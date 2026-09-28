@@ -2794,6 +2794,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 <TradeManagerPanel
                   embedded
                   roleFilter={workspaceRole}
+                  currentUserId={user.id}
                   typeFilter={docsTypeFilter}
                   onTypeCounts={setDraftTypeCounts}
                   onLoad={(trade) => void handleResumeSavedTradeFromDocumentManager(trade)}
@@ -2803,6 +2804,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   onCopy={handleCopySavedTrade}
                   onRevise={(trade) => void handleReviseReturnedImportTrade(trade)}
                   roleFilter={workspaceRole}
+                  currentUserId={user.id}
                   onListReady={handleDocumentManagerListReady}
                   typeFilter={docsTypeFilter}
                   onTypeCounts={setSubmittedTypeCounts}

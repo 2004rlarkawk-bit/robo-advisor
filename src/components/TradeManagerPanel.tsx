@@ -12,6 +12,8 @@ interface Props {
   embedded?: boolean;
   /** 현재 선택된 역할의 거래만 표시 — 화주·포워더 거래가 섞여 보이지 않게 한다 */
   roleFilter?: 'shipper' | 'forwarder';
+  /** roleFilter가 'shipper'일 때, 내가 실제 소유한 거래인지 확인하는 데 쓴다(배정받은 남의 거래 제외). */
+  currentUserId: string;
   /** 문서 관리 상단 수출/수입 필터 */
   typeFilter?: TradeTypeFilter;
   /** 역할 필터가 적용된 거래의 수출/수입 건수 — 필터 칩 숫자에 쓴다 */
@@ -69,7 +71,7 @@ function fmtDate(iso: string) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export default function TradeManagerPanel({ onLoad, embedded, roleFilter, typeFilter = 'all', onTypeCounts }: Props) {
+export default function TradeManagerPanel({ onLoad, embedded, roleFilter, currentUserId, typeFilter = 'all', onTypeCounts }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -89,8 +91,12 @@ export default function TradeManagerPanel({ onLoad, embedded, roleFilter, typeFi
     setError('');
     try {
       const loaded = filterTradeManagerTrades(await fetchTradeManagerTrades());
+      // RLS는 내 소유 거래뿐 아니라 forwarder_user_id로 배정받은 남의 거래도 함께 돌려준다.
+      // 임시보관함(roleFilter='shipper')에서는 실제 소유자(userId)까지 확인해야 남의 거래가 안 섞인다.
       setTrades(roleFilter
-        ? loaded.filter((trade) => (trade.tradeRole ?? 'shipper') === roleFilter)
+        ? loaded.filter((trade) =>
+          (trade.tradeRole ?? 'shipper') === roleFilter
+          && (roleFilter !== 'shipper' || trade.userId === currentUserId))
         : loaded);
     } catch (caught) {
       console.error('[Trade Manager] generated trades query failed:', caught);
@@ -98,7 +104,7 @@ export default function TradeManagerPanel({ onLoad, embedded, roleFilter, typeFi
     } finally {
       setIsLoading(false);
     }
-  }, [roleFilter]);
+  }, [roleFilter, currentUserId]);
 
   useEffect(() => { void loadTrades(); }, [loadTrades]);
 

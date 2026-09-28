@@ -77,8 +77,11 @@ export async function sendTradeMessage(
     .select()
     .single();
   if (error) {
-    // 42501 = RLS 위반. 종료된 의뢰이거나 참여자가 아닌 경우다.
-    if (error.code === '42501') throw new Error('종료된 의뢰이거나 대화 권한이 없어 메시지를 보낼 수 없습니다.');
+    // 42501 = RLS 위반 또는 sender_role 검증 트리거 거부. 원인 파악을 위해 원본 메시지를 콘솔에 남긴다.
+    if (error.code === '42501') {
+      console.error('[업무 메시지] 전송 거부(42501):', error.message, error.details, error.hint);
+      throw new Error('종료된 의뢰이거나 대화 권한이 없어 메시지를 보낼 수 없습니다.');
+    }
     throw error;
   }
   return mapTradeMessageRow(data as TradeMessageRow);
