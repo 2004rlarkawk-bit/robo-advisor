@@ -1,5 +1,5 @@
 import { exportDeclarationFobNotice } from './utils/exportDeclarationFob';
-import { scrollPageToTop } from './utils/scrollPageToTop';
+import { scrollElementToTop, scrollPageToTop } from './utils/scrollPageToTop';
 import {
   Fragment,
   Suspense,
@@ -489,7 +489,13 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   }, [hasGenerated]);
 
   // 수출 포워더 5단계를 넘길 때, 의뢰함↔업무 화면을 오갈 때도 새 화면의 맨 위부터 보이게 한다.
+  // 단 업무 화면에서는 위쪽의 의뢰 수신함·페이지 제목을 지나 업무 카드부터 보이게 맞춘다 —
+  // 단계를 넘길 때마다 페이지 꼭대기로 올라가면 매번 다시 내려와야 한다.
   useEffect(() => {
+    if (exportForwarderView === 'workflow') {
+      scrollElementToTop('.fwd-workspace');
+      return;
+    }
     scrollPageToTop();
   }, [workspaceCurrentStep, exportForwarderView]);
 
