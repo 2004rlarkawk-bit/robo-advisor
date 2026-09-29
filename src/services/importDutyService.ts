@@ -1,4 +1,5 @@
 import { getCustomsExchangeRateStrict } from './customsApiService';
+import { normalizeCurrencyCode } from '../utils/currencyCode';
 import { getTariffRates, pickBasicRate } from './unipassService';
 import type { ImportDutyEstimate, ImportItem } from '../types/importTrade';
 import { parseTradeNumber } from '../utils/number';
@@ -18,7 +19,8 @@ export interface ImportDutyInput {
 }
 
 export async function calculateEstimatedImportDuty(input: ImportDutyInput): Promise<ImportDutyEstimate> {
-  const currency = input.invoiceCurrency.trim().toUpperCase();
+  // 이미 저장된 분석 결과에는 'US$'가 그대로 남아 있을 수 있어 여기서도 코드로 맞춘다.
+  const currency = normalizeCurrencyCode(input.invoiceCurrency) || input.invoiceCurrency.trim().toUpperCase();
   const invoiceAmount = numberValue(input.invoiceAmount);
   if (!currency) throw new Error('환율 조회 불가: Invoice 통화가 없습니다.');
   if (invoiceAmount <= 0) throw new Error('예상세액 계산 불가: Invoice 총금액이 없습니다.');
