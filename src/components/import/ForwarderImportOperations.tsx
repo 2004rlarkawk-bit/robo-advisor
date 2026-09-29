@@ -117,7 +117,6 @@ export default function ForwarderImportOperations({ item, userId, saving, locked
         <div><strong>수입신고의뢰서</strong><p>수입자 · 품목 · 금액 · 첨부 서류</p></div>
         <div className="fwd-inline-actions"><button className="btn btn-secondary" type="button" disabled={busy} onClick={() => void documentAction(true)}>미리보기</button><button className="btn btn-primary" type="button" disabled={busy || locked || saving} onClick={() => void documentAction(false)}><Download size={15} />{busy ? '처리 중…' : '자료 다운로드'}</button></div>
       </div>
-      <p className="fwd-section-note">다운로드한 자료를 관세사에게 전달해 주세요. 세관에 자동 제출되지 않습니다.</p>
     </section>
 
     <section className="form-card import-card">

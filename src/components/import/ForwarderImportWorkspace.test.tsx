@@ -68,8 +68,8 @@ describe('forwarder task tabs', () => {
     expect(container.textContent).not.toContain('확인 필요');
     expect(container.textContent).not.toContain('보완 요청');
     await click('업무 진행');
-    expect(container.textContent).toContain('서류 확인을 완료하면 신고자료 다운로드와 업무 기록이 가능합니다.');
-    expect(container.querySelectorAll('.fwd-document-lock')).toHaveLength(1);
+    // 잠금 안내 배너는 걷어냈다. 잠겨 있다는 사실은 아래 입력·버튼의 비활성 상태로만 드러난다.
+    expect(container.textContent).not.toContain('서류 확인을 완료하면');
     expect(container.textContent).toContain('도착 안내 · A/N');
     expect(container.textContent).toContain('화물인도지시서 · D/O');
     expect(button('A/N 생성·다운로드').disabled).toBe(true);
