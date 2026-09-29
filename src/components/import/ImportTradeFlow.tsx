@@ -1316,9 +1316,10 @@ export default function ImportTradeFlow({
               dutyError: '',
             }))}
           />
-          {role === 'shipper' ? (
-            <ImportDeclarationChecklist fields={state.analysis.extracted} />
-          ) : (
+          {/* 화주 화면에는 준비 현황 체크리스트를 두지 않는다 — 바로 아래 HSK 확정 화면에서
+              같은 값을 다시 보여주고 고치게 되어 있어 같은 정보가 두 번 나온다.
+              신고자료 요약은 4단계에서 한 번만 보여준다. */}
+          {role !== 'shipper' && (
             <RiskSummary
               risks={liveRisks}
               onToggle={readOnly ? undefined : toggleRisk}
