@@ -18,8 +18,10 @@ interface Props {
   seed: string;
   /** 신고서에 적힌 세관 */
   customsOffice?: string;
-  /** 전송 전에 확인시킬 요약 항목 */
+  /** 왼쪽 패널 — 무엇을 신고하는지 가리키는 값(B/L·품명·HSK) */
   summary: Array<{ label: string; value: string }>;
+  /** 오른쪽 패널 — 금액. 전송 버튼과 붙여 두어 보내기 전에 마지막으로 보게 한다. */
+  totals?: Array<{ label: string; value: string }>;
   /** 아직 해결되지 않은 확인 항목 수 — 0보다 크면 전송을 막는다. */
   pendingCount?: number;
 }
@@ -31,7 +33,7 @@ const timeText = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} `
   + `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 
-export default function ImportUnipassSubmit({ seed, customsOffice, summary, pendingCount = 0 }: Props) {
+export default function ImportUnipassSubmit({ seed, customsOffice, summary, totals = [], pendingCount = 0 }: Props) {
   const [step, setStep] = useState(-1);
   const [result, setResult] = useState<UnipassSubmitResult | null>(null);
   const [error, setError] = useState('');
@@ -62,14 +64,37 @@ export default function ImportUnipassSubmit({ seed, customsOffice, summary, pend
         <p>작성된 수입신고서를 관세청 UNI-PASS로 전송합니다.</p>
       </div>
 
-      <dl className="unipass-submit-summary">
-        {summary.map((row) => (
-          <div key={row.label} className={row.value ? '' : 'is-empty'}>
-            <dt>{row.label}</dt>
-            <dd>{row.value || '—'}</dd>
-          </div>
-        ))}
-      </dl>
+      <div className="unipass-submit-panels">
+        <section className="unipass-panel">
+          <h3>신고 기본 정보</h3>
+          <dl>
+            {summary.map((row) => (
+              <div key={row.label} className={row.value ? '' : 'is-empty'}>
+                <dt>{row.label}</dt>
+                <dd>{row.value || '—'}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <section className="unipass-panel unipass-panel-totals">
+          <h3>과세 및 세액 요약</h3>
+          <dl>
+            {totals.map((row) => (
+              <div key={row.label} className={row.value ? '' : 'is-empty'}>
+                <dt>{row.label}</dt>
+                <dd>{row.value || '—'}</dd>
+              </div>
+            ))}
+          </dl>
+
+          {!result && (
+            <button className="btn btn-primary unipass-submit-button" disabled={sending} onClick={() => void handleSubmit()}>
+              <Send size={17} /> {sending ? '전송 중…' : 'UNI-PASS 전송하기'}
+            </button>
+          )}
+        </section>
+      </div>
 
       {pendingCount > 0 && (
         <p className="form-message warning">
@@ -106,14 +131,6 @@ export default function ImportUnipassSubmit({ seed, customsOffice, summary, pend
       )}
 
       {error && <p className="form-message error" role="alert">{error}</p>}
-
-      {!result && (
-        <div className="unipass-submit-actions">
-          <button className="btn btn-primary" disabled={sending} onClick={() => void handleSubmit()}>
-            <Send size={17} /> {sending ? '전송 중…' : 'UNI-PASS 전송'}
-          </button>
-        </div>
-      )}
 
       <aside className="unipass-submit-note">
         <Info size={16} aria-hidden="true" />

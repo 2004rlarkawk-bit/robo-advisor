@@ -5025,30 +5025,45 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
   font-size: 11px; font-weight: 700; letter-spacing: .02em; padding: 2px 7px; border-radius: 999px;
   background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
 }
-/* 요약은 '라벨: 값'을 세로로 늘어놓는 대신 값 카드로 묶는다 —
-   폭이 넓은 카드에서 왼쪽에만 붙어 여백이 크게 비어 보였다. */
-.unipass-submit-summary {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 10px; margin: 16px 0 0;
+/* 확인 영역을 두 패널로 나눈다 — 왼쪽은 '무엇을 신고하는지'(B/L·품명·HSK),
+   오른쪽은 금액과 전송 버튼. 보내기 직전에 금액을 한 번 더 보게 된다. */
+.unipass-submit-panels {
+  /* stretch로 두 패널 높이를 맞춘다 — 줄 수가 달라도 카드가 어긋나 보이지 않는다. */
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0 0; align-items: stretch;
 }
-.unipass-submit-summary > div {
-  display: flex; flex-direction: column; gap: 5px; min-width: 0;
-  padding: 11px 13px; border: 1px solid var(--border-color, #e2e8f0);
-  border-radius: 10px; background: #f8fafc;
+.unipass-panel {
+  display: flex; flex-direction: column; min-width: 0;
+  padding: 16px 18px; border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px; background: #fff;
 }
-.unipass-submit-summary dt {
-  font-size: 12px; font-weight: 600; letter-spacing: .02em;
-  color: var(--text-secondary); word-break: keep-all;
+.unipass-panel > h3 {
+  margin: 0 0 12px; font-size: 15px; font-weight: 700; color: var(--text-primary); word-break: keep-all;
 }
-.unipass-submit-summary dd {
-  margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary);
-  line-height: 1.45; overflow-wrap: anywhere;
-  /* B/L·HSK 같은 자릿수 있는 값이 세로로 어긋나지 않게. */
+.unipass-panel dl { display: grid; gap: 8px; margin: 0; }
+.unipass-panel dl > div {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0;
+}
+.unipass-panel dt { font-size: 13px; color: var(--text-secondary); word-break: keep-all; flex: 0 0 auto; }
+.unipass-panel dd {
+  margin: 0; min-width: 0; text-align: right; font-size: 14px; font-weight: 600;
+  color: var(--text-primary); overflow-wrap: anywhere;
+  /* B/L·HSK·금액이 세로로 어긋나지 않게 자릿수 폭을 맞춘다. */
   font-variant-numeric: tabular-nums;
 }
-/* 아직 계산되지 않은 값 — 빈 칸이 값처럼 진하게 보이지 않도록 낮춘다. */
-.unipass-submit-summary > div.is-empty { background: #fff; border-style: dashed; }
-.unipass-submit-summary > div.is-empty dd { color: var(--text-secondary); font-weight: 500; }
+/* 아직 계산되지 않은 값 — 빈 칸이 값처럼 진해 보이지 않도록 낮춘다. */
+.unipass-panel dl > div.is-empty dd { color: var(--text-secondary); font-weight: 500; }
+
+.unipass-panel-totals { background: #f8fafc; }
+/* 금액이 한 줄뿐이어도 버튼이 위로 붙지 않게 아래로 민다. */
+.unipass-panel-totals dl { margin-bottom: auto; }
+.unipass-submit-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; margin-top: 16px; padding: 12px 20px; font-size: 15px; font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .unipass-submit-panels { grid-template-columns: 1fr; }
+}
 
 .unipass-submit-steps { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; }
 .unipass-submit-steps li {
@@ -5072,24 +5087,13 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .unipass-submit-result dd { margin: 0; }
 .unipass-submit-result strong { font-size: 16px; letter-spacing: .02em; }
 
-/* 주 버튼은 카드 오른쪽 아래에 두고 위에 가는 구분선을 둔다 — 요약에 바로 붙어 있어
-   어디까지가 확인 영역인지 끊기지 않았다. */
-.unipass-submit-actions {
-  display: flex; justify-content: flex-end; margin: 18px 0 0;
-  padding-top: 16px; border-top: 1px solid var(--border-color, #e2e8f0);
-}
-.unipass-submit-actions .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; font-weight: 700; }
-
 /* 시연이라는 사실은 본문과 섞이면 읽히지 않는다. 안내 블록으로 분리한다. */
 .unipass-submit-note {
   display: flex; gap: 10px; margin: 16px 0 0; padding: 12px 14px;
-  border-radius: 10px; background: #f1f5f9; color: var(--text-secondary);
+  border-radius: 10px; background: #eff6ff; border: 1px solid #dbeafe; color: #475569;
 }
-.unipass-submit-note > svg { flex: 0 0 auto; margin-top: 2px; color: #64748b; }
+.unipass-submit-note > svg { flex: 0 0 auto; margin-top: 2px; color: #2563eb; }
 .unipass-submit-note p { margin: 0; font-size: 12.5px; line-height: 1.65; word-break: keep-all; }
 .unipass-submit-note p + p { margin-top: 5px; }
 
-@media (max-width: 560px) {
-  .unipass-submit-actions { justify-content: stretch; }
-  .unipass-submit-actions .btn { width: 100%; justify-content: center; }
-}
+

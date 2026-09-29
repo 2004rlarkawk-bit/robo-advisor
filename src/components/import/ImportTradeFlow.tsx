@@ -1130,6 +1130,13 @@ export default function ImportTradeFlow({
       { label: 'B/L 번호', value: form.bl_no ?? '' },
       { label: '신고 물품', value: form.first_goods_name ?? '' },
       { label: 'HSK', value: form.first_hs_code ?? '' },
+    ];
+  }, [declarationFormValues]);
+
+  /** 금액은 전송 버튼과 나란히 두어 보내기 직전에 한 번 더 보게 한다. */
+  const unipassTotals = useMemo(() => {
+    const form = declarationFormValues;
+    return [
       { label: '총 과세가격', value: form.total_customs_value_krw ? `${form.total_customs_value_krw}원` : '' },
       { label: '총 예상세액', value: form.total_tax ? `${form.total_tax}원` : '' },
     ];
@@ -1570,6 +1577,7 @@ export default function ImportTradeFlow({
             seed={declarationFormValues.bl_no ?? ''}
             customsOffice={declarationFormValues.customs_office}
             summary={unipassSummary}
+            totals={unipassTotals}
           />
 
           {readOnly && onClose ? <DocumentManagerReadOnlyAction
