@@ -6,7 +6,7 @@
  * 실제 제출로 오해하면 나머지 실제 연동(관세율·화물진행 조회)까지 의심받는다.
  */
 import { useState } from 'react';
-import { CheckCircle2, Loader2, Send } from 'lucide-react';
+import { CheckCircle2, Info, Loader2, Send } from 'lucide-react';
 import {
   submitImportDeclaration,
   UNIPASS_SUBMIT_STEPS,
@@ -64,7 +64,7 @@ export default function ImportUnipassSubmit({ seed, customsOffice, summary, pend
 
       <dl className="unipass-submit-summary">
         {summary.map((row) => (
-          <div key={row.label}>
+          <div key={row.label} className={row.value ? '' : 'is-empty'}>
             <dt>{row.label}</dt>
             <dd>{row.value || '—'}</dd>
           </div>
@@ -108,17 +108,23 @@ export default function ImportUnipassSubmit({ seed, customsOffice, summary, pend
       {error && <p className="form-message error" role="alert">{error}</p>}
 
       {!result && (
-        <div className="document-preview-actions">
+        <div className="unipass-submit-actions">
           <button className="btn btn-primary" disabled={sending} onClick={() => void handleSubmit()}>
             <Send size={17} /> {sending ? '전송 중…' : 'UNI-PASS 전송'}
           </button>
         </div>
       )}
 
-      <p className="unipass-submit-note">
-        전자신고는 관세청에 등록된 신고인(관세사 또는 자가통관 승인업체)만 할 수 있어, 이 화면의 전송과 신고번호는 시연용입니다.
-        실제 신고는 생성된 신고서를 관세사에게 전달해 진행합니다. 관세율·화물통관진행 조회는 실제 UNI-PASS API를 씁니다.
-      </p>
+      <aside className="unipass-submit-note">
+        <Info size={16} aria-hidden="true" />
+        <div>
+          <p>
+            전자신고는 관세청에 등록된 신고인(관세사 또는 자가통관 승인업체)만 할 수 있어,
+            이 화면의 전송과 신고번호는 시연용입니다. 실제 신고는 생성된 신고서를 관세사에게 전달해 진행합니다.
+          </p>
+          <p>관세율·화물통관진행 조회는 실제 UNI-PASS API를 씁니다.</p>
+        </div>
+      </aside>
     </section>
   );
 }
