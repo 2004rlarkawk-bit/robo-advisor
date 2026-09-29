@@ -5057,13 +5057,5 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .unipass-submit-result dd { margin: 0; }
 .unipass-submit-result strong { font-size: 16px; letter-spacing: .02em; }
 
-/* 시연이라는 사실은 본문과 섞이면 읽히지 않는다. 안내 블록으로 분리한다. */
-.unipass-submit-note {
-  display: flex; gap: 10px; margin: 16px 0 0; padding: 12px 14px;
-  border-radius: 10px; background: #eff6ff; border: 1px solid #dbeafe; color: #475569;
-}
-.unipass-submit-note > svg { flex: 0 0 auto; margin-top: 2px; color: #2563eb; }
-.unipass-submit-note p { margin: 0; font-size: 12.5px; line-height: 1.65; word-break: keep-all; }
-.unipass-submit-note p + p { margin-top: 5px; }
 
 

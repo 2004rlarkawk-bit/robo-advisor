@@ -1350,7 +1350,6 @@ export default function ImportTradeFlow({
                     <div className="import-hs-reference">
                       <span className="form-label">해외 문서 HS Code</span>
                       <strong>{item.documentHSCode || '첨부문서에서 확인되지 않음'}</strong>
-                      <small>해외 수출자가 작성한 HS Code로 참고용입니다.</small>
                     </div>
                     <h4 className="import-hs-subheading">대한민국 HSK 자동추천</h4>
                     <div className="hs-suggestion-list">
