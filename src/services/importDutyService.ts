@@ -30,11 +30,10 @@ export async function calculateEstimatedImportDuty(input: ImportDutyInput): Prom
 
   let exchangeRate;
   try {
-    exchangeRate = await getCustomsExchangeRateStrict(
-      currency,
-      'import',
-      input.invoiceDate?.replace(/-/g, '') || undefined,
-    );
+    // 과세환율은 '수입신고일이 속한 주'의 고시 환율을 쓴다. 송장 작성일이 아니다.
+    // 날짜를 넘기지 않으면 Edge Function이 오늘(한국 시간) 기준 주의 환율을 찾는다.
+    // 송장일을 넘기던 때에는 아직 고시되지 않은 주(=미래 날짜)를 조회해 통째로 실패했다.
+    exchangeRate = await getCustomsExchangeRateStrict(currency, 'import');
   } catch (error) {
     throw new Error(`환율 API 조회 실패: ${error instanceof Error ? error.message : String(error)}`);
   }
