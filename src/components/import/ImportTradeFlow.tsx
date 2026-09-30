@@ -1104,7 +1104,6 @@ export default function ImportTradeFlow({
                           <input type="radio" name={`import-hs-${item.id}`} checked={item.confirmedHSCode === suggestion.code} disabled={readOnly} onChange={() => selectRecommendedHS(item.id, suggestion.code)} />
                           <span>
                             <strong title={`${suggestion.code} · ${suggestion.description}`}>{suggestion.code} · {suggestion.description}</strong>
-                            <small>추천 신뢰도 {Math.round(suggestion.confidence * 100)}%</small>
                             <small>{suggestion.reasoning}</small>
                           </span>
                         </label>
