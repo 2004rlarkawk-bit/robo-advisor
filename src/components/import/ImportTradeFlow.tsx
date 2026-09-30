@@ -1490,7 +1490,18 @@ export default function ImportTradeFlow({
                   : '협정 적용 요건은 이 앱이 판정하지 않습니다. 위 항목을 확인한 뒤 관세사와 최종 적용 여부를 정하세요.'}
             </p>
           </section>
-          <DutySummary duty={state.duty} error={state.dutyError} busy={dutyBusy} ftaReviewing={ftaReviewing} />
+          <DutySummary
+            duty={state.duty}
+            error={state.dutyError}
+            busy={dutyBusy}
+            ftaReviewing={ftaReviewing}
+            readOnly={readOnly}
+            onRetry={() => {
+              // 남아 있던 실패 사유를 지워야 자동 재계산 조건에도 다시 걸린다.
+              setState((current) => ({ ...current, dutyError: '' }));
+              void recalculateDuty();
+            }}
+          />
           {readOnly && onClose ? (
             <DocumentManagerReadOnlyAction
               onClose={onClose}
@@ -1616,24 +1627,40 @@ export default function ImportTradeFlow({
   );
 }
 
-function DutySummary({ duty, error, busy = false, ftaReviewing = false }: {
+function DutySummary({ duty, error, busy = false, ftaReviewing = false, readOnly = false, onRetry }: {
   duty: ImportDutyEstimate | null;
   error: string;
   busy?: boolean;
   /** FTA 적용 가능 여부를 확인 중인지 */
   ftaReviewing?: boolean;
+  /** 문서 관리에서 조회로 연 화면 — 다시 계산하지 않고 저장된 값만 보여준다. */
+  readOnly?: boolean;
+  onRetry?: () => void;
 }) {
-  if (!duty) return (
-    <section className="form-card import-card">
-      <div className="import-card-heading">
-        <div><h2>예상 관세액</h2></div>
-        <span className="source-badge">{busy ? '계산 중' : '계산 전'}</span>
-      </div>
-      <div className={`form-message ${busy ? 'info' : 'warning'}`} role="status">
-        {busy ? '기본 관세율로 예상세액을 계산하고 있습니다…' : error || '관세율 정보를 확인할 수 없어 예상세액을 계산하지 못했습니다.'}
-      </div>
-    </section>
-  );
+  if (!duty) {
+    // 사유를 뭉뚱그리지 않는다. 조회 화면에서 계산을 시도하지도 않았는데
+    // '관세율 정보를 확인할 수 없어'라고 적으면 API가 고장 난 것처럼 읽힌다.
+    const message = busy
+      ? '기본 관세율로 예상세액을 계산하고 있습니다…'
+      : error
+        || (readOnly
+          ? '이 거래에는 예상세액이 저장되어 있지 않습니다. 목록에서 거래를 이어서 열면 다시 계산합니다.'
+          : '아직 예상세액을 계산하지 않았습니다.');
+    return (
+      <section className="form-card import-card">
+        <div className="import-card-heading">
+          <div><h2>예상 관세액</h2></div>
+          <span className="source-badge">{busy ? '계산 중' : '계산 전'}</span>
+        </div>
+        <div className={`form-message ${busy ? 'info' : 'warning'}`} role="status">{message}</div>
+        {!busy && !readOnly && onRetry && (
+          <div className="import-actions">
+            <button type="button" className="btn btn-secondary" onClick={onRetry}>예상세액 다시 계산</button>
+          </div>
+        )}
+      </section>
+    );
+  }
   const krw = (value: number | null) => value == null ? '확인 필요' : `${Math.round(value).toLocaleString('ko-KR')}원`;
   // 환율 기준일 YYYYMMDD → YYYY.MM.DD (수출 과세가격 카드와 표기 통일)
   const ymd = (d: string) => /^\d{8}$/.test(d) ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d;
