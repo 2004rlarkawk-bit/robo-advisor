@@ -22,6 +22,12 @@ interface Props {
   typeFilter?: TradeTypeFilter;
   /** 역할 필터가 적용된 제출 거래의 수출/수입 건수 */
   onTypeCounts?: (counts: TradeTypeCounts) => void;
+  /**
+   * 방금 제출을 마치고 넘어온 경우에 올라가는 값.
+   * 값이 바뀔 때마다 이 목록을 펼치고 화면을 맞춘다 — 제출한 거래가 어디 들어갔는지
+   * 바로 보여야 한다. 연속 제출에도 매번 동작하도록 불리언이 아니라 증가하는 수를 받는다.
+   */
+  focusSubmitted?: number;
 }
 
 function formatMailDate(iso: string): string {
@@ -134,6 +140,7 @@ export default function DocumentManagerPanel({
   onListReady,
   typeFilter = 'all',
   onTypeCounts,
+  focusSubmitted = 0,
 }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -141,6 +148,7 @@ export default function DocumentManagerPanel({
   // 문서 관리 탭 진입 시 임시보관함이 먼저 보이도록 기본 접힘
   const [open, setOpen] = useState(false);
   const [sortKey, setSortKey] = useState<'latest' | 'oldest'>('latest');
+  const panelRef = useRef<HTMLElement | null>(null);
 
   const loadTrades = useCallback(async () => {
     setIsLoading(true);
@@ -177,6 +185,17 @@ export default function DocumentManagerPanel({
   useEffect(() => {
     void loadTrades();
   }, [loadTrades]);
+
+  // 제출을 마치고 넘어오면 목록을 펼치고 그 위치로 화면을 맞춘다.
+  useEffect(() => {
+    if (!focusSubmitted) return;
+    setOpen(true);
+    // 펼쳐진 뒤 높이가 잡히고 나서 맞춰야 목록이 화면 밖으로 밀리지 않는다.
+    const frame = window.requestAnimationFrame(() => {
+      panelRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusSubmitted]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -218,7 +237,7 @@ export default function DocumentManagerPanel({
     formatKstDateTime(trade.submittedAt ?? trade.createdAt);
 
   return (
-    <section className="doc-panel">
+    <section className="doc-panel" ref={panelRef}>
       <button
         type="button"
         className="doc-panel-head"

@@ -149,7 +149,10 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
           internalSuccess ? (
             <SentConfirmation
               title="운송의뢰를 전달했어요"
-              message={`${searchResult?.companyName?.trim() || searchResult?.contactName?.trim() || '선택한 포워더'}에 운송의뢰를 전달했습니다. 포워더의 수락을 기다리고 있습니다.`}
+              message={[
+                `${searchResult?.companyName?.trim() || searchResult?.contactName?.trim() || '선택한 포워더'}에 운송의뢰를 전달했습니다.`,
+                '포워더의 수락을 기다리고 있습니다.',
+              ]}
               actions={sentActions}
             />
           ) : (

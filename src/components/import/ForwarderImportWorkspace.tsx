@@ -468,7 +468,6 @@ export default function ForwarderImportWorkspace({
         )}
 
         <div hidden={detailTab !== 'clearance'}>
-          {documentsLocked && <div className="fwd-document-lock" role="status"><span>{returnPending ? '화주 회신을 확인한 뒤 신고자료와 인도 서류를 준비하세요.' : '서류 확인을 완료하면 신고자료 다운로드와 업무 기록이 가능합니다.'}</span><button type="button" className="btn btn-secondary" onClick={() => setDetailTab('review')}>서류 확인으로 이동</button></div>}
           <ForwarderImportOperations key={selected.tradeId} item={selected} userId={userId} saving={saving} locked={documentsLocked}
             onSave={(importOperations, activity) => persist(selected, { importOperations }, [activity])}
             arrivalNotice={

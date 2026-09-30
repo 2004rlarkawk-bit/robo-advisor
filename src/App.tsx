@@ -1,5 +1,5 @@
 import { exportDeclarationFobNotice } from './utils/exportDeclarationFob';
-import { scrollPageToTop } from './utils/scrollPageToTop';
+import { scrollElementToTop, scrollPageToTop } from './utils/scrollPageToTop';
 import {
   Fragment,
   Suspense,
@@ -301,6 +301,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     clearWorkspaceSession();
     // 임시저장(미제출) 거래는 작업실 내 임시보관함에서 이어가도록 작업실로 돌려보낸다.
     setActiveMenu(completedTrade.status === 'submitted' ? 'docs' : 'dashboard');
+    if (completedTrade.status === 'submitted') setSubmittedDocsFocus((count) => count + 1);
   };
 
   const handleImportGenerate = async (snapshot: ImportTradeSnapshot): Promise<string> => {
@@ -415,6 +416,11 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [appliedExportRequestId, setAppliedExportRequestId] = useState<string | null>(null);
   // 문서 관리 수출/수입 필터 — 임시보관함·최종 제출 거래에 함께 적용한다(통관 내역과 같은 칩).
   const [docsTypeFilter, setDocsTypeFilter] = useState<TradeTypeFilter>('all');
+  /**
+   * 제출을 마치고 문서 관리로 넘어올 때마다 올린다 — '최종 제출된 거래'를 펼쳐
+   * 방금 제출한 건이 어디 들어갔는지 보여준다. 연속 제출에도 매번 동작하도록 수로 둔다.
+   */
+  const [submittedDocsFocus, setSubmittedDocsFocus] = useState(0);
   const [draftTypeCounts, setDraftTypeCounts] = useState<TradeTypeCounts>({ export: 0, import: 0 });
   const [submittedTypeCounts, setSubmittedTypeCounts] = useState<TradeTypeCounts>({ export: 0, import: 0 });
   /** 수신함에서 불러온 의뢰의 화주 연락처 — 5단계 '화주에게 알림' 패널 기본값으로만 사용 */
@@ -489,7 +495,13 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   }, [hasGenerated]);
 
   // 수출 포워더 5단계를 넘길 때, 의뢰함↔업무 화면을 오갈 때도 새 화면의 맨 위부터 보이게 한다.
+  // 단 업무 화면에서는 위쪽의 의뢰 수신함·페이지 제목을 지나 업무 카드부터 보이게 맞춘다 —
+  // 단계를 넘길 때마다 페이지 꼭대기로 올라가면 매번 다시 내려와야 한다.
   useEffect(() => {
+    if (exportForwarderView === 'workflow') {
+      scrollElementToTop('.fwd-workspace');
+      return;
+    }
     scrollPageToTop();
   }, [workspaceCurrentStep, exportForwarderView]);
 
@@ -1180,6 +1192,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       }
       clearExportAuthoringStateAfterSubmission();
       setActiveMenu('docs');
+      setSubmittedDocsFocus((count) => count + 1);
       alert('선적 완료로 처리되었습니다. 문서관리에서 거래를 열어 화주 알림과 Shipping Advice를 보낼 수 있습니다.');
     } catch (error) {
       console.error('[Forwarder Export] submitted 저장 실패:', error);
@@ -2523,6 +2536,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       }
       clearExportAuthoringStateAfterSubmission();
       setActiveMenu('docs');
+      setSubmittedDocsFocus((count) => count + 1);
       if (devTestMode === 'needs_revision' && hasBlockingErrors) {
         alert('검증 오류를 포함한 테스트 문서가 제출되었습니다.');
       } else if (devTestMode) {
@@ -2837,6 +2851,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   onListReady={handleDocumentManagerListReady}
                   typeFilter={docsTypeFilter}
                   onTypeCounts={setSubmittedTypeCounts}
+                  focusSubmitted={submittedDocsFocus}
                 />
               </>
             )

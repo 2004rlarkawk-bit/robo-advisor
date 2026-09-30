@@ -12,6 +12,8 @@
  */
 
 import { supabase } from '../lib/supabase';
+import { normalizeCurrencyCode } from '../utils/currencyCode';
+import { readEdgeErrorDetail } from '../utils/edgeErrorDetail';
 import type { CustomsCargoProgressResult } from '../types';
 // ===== 공통 =====
 
@@ -79,10 +81,10 @@ export async function getCustomsExchangeRate(
   try {
     const { data, error } = await supabase.functions.invoke<CustomsExchangeRateFunctionResponse>(
       'customs-exchange-rate',
-      { body: { currency, tradeType, date } }
+      { body: { currency: normalizeCurrencyCode(currency) || currency, tradeType, date } }
     );
 
-    if (error) throw error;
+    if (error) throw new Error(await readEdgeErrorDetail(error));
     if (!data || data.success !== true) {
       const message = typeof data?.error === 'string'
         ? data.error
@@ -127,9 +129,11 @@ export async function getCustomsExchangeRateStrict(
 ): Promise<ExchangeRate> {
   const { data, error } = await supabase.functions.invoke<CustomsExchangeRateFunctionResponse>(
     'customs-exchange-rate',
-    { body: { currency, tradeType, date } },
+    // 서류에는 'US$'처럼 사람이 읽는 표기가 적혀 있다. 코드로 바꿔 보내지 않으면
+    // 관세청 목록에서 통화를 찾지 못해 예상세액 계산이 통째로 막힌다.
+    { body: { currency: normalizeCurrencyCode(currency) || currency, tradeType, date } },
   );
-  if (error) throw error;
+  if (error) throw new Error(await readEdgeErrorDetail(error));
   if (!data || data.success !== true) {
     throw new Error(typeof data?.error === 'string' ? data.error : '환율 API가 실패 응답을 반환했습니다.');
   }

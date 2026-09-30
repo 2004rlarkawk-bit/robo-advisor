@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { normalizeCurrencyCode } from '../utils/currencyCode';
 import type {
   ImportAnalysisResult,
   ImportDocumentAnalysisResponse,
@@ -102,7 +103,9 @@ function normalizeItem(value: unknown, index: number): ImportItem {
     quantity: text(item.quantity),
     quantityUnit: text(item.quantityUnit),
     unitPrice: text(item.unitPrice),
-    currency: text(item.currency),
+    // 서류에는 'US$'처럼 사람이 읽는 표기가 적혀 있다. 여기서 코드로 맞춰 두면
+    // 화면·서식·환율 조회가 모두 같은 값을 쓴다.
+    currency: normalizeCurrencyCode(text(item.currency)),
     amount: text(item.amount),
     packageCount: text(item.packageCount),
     packageUnit: text(item.packageUnit),
@@ -236,7 +239,7 @@ export function normalizeImportExtractedFields(value: unknown): ImportExtractedF
     netWeight: text(raw.netWeight),
     originCountry: firstItem?.originCountry || text(raw.originCountry),
     destinationCountry: text(raw.destinationCountry),
-    currency: text(raw.currency) || firstItem?.currency || '',
+    currency: normalizeCurrencyCode(text(raw.currency)) || firstItem?.currency || '',
     totalAmount: text(raw.totalAmount),
     loadPort: text(raw.loadPort),
     dischargePort: text(raw.dischargePort),

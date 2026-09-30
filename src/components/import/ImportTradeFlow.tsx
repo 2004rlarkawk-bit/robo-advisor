@@ -9,7 +9,6 @@ import {
 } from '../../services/importDeclarationFormService';
 import ImportDeclarationFormPreview from './ImportDeclarationFormPreview';
 import ImportUnipassSubmit from './ImportUnipassSubmit';
-import ImportDeclarationChecklist from './ImportDeclarationChecklist';
 import ImportHandoffReadyCard from './ImportHandoffReadyCard';
 import { scrollPageToTop } from '../../utils/scrollPageToTop';
 import ImportDocumentComparison from './ImportDocumentComparison';
@@ -1130,6 +1129,13 @@ export default function ImportTradeFlow({
       { label: 'B/L 번호', value: form.bl_no ?? '' },
       { label: '신고 물품', value: form.first_goods_name ?? '' },
       { label: 'HSK', value: form.first_hs_code ?? '' },
+    ];
+  }, [declarationFormValues]);
+
+  /** 금액은 전송 버튼과 나란히 두어 보내기 직전에 한 번 더 보게 한다. */
+  const unipassTotals = useMemo(() => {
+    const form = declarationFormValues;
+    return [
       { label: '총 과세가격', value: form.total_customs_value_krw ? `${form.total_customs_value_krw}원` : '' },
       { label: '총 예상세액', value: form.total_tax ? `${form.total_tax}원` : '' },
     ];
@@ -1316,9 +1322,10 @@ export default function ImportTradeFlow({
               dutyError: '',
             }))}
           />
-          {role === 'shipper' ? (
-            <ImportDeclarationChecklist fields={state.analysis.extracted} />
-          ) : (
+          {/* 화주 화면에는 준비 현황 체크리스트를 두지 않는다 — 바로 아래 HSK 확정 화면에서
+              같은 값을 다시 보여주고 고치게 되어 있어 같은 정보가 두 번 나온다.
+              신고자료 요약은 4단계에서 한 번만 보여준다. */}
+          {role !== 'shipper' && (
             <RiskSummary
               risks={liveRisks}
               onToggle={readOnly ? undefined : toggleRisk}
@@ -1330,7 +1337,6 @@ export default function ImportTradeFlow({
             <section className="form-card import-card">
               <div className="import-card-heading import-hs-heading">
                 <div><span className="ai-badge">대한민국 공식 HSK</span><h2>G. 품목별 HSK 자동추천 및 확정</h2></div>
-                <p>해외 문서 코드는 참고용이며, 관세청 공식 HSK 후보를 선택하거나 검증된 10자리 코드를 직접 입력해야 합니다.</p>
               </div>
               {state.analysis.extracted.items.map((item, index) => {
                 const candidates = state.suggestions.filter((suggestion) => !suggestion.itemId || suggestion.itemId === item.id);
@@ -1344,7 +1350,6 @@ export default function ImportTradeFlow({
                     <div className="import-hs-reference">
                       <span className="form-label">해외 문서 HS Code</span>
                       <strong>{item.documentHSCode || '첨부문서에서 확인되지 않음'}</strong>
-                      <small>해외 수출자가 작성한 HS Code로 참고용입니다.</small>
                     </div>
                     <h4 className="import-hs-subheading">대한민국 HSK 자동추천</h4>
                     <div className="hs-suggestion-list">
@@ -1393,17 +1398,6 @@ export default function ImportTradeFlow({
                   </div>
                 );
               })}
-            </section>
-            {/* 수입요건은 HSK가 정해져야 판단할 수 있다. 앱에는 세번별 요건 데이터가 없어
-                추정값을 보여주지 않고, 공식 확인 경로만 안내한다(추후 관세청 API 연동 예정). */}
-            <section className="form-card import-card">
-              <div className="import-card-heading">
-                <div><h2>H. 수입요건 확인</h2></div>
-                <p>확정한 HSK에 세관장확인 대상 요건(식품·전기용품·전파 등)이 걸리는지는 공식 경로에서 확인해야 합니다.</p>
-              </div>
-              <p className="import-card-note">
-                이 앱은 요건 해당 여부를 판정하지 않습니다. 관세법령정보포털(unipass.customs.go.kr)의 세번별 요건 또는 관세사를 통해 확인하세요.
-              </p>
             </section>
             </fieldset>
           )}
@@ -1516,7 +1510,6 @@ export default function ImportTradeFlow({
 
       {state.step === 4 && state.analysis && role === 'shipper' && declarationData && (
         <>
-          <ImportDeclarationChecklist fields={state.analysis.extracted} summary />
           <ImportHandoffReadyCard
             documentTypes={state.documents.map((document) => document.type)}
             fields={state.analysis.extracted}
@@ -1569,6 +1562,7 @@ export default function ImportTradeFlow({
             seed={declarationFormValues.bl_no ?? ''}
             customsOffice={declarationFormValues.customs_office}
             summary={unipassSummary}
+            totals={unipassTotals}
           />
 
           {readOnly && onClose ? <DocumentManagerReadOnlyAction

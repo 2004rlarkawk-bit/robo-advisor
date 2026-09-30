@@ -10,6 +10,9 @@ const BASE_URL =
 
 const HUNDRED_UNIT_CURRENCIES = new Set(["JPY", "IDR"]);
 
+/** 고시가 없을 때 거슬러 올라가 볼 주 수. 연휴가 길어도 덮을 만큼만 둔다. */
+const WEEKLY_FALLBACK_LIMIT = 4;
+
 interface ExchangeRateRequest {
   currency?: string;
   tradeType?: "export" | "import";
@@ -254,17 +257,31 @@ export default {
       const todayYmd = getKoreanTodayYmd();
 
       /*
-       * 날짜를 직접 입력한 경우 해당 날짜만 조회
-       * 날짜가 없으면 오늘과 해당 주 일요일을 차례로 조회
+       * 관세환율은 주 단위로 고시된다. 그래서 한 날짜만 조회하고 끝내면
+       * 아직 고시되지 않은 주(미래 날짜)나 고시가 비는 주에서 통째로 실패한다.
+       * 기준 날짜 → 그 주 일요일 → 직전 주들 순으로 최대 4주까지 거슬러 찾는다.
        */
-      const attempts = requestedDate
-        ? [requestedDate]
-        : [
-            ...new Set([
-              todayYmd,
-              getWeekStartYmd(todayYmd),
-            ]),
-          ];
+      const baseYmd = requestedDate ?? todayYmd;
+
+      const attempts: string[] = [];
+
+      const addAttempt = (ymd: string): void => {
+        if (!attempts.includes(ymd)) attempts.push(ymd);
+      };
+
+      addAttempt(baseYmd);
+
+      let weekStart = getWeekStartYmd(baseYmd);
+
+      for (let back = 0; back <= WEEKLY_FALLBACK_LIMIT; back += 1) {
+        addAttempt(weekStart);
+
+        const previous = ymdToDate(weekStart);
+
+        previous.setUTCDate(previous.getUTCDate() - 7);
+
+        weekStart = dateToYmd(previous);
+      }
 
       for (const attemptDate of attempts) {
         const url = new URL(BASE_URL);
@@ -357,7 +374,9 @@ export default {
       }
 
       throw new Error(
-        `관세청 환율 정보에서 ${currency} 통화를 찾지 못했습니다.`,
+        `관세청 환율 정보에서 ${currency} 통화를 찾지 못했습니다. ` +
+          `조회한 날짜: ${attempts.join(", ")}. ` +
+          `통화 코드(ISO 4217, 예: USD)가 맞는지 확인하세요.`,
       );
     } catch (error) {
       console.error(
