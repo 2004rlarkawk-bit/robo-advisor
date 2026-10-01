@@ -12,6 +12,8 @@ import type {
 import templateUrl from '../../templates/import_declaration_request_template.docx?url';
 import { portaiFileName } from '../utils/documentFileName';
 import { formatKstDateSpaced } from '../utils/formatDate';
+import { createTemplateLoader } from './templateLoader';
+import { saveBlobAs } from '../utils/saveBlob';
 
 export interface ImportDeclarationData {
   fields: ImportExtractedFields;
@@ -193,14 +195,7 @@ export function mapImportDeclarationToSchema(data: ImportDeclarationData): Impor
   };
 }
 
-let templateCache: ArrayBuffer | null = null;
-async function loadTemplate(): Promise<ArrayBuffer> {
-  if (templateCache) return templateCache;
-  const res = await fetch(templateUrl);
-  if (!res.ok) throw new Error(`수입신고의뢰서 템플릿 로드 실패 (${res.status})`);
-  templateCache = await res.arrayBuffer();
-  return templateCache;
-}
+const loadTemplate = createTemplateLoader(templateUrl, '수입신고의뢰서 템플릿');
 
 /** 스키마 값을 고정 템플릿에 주입해 docx Blob을 만든다(품목 행은 반복). */
 export async function buildImportDeclarationDocx(data: ImportDeclarationData): Promise<Blob> {
@@ -230,14 +225,7 @@ export function importDeclarationFileName(_fields?: ImportExtractedFields): stri
 
 export async function downloadImportDeclarationDocx(data: ImportDeclarationData): Promise<void> {
   const blob = await buildImportDeclarationDocx(data);
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${importDeclarationFileName(data.fields)}.docx`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveBlobAs(blob, `${importDeclarationFileName(data.fields)}.docx`);
 }
 
 /** PDF 저장 — 같은 docx를 인쇄용 iframe에 렌더해 브라우저 "PDF로 저장"으로 내보낸다(상업송장과 동일 방식). */

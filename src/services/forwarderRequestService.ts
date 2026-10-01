@@ -7,6 +7,7 @@ import type {
   TradeRequestPreview,
   TradeRequestStatus,
 } from '../types/forwarderRequest';
+import { getRequiredUserId } from './authUser';
 
 interface TradeRequestRow {
   id: string;
@@ -36,14 +37,6 @@ function mapTradeRequestRow(row: TradeRequestRow): TradeRequest {
     rejectedAt: row.rejected_at,
     cancelledAt: row.cancelled_at,
   };
-}
-
-async function getRequiredUserId(): Promise<string> {
-  const { data, error } = await supabase.auth.getUser();
-  if (error) throw error;
-  const userId = data.user?.id;
-  if (!userId) throw new Error('로그인이 필요합니다.');
-  return userId;
 }
 
 /** 이메일로 등록된 포워더 계정을 검색한다. 화주 전용 계정·존재하지 않는 이메일이면 null.

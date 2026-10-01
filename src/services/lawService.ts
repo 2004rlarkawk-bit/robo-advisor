@@ -13,10 +13,7 @@
 
 import type { DataSource } from './customsApiService';
 import { supabase } from '../lib/supabase';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+import { isRecord } from '../utils/isRecord';
 
 // ===== 법령 검색 =====
 

@@ -1,4 +1,3 @@
-import { exportDeclarationFobNotice } from './utils/exportDeclarationFob';
 import { scrollElementToTop, scrollPageToTop } from './utils/scrollPageToTop';
 import {
   Fragment,
@@ -23,7 +22,6 @@ import {
   Calculator,
   Calendar,
   OctagonAlert,
-  Info,
   PenLine,
   ChevronRight,
   Paperclip,
@@ -78,6 +76,13 @@ import { calculateReadiness } from './harness/rulesEngine';
 import { validateRequiredInputs } from './harness/validatorEngine';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
+import AgentConsoleOverlay from './components/AgentConsoleOverlay';
+import NoticeModal from './components/NoticeModal';
+import DocumentPreviewModal from './components/DocumentPreviewModal';
+import OverrideReasonModal from './components/OverrideReasonModal';
+import { saveBlobAs } from './utils/saveBlob';
+import { importDraftCacheKey } from './utils/importDraftCacheKey';
+import { renderDocxPreview } from './utils/docxPreview';
 import {
   createGeneratedTrade,
   createGeneratedImportTrade,
@@ -155,8 +160,12 @@ import {
   type ExportProgressStatus,
 } from './types/exportForwarderCase';
 import {
+  exportIssueDocLabel,
+  isLiveCheckIssueId,
+  issueFixHint,
   issueKey,
   issueToFieldKey,
+  presentIssue,
   shortIssueLabel,
   unresolvedBlockers,
 } from './utils/validationIssues';
@@ -656,96 +665,46 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   // 미리보기 모달에서 상업송장은 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
   useEffect(() => {
     if (previewDocId !== 'invoice' || !invoiceData) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const blob = await getInvoiceBlob();
-        const host = docxPreviewRef.current;
-        if (!blob || cancelled || !host) return;
-        const { renderInvoiceDocxPreview } = await import('./services/invoiceDocxService');
-        await renderInvoiceDocxPreview(blob, host);
-      } catch {
-        const host = docxPreviewRef.current;
-        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">상업송장 미리보기 생성에 실패했습니다.</p>';
-      }
-    })();
-    return () => { cancelled = true; };
+    return renderDocxPreview(getInvoiceBlob, docxPreviewRef, async (blob, host) => {
+      const { renderInvoiceDocxPreview } = await import('./services/invoiceDocxService');
+      await renderInvoiceDocxPreview(blob, host);
+    }, '상업송장');
   }, [previewDocId, invoiceData]);
 
   // 선하증권도 생성된 docx(무역협회 표준 서식)를 그대로 렌더 — 다운로드와 동일 소스
   useEffect(() => {
     if (previewDocId !== 'bl' || !billOfLadingData) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const blob = await getBillOfLadingBlob();
-        const host = blDocxPreviewRef.current;
-        if (!blob || cancelled || !host) return;
-        const { renderBillOfLadingDocxPreview } = await import('./services/billOfLadingDocxService');
-        await renderBillOfLadingDocxPreview(blob, host);
-      } catch {
-        const host = blDocxPreviewRef.current;
-        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">선하증권 미리보기 생성에 실패했습니다.</p>';
-      }
-    })();
-    return () => { cancelled = true; };
+    return renderDocxPreview(getBillOfLadingBlob, blDocxPreviewRef, async (blob, host) => {
+      const { renderBillOfLadingDocxPreview } = await import('./services/billOfLadingDocxService');
+      await renderBillOfLadingDocxPreview(blob, host);
+    }, '선하증권');
   }, [previewDocId, billOfLadingData]);
 
   // 운송의뢰서도 고정 서식(Shipping Instruction) docx를 그대로 렌더 — 다운로드와 동일 소스
   useEffect(() => {
     if (previewDocId !== 'transport_request' || !transportRequestData) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const blob = await getTransportRequestBlob();
-        const host = trDocxPreviewRef.current;
-        if (!blob || cancelled || !host) return;
-        const { renderTransportRequestDocxPreview } = await import('./services/transportRequestDocxService');
-        await renderTransportRequestDocxPreview(blob, host);
-      } catch {
-        const host = trDocxPreviewRef.current;
-        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">수출 운송의뢰서 미리보기 생성에 실패했습니다.</p>';
-      }
-    })();
-    return () => { cancelled = true; };
+    return renderDocxPreview(getTransportRequestBlob, trDocxPreviewRef, async (blob, host) => {
+      const { renderTransportRequestDocxPreview } = await import('./services/transportRequestDocxService');
+      await renderTransportRequestDocxPreview(blob, host);
+    }, '수출 운송의뢰서');
   }, [previewDocId, transportRequestData]);
 
   // 패킹리스트도 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
   useEffect(() => {
     if (previewDocId !== 'packing_list' || !packingListData) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const blob = await getPackingListBlob();
-        const host = packingDocxPreviewRef.current;
-        if (!blob || cancelled || !host) return;
-        const { renderPackingListDocxPreview } = await import('./services/packingListDocxService');
-        await renderPackingListDocxPreview(blob, host);
-      } catch {
-        const host = packingDocxPreviewRef.current;
-        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">패킹리스트 미리보기 생성에 실패했습니다.</p>';
-      }
-    })();
-    return () => { cancelled = true; };
+    return renderDocxPreview(getPackingListBlob, packingDocxPreviewRef, async (blob, host) => {
+      const { renderPackingListDocxPreview } = await import('./services/packingListDocxService');
+      await renderPackingListDocxPreview(blob, host);
+    }, '패킹리스트');
   }, [previewDocId, packingListData]);
 
   // 수출신고서(초안)도 생성된 docx를 그대로 렌더(다운로드와 동일 소스)
   useEffect(() => {
     if (previewDocId !== 'customs_dec' || !customsDeclarationData) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const blob = await getCustomsDeclBlob();
-        const host = customsDocxPreviewRef.current;
-        if (!blob || cancelled || !host) return;
-        const { renderExportDeclarationDocxPreview } = await import('./services/exportDeclarationDocxService');
-        await renderExportDeclarationDocxPreview(blob, host);
-      } catch {
-        const host = customsDocxPreviewRef.current;
-        if (host) host.innerHTML = '<p style="padding:16px;color:#b91c1c;">수출신고서 미리보기 생성에 실패했습니다.</p>';
-      }
-    })();
-    return () => { cancelled = true; };
+    return renderDocxPreview(getCustomsDeclBlob, customsDocxPreviewRef, async (blob, host) => {
+      const { renderExportDeclarationDocxPreview } = await import('./services/exportDeclarationDocxService');
+      await renderExportDeclarationDocxPreview(blob, host);
+    }, '수출신고서');
   }, [previewDocId, customsDeclarationData]);
 
   // Mobile simulator inputs
@@ -1570,7 +1529,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     if ((t.tradeDirection ?? t.profile.tradeType) === 'import' && importSnapshot && user) {
       setTradeDirection('import');
       setIntegratedWorkspaceRole(importSnapshot.role);
-      localStorage.setItem(`portai_import_draft:${user.id}:${importSnapshot.role}`, JSON.stringify({
+      localStorage.setItem(importDraftCacheKey(user.id, importSnapshot.role), JSON.stringify({
         step: 3,
         documents: importSnapshot.documents,
         analysis: importSnapshot.analysis,
@@ -1646,7 +1605,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const handleLoadSavedTradeFromDocumentManager = (trade: SavedTrade) => {
     const importSnapshot = trade.generatedDocs?.importTrade as ImportTradeSnapshot | undefined;
     const importCacheKey = user && (trade.tradeDirection ?? trade.profile.tradeType) === 'import' && importSnapshot
-      ? `portai_import_draft:${user.id}:${importSnapshot.role}`
+      ? importDraftCacheKey(user.id, importSnapshot.role)
       : null;
     const origin = {
       contentScrollTop: document.querySelector<HTMLElement>('.content-body')?.scrollTop ?? 0,
@@ -1702,7 +1661,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       // 무엇을 고쳐야 하는지 포워더의 요청 사유를 상단 안내 카드로 띄운다.
       if (!user) return;
       const role = reopened.tradeRole ?? 'shipper';
-      const cacheKey = `portai_import_draft:${user.id}:${role}`;
+      const cacheKey = importDraftCacheKey(user.id, role);
       try {
         const cached = JSON.parse(localStorage.getItem(cacheKey) ?? 'null') as Record<string, unknown> | null;
         if (cached) {
@@ -1953,7 +1912,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       const role = importSnapshot.role;
       setTradeDirection('import');
       setIntegratedWorkspaceRole(role);
-      localStorage.setItem(`portai_import_draft:${user.id}:${role}`, JSON.stringify({
+      localStorage.setItem(importDraftCacheKey(user.id, role), JSON.stringify({
         step: 1,
         documents: [],
         analysis: null,
@@ -2315,14 +2274,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         return;
       }
       // 1) DOCX 저장
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = getDocFileName('invoice').replace(/\.pdf$/i, '.docx');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      saveBlobAs(blob, getDocFileName('invoice').replace(/\.pdf$/i, '.docx'));
 
       // 2) PDF 저장(브라우저 인쇄) — 같은 docx를 렌더해서 벡터 PDF로.
       alert(
@@ -2334,99 +2286,47 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       return;
     }
 
-    // 패킹리스트: 고정 docx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 바이너리).
-    if (docId === 'packing_list') {
+    // 패킹리스트·선하증권·수출신고서(초안)·운송의뢰서: 미리보기에 쓴 docx Blob을 그대로 내려받는다.
+    const docxDownloads: Record<string, { getBlob: () => Promise<Blob | null>; failed: string; missing: string; fileId: string }> = {
+      packing_list: {
+        getBlob: getPackingListBlob,
+        failed: '패킹리스트 생성에 실패했습니다.',
+        missing: '패킹리스트 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.',
+        fileId: 'packing_list',
+      },
+      bl: {
+        getBlob: getBillOfLadingBlob,
+        failed: '선하증권 생성에 실패했습니다.',
+        missing: '선하증권 데이터가 없습니다. 먼저 B/L을 생성해 주세요.',
+        fileId: billOfLadingData?.transportMode === 'AIR' ? 'awb' : 'bl',
+      },
+      customs_dec: {
+        getBlob: getCustomsDeclBlob,
+        failed: '수출신고서 생성에 실패했습니다.',
+        missing: '수출신고서 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.',
+        fileId: 'customs_dec',
+      },
+      transport_request: {
+        getBlob: getTransportRequestBlob,
+        failed: '수출 운송의뢰서 생성에 실패했습니다.',
+        missing: '운송의뢰서 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.',
+        fileId: 'transport_request',
+      },
+    };
+    if (Object.prototype.hasOwnProperty.call(docxDownloads, docId)) {
+      const docx = docxDownloads[docId];
       let blob: Blob | null = null;
       try {
-        blob = await getPackingListBlob();
+        blob = await docx.getBlob();
       } catch (e) {
-        alert(e instanceof Error ? e.message : '패킹리스트 생성에 실패했습니다.');
+        alert(e instanceof Error ? e.message : docx.failed);
         return;
       }
       if (!blob) {
-        alert('패킹리스트 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
+        alert(docx.missing);
         return;
       }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = getDocFileName('packing_list').replace(/\.pdf$/i, '.docx');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      return;
-    }
-
-    // 선하증권: 무역협회 표준 서식 docx Blob을 그대로 다운로드(미리보기와 동일 바이너리).
-    if (docId === 'bl') {
-      let blob: Blob | null = null;
-      try {
-        blob = await getBillOfLadingBlob();
-      } catch (e) {
-        alert(e instanceof Error ? e.message : '선하증권 생성에 실패했습니다.');
-        return;
-      }
-      if (!blob) {
-        alert('선하증권 데이터가 없습니다. 먼저 B/L을 생성해 주세요.');
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = getDocFileName(billOfLadingData?.transportMode === 'AIR' ? 'awb' : 'bl').replace(/\.pdf$/i, '.docx');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      return;
-    }
-
-    // 수출신고서(초안): 고정 docx 템플릿에서 생성한 Blob을 그대로 다운로드(미리보기와 동일 바이너리).
-    if (docId === 'customs_dec') {
-      let blob: Blob | null = null;
-      try {
-        blob = await getCustomsDeclBlob();
-      } catch (e) {
-        alert(e instanceof Error ? e.message : '수출신고서 생성에 실패했습니다.');
-        return;
-      }
-      if (!blob) {
-        alert('수출신고서 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = getDocFileName('customs_dec').replace(/\.pdf$/i, '.docx');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      return;
-    }
-
-    // 수출 운송의뢰서: docx 라이브러리로 조립한 Blob을 다운로드(미리보기는 기존 HTML 그대로 유지).
-    if (docId === 'transport_request') {
-      let blob: Blob | null = null;
-      try {
-        blob = await getTransportRequestBlob();
-      } catch (e) {
-        alert(e instanceof Error ? e.message : '수출 운송의뢰서 생성에 실패했습니다.');
-        return;
-      }
-      if (!blob) {
-        alert('운송의뢰서 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = getDocFileName('transport_request').replace(/\.pdf$/i, '.docx');
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      saveBlobAs(blob, getDocFileName(docx.fileId).replace(/\.pdf$/i, '.docx'));
       return;
     }
 
@@ -2577,16 +2477,12 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1)),
     [issues]
   );
-  // amount-calc-mismatch는 2026-08 통합으로 complianceRules.ts R8에 흡수되어 더 이상 발행되지
-  // 않는다(validatorEngine.ts 참고) — validateRequiredInputs가 안 내는 id를 실시간 재평가 대상으로
-  // 남겨두면 liveInputIssueIds가 절대 못 채워서 "항상 해결됨"으로 오판하므로 패턴에서 제외했다.
-  const LIVE_CHECK_ID = /^(input-missing-|input-nan-|input-nonpositive-)|^(input-date-order|invoice-date-after-shipment|weight-net-gross|package-count-nonpositive|currency-missing|unit-missing|items-total-mismatch)$/;
   const liveInputIssueIds = useMemo(
     () => new Set(validateRequiredInputs(profile).map(i => i.id)),
     [profile]
   );
   const isIssueLiveResolved = (issue: ValidationIssue) =>
-    LIVE_CHECK_ID.test(issue.id) && !liveInputIssueIds.has(issue.id);
+    isLiveCheckIssueId(issue.id) && !liveInputIssueIds.has(issue.id);
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 
@@ -3059,21 +2955,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                       {(() => {
                         // 한 줄 요약 행 — 전체 문구는 title 툴팁 + 클릭 시 상단 배너로.
                         // 요약 아래엔 "어떻게 고치는지"(예시·조건)만 작게 남긴다. 근거 조문은 결과 화면 담당.
-                        const fixHint = (issue: ValidationIssue): string | null => {
-                          const m = issue.message.replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim();
-                          const ex = m.match(/예[:：]\s*([^.]+)/);
-                          if (ex) return `예: ${ex[1].trim()}`;
-                          // 괄호 속 설명이 실질적 안내인 경우가 많다 (조건·기준 등)
-                          const paren = m.match(/\(([^)]{8,})\)/);
-                          if (paren) return paren[1].trim();
-                          const colon = m.split(':');
-                          if (colon.length > 1) return colon.slice(1).join(':').split('.')[0].trim();
-                          return null;
-                        };
                         const renderRow = (issue: ValidationIssue) => {
                           const resolved = isIssueLiveResolved(issue);
                           const label = shortIssueLabel(issue);
-                          let hint = fixHint(issue);
+                          let hint = issueFixHint(issue);
                           // 제목에 이미 들어간 문구는 설명에서 반복하지 않는다
                           if (hint && label.includes(hint.replace(/\.$/, ''))) hint = null;
                           return (
@@ -3534,34 +3419,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                             error: { label: '반드시 수정', hint: '', cls: 'sev-error', icon: <OctagonAlert size={17} strokeWidth={2.4} /> },
                             warning: { label: '확인 권장', hint: '', cls: 'sev-warning', icon: <AlertTriangle size={17} strokeWidth={2.4} /> },
                           };
-                          const docLabelOf = (dt: string): string => (({
-                            invoice: '상업송장', packing_list: '패킹리스트', bl: '선하증권 B/L', transport_request: '수출 운송의뢰서',
-                            customs_dec: '통관신고서', co: '원산지증명서', insurance: '적하보험증권',
-                          } as Record<string, string>)[dt] || '기타 서류');
-                          // 확인 항목 카드용 손질 카피 — 원 검증 메시지 대신 짧은 제목 + 명령형 설명.
-                          const present = (i: ValidationIssue): { title: string; desc: string } | null => {
-                            if (i.field === 'weight') return { title: '중량 입력', desc: '총 중량 또는 순중량 정보를 입력하세요.' };
-                            if (i.id.startsWith('llm-anomaly-')) {
-                              // "라벨: 사유" 형식(예전 저장본은 앞에 "AI 참고 — "가 붙어 있음). 제목은 라벨까지, 설명은 사유.
-                              const plain = i.message.replace(/\s*\[근거:[^\]]*\]\s*$/, '').replace(/^AI 참고 — /, '');
-                              const m = /^([^:]+):\s*(.+)$/.exec(plain);
-                              return m
-                                ? { title: `${m[1]} 값 확인`, desc: `${m[2]} (실제 값이 맞다면 그대로 진행해도 됩니다.)` }
-                                : { title: '입력값 확인', desc: plain };
-                            }
-                            if (i.docType === 'co') return { title: '원산지증명서 필요 여부', desc: '구매자가 FTA 적용 또는 원산지증명서를 요청했는지 확인해 주세요.' };
-                            if (i.id === 'r2-departure-missing' || i.field === 'departureDate') return { title: '선적일 확인', desc: '선적일이 비어 있습니다. 확정 시 입력을 권장합니다.' };
-                            if (i.field === 'hsCode') return { title: 'HS CODE 확인', desc: '품목에 맞는 HS CODE를 확인·입력하세요.' };
-                            if (i.id === 'insurance-missing') return { title: '적하보험증권 준비', desc: 'CIF 조건에서는 적하보험증권이 필요합니다.' };
-                            if (i.id === 'r15-origin-not-korea') {
-                              const origin = /원산지가 '([^']+)'/.exec(i.message || '')?.[1] ?? '';
-                              return {
-                                title: '원산지 정보 확인 필요',
-                                desc: `수출물품의 원산지가 '${origin}'으로 입력되어 있습니다. 실제 물품의 원산지와 일치하는지 확인해 주세요.`,
-                              };
-                            }
-                            return null;
-                          };
                           let lastSev: string | null = null;
                           let warnSeq = 0; // 확인 권장 카드에 붙는 순번(1,2,3…)
                           return sorted.map((issue) => {
@@ -3583,7 +3440,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                 : issue.amounts ? '금액 수정'
                                 : fieldStr === 'arrivalDate' ? '도착일 입력'
                                 : '입력 수정';
-                            const docLbl = docLabelOf(issue.docType);
+                            const docLbl = exportIssueDocLabel(issue.docType);
                             return (
                               <Fragment key={issue.id}>
                                 {showHeader && (
@@ -3613,7 +3470,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   // 서류 칩이 이미 서류명을 보여주므로 제목 앞 "서류명:" 접두는 제거해 중복 방지.
                                   mainLine = mainLine.replace(new RegExp('^' + docLbl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[:：]\\s*'), '');
                                   // 알려진 이슈는 손질된 짧은 제목으로 교체(도안 카피).
-                                  const pres = present(issue);
+                                  const pres = presentIssue(issue);
                                   if (pres) { mainLine = pres.title; }
                                   // 금액 불일치는 칩으로 숫자를 보여주므로 제목을 짧게.
                                   if (issue.amounts) { mainLine = '금액 계산이 일치하지 않습니다'; }
@@ -3621,7 +3478,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   if (issue.qtyMismatch) { mainLine = '패킹리스트 수량과 상업송장 수량이 다릅니다.'; }
                                   // 긴 메시지는 첫 문장만 굵은 제목으로, 나머지는 아래 회색 설명으로 분리해
                                   // 한 덩어리 굵은 문단이 되지 않게 한다. (마침표+공백 기준)
-                                  // present()가 손질한 설명이 있으면 그대로 쓰고, 없을 때만 문장 분리로 만든다.
+                                  // presentIssue()가 손질한 설명이 있으면 그대로 쓰고, 없을 때만 문장 분리로 만든다.
                                   let descLine = pres?.desc ?? '';
                                   const sentenceBreak = mainLine.indexOf('. ');
                                   if (!pres && !issue.amounts && sentenceBreak > 0) {
@@ -4017,268 +3874,56 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
 
       {/* 4. Agent Execution Terminal Terminal Overlay */}
       {showConsole && (
-        <div className="console-overlay">
-          <div className="console-modal">
-            <div className="console-header">
-              <div className="console-title-group">
-                <Terminal size={16} />
-                <span>PortAI Agent Pipeline Runner</span>
-              </div>
-              <div className="console-dots">
-                <span className="console-dot red"></span>
-                <span className="console-dot yellow"></span>
-                <span className="console-dot green"></span>
-              </div>
-            </div>
-
-            <div className="console-body">
-              {consoleLogs.map((log, index) => (
-                <div className="log-row" key={index}>
-                  <span className="log-time">[{log.timestamp}]</span>
-                  <span className="log-agent">{log.agentName}:</span>
-                  <span className={`log-text-content ${log.level}`}>
-                    {log.message}
-                  </span>
-                </div>
-              ))}
-              {isProcessing && (
-                <div className="log-row">
-                  <span className="log-time">⏳</span>
-                  <span className="log-agent" style={{ color: '#fb7185' }}>Pipeline:</span>
-                  <span className="log-text-content" style={{ color: '#fb7185', fontStyle: 'italic' }}>
-                    에이전트 연계 연산 처리 중...
-                  </span>
-                </div>
-              )}
-              <div ref={consoleEndRef} />
-            </div>
-
-            <div className="console-footer">
-              <button 
-                className="btn btn-secondary btn-sm" 
-                onClick={() => setShowConsole(false)}
-                disabled={isProcessing}
-                style={{ opacity: isProcessing ? 0.6 : 1, cursor: isProcessing ? 'not-allowed' : 'pointer' }}
-              >
-                콘솔 닫기
-              </button>
-            </div>
-          </div>
-        </div>
+        <AgentConsoleOverlay
+          logs={consoleLogs}
+          isProcessing={isProcessing}
+          endRef={consoleEndRef}
+          onClose={() => setShowConsole(false)}
+        />
       )}
       {/* 5. Premium Document Preview Modal */}
       {previewDocId && (
-        <div className="preview-modal-overlay" style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(15, 23, 42, 0.65)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div className="preview-modal-container" style={{
-            backgroundColor: '#f8fafc',
-            borderRadius: '16px',
-            boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)',
-            width: '100%',
-            maxWidth: '850px',
-            maxHeight: '90vh',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            border: '1px solid rgba(255, 255, 255, 0.2)'
-          }}>
-            {/* Modal Header */}
-            <div className="preview-modal-header" style={{
-              padding: '16px 24px',
-              borderBottom: '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: '#ffffff'
-            }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#0f172a' }}>
-                {(({
-                  invoice: '상업송장(Commercial Invoice)',
-                  packing_list: '패킹리스트(Packing List)',
-                  co: '원산지증명서(Certificate of Origin)',
-                  bl: '선하증권(B/L)',
-                  transport_request: '수출 운송의뢰서(Shipping Instruction, S/I)',
-                  customs_dec: '수출신고서(초안)',
-                  insurance: '적하보험증권(Insurance Policy)',
-                } as Record<string, string>)[previewDocId ?? ''] ?? '문서')} 미리보기
-              </h3>
-              <button 
-                onClick={handleCloseDocumentPreview}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '24px',
-                  cursor: 'pointer',
-                  color: '#64748b',
-                  lineHeight: '1'
-                }}
-              >
-                &times;
-              </button>
-            </div>
-
-            {/* Modal Content - HTML container */}
-            <div className="preview-modal-body" style={{
-              padding: '24px',
-              overflowY: 'auto',
-              flex: 1,
-              display: 'flex',
-              justifyContent: 'center',
-              backgroundColor: '#f1f5f9'
-            }}>
-              {previewDocId === 'invoice' ? (
-                // 상업송장: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
-                <div ref={docxPreviewRef} style={{ width: '100%' }} />
-              ) : previewDocId === 'packing_list' ? (
-                // 패킹리스트: 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
-                <div ref={packingDocxPreviewRef} style={{ width: '100%' }} />
-              ) : previewDocId === 'transport_request' ? (
-                // 운송의뢰서: 고정 서식 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
-                <div ref={trDocxPreviewRef} style={{ width: '100%' }} />
-              ) : previewDocId === 'bl' ? (
-                // 선하증권: 무역협회 표준 서식 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
-                <div ref={blDocxPreviewRef} style={{ width: '100%' }} />
-              ) : previewDocId === 'customs_dec' ? (
-                // 수출신고서(초안): 생성된 docx를 그대로 렌더 — 미리보기와 다운로드가 동일 바이너리
-                <div style={{ width: '100%' }}>
-                  <div style={{
-                    marginBottom: '12px', padding: '10px 14px', borderRadius: '8px',
-                    background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412',
-                    fontSize: '13px', lineHeight: 1.5,
-                  }}>
-                    <b>초안 생성</b> — 세관 제출본이 아닙니다. 신고번호·세관기재란 등은 <b>신고 후 확정</b>되며, 실제 신고는 관세사 또는 UNI-PASS를 통해 진행하세요.
-                  </div>
-                  {customsDeclarationData && exportDeclarationFobNotice(customsDeclarationData.incoterms) && (
-                    // 신고가격(FOB) 숫자 칸은 비워 두고, 이유는 문서 위 주석으로만 알린다.
-                    <div role="note" style={{
-                      marginBottom: '12px', padding: '10px 14px', borderRadius: '8px',
-                      background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155',
-                      fontSize: '13px', lineHeight: 1.5,
-                    }}>
-                      <b>신고가격(FOB) 빈칸</b> — {customsDeclarationData.incoterms || 'Incoterms 미선택'} 조건: {exportDeclarationFobNotice(customsDeclarationData.incoterms)}
-                    </div>
-                  )}
-                  <div ref={customsDocxPreviewRef} style={{ width: '100%' }} />
-                </div>
-              ) : (
-                <div
-                  style={{ transform: 'scale(1)', transformOrigin: 'top center', width: '100%' }}
-                  dangerouslySetInnerHTML={{ __html: htmlTemplates[previewDocId] || '<p>문서 양식이 생성되지 않았습니다.</p>' }}
-                />
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="preview-modal-footer" style={{
-              padding: '16px 24px',
-              borderTop: '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: '12px',
-              backgroundColor: '#ffffff'
-            }}>
-              <button 
-                className="btn btn-secondary" 
-                onClick={handleCloseDocumentPreview}
-              >
-                닫기
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={() => handleDownloadDoc(previewDocId)}
-              >
-                <Download size={16} />
-                {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : (previewDocId === 'packing_list' || previewDocId === 'customs_dec' || previewDocId === 'transport_request' || previewDocId === 'bl') ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DocumentPreviewModal
+          previewDocId={previewDocId}
+          htmlTemplates={htmlTemplates}
+          customsDeclarationData={customsDeclarationData}
+          docxPreviewRef={docxPreviewRef}
+          packingDocxPreviewRef={packingDocxPreviewRef}
+          trDocxPreviewRef={trDocxPreviewRef}
+          blDocxPreviewRef={blDocxPreviewRef}
+          customsDocxPreviewRef={customsDocxPreviewRef}
+          onClose={handleCloseDocumentPreview}
+          onDownload={(docId) => { void handleDownloadDoc(docId); }}
+        />
       )}
 
       {/* 초안 생성 완료 안내 모달 — 브라우저 alert 대체 */}
       {draftNoticeCount !== null && (
-        <div
-          onClick={() => setDraftNoticeCount(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 92vw)', background: '#fff', borderRadius: 16, padding: '36px 32px 24px', boxShadow: '0 12px 40px rgba(0,0,0,0.25)', textAlign: 'center' }}>
-            <div style={{ width: 64, height: 64, margin: '0 auto 18px', borderRadius: '50%', background: '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-color)' }}>
-              <Info size={30} strokeWidth={2.2} />
-            </div>
-            <h3 style={{ margin: '0 0 18px', fontSize: 22, fontWeight: 800, color: 'var(--text-dark)' }}>초안이 생성되었습니다.</h3>
-            <div style={{ borderTop: '1px solid var(--border-color-subtle)', paddingTop: 18, fontSize: 16, color: 'var(--text-dark)', lineHeight: 1.8 }}>
-              <p style={{ margin: 0 }}>제출 전 확인이 필요한 항목이 <b style={{ color: '#dc2626' }}>{draftNoticeCount}건</b> 있습니다.</p>
-              <p style={{ margin: 0 }}>미리보기와 다운로드는 가능하지만,</p>
-              <p style={{ margin: 0 }}>최종 제출은 보류됩니다.</p>
-            </div>
-            <div style={{ borderTop: '1px solid var(--border-color-subtle)', marginTop: 22, paddingTop: 18, display: 'flex', justifyContent: 'center' }}>
-              <button className="btn btn-primary" style={{ minWidth: 200, justifyContent: 'center' }} onClick={() => setDraftNoticeCount(null)}>확인</button>
-            </div>
-          </div>
-        </div>
+        <NoticeModal title="초안이 생성되었습니다." onClose={() => setDraftNoticeCount(null)}>
+          <p style={{ margin: 0 }}>제출 전 확인이 필요한 항목이 <b style={{ color: '#dc2626' }}>{draftNoticeCount}건</b> 있습니다.</p>
+          <p style={{ margin: 0 }}>미리보기와 다운로드는 가능하지만,</p>
+          <p style={{ margin: 0 }}>최종 제출은 보류됩니다.</p>
+        </NoticeModal>
       )}
 
       {/* 거래 저장/재생성 완료 안내 모달 — 브라우저 alert 대체 */}
       {saveNotice !== null && (
-        <div
-          onClick={() => setSaveNotice(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(560px, 92vw)', background: '#fff', borderRadius: 16, padding: '36px 32px 24px', boxShadow: '0 12px 40px rgba(0,0,0,0.25)', textAlign: 'center' }}>
-            <div style={{ width: 64, height: 64, margin: '0 auto 18px', borderRadius: '50%', background: '#e8f0fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-color)' }}>
-              <Info size={30} strokeWidth={2.2} />
-            </div>
-            <h3 style={{ margin: '0 0 18px', fontSize: 22, fontWeight: 800, color: 'var(--text-dark)' }}>AI 연산 결과 재검증</h3>
-            <div style={{ borderTop: '1px solid var(--border-color-subtle)', paddingTop: 18, fontSize: 16, color: 'var(--text-dark)', lineHeight: 1.8 }}>
-              {saveNotice.split('\n').map((line, index) => (
-                <p key={line} style={{ margin: index === 0 ? 0 : '6px 0 0' }}>{line}</p>
-              ))}
-            </div>
-            <div style={{ borderTop: '1px solid var(--border-color-subtle)', marginTop: 22, paddingTop: 18, display: 'flex', justifyContent: 'center' }}>
-              <button className="btn btn-primary" style={{ minWidth: 200, justifyContent: 'center' }} onClick={() => setSaveNotice(null)}>확인</button>
-            </div>
-          </div>
-        </div>
+        <NoticeModal title="AI 연산 결과 재검증" onClose={() => setSaveNotice(null)}>
+          {saveNotice.split('\n').map((line, index) => (
+            <p key={line} style={{ margin: index === 0 ? 0 : '6px 0 0' }}>{line}</p>
+          ))}
+        </NoticeModal>
       )}
 
       {/* override 사유 입력 모달 */}
       {overrideTarget && (
-        <div
-          onClick={() => { setOverrideTarget(null); setOverrideReason(''); }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
-        >
-          <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(520px, 92vw)', background: '#fff', borderRadius: 14, padding: '22px 24px', boxShadow: '0 12px 40px rgba(0,0,0,0.25)' }}>
-            <h3 style={{ margin: '0 0 6px', fontSize: 17, fontWeight: 800 }}>경고 무시하고 생성 — 사유 입력</h3>
-            <p style={{ margin: '0 0 4px', fontSize: 12, color: '#64748b' }}>이 경고를 무시하고 문서를 생성합니다. 입력한 사유는 문서 이력에 기록되어 본인·관리자 사후 검토에 활용됩니다.</p>
-            <div style={{ margin: '10px 0 12px', padding: '10px 12px', borderRadius: 8, background: '#fef2f2', color: '#991b1b', fontSize: 13 }}>
-              <strong>[{overrideTarget.id}]</strong> {overrideTarget.message}
-            </div>
-            <textarea
-              autoFocus
-              value={overrideReason}
-              onChange={(e) => setOverrideReason(e.target.value)}
-              placeholder={"예:\n· 관세사와 협의됨 — 현재 상태로 신고 진행\n· 보세운송 건으로 동일국가 항구가 정상\n· 사업자번호 확정 전 초안만 생성"}
-              style={{ width: '100%', minHeight: 88, padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
-              <button className="btn btn-secondary" onClick={() => { setOverrideTarget(null); setOverrideReason(''); }}>취소</button>
-              <button className="btn btn-primary" onClick={confirmOverride}>사유 기록하고 생성</button>
-            </div>
-          </div>
-        </div>
+        <OverrideReasonModal
+          issue={overrideTarget}
+          reason={overrideReason}
+          onReasonChange={setOverrideReason}
+          onCancel={() => { setOverrideTarget(null); setOverrideReason(''); }}
+          onConfirm={confirmOverride}
+        />
       )}
       {submitCompleteNotice && (
         <div className="confirmation-backdrop" role="presentation">

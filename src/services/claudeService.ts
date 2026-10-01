@@ -12,15 +12,7 @@ import type {
   HSCodeCandidateContext,
   HSCodeItemDetails,
 } from '../types/hsCodeSuggestion';
-
-/**
- * unknown 타입의 값이 일반 객체인지 확인합니다.
- */
-function isRecord(
-  value: unknown
-): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+import { isRecord } from '../utils/isRecord';
 
 /**
  * Supabase openai-assistant Edge Function을 호출합니다.

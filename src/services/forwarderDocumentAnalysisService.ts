@@ -20,6 +20,7 @@ import {
   normalizePackageTypeValue,
 } from '../utils/tradeValueNormalization';
 import { parseTradeNumber } from '../utils/number';
+import { mapWithConcurrency } from '../utils/mapWithConcurrency';
 
 export interface ForwarderAnalysisFailure {
   attachmentId: string;
@@ -61,27 +62,6 @@ const DEFAULT_DEPENDENCIES: AnalysisDependencies = {
   analyze: analyzeImportDocuments,
 };
 const MAX_CONCURRENT_ANALYSES = 3;
-
-async function mapWithConcurrency<T, R>(
-  values: T[],
-  concurrency: number,
-  mapper: (value: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(values.length);
-  let nextIndex = 0;
-  const workers = Array.from(
-    { length: Math.min(concurrency, values.length) },
-    async () => {
-      while (nextIndex < values.length) {
-        const index = nextIndex;
-        nextIndex += 1;
-        results[index] = await mapper(values[index]);
-      }
-    },
-  );
-  await Promise.all(workers);
-  return results;
-}
 
 function text(value: string | undefined): string {
   return value?.trim() ?? '';

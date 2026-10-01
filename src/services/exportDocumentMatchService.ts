@@ -14,6 +14,7 @@ import { parseTradeNumber } from '../utils/number';
 import { areEquivalentTradeFieldValues, isAbsentTradeValue } from '../utils/tradeValueNormalization';
 import { isSameCbmAtDocumentPrecision } from '../utils/packageCbm';
 import { portComparisonKey } from './importReconciliationRules';
+import { mapWithConcurrency } from '../utils/mapWithConcurrency';
 
 export type ExportMatchStatus = 'match' | 'mismatch' | 'unknown';
 
@@ -275,27 +276,6 @@ function toDocumentMeta(attachment: TradeAttachment): ImportDocumentMeta {
  * 여러 서류를 한꺼번에 쏘면 OpenAI가 과부하(503)·레이트리밋(429)으로 거절할 확률이 올라간다.
  */
 const MAX_CONCURRENT_MATCHES = 2;
-
-async function mapWithConcurrency<T, R>(
-  values: T[],
-  concurrency: number,
-  mapper: (value: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(values.length);
-  let nextIndex = 0;
-  const workers = Array.from(
-    { length: Math.min(concurrency, values.length) },
-    async () => {
-      while (nextIndex < values.length) {
-        const index = nextIndex;
-        nextIndex += 1;
-        results[index] = await mapper(values[index]);
-      }
-    },
-  );
-  await Promise.all(workers);
-  return results;
-}
 
 export interface MatchDependencies {
   analyze: typeof analyzeImportDocuments;

@@ -8,6 +8,7 @@ import { isFobIncoterms } from '../utils/exportDeclarationFob';
 export { exportDeclarationFobNotice } from '../utils/exportDeclarationFob';
 // 고정 docx 템플릿(수출신고서 갑지·을지) — XML/서식 무수정, {{placeholder}} 값만 주입.
 import templateUrl from '../../templates/export_declaration_template.docx?url';
+import { createTemplateLoader } from './templateLoader';
 
 /** 수출신고서 품목 1란 스키마 — 갑지(firstItem)·을지(extraItems) 공통. */
 export interface ExportDeclItemSchema {
@@ -199,14 +200,7 @@ export function mapExportDeclarationToDocxSchema(cd: CustomsDeclarationData): Ex
   };
 }
 
-let templateCache: ArrayBuffer | null = null;
-async function loadTemplate(): Promise<ArrayBuffer> {
-  if (templateCache) return templateCache;
-  const res = await fetch(templateUrl);
-  if (!res.ok) throw new Error(`수출신고서 템플릿 로드 실패 (${res.status})`);
-  templateCache = await res.arrayBuffer();
-  return templateCache;
-}
+const loadTemplate = createTemplateLoader(templateUrl, '수출신고서 템플릿');
 
 /** 스키마 데이터를 고정 docx 템플릿에 주입해 docx Blob을 반환한다(을지 조건부 + 품목 루프). */
 export async function exportExportDeclarationDocx(data: ExportDeclarationDocxSchema): Promise<Blob> {

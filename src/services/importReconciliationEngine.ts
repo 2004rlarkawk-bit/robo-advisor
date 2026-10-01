@@ -112,10 +112,3 @@ export function buildReconciliationInput(
   });
   return input;
 }
-
-export function reconcileFromAnalysis(
-  analysis: ImportAnalysisResult,
-  presentTypes: ImportDocumentType[],
-): ReconciliationRuleResult[] {
-  return runImportReconciliation(buildReconciliationInput(analysis, presentTypes));
-}

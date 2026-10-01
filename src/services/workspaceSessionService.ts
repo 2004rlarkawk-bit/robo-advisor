@@ -1,4 +1,5 @@
 import type { TradeRole, TradeType } from '../types';
+import { isRecord } from '../utils/isRecord';
 
 export const WORKSPACE_SESSION_KEY = 'portai_workspace_session_v1';
 
@@ -45,10 +46,6 @@ export function defaultWorkspaceSession(userId: string): WorkspaceSessionState {
     currentStep: 1,
     selectedTradeId: null,
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 export function parseWorkspaceSession(

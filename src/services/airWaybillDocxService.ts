@@ -1,9 +1,9 @@
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
-import { renderAsync } from 'docx-preview';
 import type { BillOfLadingData, NumericInput } from '../types';
 // 고정 서식(House Air Waybill) — 칸 구성은 화주가 준 견본을 그대로 옮겼고, {{placeholder}} 값만 주입한다.
 import templateUrl from '../../templates/air_waybill_template.docx?url';
+import { createTemplateLoader } from './templateLoader';
 
 /**
  * 항공화물운송장(AWB) 스키마 — 서식의 {{placeholder}}와 1:1.
@@ -145,18 +145,7 @@ export function mapAirWaybillToSchema(awb: BillOfLadingData): AirWaybillSchema {
   };
 }
 
-let templateCache: ArrayBuffer | null = null;
-
-async function loadTemplate(): Promise<ArrayBuffer> {
-  if (templateCache) return templateCache;
-
-  const response = await fetch(templateUrl);
-  if (!response.ok) {
-    throw new Error(`항공화물운송장 서식 로드 실패 (${response.status})`);
-  }
-  templateCache = await response.arrayBuffer();
-  return templateCache;
-}
+const loadTemplate = createTemplateLoader(templateUrl, '항공화물운송장 서식');
 
 /** 항공화물운송장 스키마를 고정 서식에 주입해 DOCX Blob을 반환한다. */
 export async function exportAirWaybill(data: AirWaybillSchema): Promise<Blob> {
@@ -181,17 +170,4 @@ export async function exportAirWaybill(data: AirWaybillSchema): Promise<Blob> {
 /** BillOfLadingData(transportMode: 'AIR') → DOCX Blob */
 export async function buildAirWaybillDocx(awb: BillOfLadingData): Promise<Blob> {
   return exportAirWaybill(mapAirWaybillToSchema(awb));
-}
-
-export async function renderAirWaybillDocxPreview(
-  blob: Blob,
-  container: HTMLElement,
-): Promise<void> {
-  container.innerHTML = '';
-  await renderAsync(blob, container, undefined, {
-    className: 'docx-preview',
-    inWrapper: true,
-    ignoreWidth: false,
-    ignoreHeight: false,
-  });
 }

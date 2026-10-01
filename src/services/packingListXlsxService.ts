@@ -18,15 +18,9 @@ export {
   type PackingListItemRow,
   type PackingListSchema,
 } from './packingListXlsxCore';
+import { createTemplateLoader } from './templateLoader';
 
-let templateCache: ArrayBuffer | null = null;
-async function loadTemplate(): Promise<ArrayBuffer> {
-  if (templateCache) return templateCache;
-  const res = await fetch(templateUrl);
-  if (!res.ok) throw new Error(`패킹리스트 템플릿 로드 실패 (${res.status})`);
-  templateCache = await res.arrayBuffer();
-  return templateCache;
-}
+const loadTemplate = createTemplateLoader(templateUrl, '패킹리스트 템플릿');
 
 /** 스키마 데이터를 고정 템플릿에 주입해 xlsx Blob을 반환한다(템플릿은 런타임 fetch). */
 export async function exportPackingList(data: PackingListSchema): Promise<Blob> {

@@ -299,7 +299,6 @@ export type PersistedTradeStatus =
   | 'failed';
 
 export type TradeUiStatus = 'draft' | 'generating' | 'submitting';
-export type TradeStatus = PersistedTradeStatus | TradeUiStatus;
 
 export interface DocumentStatus {
   id: string;

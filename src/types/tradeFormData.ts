@@ -11,11 +11,9 @@ import type {
 import type {
   CargoTrackingResult,
   ImportAnalysisResult,
-  ImportDocumentMeta,
   ImportDutyEstimate,
   ImportHSCodeSuggestion,
   ImportRisk,
-  ImportTradeSnapshot,
 } from './importTrade';
 
 export const TRADE_FORM_SCHEMA_VERSION = 3 as const;
@@ -208,6 +206,3 @@ export interface TradeDocumentData {
   generatedDocuments?: GeneratedDocuments;
 }
 
-export interface ReconstructedImportTrade extends ImportTradeSnapshot {
-  documents: ImportDocumentMeta[];
-}

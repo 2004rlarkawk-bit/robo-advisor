@@ -8,9 +8,9 @@ import {
   ImportFileResolutionError,
   importDraftFormData,
   resolveImportAnalysisFiles,
-  sameChoiceValue,
   type CachedState,
-} from './ImportTradeFlow';
+} from './importDraftState';
+import { sameChoiceValue } from './ImportRiskSummary';
 
 const baseState: CachedState = {
   step: 1,

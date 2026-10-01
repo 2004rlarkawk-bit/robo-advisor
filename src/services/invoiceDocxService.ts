@@ -4,6 +4,7 @@ import { renderAsync } from 'docx-preview';
 import type { InvoiceData } from '../types';
 // 고정 템플릿(무역협회 표준 상업송장) — XML/서식 무수정, {{placeholder}} 값만 주입.
 import templateUrl from '../../templates/commercial_invoice_template.docx?url';
+import { createTemplateLoader } from './templateLoader';
 
 /**
  * 상업송장 템플릿 스키마 (템플릿의 {{placeholder}} 36개와 1:1).
@@ -253,25 +254,7 @@ export function mapInvoiceToSchema(inv: InvoiceData): InvoiceSchema {
   };
 }
 
-let templateCache: ArrayBuffer | null = null;
-
-async function loadTemplate(): Promise<ArrayBuffer> {
-  if (templateCache) {
-    return templateCache;
-  }
-
-  const response = await fetch(templateUrl);
-
-  if (!response.ok) {
-    throw new Error(
-      `상업송장 템플릿 로드 실패 (${response.status})`,
-    );
-  }
-
-  templateCache = await response.arrayBuffer();
-
-  return templateCache;
-}
+const loadTemplate = createTemplateLoader(templateUrl, '상업송장 템플릿');
 
 /**
  * 상업송장 스키마 데이터를 고정 템플릿에 주입해 DOCX Blob을 반환한다.

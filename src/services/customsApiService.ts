@@ -15,14 +15,11 @@ import { supabase } from '../lib/supabase';
 import { normalizeCurrencyCode } from '../utils/currencyCode';
 import { readEdgeErrorDetail } from '../utils/edgeErrorDetail';
 import type { CustomsCargoProgressResult } from '../types';
+import { isRecord } from '../utils/isRecord';
 // ===== 공통 =====
 
 /** 데이터 소스 표시: 실 API 응답인지 시뮬레이션 폴백인지 UI에서 구분 */
 export type DataSource = 'api' | 'simulation';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 
 /** yyyyMMdd */
 function toYmd(d: Date): string {

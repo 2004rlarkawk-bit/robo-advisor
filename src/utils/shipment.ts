@@ -1,4 +1,4 @@
-import type { Shipment, TradeItem, TradeProfile } from '../types';
+import type { TradeItem } from '../types';
 import type { ShipperItem } from '../types';
 
 /** amount는 저장하지 않고 계산: 추출값 우선, 없으면 수량×단가. */
@@ -46,26 +46,5 @@ export function shipperItemToTradeItem(si: ShipperItem): TradeItem {
     packageCount: 0,
     packageUnit: '',
     shippingMarks: undefined,
-  };
-}
-
-/** 품목들의 통화가 서로 다른지(혼합) 판정. */
-export function hasMixedCurrency(items: ShipperItem[]): boolean {
-  const set = new Set(items.map((i) => i.currency));
-  return set.size > 1;
-}
-
-/**
- * 문서레벨 프로필 + 화주 품목 → Shipment.
- * 통화는 Shipment 레벨 단일 — 품목 통화가 일치하면 그 값을, 아니면 profile.currency를 유지한다
- * (혼합 통화 자체는 상위(검증/생성 게이트)에서 error로 막는다).
- */
-export function buildShipment(profile: TradeProfile, shipperItems: ShipperItem[]): Shipment {
-  const items = shipperItems.map(shipperItemToTradeItem);
-  const currencies = new Set(shipperItems.map((i) => i.currency));
-  const resolvedCurrency = currencies.size === 1 ? [...currencies][0] : profile.currency;
-  return {
-    profile: { ...profile, currency: resolvedCurrency },
-    items,
   };
 }

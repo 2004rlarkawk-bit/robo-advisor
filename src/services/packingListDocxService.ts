@@ -4,6 +4,7 @@ import { renderAsync } from 'docx-preview';
 import type { PackingListData, InvoiceItem } from '../types';
 // 고정 템플릿(무역협회 표준 포장명세서) — XML/서식 무수정, {{placeholder}} 값만 주입.
 import templateUrl from '../../templates/packing_list_template.docx?url';
+import { createTemplateLoader } from './templateLoader';
 
 /** 포장명세서 docx 템플릿 스키마 — 템플릿의 {{placeholder}}(문서레벨 + items 루프)와 1:1. */
 export interface PackingItemRow {
@@ -79,14 +80,7 @@ export function mapPackingListToDocxSchema(pl: PackingListData): PackingListDocx
   };
 }
 
-let templateCache: ArrayBuffer | null = null;
-async function loadTemplate(): Promise<ArrayBuffer> {
-  if (templateCache) return templateCache;
-  const res = await fetch(templateUrl);
-  if (!res.ok) throw new Error(`포장명세서 템플릿 로드 실패 (${res.status})`);
-  templateCache = await res.arrayBuffer();
-  return templateCache;
-}
+const loadTemplate = createTemplateLoader(templateUrl, '포장명세서 템플릿');
 
 /** 스키마 데이터를 고정 docx 템플릿에 주입해 docx Blob을 반환한다(품목은 {{#items}} 루프로 반복). */
 export async function exportPackingListDocx(data: PackingListDocxSchema): Promise<Blob> {

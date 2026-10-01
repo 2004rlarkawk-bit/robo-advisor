@@ -1,10 +1,7 @@
 /** UNI-PASS 조회는 Supabase Edge Function을 통해서만 수행한다. */
 import type { DataSource } from './customsApiService';
 import { supabase } from '../lib/supabase';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+import { isRecord } from '../utils/isRecord';
 
 function assertEdgeSuccess(data: unknown, fallbackMessage: string): asserts data is Record<string, unknown> {
   if (!isRecord(data) || data.success !== true) {

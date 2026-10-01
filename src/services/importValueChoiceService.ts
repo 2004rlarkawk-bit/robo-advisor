@@ -100,33 +100,11 @@ export function choiceKeyForValidation(validation: { id: string; field: string }
   return docKey ? fieldChoiceKey(docKey) : validationChoiceKey(validation.id);
 }
 
-/** chosenValues 중 서류 대사 필드에 해당하는 값만 꺼낸다. */
-export function chosenDocFields(analysis: ImportAnalysisResult): Partial<Record<ChoiceDocKey, string>> {
-  const result: Partial<Record<ChoiceDocKey, string>> = {};
-  Object.entries(analysis.chosenValues ?? {}).forEach(([key, value]) => {
-    if (!key.startsWith(FIELD_PREFIX) || !value.trim()) return;
-    const docKey = key.slice(FIELD_PREFIX.length) as ChoiceDocKey;
-    if (docKey in CHOICE_FIELD_LABEL) result[docKey] = value.trim();
-  });
-  return result;
-}
-
 export function isValidationChosen(analysis: ImportAnalysisResult, validation: { id: string; field: string }): boolean {
   const chosen = analysis.chosenValues ?? {};
   if (chosen[validationChoiceKey(validation.id)]?.trim()) return true;
   const docKey = validationDocKey(validation.field);
   return Boolean(docKey && chosen[fieldChoiceKey(docKey)]?.trim());
-}
-
-/** 사람이 읽는 라벨 — 카드 위 "직접 고른 값" 목록에 쓴다. */
-export function choiceLabel(key: string, analysis: ImportAnalysisResult): string {
-  if (key === FTA_CHOICE_KEY) return 'FTA 적용';
-  if (key.startsWith(FIELD_PREFIX)) {
-    return CHOICE_FIELD_LABEL[key.slice(FIELD_PREFIX.length) as ChoiceDocKey] ?? key;
-  }
-  const id = key.slice(VALIDATION_PREFIX.length);
-  const field = analysis.validations.find((validation) => validation.id === id)?.field ?? id;
-  return field.replace(/([a-z])([A-Z])/g, '$1 $2');
 }
 
 /** 추출 결과에서 서류 대사 필드에 해당하는 현재 값 — 직접 편집 감지용. */

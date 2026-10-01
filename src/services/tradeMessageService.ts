@@ -6,6 +6,7 @@
  */
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import type { TradeMessage, TradeMessageKind } from '../types/forwarderRequest';
+import { getRequiredUserId } from './authUser';
 
 interface TradeMessageRow {
   id: string;
@@ -33,14 +34,6 @@ export function mapTradeMessageRow(row: TradeMessageRow): TradeMessage {
     createdAt: row.created_at,
     readAt: row.read_at,
   };
-}
-
-async function getRequiredUserId(): Promise<string> {
-  const { data, error } = await supabase.auth.getUser();
-  if (error) throw error;
-  const userId = data.user?.id;
-  if (!userId) throw new Error('로그인이 필요합니다.');
-  return userId;
 }
 
 /** 한 의뢰의 대화 전체(오래된 순). RLS가 참여자가 아닌 사용자에게는 빈 목록을 돌려준다. */

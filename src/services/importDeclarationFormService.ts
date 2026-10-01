@@ -7,13 +7,14 @@
  */
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
-import { renderAsync } from 'docx-preview';
 import type { ImportDutyEstimate, ImportExtractedFields, ImportItem } from '../types/importTrade';
 import { portaiFileName } from '../utils/documentFileName';
 import { parseTradeNumber } from '../utils/number';
 // 고정 템플릿 — 관보 서식 이미지 위에 {{placeholder}}를 좌표로 얹은 파일.
 // 서식을 고치려면 scripts/generate-import-declaration-template.ts 를 고쳐 다시 뽑는다.
 import templateUrl from '../../templates/import_declaration_template.docx?url';
+import { createTemplateLoader } from './templateLoader';
+import { saveBlobAs } from '../utils/saveBlob';
 
 export interface ImportDeclarationFormData {
   fields: ImportExtractedFields;
@@ -157,15 +158,7 @@ export function mapImportDeclarationForm(data: ImportDeclarationFormData): Recor
   };
 }
 
-let templateCache: ArrayBuffer | null = null;
-
-async function loadTemplate(): Promise<ArrayBuffer> {
-  if (templateCache) return templateCache;
-  const response = await fetch(templateUrl);
-  if (!response.ok) throw new Error(`수입신고서 템플릿 로드 실패 (${response.status})`);
-  templateCache = await response.arrayBuffer();
-  return templateCache;
-}
+const loadTemplate = createTemplateLoader(templateUrl, '수입신고서 템플릿');
 
 export async function buildImportDeclarationFormDocx(data: ImportDeclarationFormData): Promise<Blob> {
   const doc = new Docxtemplater(new PizZip(await loadTemplate()), {
@@ -179,26 +172,11 @@ export async function buildImportDeclarationFormDocx(data: ImportDeclarationForm
   return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
 }
 
-/** 미리보기 — 다운로드와 같은 docx를 그대로 렌더한다. */
-export async function renderImportDeclarationFormPreview(blob: Blob, container: HTMLElement): Promise<void> {
-  container.innerHTML = '';
-  await renderAsync(blob, container, undefined, {
-    className: 'docx-preview', inWrapper: true, ignoreWidth: false, ignoreHeight: false,
-  });
-}
-
 export function importDeclarationFormFileName(): string {
   return portaiFileName('import_declaration');
 }
 
 export async function downloadImportDeclarationFormDocx(data: ImportDeclarationFormData): Promise<void> {
   const blob = await buildImportDeclarationFormDocx(data);
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${importDeclarationFormFileName()}.docx`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveBlobAs(blob, `${importDeclarationFormFileName()}.docx`);
 }

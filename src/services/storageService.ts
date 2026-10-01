@@ -18,6 +18,7 @@ import {
   filterDocumentManagerTrades,
   filterTradeManagerTrades,
 } from './tradeListPolicy';
+import { getRequiredUserId } from './authUser';
 
 const STORAGE_KEY = 'portai_saved_trades';
 const SETTINGS_KEY = 'portai_settings';
@@ -103,15 +104,6 @@ function mapTradeRow(row: TradeRow): SavedTrade {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
-}
-
-// [EDIT: Trade Persistence] 프론트에서 전달한 user_id를 믿지 않고 Supabase 세션에서 현재 사용자만 가져옵니다.
-async function getRequiredUserId(): Promise<string> {
-  const { data: userData, error: userError } = await supabase.auth.getUser();
-  if (userError) throw userError;
-  const userId = userData.user?.id;
-  if (!userId) throw new Error('로그인이 필요합니다.');
-  return userId;
 }
 
 export function getSavedTrades(): SavedTrade[] {
@@ -547,13 +539,4 @@ export function getSettings(): AppSettings {
     console.warn('설정 파싱 실패 — 기본값 반환:', err);
     return DEFAULT_SETTINGS;
   }
-}
-
-export function saveSettings(settings: Partial<AppSettings>): void {
-  const current = getSettings();
-  const updated = { ...current, ...settings };
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
-
-  // 같은 탭의 다른 컴포넌트가 설정 변경을 즉시 반영할 수 있도록 알림
-  window.dispatchEvent(new CustomEvent('portai-settings-changed'));
 }
