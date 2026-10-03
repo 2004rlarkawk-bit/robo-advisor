@@ -34,6 +34,7 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
   const [internalMessage, setInternalMessage] = useState('');
   const [sendingInternal, setSendingInternal] = useState(false);
   const [internalSuccess, setInternalSuccess] = useState(false);
+  const [customConditions, setCustomConditions] = useState<string[]>([]);
 
   // 외부 이메일 상태
   const attachableTypes = getAttachableDocumentTypes(trade);
@@ -72,7 +73,11 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
     setSendingInternal(true);
     setSearchError('');
     try {
-      await sendTradeRequest(trade.id, searchResult.id, internalMessage);
+      // 직접 적은 조건은 자동 배정에 안 쓰이니 메시지에 붙여 포워더가 읽게 한다.
+      const message = customConditions.length > 0
+        ? [`추가 조건: ${customConditions.join(', ')}`, internalMessage.trim()].filter(Boolean).join('\n')
+        : internalMessage;
+      await sendTradeRequest(trade.id, searchResult.id, message);
       setInternalSuccess(true);
       onSent?.();
     } catch (err) {
@@ -159,6 +164,7 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
             <>
               <ForwarderRecommendList
                 trade={trade}
+                onCustomConditionsChange={setCustomConditions}
                 onSelected={(candidate) => {
                   setSearchError('');
                   setSearchResult(candidate
@@ -198,6 +204,9 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
                   <div className="fwd-search-result-row"><span>담당자명</span><span>{searchResult.contactName || '-'}</span></div>
                   <div className="fwd-field" style={{ marginTop: 12, marginBottom: 0 }}>
                     <label htmlFor="fwd-internal-message">요청 메시지</label>
+                    {customConditions.length > 0 && (
+                      <p className="fwd-message-extra">함께 전달 · 추가 조건: {customConditions.join(', ')}</p>
+                    )}
                     <textarea
                       id="fwd-internal-message"
                       rows={3}

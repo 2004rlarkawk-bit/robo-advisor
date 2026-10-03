@@ -1106,6 +1106,20 @@
 .fwd-cond-add[aria-expanded='true'] { border-style: solid; border-color: #94a3b8; }
 .fwd-cond-reason { margin: 8px 0 0; color: #94a3b8; font-size: 11.5px; line-height: 1.5; word-break: keep-all; text-wrap: pretty; }
 .fwd-cond-more { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
+.fwd-cond-chip.is-custom { border-color: #1759c9; background: #fff; color: #1759c9; }
+.fwd-cond-custom { display: flex; gap: 6px; width: 100%; margin-top: 4px; }
+.fwd-cond-custom input {
+  flex: 1; min-width: 0; padding: 7px 11px; border: 1px solid #e2e8f0; border-radius: 8px;
+  background: #fff; font: inherit; font-size: 12.5px; color: #0f172a;
+}
+.fwd-cond-custom input:focus { outline: none; border-color: #1759c9; box-shadow: 0 0 0 3px rgba(23, 89, 201, 0.12); }
+.fwd-cond-custom button {
+  flex: 0 0 auto; padding: 7px 14px; border: 0; border-radius: 8px; background: #1759c9; color: #fff;
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.fwd-cond-custom button:disabled { background: #cbd5e1; cursor: not-allowed; }
+.fwd-message-extra { margin: 0 0 6px; color: #1759c9; font-size: 12px; font-weight: 700; word-break: keep-all; }
+.fwd-cond-custom-hint { width: 100%; margin: 0; color: #94a3b8; font-size: 11.5px; word-break: keep-all; }
 
 .fwd-pick-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .fwd-pick-row {

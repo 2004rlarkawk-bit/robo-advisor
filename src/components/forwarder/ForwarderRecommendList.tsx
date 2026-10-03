@@ -5,7 +5,10 @@ import type { ForwarderMatchCandidate } from '../../types/forwarderRequest';
 import { matchForwarderForTrade } from '../../services/forwarderRequestService';
 import { loadPortData } from '../../services/portLocodeService';
 import {
+  CUSTOM_SPECIALTY_MAX_COUNT,
+  CUSTOM_SPECIALTY_MAX_LENGTH,
   FORWARDER_SPECIALTIES,
+  normalizeCustomSpecialties,
   specialtyLabel,
   type ForwarderSpecialtyKey,
 } from '../../utils/forwarderSpecialty';
@@ -20,6 +23,15 @@ interface Props {
   trade: SavedTrade;
   /** 화주가 고른 포워더가 바뀔 때마다 호출. 고른 후보가 없으면 null. */
   onSelected: (candidate: ForwarderMatchCandidate | null) => void;
+  /** 화주가 직접 적은 조건. 자동 배정 점수에는 안 들어가 요청 메시지로 포워더에게 전한다. */
+  onCustomConditionsChange?: (conditions: string[]) => void;
+}
+
+/** 직접 적은 조건과 포워더가 직접 적은 분야가 겹치는지 — 한쪽이 다른 쪽을 포함하면 같은 뜻으로 본다. */
+function customMatches(condition: string, specialty: string): boolean {
+  const a = condition.toLowerCase();
+  const b = specialty.toLowerCase();
+  return a.includes(b) || b.includes(a);
 }
 
 /** 처음에 보여 줄 후보 수. 나머지는 '더 보기'로 펼친다 — 시연·실사용 모두 상위 몇 곳만 비교한다. */
@@ -37,13 +49,15 @@ function candidateCompany(candidate: ForwarderMatchCandidate): string {
  * 거래 조건에 맞는 포워더를 추천한다. PortAI는 추천 순서만 정하고 확정은 화주가 한다.
  * 제휴 포워더를 먼저 보여주고(서버 정렬), 일반 가입 담당자는 후순위 후보로 붙는다.
  */
-export default function ForwarderRecommendList({ trade, onSelected }: Props) {
+export default function ForwarderRecommendList({ trade, onSelected, onCustomConditionsChange }: Props) {
   const [suggestions, setSuggestions] = useState<SpecialtySuggestion[] | null>(null);
   const [selectedSpecialties, setSelectedSpecialties] = useState<ForwarderSpecialtyKey[]>([]);
   const [candidates, setCandidates] = useState<ForwarderMatchCandidate[] | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [showAllConditions, setShowAllConditions] = useState(false);
   const [showAllCandidates, setShowAllCandidates] = useState(false);
+  const [customConditions, setCustomConditions] = useState<string[]>([]);
+  const [customDraft, setCustomDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -102,6 +116,17 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
     ));
   };
 
+  const updateCustomConditions = (next: string[]) => {
+    setCustomConditions(next);
+    onCustomConditionsChange?.(next);
+  };
+
+  const addCustomCondition = () => {
+    const next = normalizeCustomSpecialties([...customConditions, customDraft]);
+    if (next.length > customConditions.length) updateCustomConditions(next);
+    setCustomDraft('');
+  };
+
   const pick = (candidate: ForwarderMatchCandidate) => {
     setPickedId(candidate.id);
     onSelected(candidate);
@@ -134,6 +159,12 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
               <X size={12} aria-hidden="true" />
             </button>
           ))}
+          {customConditions.map((label) => (
+            <button key={`custom-${label}`} type="button" className="fwd-cond-chip is-on is-custom" onClick={() => updateCustomConditions(customConditions.filter((item) => item !== label))} aria-label={`${label} 조건 빼기`}>
+              {label}
+              <X size={12} aria-hidden="true" />
+            </button>
+          ))}
           <button type="button" className="fwd-cond-add" aria-expanded={showAllConditions} onClick={() => setShowAllConditions((v) => !v)}>
             <Plus size={12} aria-hidden="true" />
             조건 추가
@@ -147,6 +178,22 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
                 {item.label}
               </button>
             ))}
+            <form
+              className="fwd-cond-custom"
+              onSubmit={(event) => { event.preventDefault(); addCustomCondition(); }}
+            >
+              <input
+                type="text"
+                value={customDraft}
+                maxLength={CUSTOM_SPECIALTY_MAX_LENGTH}
+                onChange={(event) => setCustomDraft(event.target.value)}
+                placeholder="기타 조건 직접 입력 (예: 반송, 전시화물)"
+                aria-label="기타 조건 직접 입력"
+                disabled={customConditions.length >= CUSTOM_SPECIALTY_MAX_COUNT}
+              />
+              <button type="submit" disabled={!customDraft.trim() || customConditions.length >= CUSTOM_SPECIALTY_MAX_COUNT}>추가</button>
+            </form>
+            <p className="fwd-cond-custom-hint">직접 적은 조건은 요청 메시지와 함께 포워더에게 전달됩니다.</p>
           </div>
         )}
       </div>
@@ -164,8 +211,12 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
             const on = candidate.id === pickedId;
             const tags = [
               ...candidate.matchedSpecialties.map((key) => ({ key, label: specialtyLabel(key), match: true })),
-              // 직접 적은 분야 — 배정 점수와 무관해 일치 태그와 다르게 보인다.
-              ...(candidate.customSpecialties ?? []).map((label) => ({ key: `custom-${label}`, label, match: false })),
+              // 직접 적은 분야 — 배정 점수와 무관하다. 화주가 직접 적은 조건과 겹칠 때만 일치로 칠한다.
+              ...(candidate.customSpecialties ?? []).map((label) => ({
+                key: `custom-${label}`,
+                label,
+                match: customConditions.some((condition) => customMatches(condition, label)),
+              })),
             ];
             return (
               <li key={candidate.id}>

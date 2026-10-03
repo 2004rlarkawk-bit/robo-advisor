@@ -154,6 +154,34 @@ describe('ForwarderRecommendList', () => {
     expect(button('더 보기')).toBeUndefined();
   });
 
+  it('조건 추가를 펼치면 기타 조건을 직접 적을 수 있고, 포워더가 적은 분야와 겹치면 일치로 표시한다', async () => {
+    const onCustomConditionsChange = vi.fn();
+    await render({ onCustomConditionsChange });
+    expect(container.querySelector('.fwd-cond-custom')).toBeNull();
+    await act(async () => { button('조건 추가').click(); });
+    const input = container.querySelector('.fwd-cond-custom input') as HTMLInputElement;
+    expect(input).not.toBeNull();
+
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(input, '삼국간');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      (container.querySelector('.fwd-cond-custom') as HTMLFormElement).requestSubmit();
+    });
+
+    expect(onCustomConditionsChange).toHaveBeenLastCalledWith(['삼국간']);
+    expect(container.querySelector('.fwd-cond-chip.is-custom')?.textContent).toBe('삼국간');
+    // 직접 적은 조건은 서버 추천을 다시 부르지 않는다.
+    expect(requestService.matchForwarderForTrade).toHaveBeenCalledTimes(1);
+    const customTag = [...rows()[0].querySelectorAll('.fwd-basis-chip')].find((chip) => chip.textContent === '삼국간 무역');
+    expect(customTag?.classList.contains('is-match')).toBe(true);
+
+    await act(async () => { (container.querySelector('.fwd-cond-chip.is-custom') as HTMLButtonElement).click(); });
+    expect(onCustomConditionsChange).toHaveBeenLastCalledWith([]);
+  });
+
   it('추천할 담당자가 없으면 다른 방법을 안내한다', async () => {
     requestService.matchForwarderForTrade.mockResolvedValue([]);
     await render();
