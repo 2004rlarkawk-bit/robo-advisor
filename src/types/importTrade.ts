@@ -256,6 +256,14 @@ export interface ImportDutyItemEstimate {
   basicDuty: number;
 }
 
+/** Incoterms에 따라 과세가격에 더한 운임·보험료(Invoice 통화)와 확인할 점 */
+export interface ImportDutyValuation {
+  incoterms: string | null;
+  freight: number;
+  insurance: number;
+  notes: string[];
+}
+
 export interface ImportDutyEstimate {
   status: 'calculated';
   invoiceCurrency: string;
@@ -263,6 +271,9 @@ export interface ImportDutyEstimate {
   exchangeRate: number;
   exchangeRateDate: string;
   convertedInvoiceKrw: number;
+  /** 과세가격에 더한 운임·보험료 등(원화). 이 필드가 생기기 전에 저장된 거래에는 없다. */
+  additionsKrw?: number;
+  valuation?: ImportDutyValuation;
   customsValue: number;
   basicRate: number;
   basicDuty: number;

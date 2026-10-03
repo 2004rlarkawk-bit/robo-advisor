@@ -479,6 +479,10 @@ export default function ImportTradeFlow({
         invoiceDate: fields.invoiceDate,
         originCountry: fields.items.map((item) => item.originCountry).filter(Boolean).join(', '),
         destinationCountry: fields.destinationCountry,
+        incoterms: fields.incoterms,
+        freight: fields.freight,
+        insurance: fields.insurance,
+        otherAdditions: fields.otherAdditions,
       });
       setState((current) => ({ ...current, duty, dutyError: '' }));
     } catch (error) {
@@ -546,6 +550,10 @@ export default function ImportTradeFlow({
           invoiceDate: fields.invoiceDate,
           originCountry: fields.items.map((item) => item.originCountry).filter(Boolean).join(', '),
           destinationCountry: fields.destinationCountry,
+          incoterms: fields.incoterms,
+          freight: fields.freight,
+          insurance: fields.insurance,
+          otherAdditions: fields.otherAdditions,
         })
         : null;
     } catch (error) {

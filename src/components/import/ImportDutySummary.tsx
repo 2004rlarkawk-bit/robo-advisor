@@ -34,6 +34,7 @@ export default function ImportDutySummary({ duty, error, busy = false, ftaReview
       </section>
     );
   }
+  const valuation = duty.valuation;
   const krw = (value: number | null) => value == null ? '확인 필요' : `${Math.round(value).toLocaleString('ko-KR')}원`;
   // 환율 기준일 YYYYMMDD → YYYY.MM.DD (수출 과세가격 카드와 표기 통일)
   const ymd = (d: string) => /^\d{8}$/.test(d) ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d;
@@ -46,6 +47,7 @@ export default function ImportDutySummary({ duty, error, busy = false, ftaReview
         <div><dt>적용 환율</dt><dd>{duty.exchangeRate.toLocaleString()}원</dd></div>
         <div><dt>환율 기준일</dt><dd>{ymd(duty.exchangeRateDate)}</dd></div>
         <div><dt>원화 환산금액</dt><dd>{krw(duty.convertedInvoiceKrw)}</dd></div>
+        <div><dt>운임·보험료 가산{valuation?.incoterms ? ` (${valuation.incoterms})` : ''}</dt><dd>{duty.additionsKrw == null ? '확인 필요' : krw(duty.additionsKrw)}</dd></div>
         <div><dt>예상 과세가격</dt><dd>{krw(duty.customsValue)}</dd></div>
         <div><dt>기본 관세율</dt><dd>{duty.basicRate}%</dd></div>
         <div><dt>FTA 협정</dt><dd>{duty.ftaAgreement}</dd></div>
@@ -56,6 +58,11 @@ export default function ImportDutySummary({ duty, error, busy = false, ftaReview
         <div><dt>총 예상세액</dt><dd>{krw(duty.totalTax)}</dd></div>
         <div><dt>예상 절감액</dt><dd>{krw(duty.estimatedSavings)}</dd></div>
       </dl>
+      {valuation && valuation.notes.length > 0 && (
+        <div className="form-message warning" role="status">
+          {valuation.notes.map((note) => <div key={note}>{note}</div>)}
+        </div>
+      )}
       <p className="import-notice">
         {ftaReviewing
           ? duty.ftaRate == null

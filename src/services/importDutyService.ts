@@ -1,7 +1,7 @@
 import { getCustomsExchangeRateStrict } from './customsApiService';
 import { normalizeCurrencyCode } from '../utils/currencyCode';
 import { getTariffRates, pickBasicRate } from './unipassService';
-import type { ImportDutyEstimate, ImportItem } from '../types/importTrade';
+import type { ImportDutyEstimate, ImportDutyValuation, ImportItem } from '../types/importTrade';
 import { parseTradeNumber } from '../utils/number';
 
 const numberValue = (value: string | number | undefined): number => parseTradeNumber(value) ?? 0;
@@ -13,9 +13,53 @@ export interface ImportDutyInput {
   invoiceDate?: string;
   originCountry: string;
   destinationCountry: string;
+  /** 'FOB Ho Chi Minh'처럼 장소가 붙어 와도 된다. 운임·보험료 가산 범위를 정한다. */
+  incoterms?: string;
   freight?: string | number;
   insurance?: string | number;
   otherAdditions?: string | number;
+}
+
+const ADD_FREIGHT_AND_INSURANCE = new Set(['EXW', 'FCA', 'FAS', 'FOB']);
+const ADD_INSURANCE_ONLY = new Set(['CFR', 'CPT']);
+const ADD_NOTHING = new Set(['CIF', 'CIP']);
+const DELIVERED = new Set(['DAP', 'DPU', 'DDP']);
+
+/**
+ * 과세가격은 우리나라 수입항 도착까지의 운임·보험료를 포함한다(관세법 제30조).
+ * Invoice 가격에 이미 들어 있는 비용은 다시 더하지 않도록 Incoterms로 가산 범위를 정한다.
+ */
+export function resolveDutiableAdditions(input: Pick<ImportDutyInput, 'incoterms' | 'freight' | 'insurance'>): ImportDutyValuation {
+  const code = (input.incoterms ?? '').toUpperCase().match(/\b(EXW|FCA|FAS|FOB|CFR|CPT|CIF|CIP|DAP|DPU|DDP)\b/)?.[1] ?? null;
+  const freight = numberValue(input.freight);
+  const insurance = numberValue(input.insurance);
+  const notes: string[] = [];
+  let addFreight = false;
+  let addInsurance = false;
+  if (!code) {
+    notes.push('Incoterms를 확인하지 못해 운임·보험료를 가산하지 않았습니다. 조건이 FOB·CFR 등이면 과세가격이 늘어납니다.');
+  } else if (ADD_FREIGHT_AND_INSURANCE.has(code)) {
+    addFreight = true;
+    addInsurance = true;
+  } else if (ADD_INSURANCE_ONLY.has(code)) {
+    addInsurance = true;
+  } else if (DELIVERED.has(code)) {
+    notes.push(`${code} 가격에는 수입항 이후 국내 운송비 등이 포함될 수 있어, 과세가격에서 공제할 금액을 관세사와 확인해야 합니다.`);
+  } else if (!ADD_NOTHING.has(code)) {
+    notes.push(`${code} 조건의 가산 범위를 확인해야 합니다.`);
+  }
+  if (addFreight && freight <= 0) {
+    notes.push(`${code} 조건이라 수입항까지의 국제운임을 더해야 하는데, 서류에서 운임을 찾지 못했습니다. 운임을 확인하면 과세가격이 늘어납니다.`);
+  }
+  if (addInsurance && insurance <= 0) {
+    notes.push(`${code} 조건이라 보험료를 더해야 하는데 서류에서 찾지 못했습니다. 적하보험에 들지 않았다면 가산하지 않습니다.`);
+  }
+  return {
+    incoterms: code,
+    freight: addFreight ? freight : 0,
+    insurance: addInsurance ? insurance : 0,
+    notes,
+  };
 }
 
 export async function calculateEstimatedImportDuty(input: ImportDutyInput): Promise<ImportDutyEstimate> {
@@ -41,7 +85,8 @@ export async function calculateEstimatedImportDuty(input: ImportDutyInput): Prom
   }
 
   const convertedInvoiceKrw = Math.round(invoiceAmount * exchangeRate.rate);
-  const additionsForeign = numberValue(input.freight) + numberValue(input.insurance) + numberValue(input.otherAdditions);
+  const valuation = resolveDutiableAdditions(input);
+  const additionsForeign = valuation.freight + valuation.insurance + numberValue(input.otherAdditions);
   const customsValue = Math.round((invoiceAmount + additionsForeign) * exchangeRate.rate);
   const itemAmounts = input.items.map((item) => numberValue(item.amount));
   const itemAmountTotal = itemAmounts.reduce((sum, amount) => sum + amount, 0);
@@ -82,6 +127,8 @@ export async function calculateEstimatedImportDuty(input: ImportDutyInput): Prom
     exchangeRate: exchangeRate.rate,
     exchangeRateDate: exchangeRate.effectiveDate,
     convertedInvoiceKrw,
+    additionsKrw: customsValue - convertedInvoiceKrw,
+    valuation,
     customsValue,
     basicRate: Number(weightedBasicRate.toFixed(4)),
     basicDuty,
