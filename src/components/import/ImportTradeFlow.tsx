@@ -1104,7 +1104,6 @@ export default function ImportTradeFlow({
                           <input type="radio" name={`import-hs-${item.id}`} checked={item.confirmedHSCode === suggestion.code} disabled={readOnly} onChange={() => selectRecommendedHS(item.id, suggestion.code)} />
                           <span>
                             <strong title={`${suggestion.code} · ${suggestion.description}`}>{suggestion.code} · {suggestion.description}</strong>
-                            <small>추천 신뢰도 {Math.round(suggestion.confidence * 100)}%</small>
                             <small>{suggestion.reasoning}</small>
                           </span>
                         </label>
@@ -1273,7 +1272,7 @@ export default function ImportTradeFlow({
             confirmedHsCodes={state.analysis.extracted.items.map((item) => item.confirmedHSCode)}
           />
           <section className="form-card import-card">
-            <div className="import-card-heading"><div><h2>수입신고 의뢰서</h2></div><p>서류에서 확인된 값을 수입신고의뢰서 양식에 채웠습니다. 관세사에게 보내기 전에 빈칸과 체크 항목을 확인하세요.</p></div>
+            <div className="import-card-heading"><div><h2>수입신고 의뢰서</h2></div></div>
             <div className="document-preview-actions">
               <button className="btn btn-secondary" onClick={() => setPreview((value) => !value)}><Eye size={17} /> {preview ? '닫기' : '보기'}</button>
               <button
@@ -1297,7 +1296,6 @@ export default function ImportTradeFlow({
           <section className="form-card import-card">
             <div className="import-card-heading">
               <div><h2>수입신고서(초안)</h2></div>
-              <p>관세청 서식에 확인된 값을 채웠습니다. 신고번호·부호칸과 세관기재란은 신고 후 확정되거나 관세사가 적는 자리라 비워 둡니다.</p>
             </div>
             <div className="document-preview-actions">
               <button className="btn btn-secondary" onClick={() => setDeclarationFormPreview((value) => !value)}>

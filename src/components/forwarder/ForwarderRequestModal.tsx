@@ -20,8 +20,8 @@ interface Props {
 
 type Tab = 'internal' | 'external';
 
-/** 외부 포워더 이메일 전송 탭 노출 여부 — 이메일 발송 인프라 검증 후 켠다. */
-const EXTERNAL_EMAIL_ENABLED = false;
+/** 외부 포워더 이메일 전송 탭 노출 여부. 발송 함수·발신 설정이 깨지면 false로 되돌려 숨긴다. */
+const EXTERNAL_EMAIL_ENABLED = true;
 
 export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRequests }: Props) {
   const [tab, setTab] = useState<Tab>('internal');
@@ -34,6 +34,7 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
   const [internalMessage, setInternalMessage] = useState('');
   const [sendingInternal, setSendingInternal] = useState(false);
   const [internalSuccess, setInternalSuccess] = useState(false);
+  const [customConditions, setCustomConditions] = useState<string[]>([]);
 
   // 외부 이메일 상태
   const attachableTypes = getAttachableDocumentTypes(trade);
@@ -72,7 +73,11 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
     setSendingInternal(true);
     setSearchError('');
     try {
-      await sendTradeRequest(trade.id, searchResult.id, internalMessage);
+      // 직접 적은 조건은 자동 배정에 안 쓰이니 메시지에 붙여 포워더가 읽게 한다.
+      const message = customConditions.length > 0
+        ? [`추가 조건: ${customConditions.join(', ')}`, internalMessage.trim()].filter(Boolean).join('\n')
+        : internalMessage;
+      await sendTradeRequest(trade.id, searchResult.id, message);
       setInternalSuccess(true);
       onSent?.();
     } catch (err) {
@@ -136,8 +141,6 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
           <button type="button" className={`fwd-modal-tab${tab === 'internal' ? ' active' : ''}`} onClick={() => setTab('internal')}>
             서비스 회원에게 요청
           </button>
-          {/* 외부 포워더 이메일 전송은 발송 함수·발신 설정 검증 전까지 숨긴다 — 시연 중 미배포 상태에서 누르면 에러가 난다.
-              복원: EXTERNAL_EMAIL_ENABLED를 true로. */}
           {EXTERNAL_EMAIL_ENABLED && (
             <button type="button" className={`fwd-modal-tab${tab === 'external' ? ' active' : ''}`} onClick={() => setTab('external')}>
               외부 포워더에게 이메일 전송
@@ -159,6 +162,7 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
             <>
               <ForwarderRecommendList
                 trade={trade}
+                onCustomConditionsChange={setCustomConditions}
                 onSelected={(candidate) => {
                   setSearchError('');
                   setSearchResult(candidate
@@ -211,11 +215,10 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
 
               <div className="fwd-modal-actions">
                 <button type="button" className="btn btn-secondary" onClick={onClose}>닫기</button>
-                {searchResult && (
-                  <button type="button" className="btn btn-primary" disabled={sendingInternal} onClick={() => void handleSendInternalRequest()}>
-                    {sendingInternal ? '전달 중…' : '선택한 포워더에게 전달'}
-                  </button>
-                )}
+                {/* 고르기 전에도 버튼을 보여 줘 '선택 → 전달' 순서가 눈에 보이게 한다. */}
+                <button type="button" className="btn btn-primary" disabled={sendingInternal || !searchResult} onClick={() => void handleSendInternalRequest()}>
+                  {sendingInternal ? '전달 중…' : searchResult ? '선택한 포워더에게 전달' : '포워더를 선택해 주세요'}
+                </button>
               </div>
             </>
           )

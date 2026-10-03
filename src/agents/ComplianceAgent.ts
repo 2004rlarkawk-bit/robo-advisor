@@ -6,6 +6,9 @@ import { runComplianceRules, checkPackingInvoiceConsistency, checkHsChapterMisma
 import { loadPortData } from '../services/portLocodeService';
 import { collectAnomalyFields, flagFieldAnomalies } from '../services/fieldAnomalyService';
 
+/** 자유 텍스트 LLM 이상 검사 사용 여부. 켜면 회사명·주소·품명에 '값 확인' 경고가 붙는다. */
+const FIELD_ANOMALY_CHECK_ENABLED = false;
+
 interface ComplianceInput {
   profile: TradeProfile;
   documents: DocumentStatus[];
@@ -69,7 +72,8 @@ export class ComplianceAgent implements Agent<ComplianceInput, ComplianceResult>
 
     // LLM 보조 검증 — 룰이 못 보는 자유 텍스트(회사명·주소·품명)의 임시값·필드 뒤바뀜을 "AI 참고"로 안내한다.
     // 생성을 막지 않는 warning 이며, API 실패·시간 초과 시 조용히 건너뛴다.
-    if (useLLM) {
+    // 실제 회사명·주소에도 '값 확인'을 띄워 확인 권장 목록을 채우는 일이 잦아 꺼 둔다.
+    if (useLLM && FIELD_ANOMALY_CHECK_ENABLED) {
       const fields = collectAnomalyFields(profile);
       if (fields.length) {
         try {

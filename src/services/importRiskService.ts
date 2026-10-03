@@ -386,7 +386,8 @@ export function assessImportRisks(
     if (role === 'shipper' && !item.confirmedHSCode) add({ id: `hs-${item.id}`, level: 'high', item: `품목 ${index + 1} HS Code 미확정`, cause: item.documentHSCode ? '문서 HS Code가 있으나 사용자가 최종 확정하지 않았습니다.' : '문서 HS Code가 없고 추천 후보도 아직 확정되지 않았습니다.', recommendation: recommendationFor('hs'), relatedDocuments: sourceDocumentNames(item.sourceDocumentIds), fixes: [{ kind: 'hs', itemId: item.id }], status: 'unresolved' });
     const itemSuggestions = suggestions.filter((suggestion) => !suggestion.itemId || suggestion.itemId === item.id);
     if (itemSuggestions.length && Math.max(...itemSuggestions.map((suggestion) => suggestion.confidence)) < 0.7) {
-      add({ id: `hs-confidence-${item.id}`, level: 'medium', item: `품목 ${index + 1} HS Code 신뢰도 낮음`, cause: 'AI 추천 후보의 최고 신뢰도가 70% 미만입니다.', recommendation: '추천에 부족하다고 표시된 재질·용도·규격을 확인하고 관세사 검토를 받으세요.', relatedDocuments: sourceDocumentNames(item.sourceDocumentIds), fixes: [{ kind: 'hs', itemId: item.id }], status: 'unresolved' });
+      // '신뢰도 70%'는 측정값이 아니라 판단 단계 라벨이었다. 수치 대신 상태를 적는다.
+      add({ id: `hs-confidence-${item.id}`, level: 'medium', item: `품목 ${index + 1} HS 후보 확정 어려움`, cause: '상품정보가 부족해 후보 중 어느 하나를 뚜렷하게 고르지 못했습니다.', recommendation: '추천에 부족하다고 표시된 재질·용도·규격을 확인하고 관세사 검토를 받으세요.', relatedDocuments: sourceDocumentNames(item.sourceDocumentIds), fixes: [{ kind: 'hs', itemId: item.id }], status: 'unresolved' });
     }
   });
   if (dutyError) {

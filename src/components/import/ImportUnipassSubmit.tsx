@@ -59,9 +59,8 @@ export default function ImportUnipassSubmit({ seed, customsOffice, summary, tota
     <section className="form-card import-card unipass-submit">
       <div className="import-card-heading">
         <div>
-          <h2>UNI-PASS 전자신고<span className="unipass-demo-badge">시연</span></h2>
+          <h2>UNI-PASS 전자신고</h2>
         </div>
-        <p>작성된 수입신고서를 관세청 UNI-PASS로 전송합니다.</p>
       </div>
 
       <div className="unipass-submit-panels">
