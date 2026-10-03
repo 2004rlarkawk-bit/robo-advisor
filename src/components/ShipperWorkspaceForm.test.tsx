@@ -634,7 +634,7 @@ describe('원산지 안내 카드 다시 열기', () => {
     const renderWithKey = (fixRevealKey: number) => act(() => {
       root?.render(
         <ShipperWorkspaceForm
-          profile={{ ...profile, countryOfOrigin: 'South Korea' }}
+          profile={{ ...profile, countryOfOrigin: 'Japan' }}
           items={[firstItem]}
           supplemental={EMPTY_SHIPPER_SUPPLEMENTAL_STATE}
           isProcessing={false}
@@ -659,6 +659,44 @@ describe('원산지 안내 카드 다시 열기', () => {
 
     renderWithKey(2);
     expect(originCard()).toBeDefined();
+  });
+});
+
+describe('원산지 안내 카드와 다른 항목 수정', () => {
+  const renderOrigin = (overrides: Record<string, unknown>) => {
+    container = document.createElement('div');
+    document.body.append(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(
+        <ShipperWorkspaceForm
+          profile={{ ...profile, countryOfOrigin: 'Japan' }}
+          items={[firstItem]}
+          supplemental={EMPTY_SHIPPER_SUPPLEMENTAL_STATE}
+          isProcessing={false}
+          onProfilePatch={vi.fn()}
+          onItemsChange={vi.fn()}
+          onSupplementalChange={vi.fn()}
+          onReset={vi.fn()}
+          onGenerate={vi.fn()}
+          originIssueActive
+          {...overrides}
+        />,
+      );
+    });
+    return Array.from(container!.querySelectorAll('.inline-fix-card'));
+  };
+
+  it('운송방식 [입력 수정]으로 들어오면 원산지 카드 대신 운송방식 안내만 6번 섹션에 뜬다', () => {
+    const cards = renderOrigin({ fixNotice: { fieldKey: 'loadingMode', message: '소량 화물 안내' } });
+    expect(cards.some((card) => card.textContent?.includes('대외무역법'))).toBe(false);
+    const section6 = container!.querySelector('details[data-form-section="6"]');
+    expect(section6?.textContent).toContain('소량 화물 안내');
+  });
+
+  it('원산지를 이미 한국으로 고쳤으면 재생성 전이라도 원산지 카드를 띄우지 않는다', () => {
+    const cards = renderOrigin({ profile: { ...profile, countryOfOrigin: 'South Korea' } });
+    expect(cards.some((card) => card.textContent?.includes('대외무역법'))).toBe(false);
   });
 });
 

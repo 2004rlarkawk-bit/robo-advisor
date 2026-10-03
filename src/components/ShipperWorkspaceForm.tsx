@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { FileSignature, FileText, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
+import { ChevronDown, FileSignature, FileText, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import PortLocodeHint from './trade/PortLocodeHint';
 import {
   EXPORT_POD_OPTIONS,
@@ -108,7 +108,7 @@ export const SHIPPER_FIELD_SECTION: Record<string, number> = {
   itemName: 3, hsCode: 3, quantity: 3, unitPrice: 3, totalAmount: 3, unit: 3, invoiceAmount: 3,
   incoterms: 4, paymentTerms: 4, currency: 4, invoiceNo: 4, invoiceDate: 4, lcNo: 4, lcDate: 4,
   weight: 5, netWeight: 5, grossWeight: 5, packageCount: 5, packageType: 5, eaPerBox: 5,
-  loadPort: 6, dischargePort: 6, departureDate: 6, arrivalDate: 6, vessel: 6,
+  loadPort: 6, dischargePort: 6, departureDate: 6, arrivalDate: 6, vessel: 6, loadingMode: 6,
   countryOfOrigin: 7,
 };
 
@@ -172,7 +172,10 @@ export default function ShipperWorkspaceForm({
   const fixSection = fixNotice ? SHIPPER_FIELD_SECTION[fixNotice.fieldKey] : undefined;
   const [originDismissed, setOriginDismissed] = useState(false);
   useEffect(() => { if (originIssueActive) setOriginDismissed(false); }, [originIssueActive, fixRevealKey]);
-  const showOriginCard = originIssueActive && !originDismissed;
+  // 다른 항목의 [입력 수정]으로 들어왔거나 이미 한국으로 고쳤으면 원산지 카드를 띄우지 않는다.
+  // (검증 결과는 재생성 전까지 남아 있어서 이슈 존재만 보면 엉뚱한 카드가 뜬다.)
+  const originStillForeign = !/korea|한국|대한민국|\bkr\b/i.test(profile.countryOfOrigin ?? '');
+  const showOriginCard = originIssueActive && !originDismissed && !fixNotice && originStillForeign;
 
   useEffect(() => {
     const section = fixSection ?? (showOriginCard ? 7 : undefined);
@@ -242,6 +245,8 @@ export default function ShipperWorkspaceForm({
   const [describeText, setDescribeText] = useState<Record<string, string>>({});
   const [describeBusy, setDescribeBusy] = useState<Record<string, boolean>>({});
   const [describeError, setDescribeError] = useState<Record<string, string>>({});
+  // 접이식 설명칸의 펼침 여부. 추천 결과를 먼저 보이게 기본은 접어 둔다.
+  const [describeOpen, setDescribeOpen] = useState<Record<string, boolean>>({});
 
   /**
    * "검정색 남자 가죽 재킷" → 품명 "Men's Leather Jacket" + 상세 "Black" 으로 채우고,
@@ -249,11 +254,32 @@ export default function ShipperWorkspaceForm({
    */
 
   /** 자연어 설명 → 영문 품명 정리 입력칸. 추가 확인사항·되묻기 패널에서 함께 쓴다. */
-  const renderDescribeBox = (item: ShipperItem, title: string) => (
+  const renderDescribeBox = (item: ShipperItem, title: string, collapsible = false) => {
+    // 입력 중이거나 오류가 있으면 접히지 않게 둔다.
+    const open = !collapsible
+      || Boolean(describeOpen[item.id])
+      || Boolean(describeBusy[item.id])
+      || Boolean(describeError[item.id]);
+    return (
       <div className="shipper-describe">
-        <label className="form-label" htmlFor={`describe-${item.id}`}>
-          {title}
-        </label>
+        {collapsible ? (
+          <button
+            type="button"
+            className="shipper-describe-toggle"
+            aria-expanded={open}
+            aria-controls={`describe-body-${item.id}`}
+            onClick={() => setDescribeOpen((current) => ({ ...current, [item.id]: !open }))}
+          >
+            <span>{title}</span>
+            <ChevronDown size={16} className={open ? 'is-open' : undefined} />
+          </button>
+        ) : (
+          <label className="form-label" htmlFor={`describe-${item.id}`}>
+            {title}
+          </label>
+        )}
+        {open && (
+        <div id={`describe-body-${item.id}`} className="shipper-describe-body">
         <div className="shipper-describe-row">
           <input
             id={`describe-${item.id}`}
@@ -284,8 +310,11 @@ export default function ShipperWorkspaceForm({
         {describeError[item.id] && (
           <small className="form-help form-help-error" role="alert">{describeError[item.id]}</small>
         )}
+        </div>
+        )}
       </div>
-  );
+    );
+  };
 
   const handleNormalizeDescription = async (item: ShipperItem) => {
     const text = (describeText[item.id] ?? '').trim();
@@ -940,7 +969,7 @@ export default function ShipperWorkspaceForm({
                               ))}
                             </ul>
                           )}
-                          {renderDescribeBox(item, '상세 정보를 더 입력해 주세요')}
+                          {renderDescribeBox(item, '상세 정보를 더 입력해 주세요', true)}
                         </div>
                       )}
 
@@ -1133,7 +1162,7 @@ export default function ShipperWorkspaceForm({
           <div className="form-group" data-field="departureDate"><label className="form-label">희망 출항일</label><input type="date" className="form-input" value={profile.departureDate} onChange={(e) => onProfilePatch({ departureDate: e.target.value })} /></div>
           {/* 도착예정일 — 날짜 검증(도착<출항 등) 경고가 이 칸으로 이동·강조되도록 data-field를 둔다 */}
           <div className="form-group" data-field="arrivalDate"><label className="form-label">도착 예정일 <span className="optional-label">(선택)</span></label><input type="date" className="form-input" value={profile.arrivalDate} min={profile.departureDate || undefined} onChange={(e) => onProfilePatch({ arrivalDate: e.target.value })} /></div>
-          <div className="form-group"><label className="form-label">운송방식</label><select className="form-input" value={profile.loadingMode ?? ''} onChange={(e) => onProfilePatch({ loadingMode: e.target.value === '' ? undefined : e.target.value as TradeProfile['loadingMode'] })}><option value="">미정</option><option value="FCL">FCL</option><option value="LCL">LCL</option></select></div>
+          <div className="form-group" data-field="loadingMode"><label className="form-label">운송방식</label><select className="form-input" value={profile.loadingMode ?? ''} onChange={(e) => onProfilePatch({ loadingMode: e.target.value === '' ? undefined : e.target.value as TradeProfile['loadingMode'] })}><option value="">미정</option><option value="FCL">FCL</option><option value="LCL">LCL</option></select></div>
           {/* 복합운송 구간 — 내륙 집하지·최종 인도지가 항구와 다를 때 기재(House B/L 필수 기재사항) */}
           <div className="form-group"><label className="form-label">화물 인수지 (Place of Receipt)</label><input className="form-input" value={profile.placeOfReceipt ?? ''} onChange={(e) => onProfilePatch({ placeOfReceipt: e.target.value })} placeholder="비우면 선적항과 동일하게 처리" /></div>
           <div className="form-group"><label className="form-label">화물 인도지 (Place of Delivery)</label><input className="form-input" value={profile.placeOfDelivery ?? ''} onChange={(e) => onProfilePatch({ placeOfDelivery: e.target.value })} placeholder="비우면 도착항과 동일하게 처리" /></div>
@@ -1193,8 +1222,6 @@ export default function ShipperWorkspaceForm({
             <div className="form-group"><label className="form-label">제조장소 우편번호</label><input className="form-input" inputMode="numeric" maxLength={5} value={declaration.makerPostalCode ?? ''} onChange={(e) => patchDeclaration({ makerPostalCode: e.target.value.replace(/\D/g, '') })} placeholder="5자리" /></div>
           </>}
           <div className="form-group"><label className="form-label">산업단지부호 <span className="optional-label">(선택)</span></label><input className="form-input" maxLength={3} value={declaration.industrialComplexCode ?? ''} onChange={(e) => patchDeclaration({ industrialComplexCode: e.target.value })} placeholder="산업단지가 아니면 999" /></div>
-          <div className="form-group"><span className="form-label">BOM 또는 원료명세서</span><input className="form-input" value="추후 첨부 지원 예정" disabled /></div>
-          <div className="form-group"><span className="form-label">수출요건 확인서류</span><input className="form-input" value="추후 첨부 지원 예정" disabled /></div>
         </div>
       </details>
 

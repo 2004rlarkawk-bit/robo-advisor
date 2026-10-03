@@ -45,6 +45,7 @@ describe('validation issue helpers', () => {
   it('체크리스트에는 짧은 수정 문구를 제공한다', () => {
     expect(shortIssueLabel(issue())).toBe('품명 입력');
     expect(shortIssueLabel(issue({ message: '품명에 한글이 포함되어 있습니다.' }))).toBe('품명 영문으로 수정');
+    expect(shortIssueLabel(issue({ id: 'r23-small-cargo-lcl', message: '총 0.088 CBM 소량 화물로 LCL(혼재) 운송이 일반적입니다.' }))).toBe('FCL/LCL 운송방식 재확인');
   });
 
   it('입력값만으로 다시 판정할 수 있는 이슈 id만 실시간 재평가 대상으로 본다', () => {

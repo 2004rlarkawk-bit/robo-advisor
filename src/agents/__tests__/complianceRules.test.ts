@@ -14,7 +14,7 @@ const base: TradeProfile = {
   departureDate: '2026-07-20',
   arrivalDate: '2026-07-25',
   companyName: 'DAEHAN',
-  contact: '02-1',
+  contact: '02-1234-5678',
   countryOfOrigin: 'REPUBLIC OF KOREA',
   unit: 'KG',
   unitPrice: 42.5,
@@ -530,5 +530,46 @@ describe('R21 날짜 이상치', () => {
   it('정상 날짜는 발행하지 않는다', () => {
     const list = ids({ invoiceDate: '2026-09-01', departureDate: '2026-09-05', arrivalDate: '2026-09-12' });
     expect(list.filter((id) => id.startsWith('r21-'))).toEqual([]);
+  });
+});
+
+describe('R22 회사 연락처 형식', () => {
+  it('숫자가 모자라거나 문자가 섞인 번호는 반드시 수정으로 잡는다', () => {
+    const issue = find({ contact: '02-123' }, 'r22-contact-format');
+    expect(issue?.severity).toBe('error');
+    expect(issue?.overridable).toBe(true);
+    expect(issue?.field).toBe('contact');
+    expect(ids({ contact: '010-12ab-5678' })).toContain('r22-contact-format');
+  });
+
+  it('국내·국제 전화번호와 이메일은 통과시킨다', () => {
+    for (const contact of ['02-123-4567', '010-1234-5678', '+82-2-1234-5678', '(051) 123 4567', 'export@example.com']) {
+      expect(ids({ contact })).not.toContain('r22-contact-format');
+    }
+  });
+
+  it('비어 있으면 필수값 검사 몫이라 형식 규칙은 조용하다', () => {
+    expect(ids({ contact: '' })).not.toContain('r22-contact-format');
+  });
+});
+
+describe('R23 소량 화물 운송 방식 안내', () => {
+  it('15 CBM 미만이고 LCL이 아니면 확인 권장으로 안내하고 운임톤을 함께 적는다', () => {
+    const issue = find({ measurement: '0.300', weight: 120, loadingMode: undefined }, 'r23-small-cargo-lcl');
+    expect(issue?.severity).toBe('warning');
+    expect(issue?.field).toBe('loadingMode');
+    expect(issue?.message).toContain('총 0.300 CBM');
+    expect(issue?.message).toBe('총 0.300 CBM 소량 화물로 LCL(혼재) 운송이 일반적입니다.\n예상 운임톤 0.300 R/T(부피 기준).');
+  });
+
+  it('중량이 더 크면 중량 기준 운임톤으로 적고, FCL을 골랐으면 그 사실을 알린다', () => {
+    const message = find({ measurement: '0.300', weight: 2000, loadingMode: 'FCL' }, 'r23-small-cargo-lcl')?.message ?? '';
+    expect(message).toBe('총 0.300 CBM 소량 화물로 FCL보다 LCL(혼재) 운송이 일반적입니다.\n예상 운임톤 2.000 R/T(중량 기준).');
+  });
+
+  it('이미 LCL이거나, 15 CBM 이상이거나, CBM이 없으면 안내하지 않는다', () => {
+    expect(ids({ measurement: '0.300', loadingMode: 'LCL' })).not.toContain('r23-small-cargo-lcl');
+    expect(ids({ measurement: '20', loadingMode: 'FCL' })).not.toContain('r23-small-cargo-lcl');
+    expect(ids({ measurement: '' })).not.toContain('r23-small-cargo-lcl');
   });
 });

@@ -437,7 +437,7 @@ body {
 }
 
 .form-section {
-  border: 1px solid var(--border-color-strong);
+  border: 1px solid #aab7c8; /* 발표 화면(프로젝터)에서도 섹션 경계가 보이게 */
   border-radius: 10px;
   margin-bottom: 14px;
   background-color: #fafcff;
@@ -542,7 +542,7 @@ body {
 .form-input {
   width: 100%;
   padding: 10px 14px;
-  border: 1.5px solid var(--border-color);
+  border: 1.5px solid #c5cfdb;
   border-radius: 8px;
   font-family: var(--font-main);
   font-size: 14px;
@@ -639,10 +639,10 @@ body {
 .shipper-checkbox-row { display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 0 18px 16px; color: var(--text-dark); font-size: 13px; }
 .shipper-checkbox-row label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
 .shipper-checkbox-row input { accent-color: var(--primary-color); }
-.frequent-partners { margin: 0 18px 16px; padding: 12px; border: 1px solid #bfdbfe; border-radius: 10px; background: #f8fbff; }
+.frequent-partners { margin: 0 18px 16px; padding: 12px; border: 1px solid #93c5fd; border-radius: 10px; background: #eff6ff; }
 .frequent-partners-title { display: block; margin-bottom: 9px; color: #1e3a8a; font-size: 13px; }
 .frequent-partner-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.frequent-partner-card { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 10px; padding: 10px; border: 1px solid #dbeafe; border-radius: 8px; background: #fff; }
+.frequent-partner-card { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 10px; padding: 10px; border: 1px solid #93c5fd; box-shadow: 0 1px 2px rgba(30, 58, 138, 0.08); border-radius: 8px; background: #fff; }
 .frequent-partner-copy { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .frequent-partner-copy strong { overflow: hidden; color: var(--text-dark); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .frequent-partner-copy span { color: var(--text-light); font-size: 11px; white-space: nowrap; }
@@ -2138,7 +2138,7 @@ body {
   cursor: pointer;
 }
 .dev-test-button-perfect { border: 1px solid #a5b4fc; background: #eef2ff; color: #364fc7; }
-.dev-test-button-revision { border: 1px solid #f5c86b; background: #fff8e6; color: #9a6700; }
+.dev-test-button-demo { border: 1px solid #86efac; background: #f0fdf4; color: #166534; }
 .dev-test-disable { border: 1px solid #d1d5db; background: #fff; color: #6b7280; }
 .dev-test-button:disabled { cursor: not-allowed; opacity: 0.45; }
 .dev-test-mode-label { margin: 0 0 10px; color: #6366f1; font-size: 12px; font-weight: 700; }
@@ -3945,7 +3945,7 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 }
 .inline-fix-card .ifc-body { flex: 1; min-width: 0; }
 .inline-fix-card .ifc-title { display: block; font-size: 14px; font-weight: 700; }
-.inline-fix-card .ifc-text { margin: 5px 0 0; font-size: 13px; color: #e2e8f0; line-height: 1.6; }
+.inline-fix-card .ifc-text { margin: 5px 0 0; font-size: 13px; color: #e2e8f0; line-height: 1.6; white-space: pre-line; }
 .inline-fix-card .hl-bad { color: #fb923c; font-weight: 800; }
 .inline-fix-card .hl-good { color: #60a5fa; font-weight: 800; }
 .inline-fix-card .ifc-foot { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 9px; }
@@ -4557,6 +4557,14 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
   display: flex; flex-direction: column; gap: 6px;
 }
 .shipper-describe .form-label { margin: 0; font-weight: 700; color: var(--text-dark); }
+.shipper-describe-body { display: flex; flex-direction: column; gap: 6px; }
+.shipper-describe-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; font-weight: 700; color: var(--text-dark); text-align: left;
+}
+.shipper-describe-toggle svg { flex-shrink: 0; transition: transform 0.15s ease; }
+.shipper-describe-toggle svg.is-open { transform: rotate(180deg); }
 .shipper-describe-row { display: flex; gap: 8px; align-items: stretch; }
 .shipper-describe-row .form-input { flex: 1; min-width: 0; }
 .shipper-describe-row .btn { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }

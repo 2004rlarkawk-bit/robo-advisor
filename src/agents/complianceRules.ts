@@ -3,6 +3,7 @@ import { AgentLog, createLog } from './types';
 import { isLcPayment, isNonLcPayment } from './paymentTerms';
 import { formatPortLabel, portCountryCode, resolvePort, type PortEntry } from '../services/portLocodeService';
 import { EXPORT_POD_OPTIONS, EXPORT_POL_OPTIONS, normalizePortComparisonKey } from '../constants/ports';
+import { formatCbm } from '../utils/packageCbm';
 
 /**
  * 검증 정책 (타입으로 강제)
@@ -52,6 +53,10 @@ export const RULE_POLICY = {
   'r21-invoice-date-future':  { severity: 'warning', overridable: false },
   'r21-invoice-after-departure': { severity: 'warning', overridable: false },
   'r21-date-out-of-range':    { severity: 'warning', overridable: false },
+  // 서류 연락처란에 그대로 찍히므로 잘못된 번호는 반드시 수정 대상(특수 번호면 사유 적고 진행).
+  'r22-contact-format':       { severity: 'error',   overridable: true },
+  // 운송 방식 선택을 돕는 안내 — 서류 오류가 아니므로 확인 권장으로만 띄운다.
+  'r23-small-cargo-lcl':      { severity: 'warning', overridable: false },
 } as const satisfies Record<string, RulePolicy>;
 
 export type ComplianceRuleId = keyof typeof RULE_POLICY;
@@ -78,6 +83,17 @@ const HANGUL = /[ᄀ-ᇿ㄰-㆏가-힣]/;
 const hasHangul = (s?: string) => !!s && HANGUL.test(s);
 const hasLatin = (s?: string) => !!s && /[A-Za-z]/.test(s);
 const up = (s?: string) => (s || '').toUpperCase();
+
+/** 이 부피 미만이면 컨테이너 단독(FCL)보다 혼재(LCL)가 일반적인 소량 화물로 본다. */
+const SMALL_CARGO_CBM = 15;
+
+/** 전화번호(+82-2-1234-5678, 010-1234-5678 등 숫자 9~15자리)나 이메일이면 올바른 연락처로 본다. */
+function isValidContact(value: string): boolean {
+  if (value.includes('@')) return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  if (!/^[0-9+\-().\s]+$/.test(value)) return false;
+  const digits = value.replace(/\D/g, '').length;
+  return digits >= 9 && digits <= 15;
+}
 
 // Incoterms 2020 지명 그룹
 const ORIGIN_STRICT = new Set(['FAS', 'FOB']);       // 선적지 지칭(엄격) → From과 비교, 불일치 error
@@ -407,6 +423,31 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
   if (profile.tradeType === 'export' && originVal && !isKoreaOrigin) {
     issues.push(mk('r15-origin-not-korea', 'customs_dec', 'countryOfOrigin',
       `원산지 정보 확인 필요. 수출물품의 원산지가 '${originVal}'으로 입력되어 있습니다. 실제 물품의 원산지와 일치하는지 확인해 주세요.`));
+  }
+
+  // ── R22. 회사 연락처 형식 (error, override 가능) ─────────
+  // 연락처는 상업송장·포장명세서 Seller란에 그대로 찍힌다. 비어 있는지는 필수값 검사가 보고,
+  // 여기서는 입력된 값이 전화번호(숫자 9~15자리)나 이메일 형태인지 본다.
+  const contactVal = (profile.contact || '').trim();
+  if (contactVal && !isValidContact(contactVal)) {
+    issues.push(mk('r22-contact-format', 'invoice', 'contact',
+      `회사 연락처 확인 필요. 입력된 연락처 '${contactVal}'이(가) 올바른 전화번호 형식이 아닙니다. 서류에 그대로 기재되므로 확인해 주세요.`));
+  }
+
+  // ── R23. 소량 화물 운송 방식 안내 (warning) ─────────────
+  // 컨테이너 한 대를 채우지 못하는 소량 화물은 혼재(LCL)가 일반적이다.
+  // LCL 운임은 부피(CBM)와 중량(톤) 중 큰 값인 운임톤(R/T)으로 매겨지므로 그 값도 함께 보여준다.
+  // 이미 LCL을 골랐으면 안내할 것이 없다.
+  const cbmVal = num(profile.measurement);
+  if (cbmVal !== null && cbmVal > 0 && cbmVal < SMALL_CARGO_CBM && profile.loadingMode !== 'LCL') {
+    const weightKg = num(profile.weight);
+    const tons = weightKg !== null && weightKg > 0 ? weightKg / 1000 : null;
+    const revenueTon = Math.max(cbmVal, tons ?? 0);
+    const basis = tons !== null && tons > cbmVal ? '중량' : '부피';
+    const rtNote = tons !== null ? `\n예상 운임톤 ${formatCbm(revenueTon)} R/T(${basis} 기준).` : '';
+    const modeNote = profile.loadingMode === 'FCL' ? '로 FCL보다' : '로';
+    issues.push(mk('r23-small-cargo-lcl', 'transport_request', 'loadingMode',
+      `총 ${formatCbm(cbmVal)} CBM 소량 화물${modeNote} LCL(혼재) 운송이 일반적입니다.${rtNote}`));
   }
 
   // ── R16. 포괄 품명 (error, override 가능) ───────────────
