@@ -315,11 +315,11 @@ export default function ImportTradeFlow({
       }
       setSourceFiles(resolvedFiles);
       pushAnalysisLog('Document Agent', `파일 ${analyzableDocuments.length}건 로드 완료`, 'success');
-      pushAnalysisLog('Analysis Agent', `AI가 서류 ${analyzableDocuments.length}건을 읽고 서로 대조하는 중이에요.`);
+      pushAnalysisLog('Document Agent', `AI가 서류 ${analyzableDocuments.length}건을 읽고 서로 대조하는 중이에요.`);
       const analysisStartedAt = Date.now();
       setAnalysisPhase({ label: '서류 분석 중', startedAt: analysisStartedAt });
       const result = await analyzeImportDocuments(analyzableDocuments, resolvedFiles);
-      pushAnalysisLog('Analysis Agent', `서류 분석 완료 (${elapsedSeconds(analysisStartedAt)}초)`, 'success');
+      pushAnalysisLog('Document Agent', `서류 분석 완료 (${elapsedSeconds(analysisStartedAt)}초)`, 'success');
       const failedIds = new Set(failures.map((failure) => failure.documentId));
       const documents = state.documents.map((document) => {
           if (failedIds.has(document.id)) {
@@ -538,7 +538,7 @@ export default function ImportTradeFlow({
       let stageIndex = 0;
       if (analysisTickerRef.current) clearInterval(analysisTickerRef.current);
       analysisTickerRef.current = setInterval(() => {
-        if (stageIndex < stages.length) pushAnalysisLog('Duty Agent', stages[stageIndex++]);
+        if (stageIndex < stages.length) pushAnalysisLog('Compliance Agent', stages[stageIndex++]);
       }, 1000);
     }
     try {
