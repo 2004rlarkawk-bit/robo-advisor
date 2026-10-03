@@ -65,7 +65,7 @@ import {
   createPerfectTestProfile,
   createProfileForNewTrade,
   createNormalDocumentIdentifiers,
-  createRevisionTestProfile,
+  createDemoRehearsalProfile,
   createTestSubmissionMeta,
   removeDevOnlyFields,
   type DevTestMode,
@@ -1276,11 +1276,12 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setDevTestMessage('완성형 테스트 데이터가 입력되었습니다. 내용을 확인한 뒤 필요 서류 자동생성을 직접 눌러주세요.');
   };
 
-  const handleFillRevisionTestData = () => {
+  // 시연 연습 — 품목·포장만 비워 두고 나머지를 채운다. 실제 발표와 같게 테스트 모드(검증 우회)는 켜지 않는다.
+  const handleFillDemoRehearsalData = () => {
     if (!IS_DEV_TEST_ENABLED || isProcessing) return;
-    setProfile((current) => createRevisionTestProfile(current));
-    setDevTestMode('needs_revision');
-    setDevTestMessage('수정이 필요한 테스트 데이터가 입력되었습니다. 내용을 수정한 뒤 필요 서류 자동생성을 직접 눌러주세요.');
+    setProfile((current) => createDemoRehearsalProfile(current));
+    setDevTestMode(null);
+    setDevTestMessage('시연 연습 데이터가 입력되었습니다. 품목 정보와 포장 정보만 입력한 뒤 필요 서류 자동생성을 눌러주세요.');
   };
 
   const handleDisableDevTestMode = () => {
@@ -2906,7 +2907,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     <div className="dev-test-actions">
                       <span className="dev-badge">DEV</span>
                       <button type="button" className="dev-test-button dev-test-button-perfect" onClick={handleFillPerfectTestData} disabled={isProcessing}>완벽 테스트</button>
-                      <button type="button" className="dev-test-button dev-test-button-revision" onClick={handleFillRevisionTestData} disabled={isProcessing}>수정 필요 테스트</button>
+                      <button type="button" className="dev-test-button dev-test-button-demo" onClick={handleFillDemoRehearsalData} disabled={isProcessing}>시연 연습</button>
                       {devTestMode && <button type="button" className="dev-test-disable" onClick={handleDisableDevTestMode}>테스트 모드 해제</button>}
                     </div>
                   ) : undefined}

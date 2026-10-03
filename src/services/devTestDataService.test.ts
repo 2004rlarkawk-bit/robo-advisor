@@ -13,7 +13,6 @@ import {
   createPerfectTestProfile,
   createNormalDocumentIdentifiers,
   createProfileForNewTrade,
-  createRevisionTestProfile,
   createTestSubmissionMeta,
   fillMissingTestValues,
   getTestSubmissionMeta,
@@ -46,20 +45,12 @@ describe('개발 테스트 데이터', () => {
     expect(result.companyName).toBe('기존 회사');
     expect(result.departureDate).toBe('2026-07-21');
     expect(result.arrivalDate).toBe('2026-08-04');
-    expect(result.hsCode).toBe('620211');
+    expect(result.hsCode).toBe('9403301000');
+    expect(result.measurement).toBe('0.300');
     expect(result.documentNo).toBeUndefined();
     expect(result.invoiceNo).toBeUndefined();
     expect(result.referenceNo).toBeUndefined();
     expect(result.blNo).toBeUndefined();
-  });
-
-  it('수정 필요 테스트는 생성 가능한 기본값과 의도적인 검증 누락을 함께 만든다', () => {
-    const result = createRevisionTestProfile(emptyProfile, new Date('2026-07-14T00:00:00.000Z'));
-    expect(result.itemName).toBe('Test Cargo');
-    expect(result.loadPort).toBe('Busan Port');
-    expect(result.hsCode).toBe('');
-    expect(result.weight).toBe('');
-    expect(result.departureDate).toBe('');
   });
 
   it('완벽 테스트 프로필은 실제 검증에서 차단 이슈가 없다', async () => {
@@ -70,16 +61,8 @@ describe('개발 테스트 데이터', () => {
     // 정책: error만 생성 차단. 완벽 프로필은 차단(error) 이슈가 없어야 한다.
     // (한글 항구/주소 등은 R7 warning으로 배지만 표시 — 차단 아님)
     expect(result.issues?.issues.filter((issue) => issue.severity === 'error')).toEqual([]);
-  });
-
-  it('수정 필요 프로필은 실제 문서 생성 파이프라인을 완료하면서 차단 이슈를 유지한다', async () => {
-    const result = await new OrchestratorAgent().run({
-      profile: createRevisionTestProfile(emptyProfile, new Date('2026-07-14T00:00:00.000Z')),
-      useLLM: false,
-    });
-    expect(result.error).toBeUndefined();
-    expect(result.documents?.documents.length).toBeGreaterThan(0);
-    expect(result.issues?.issues.some((issue) => issue.severity !== 'info')).toBe(true);
+    // 시연용 완성본이라 확인 권장(warning)도 없어야 한다.
+    expect(result.issues?.issues.filter((issue) => issue.severity === 'warning')).toEqual([]);
   });
 
   it('제출 시점 메타데이터를 생성하고 읽는다', () => {
@@ -135,5 +118,24 @@ describe('개발 테스트 데이터', () => {
   it('신규 거래 복사에서 과거 테스트 메타데이터를 제거한다', () => {
     const result = createProfileForNewTrade({ ...emptyProfile, _testMeta: { isTestSubmission: true } } as TradeProfile);
     expect('_testMeta' in result).toBe(false);
+  });
+});
+
+describe('createDemoRehearsalProfile', () => {
+  it('품목·포장 값은 그대로 두고, 시연용 오류(원산지·신용장 날짜)와 LCL 안내가 걸리게 채운다', async () => {
+    const { createDemoRehearsalProfile } = await import('./devTestDataService');
+    const { runComplianceRules } = await import('../agents/complianceRules');
+    const current = { tradeType: 'export', itemName: 'desk', hsCode: '9403301000', quantity: 10, unitPrice: 100, totalAmount: 1000, currency: 'USD', unit: 'EA', weight: 120, measurement: '0.300' } as never;
+    const profile = createDemoRehearsalProfile(current, new Date('2026-10-03T00:00:00Z'));
+
+    expect(profile.itemName).toBe('desk');
+    expect(profile.currency).toBe('USD');
+    expect(profile.measurement).toBe('0.300');
+    expect(profile.departureDate).toBe('2026-10-10');
+    expect(profile.lcDate).toBe('2026-10-31');
+
+    const ids = runComplianceRules(profile).map((issue) => issue.id);
+    expect(ids).toEqual(expect.arrayContaining(['r15-origin-not-korea', 'r14-lc-after-shipment', 'r23-small-cargo-lcl']));
+    expect(ids).not.toContain('r22-contact-format');
   });
 });

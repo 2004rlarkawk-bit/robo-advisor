@@ -21,6 +21,8 @@ export function issueToFieldKey(issue: ValidationIssue): string {
 }
 
 export function shortIssueLabel(issue: ValidationIssue): string {
+  // 메시지가 "총 0.088 CBM …"으로 시작해 첫 마침표에서 자르면 "총 0"이 된다.
+  if (issue.id === 'r23-small-cargo-lcl') return 'FCL/LCL 운송방식 재확인';
   const message = issue.message
     .replace(/\[[^\]]*\]/g, '')
     .replace(/\([^)]*\)/g, '')
@@ -85,6 +87,16 @@ export function presentIssue(i: ValidationIssue): { title: string; desc: string 
   if (i.id === 'r2-departure-missing' || i.field === 'departureDate') return { title: '선적일 확인', desc: '선적일이 비어 있습니다. 확정 시 입력을 권장합니다.' };
   if (i.field === 'hsCode') return { title: 'HS CODE 확인', desc: '품목에 맞는 HS CODE를 확인·입력하세요.' };
   if (i.id === 'insurance-missing') return { title: '적하보험증권 준비', desc: 'CIF 조건에서는 적하보험증권이 필요합니다.' };
+  if (i.id === 'r23-small-cargo-lcl') {
+    return { title: '소량 화물 — 혼재(LCL) 운송 검토', desc: i.message };
+  }
+  if (i.id === 'r22-contact-format') {
+    const contact = /연락처 '([^']*)'/.exec(i.message || '')?.[1] ?? '';
+    return {
+      title: '회사 연락처 확인 필요',
+      desc: `입력된 연락처 '${contact}'이(가) 올바른 전화번호 형식이 아닙니다. 서류에 그대로 기재되므로 확인해 주세요.`,
+    };
+  }
   if (i.id === 'r15-origin-not-korea') {
     const origin = /원산지가 '([^']+)'/.exec(i.message || '')?.[1] ?? '';
     return {

@@ -33,6 +33,10 @@ function futureDate(days: number, now: Date): string {
   return toDateInputValue(date);
 }
 
+/**
+ * 완벽 테스트 기본값 — 시연 시나리오(목제 사무용 책상 10박스, 부산→LA, FOB·L/C)를
+ * 오류 없이 끝까지 채운 상태. 시연 연습(createDemoRehearsalProfile)과 같은 거래처·항로를 쓴다.
+ */
 function createPerfectDefaults(now: Date): TradeProfile {
   const invoiceDate = toDateInputValue(now);
   return {
@@ -40,57 +44,64 @@ function createPerfectDefaults(now: Date): TradeProfile {
     invoiceDate,
     issuePlace: 'Busan, Korea',
     issueDate: invoiceDate,
-    itemName: "Women's Cashmere Coats",
+    itemName: 'Wooden Office Desk',
     shipperItems: [{
       id: 'primary-item',
-      itemName: "Women's Cashmere Coats",
-      hsCode: '620211',
-      quantity: 100,
+      itemName: 'Wooden Office Desk',
+      detail: 'Natural Oak, W1200 x D600 x H750 mm',
+      brand: 'OAKLINE',
+      composition: 'Oak wood 100%',
+      hsCode: '9403301000',
+      quantity: 10,
       unit: 'EA',
-      unitPrice: 250,
+      unitPrice: 120,
       currency: 'USD',
     }],
-    hsCode: '620211',
+    hsCode: '9403301000',
     countryOfOrigin: 'South Korea',
-    quantity: 100,
+    quantity: 10,
     unit: 'EA',
     currency: 'USD',
-    unitPrice: 250,
-    totalAmount: 25000,
-    invoiceAmount: 25000,
+    unitPrice: 120,
+    totalAmount: 1200,
+    invoiceAmount: 1200,
+    // 40×30×25cm 10박스 = 0.300 CBM, 박스당 1개 → 포장명세서 10개 = 상업송장 10개
     packageCount: 10,
     packageType: 'Carton',
-    netWeight: 450,
-    grossWeight: 500,
-    weight: 500,
-    measurement: '4.2 CBM',
-    shippingMarks: 'CASHMERE COAT / LOS ANGELES / C/T 1-10',
+    eaPerBox: 1,
+    packageDimensionUnit: 'cm',
+    packageDimensions: [{ id: 'dim-1', width: 40, length: 30, height: 25, boxes: 10 }],
+    measurement: '0.300',
+    netWeight: 100,
+    grossWeight: 120,
+    weight: 120,
+    shippingMarks: 'TIC\nLOS ANGELES\nC/NO. 1-10\nMADE IN KOREA',
     loadPort: 'Busan Port',
     dischargePort: 'Los Angeles Port',
     departureDate: futureDate(7, now),
     arrivalDate: futureDate(21, now),
+    // 소량 화물이라 LCL — FCL이면 확인 권장(R23)이 뜬다.
+    loadingMode: 'LCL',
     vesselOrFlight: 'OCEAN STAR V.1001',
     carrier: 'Korea Shipping',
     placeOfReceipt: 'Busan, Korea',
-    placeOfDelivery: 'Los Angeles, USA',
+    placeOfDelivery: 'Los Angeles, CA, USA',
     finalDestination: 'Los Angeles, USA',
     voyageNo: '1001E',
     flag: 'Korea',
-    containerNo: 'KRSU1234567',
-    sealNo: 'SEAL1001',
     incoterms: 'FOB',
-    paymentTerms: 'T/T in advance',
-    otherReferences: 'PO-TEST-2026-001',
+    // 신용장은 출항 전에 개설돼 있어야 한다(R14).
+    paymentTerms: 'L/C',
+    lcNo: 'M0461261NU00012',
+    lcDate: invoiceDate,
+    otherReferences: 'PO No. PO-2026-1003',
     reasonForExport: 'Sale of goods',
-    freightTerms: 'Prepaid',
-    freightCharges: 'Prepaid',
-    freightPrepaidAt: 'Busan, Korea',
-    freightPayableAt: 'Los Angeles, USA',
-    companyName: 'Test Export Co., Ltd.',
-    companyAddress: '1 Jungang-daero, Jung-gu, Busan, South Korea',
+    freightTerms: 'COLLECT',
+    companyName: 'PortAI Trading Co., Ltd.',
+    companyAddress: '123 Teheran-ro, Gangnam-gu, Seoul, Korea',
     companyCountry: 'South Korea',
-    contact: '+82-10-2222-2222',
-    contactName: 'Test Manager',
+    contact: '+82-2-1234-5678',
+    contactName: 'Gildong Hong',
     taxNo: '124-81-00998',
     businessRegistrationNo: '124-81-00998',
     partnerName: 'Test Import Company',
@@ -103,11 +114,22 @@ function createPerfectDefaults(now: Date): TradeProfile {
     notifyPartyName: 'Test Import Company',
     notifyPartyAddress: '100 Test Street, Los Angeles, CA',
     notifyPartyContact: '+1-213-555-0100',
-    signedBy: 'Test Manager',
-    signerName: 'Test Manager',
+    signedBy: 'Gildong Hong',
+    signerName: 'Gildong Hong',
     signerPosition: 'Export Manager',
     insuranceConfirmed: false,
     coNeeded: 'yes' as const,
+    exportDeclaration: {
+      ownerCeoName: '홍길동',
+      customsCode: 'PORTA2026001',
+      postalCode: '44776',
+      buyerCustomsCode: 'USTICO0001',
+      tradeKind: 'GENERAL',
+      goodsCondition: 'N',
+      lcPaymentType: 'SIGHT',
+      exporterType: 'A',
+      industrialComplexCode: '999',
+    },
     shipperSupplemental: {
       buyerMatchesConsignee: true,
       consigneeMatchesNotifyParty: true,
@@ -127,19 +149,79 @@ export function createPerfectTestProfile(currentProfile: TradeProfile, now = new
   ) as unknown as TradeProfile;
 }
 
-export function createRevisionTestProfile(currentProfile: TradeProfile, now = new Date()): TradeProfile {
-  const filled = createPerfectTestProfile(currentProfile, now);
+/**
+ * 시연 연습용 — 품목(3)·포장(5) 섹션만 비워 두고 나머지 섹션을 고정값으로 채운다.
+ * 품목·포장 입력값은 현재 화면 값을 그대로 둔다(발표 때 직접 입력하는 부분).
+ *
+ * 생성하면 일부러 아래 항목이 걸리게 맞춰 두었다.
+ * - 반드시 수정: 원산지 Japan(R15), 신용장 개설일이 출항일보다 늦음(R14)
+ * - 확인 권장: 운송방식 FCL인 소량 화물(R23)
+ * 패킹리스트·상업송장 수량 불일치(R10)는 품목·포장 입력으로 만든다.
+ */
+export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = new Date()): TradeProfile {
+  const departureDate = futureDate(7, now);
   return {
-    ...filled,
-    itemName: hasValue(currentProfile.itemName) ? currentProfile.itemName : 'Test Cargo',
-    companyName: hasValue(currentProfile.companyName) ? currentProfile.companyName : 'Test Company',
-    quantity: hasValue(currentProfile.quantity) ? currentProfile.quantity : 10,
-    hsCode: '',
-    weight: '',
-    grossWeight: '',
-    departureDate: '',
-    arrivalDate: '',
-    coNeeded: undefined,
+    ...currentProfile,
+    tradeType: 'export',
+    // 통화만은 USD로 고정 — 관세청 환율 환산을 시연에서 보여주기 위해. 품목의 나머지 값은 그대로 둔다.
+    currency: 'USD',
+    ...(currentProfile.shipperItems
+      ? { shipperItems: currentProfile.shipperItems.map((item) => ({ ...item, currency: 'USD' as const })) }
+      : {}),
+    // 1. 화주 기본정보
+    companyName: 'PortAI Trading Co., Ltd.',
+    companyAddress: '123 Teheran-ro, Gangnam-gu, Seoul, Korea',
+    companyCountry: 'South Korea',
+    contact: '+82-2-1234-5678',
+    businessRegistrationNo: '124-81-00998',
+    taxNo: '124-81-00998',
+    // 2. 거래처 정보
+    buyerName: 'Test Import Company',
+    buyerAddress: '100 Test Street, Los Angeles, CA',
+    buyerCountry: 'United States',
+    partnerName: 'Test Import Company',
+    partnerAddress: '100 Test Street, Los Angeles, CA',
+    partnerCountry: 'United States',
+    partnerContact: '+1-213-555-0100',
+    notifyPartyName: 'Test Import Company',
+    notifyPartyAddress: '100 Test Street, Los Angeles, CA',
+    notifyPartyContact: '+1-213-555-0100',
+    // 4. 거래 조건 — 신용장 개설일을 출항일 뒤로 둬 R14가 걸리게 한다.
+    incoterms: 'FOB',
+    paymentTerms: 'L/C',
+    lcNo: 'M0461261NU00012',
+    lcDate: futureDate(28, now),
+    otherReferences: 'PO No. PO-2026-1003',
+    // 6. 항만 및 일정
+    loadPort: 'Busan Port',
+    dischargePort: 'Los Angeles Port',
+    departureDate,
+    arrivalDate: futureDate(19, now),
+    loadingMode: 'FCL',
+    placeOfReceipt: 'Busan, Korea',
+    placeOfDelivery: 'Los Angeles, CA, USA',
+    freightTerms: 'COLLECT',
+    // 7. 원산지 — 일부러 Japan
+    countryOfOrigin: 'Japan',
+    exportDeclaration: {
+      ...currentProfile.exportDeclaration,
+      ownerCeoName: '홍길동',
+      customsCode: 'PORTA2026001',
+      postalCode: '44776',
+      buyerCustomsCode: 'USTICO0001',
+      tradeKind: 'GENERAL',
+      lcPaymentType: 'SIGHT',
+      freightKrw: 1200000,
+      insuranceKrw: 1200000,
+      exporterType: 'A',
+      industrialComplexCode: '999',
+    },
+    shipperSupplemental: {
+      ...currentProfile.shipperSupplemental,
+      buyerMatchesConsignee: true,
+      consigneeMatchesNotifyParty: true,
+      incotermsPlace: 'Busan Port',
+    } as TradeProfile['shipperSupplemental'],
   };
 }
 

@@ -484,7 +484,7 @@ function buildExportFobValueIssue(
     ? '원화 송장 — 환율 적용 없음'
     : dv.source === 'api'
     ? `${currency} 관세청 수출 주간환율 ${dv.rate.toLocaleString()}원 · 적용 주간 ${formatRateWeek(dv.effectiveDate)} · 신고일 환율과 다를 수 있음`
-    : `${currency} 시뮬레이션 환율 ${dv.rate.toLocaleString()}원 — 실환율 확인 필요`;
+    : `${currency} 참고 환율 ${dv.rate.toLocaleString()}원 · 신고일 관세청 환율로 확정`;
   const invoiceFormula = currency === 'KRW'
     ? `송장 ${krw(amount)}`
     : `${currency} ${amount.toLocaleString()} × ${dv.rate.toLocaleString()}원`;
@@ -576,7 +576,7 @@ export async function validateTradeDocumentsAsync(
       const srcNote =
         dv.source === 'api'
           ? `관세청 주간환율 · 적용일 ${fmtDate(dv.effectiveDate)}`
-          : '시뮬레이션 환율 — 실환율은 API 키 설정 후 적용';
+          : '참고 환율 · 신고일 관세청 환율로 확정';
 
       const itemNote = profile.itemName
         ? `${profile.itemName} · `

@@ -100,7 +100,7 @@ export async function getCustomsExchangeRate(
       throw new Error('관세환율 Edge Function 응답 형식이 올바르지 않습니다.');
     }
 
-    return {
+    const fresh: ExchangeRate = {
       currency: data.currency,
       currencyName: data.currencyName,
       rate: data.rate,
@@ -108,11 +108,51 @@ export async function getCustomsExchangeRate(
       tradeType: data.tradeType,
       source: 'api',
     };
+    saveLastCustomsRate(fresh);
+    return fresh;
   } catch (err) {
-    console.warn('관세환율 Edge Function 호출 실패, 시뮬레이션 폴백:', err);
+    console.warn('관세환율 Edge Function 호출 실패, 최근 조회값 또는 참고 환율 사용:', err);
   }
 
+  // 조회가 실패하면 이 브라우저에서 마지막으로 받은 관세청 환율을 쓴다.
+  // 그 값의 적용 주간을 그대로 들고 있으므로 화면에는 실제 고시 주간이 표시된다.
+  const cached = loadLastCustomsRate(currency, tradeType);
+  if (cached) return cached;
+
   return { ...simulatedRate(currency), tradeType, effectiveDate: aplyBgnDt };
+}
+
+const LAST_RATE_KEY = (currency: string, tradeType: 'export' | 'import') =>
+  `portai:last-customs-rate:${tradeType}:${(normalizeCurrencyCode(currency) || currency).toUpperCase()}`;
+
+/** 마지막으로 성공한 관세청 환율을 보관한다. 저장소를 못 쓰는 환경이면 조용히 넘어간다. */
+function saveLastCustomsRate(rate: ExchangeRate): void {
+  try {
+    globalThis.localStorage?.setItem(LAST_RATE_KEY(rate.currency, rate.tradeType), JSON.stringify(rate));
+  } catch { /* 저장 실패는 무시 */ }
+}
+
+function loadLastCustomsRate(currency: string, tradeType: 'export' | 'import'): ExchangeRate | null {
+  try {
+    const raw = globalThis.localStorage?.getItem(LAST_RATE_KEY(currency, tradeType));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ExchangeRate>;
+    if (
+      typeof parsed.rate !== 'number' || !Number.isFinite(parsed.rate) || parsed.rate <= 0
+      || typeof parsed.currency !== 'string' || typeof parsed.currencyName !== 'string'
+      || typeof parsed.effectiveDate !== 'string'
+    ) return null;
+    return {
+      currency: parsed.currency,
+      currencyName: parsed.currencyName,
+      rate: parsed.rate,
+      effectiveDate: parsed.effectiveDate,
+      tradeType,
+      source: 'api',
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -134,9 +134,29 @@ describe('관세환율 100단위 통화 정규화', () => {
 
     expect(fx.source).toBe('simulation');
     expect(warn).toHaveBeenCalledWith(
-      '관세환율 Edge Function 호출 실패, 시뮬레이션 폴백:',
+      '관세환율 Edge Function 호출 실패, 최근 조회값 또는 참고 환율 사용:',
       expect.any(Error)
     );
+  });
+
+  it('조회가 실패하면 이 브라우저에서 마지막으로 받은 관세청 환율과 그 적용 주간을 쓴다', async () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value); },
+    });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    invokeMock.mockResolvedValueOnce({
+      data: { success: true, currency: 'EUR', currencyName: '유로', rate: 1601.2, effectiveDate: '20260927', tradeType: 'export', source: 'api' },
+      error: null,
+    });
+    await getCustomsExchangeRate('EUR', 'export');
+
+    invokeMock.mockResolvedValueOnce({ data: null, error: new Error('network down') });
+    const fx = await getCustomsExchangeRate('EUR', 'export');
+
+    expect(fx).toMatchObject({ source: 'api', rate: 1601.2, effectiveDate: '20260927', currency: 'EUR' });
+    vi.unstubAllGlobals();
   });
 });
 

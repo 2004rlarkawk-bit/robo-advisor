@@ -60,8 +60,9 @@ function toItemUnit(value?: string): string {
   return value?.trim() || 'EA';
 }
 
+// 수출 송장은 달러 표시가 일반적이라 기본 통화를 USD로 둔다(거래 기본값 EMPTY_TRADE_PROFILE과 같게).
 function toCurrency(value?: string): ShipperCurrency {
-  return SHIPPER_CURRENCIES.includes(value as ShipperCurrency) ? value as ShipperCurrency : 'KRW';
+  return SHIPPER_CURRENCIES.includes(value as ShipperCurrency) ? value as ShipperCurrency : 'USD';
 }
 
 export function tradeProfileToPrimaryShipperItem(profile: TradeProfile): ShipperItem {
@@ -84,7 +85,7 @@ export function createEmptyShipperItem(id: string): ShipperItem {
     quantity: '',
     unit: 'EA',
     unitPrice: '',
-    currency: 'KRW',
+    currency: 'USD',
   };
 }
 
