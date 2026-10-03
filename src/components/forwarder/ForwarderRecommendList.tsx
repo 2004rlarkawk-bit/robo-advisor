@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, ChevronDown, Plus, X } from 'lucide-react';
 import type { SavedTrade } from '../../types';
 import type { ForwarderMatchCandidate } from '../../types/forwarderRequest';
 import { matchForwarderForTrade } from '../../services/forwarderRequestService';
@@ -22,6 +22,9 @@ interface Props {
   onSelected: (candidate: ForwarderMatchCandidate | null) => void;
 }
 
+/** 처음에 보여 줄 후보 수. 나머지는 '더 보기'로 펼친다 — 시연·실사용 모두 상위 몇 곳만 비교한다. */
+const VISIBLE_CANDIDATES = 3;
+
 function candidateName(candidate: ForwarderMatchCandidate): string {
   return candidate.contactName?.trim() || '담당자명 미등록';
 }
@@ -39,6 +42,8 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
   const [selectedSpecialties, setSelectedSpecialties] = useState<ForwarderSpecialtyKey[]>([]);
   const [candidates, setCandidates] = useState<ForwarderMatchCandidate[] | null>(null);
   const [pickedId, setPickedId] = useState<string | null>(null);
+  const [showAllConditions, setShowAllConditions] = useState(false);
+  const [showAllCandidates, setShowAllCandidates] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -99,44 +104,46 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
 
   if (suggestions === null) return <p className="fwd-assign-loading">거래 내용을 확인하는 중입니다.</p>;
 
-  const suggestedKeys = new Set(suggestions.map((item) => item.key));
-  const others = FORWARDER_SPECIALTIES.filter((item) => !suggestedKeys.has(item.key));
+  const selectedSet = new Set(selectedSpecialties);
+  const extraOptions = FORWARDER_SPECIALTIES.filter((item) => !selectedSet.has(item.key));
+  const reasons = suggestions.filter((item) => selectedSet.has(item.key)).map((item) => item.reason);
   const picked = candidates?.find((item) => item.id === pickedId) ?? null;
+  const visibleCandidates = candidates
+    ? (showAllCandidates ? candidates : candidates.slice(0, VISIBLE_CANDIDATES))
+    : [];
+  const hiddenCount = (candidates?.length ?? 0) - visibleCandidates.length;
 
   return (
     <div className="fwd-assign">
       <div className="fwd-assign-head">
         <strong>포워더 선택</strong>
-        <span>이 거래를 처리할 포워더를 선택하세요. 추천 순서는 제휴 여부와 업무 적합도를 기준으로 합니다.</span>
+        <span>제휴 포워더를 먼저, 거래 조건에 맞는 순서로 추천합니다.</span>
       </div>
 
-      {suggestions.length > 0 && (
-        <ul className="fwd-cond-list">
-          {suggestions.map((item) => {
-            const on = selectedSpecialties.includes(item.key);
-            return (
-              <li key={item.key}>
-                <button type="button" role="checkbox" aria-checked={on} className={`fwd-cond-row${on ? ' is-on' : ''}`} onClick={() => toggleSpecialty(item.key)}>
-                  <span className="fwd-cond-box" aria-hidden="true">{on && <Check size={13} />}</span>
-                  <span className="fwd-cond-label">{specialtyLabel(item.key)}</span>
-                  <span className="fwd-cond-reason">{item.reason}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <div className="fwd-cond-more" role="group" aria-label="조건 추가">
-        <span>조건 추가</span>
-        {others.map((item) => {
-          const on = selectedSpecialties.includes(item.key);
-          return (
-            <button key={item.key} type="button" role="checkbox" aria-checked={on} className={`fwd-cond-chip${on ? ' is-on' : ''}`} onClick={() => toggleSpecialty(item.key)}>
-              {item.label}
+      <div className="fwd-cond">
+        <div className="fwd-cond-chips" role="group" aria-label="추천 조건">
+          <span className="fwd-cond-title">추천 조건</span>
+          {selectedSpecialties.map((key) => (
+            <button key={key} type="button" role="checkbox" aria-checked="true" className="fwd-cond-chip is-on" onClick={() => toggleSpecialty(key)} aria-label={`${specialtyLabel(key)} 조건 빼기`}>
+              {specialtyLabel(key)}
+              <X size={12} aria-hidden="true" />
             </button>
-          );
-        })}
+          ))}
+          <button type="button" className="fwd-cond-add" aria-expanded={showAllConditions} onClick={() => setShowAllConditions((v) => !v)}>
+            <Plus size={12} aria-hidden="true" />
+            조건 추가
+          </button>
+        </div>
+        {reasons.length > 0 && <p className="fwd-cond-reason">거래 정보에서 골랐습니다 · {reasons.join(', ')}</p>}
+        {showAllConditions && (
+          <div className="fwd-cond-more" role="group" aria-label="조건 추가">
+            {extraOptions.map((item) => (
+              <button key={item.key} type="button" role="checkbox" aria-checked="false" className="fwd-cond-chip" onClick={() => toggleSpecialty(item.key)}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {loading && <p className="fwd-assign-loading">맞는 포워더를 찾는 중입니다.</p>}
@@ -148,8 +155,13 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
 
       {candidates && candidates.length > 0 && (
         <ul className="fwd-pick-list" role="radiogroup" aria-label="추천 포워더">
-          {candidates.map((candidate) => {
+          {visibleCandidates.map((candidate) => {
             const on = candidate.id === pickedId;
+            const tags = [
+              ...candidate.matchedSpecialties.map((key) => ({ key, label: specialtyLabel(key), match: true })),
+              // 직접 적은 분야 — 배정 점수와 무관해 일치 태그와 다르게 보인다.
+              ...(candidate.customSpecialties ?? []).map((label) => ({ key: `custom-${label}`, label, match: false })),
+            ];
             return (
               <li key={candidate.id}>
                 <button
@@ -165,24 +177,33 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
                       <strong>{candidateCompany(candidate)}</strong>
                       {candidate.isPartner && <span className="fwd-pick-partner">제휴 포워더</span>}
                     </span>
-                    <span className="fwd-pick-basis">
-                      {candidate.matchedSpecialties.map((key) => (
-                        <span key={key} className="fwd-basis-chip is-match">{specialtyLabel(key)}</span>
-                      ))}
-                      {/* 직접 적은 분야 — 배정 점수와 무관해 일치 칩과 다르게 보인다. */}
-                      {(candidate.customSpecialties ?? []).map((label) => (
-                        <span key={`custom-${label}`} className="fwd-basis-chip">{label}</span>
-                      ))}
-                      <span className="fwd-basis-chip">담당 {candidateName(candidate)}</span>
-                      <span className="fwd-basis-chip">현재 진행 {candidate.activeCount}건</span>
-                      <span className="fwd-basis-chip">완료 {candidate.completedCount}건</span>
+                    <span className="fwd-pick-meta">
+                      담당 {candidateName(candidate)}
+                      <i aria-hidden="true">·</i>
+                      현재 진행 {candidate.activeCount}건
+                      <i aria-hidden="true">·</i>
+                      완료 {candidate.completedCount}건
                     </span>
+                    {tags.length > 0 && (
+                      <span className="fwd-pick-basis">
+                        {tags.map((tag) => (
+                          <span key={tag.key} className={`fwd-basis-chip${tag.match ? ' is-match' : ''}`}>{tag.label}</span>
+                        ))}
+                      </span>
+                    )}
                   </span>
                 </button>
               </li>
             );
           })}
         </ul>
+      )}
+
+      {hiddenCount > 0 && (
+        <button type="button" className="fwd-pick-more" onClick={() => setShowAllCandidates(true)}>
+          다른 포워더 {hiddenCount}곳 더 보기
+          <ChevronDown size={14} aria-hidden="true" />
+        </button>
       )}
 
       {picked && (

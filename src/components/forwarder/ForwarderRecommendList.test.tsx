@@ -65,10 +65,12 @@ describe('ForwarderRecommendList', () => {
 
   it('거래에서 뽑은 조건을 근거와 함께 미리 체크해 보여준다', async () => {
     await render();
-    const conditions = [...container.querySelectorAll('.fwd-cond-row')];
-    expect(conditions.map((row) => row.querySelector('.fwd-cond-label')?.textContent)).toEqual(['중국 항로', '콜드체인']);
-    expect(conditions[0].textContent).toContain('도착항 Shanghai Port');
-    expect(conditions.every((row) => row.getAttribute('aria-checked') === 'true')).toBe(true);
+    const conditions = [...container.querySelectorAll('.fwd-cond-chip.is-on')];
+    expect(conditions.map((chip) => chip.textContent)).toEqual(['중국 항로', '콜드체인']);
+    expect(container.querySelector('.fwd-cond-reason')?.textContent).toContain('도착항 Shanghai Port');
+    expect(conditions.every((chip) => chip.getAttribute('aria-checked') === 'true')).toBe(true);
+    // 나머지 조건은 '조건 추가'를 눌러야 펼쳐진다.
+    expect(container.querySelector('.fwd-cond-more')).toBeNull();
   });
 
   it('버튼을 더 누르지 않아도 조건으로 추천을 바로 불러온다', async () => {
@@ -112,9 +114,14 @@ describe('ForwarderRecommendList', () => {
 
   it('조건을 바꾸면 그 조건으로 추천을 다시 불러온다', async () => {
     await render();
+    await act(async () => { button('조건 추가').click(); });
     await act(async () => { button('LCL 콘솔').click(); });
-    const calls = requestService.matchForwarderForTrade.mock.calls;
+    let calls = requestService.matchForwarderForTrade.mock.calls;
     expect(calls[calls.length - 1][1]).toEqual(['route_cn', 'cargo_cold', 'cargo_lcl']);
+
+    await act(async () => { button('콜드체인').click(); });
+    calls = requestService.matchForwarderForTrade.mock.calls;
+    expect(calls[calls.length - 1][1]).toEqual(['route_cn', 'cargo_lcl']);
   });
 
   it('제휴사명이 따로 등록돼 있으면 담당자 프로필 업체명 대신 제휴사명을 보여준다', async () => {
@@ -124,6 +131,16 @@ describe('ForwarderRecommendList', () => {
     await render();
     expect(rows()[0].textContent).toContain('ABC Logistics');
     expect(rows()[0].textContent).not.toContain('김포워더 개인사업자');
+  });
+
+  it('후보는 상위 3곳만 먼저 보여 주고 나머지는 더 보기로 펼친다', async () => {
+    const many = Array.from({ length: 5 }, (_, i) => ({ ...plain, id: `fwd-${i}`, companyName: `Forwarder ${i}` }));
+    requestService.matchForwarderForTrade.mockResolvedValue(many);
+    await render();
+    expect(rows()).toHaveLength(3);
+    await act(async () => { button('2곳 더 보기').click(); });
+    expect(rows()).toHaveLength(5);
+    expect(button('더 보기')).toBeUndefined();
   });
 
   it('추천할 담당자가 없으면 다른 방법을 안내한다', async () => {
