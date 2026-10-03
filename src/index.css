@@ -4683,10 +4683,6 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 
 /* UNI-PASS 전자신고 전송(시연) */
 .unipass-submit .import-card-heading h2 { display: flex; align-items: center; gap: 8px; }
-.unipass-demo-badge {
-  font-size: 11px; font-weight: 700; letter-spacing: .02em; padding: 2px 7px; border-radius: 999px;
-  background: #fef3c7; color: #92400e; border: 1px solid #fcd34d;
-}
 /* 확인 영역을 두 패널로 나눈다 — 왼쪽은 '무엇을 신고하는지'(B/L·품명·HSK),
    오른쪽은 금액과 전송 버튼. 보내기 직전에 금액을 한 번 더 보게 된다. */
 .unipass-submit-panels {
