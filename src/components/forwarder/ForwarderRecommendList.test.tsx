@@ -63,11 +63,10 @@ describe('ForwarderRecommendList', () => {
   const rows = () => [...container.querySelectorAll('.fwd-pick-row')] as HTMLButtonElement[];
   const button = (text: string) => [...container.querySelectorAll('button')].find((b) => b.textContent?.includes(text)) as HTMLButtonElement;
 
-  it('거래에서 뽑은 조건을 근거와 함께 미리 체크해 보여준다', async () => {
+  it('거래에서 뽑은 조건을 미리 체크해 보여준다', async () => {
     await render();
     const conditions = [...container.querySelectorAll('.fwd-cond-chip.is-on')];
     expect(conditions.map((chip) => chip.textContent)).toEqual(['중국 항로', '콜드체인']);
-    expect(container.querySelector('.fwd-cond-reason')?.textContent).toContain('도착항 Shanghai Port');
     expect(conditions.every((chip) => chip.getAttribute('aria-checked') === 'true')).toBe(true);
     // 나머지 조건은 '조건 추가'를 눌러야 펼쳐진다.
     expect(container.querySelector('.fwd-cond-more')).toBeNull();

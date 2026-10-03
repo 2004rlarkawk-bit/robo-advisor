@@ -136,7 +136,6 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
 
   const selectedSet = new Set(selectedSpecialties);
   const extraOptions = FORWARDER_SPECIALTIES.filter((item) => !selectedSet.has(item.key));
-  const reasons = suggestions.filter((item) => selectedSet.has(item.key)).map((item) => item.reason);
   const top = candidates?.[0] ?? null;
   const visibleCandidates = candidates
     ? (showAllCandidates ? candidates : candidates.slice(0, VISIBLE_CANDIDATES))
@@ -147,7 +146,6 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
     <div className="fwd-assign">
       <div className="fwd-assign-head">
         <strong>포워더 선택</strong>
-        <span>제휴 포워더를 먼저, 거래 조건에 맞는 순서로 추천합니다.</span>
       </div>
 
       <div className="fwd-cond">
@@ -170,7 +168,6 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
             조건 추가
           </button>
         </div>
-        {reasons.length > 0 && <p className="fwd-cond-reason">거래 정보에서 골랐습니다 · {reasons.join(', ')}</p>}
         {showAllConditions && (
           <div className="fwd-cond-more" role="group" aria-label="조건 추가">
             {extraOptions.map((item) => (
