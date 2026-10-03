@@ -101,15 +101,26 @@ describe('ForwarderRecommendList', () => {
     expect(container.textContent).toContain('확인 항목이 2건');
   });
 
-  it('1순위를 미리 고른 상태로 두고, 화주가 다른 포워더를 누르면 그쪽으로 바뀐다', async () => {
+  it('미리 고르지 않고 1순위에 추천 배지만 붙인다 — 화주가 직접 눌러야 선택된다', async () => {
     await render();
-    expect(onSelected).toHaveBeenLastCalledWith(partner);
-    expect(rows()[0].getAttribute('aria-checked')).toBe('true');
+    expect(onSelected).toHaveBeenLastCalledWith(null);
+    expect(rows().every((row) => row.getAttribute('aria-checked') === 'false')).toBe(true);
+    expect(rows()[0].querySelector('.fwd-pick-top')?.textContent).toBe('추천');
+    expect(rows()[1].querySelector('.fwd-pick-top')).toBeNull();
+    expect(container.textContent).toContain('직접 선택해 주세요');
 
     await act(async () => { rows()[1].click(); });
     expect(onSelected).toHaveBeenLastCalledWith(plain);
     expect(rows()[1].getAttribute('aria-checked')).toBe('true');
-    expect(rows()[0].getAttribute('aria-checked')).toBe('false');
+    expect(container.textContent).not.toContain('직접 선택해 주세요');
+  });
+
+  it('조건을 바꿔 다시 추천해도 고른 포워더가 남아 있으면 선택을 유지한다', async () => {
+    await render();
+    await act(async () => { rows()[1].click(); });
+    await act(async () => { button('콜드체인').click(); });
+    expect(onSelected).toHaveBeenLastCalledWith(plain);
+    expect(rows()[1].getAttribute('aria-checked')).toBe('true');
   });
 
   it('조건을 바꾸면 그 조건으로 추천을 다시 불러온다', async () => {

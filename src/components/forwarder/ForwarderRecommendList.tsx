@@ -53,6 +53,9 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
   // 호출부가 인라인 함수를 넘겨도 추천 조회가 매 렌더마다 다시 돌지 않도록 참조로 들고 있는다.
   const onSelectedRef = useRef(onSelected);
   onSelectedRef.current = onSelected;
+  // 재조회 콜백이 선택이 바뀔 때마다 새로 만들어져 추천을 다시 부르지 않도록 ref로 읽는다.
+  const pickedIdRef = useRef<string | null>(null);
+  pickedIdRef.current = pickedId;
 
   // 항구 → 국가 판정은 항구 사전이 있어야 정확하다. 못 불러와도 정규식 폴백으로 제안은 계속한다.
   useEffect(() => {
@@ -72,9 +75,11 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
     try {
       const list = await matchForwarderForTrade(trade.id, specialties, preferExperienced);
       setCandidates(list);
-      // 추천 1순위를 미리 골라 두되, 전달은 화주가 버튼을 눌러야 일어난다.
-      setPickedId(list[0]?.id ?? null);
-      onSelectedRef.current(list[0] ?? null);
+      // PortAI는 순서만 제안하고 고르는 건 화주다 — 미리 선택해 두지 않는다.
+      // 조건을 바꿔 다시 불러와도 이미 고른 포워더가 목록에 남아 있으면 선택을 유지한다.
+      const kept = list.find((item) => item.id === pickedIdRef.current) ?? null;
+      setPickedId(kept?.id ?? null);
+      onSelectedRef.current(kept);
     } catch (err) {
       console.error('[ForwarderRecommendList] 포워더 추천 조회 실패:', err);
       setError('포워더를 추천하지 못했습니다. 잠시 후 다시 시도하거나 이메일로 직접 찾아 주세요.');
@@ -107,7 +112,7 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
   const selectedSet = new Set(selectedSpecialties);
   const extraOptions = FORWARDER_SPECIALTIES.filter((item) => !selectedSet.has(item.key));
   const reasons = suggestions.filter((item) => selectedSet.has(item.key)).map((item) => item.reason);
-  const picked = candidates?.find((item) => item.id === pickedId) ?? null;
+  const top = candidates?.[0] ?? null;
   const visibleCandidates = candidates
     ? (showAllCandidates ? candidates : candidates.slice(0, VISIBLE_CANDIDATES))
     : [];
@@ -175,6 +180,7 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
                   <span className="fwd-pick-main">
                     <span className="fwd-pick-name">
                       <strong>{candidateCompany(candidate)}</strong>
+                      {candidate.id === top?.id && <span className="fwd-pick-top">추천</span>}
                       {candidate.isPartner && <span className="fwd-pick-partner">제휴 포워더</span>}
                     </span>
                     <span className="fwd-pick-meta">
@@ -206,9 +212,10 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
         </button>
       )}
 
-      {picked && (
+      {top && !loading && (
         <p className="fwd-assign-note" aria-live="polite">
-          {picked.matchedSpecialties.length === 0 && (selectedSpecialties.length > 0
+          {pickedId === null && '목록에서 의뢰할 포워더를 직접 선택해 주세요. '}
+          {top.matchedSpecialties.length === 0 && (selectedSpecialties.length > 0
             ? '조건과 일치하는 특화 담당자가 없어, 업무 여유가 있는 담당자를 먼저 추천했습니다. '
             : '조건을 고르지 않아, 업무 여유가 있는 담당자를 먼저 추천했습니다. ')}
           {preferExperienced && `서류 검증에서 확인 항목이 ${issueCount}건 있어 처리 경험이 많은 담당자를 우선했습니다. `}

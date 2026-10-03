@@ -211,11 +211,10 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
 
               <div className="fwd-modal-actions">
                 <button type="button" className="btn btn-secondary" onClick={onClose}>닫기</button>
-                {searchResult && (
-                  <button type="button" className="btn btn-primary" disabled={sendingInternal} onClick={() => void handleSendInternalRequest()}>
-                    {sendingInternal ? '전달 중…' : '선택한 포워더에게 전달'}
-                  </button>
-                )}
+                {/* 고르기 전에도 버튼을 보여 줘 '선택 → 전달' 순서가 눈에 보이게 한다. */}
+                <button type="button" className="btn btn-primary" disabled={sendingInternal || !searchResult} onClick={() => void handleSendInternalRequest()}>
+                  {sendingInternal ? '전달 중…' : searchResult ? '선택한 포워더에게 전달' : '포워더를 선택해 주세요'}
+                </button>
               </div>
             </>
           )
