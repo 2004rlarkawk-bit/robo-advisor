@@ -215,9 +215,6 @@ export default function ForwarderRecommendList({ trade, onSelected }: Props) {
       {top && !loading && (
         <p className="fwd-assign-note" aria-live="polite">
           {pickedId === null && '목록에서 의뢰할 포워더를 직접 선택해 주세요. '}
-          {top.matchedSpecialties.length === 0 && (selectedSpecialties.length > 0
-            ? '조건과 일치하는 특화 담당자가 없어, 업무 여유가 있는 담당자를 먼저 추천했습니다. '
-            : '조건을 고르지 않아, 업무 여유가 있는 담당자를 먼저 추천했습니다. ')}
           {preferExperienced && `서류 검증에서 확인 항목이 ${issueCount}건 있어 처리 경험이 많은 담당자를 우선했습니다. `}
         </p>
       )}
