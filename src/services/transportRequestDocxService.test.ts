@@ -66,9 +66,18 @@ describe('mapTransportRequestToSchema', () => {
     expect(schema.packages).toBe('20 CARTON\n8 CARTON');
     expect(schema.description_of_goods).toContain("Women's Cashmere Coats (HS 6202110000 / 200 PCS)");
     expect(schema.gross_weight).toBe('546');
-    expect(schema.measurement).toBe('2.7');
-    expect(schema.total_this_page).toBe('28 PKGS / 546 KGS / 2.7 M3');
+    expect(schema.measurement).toBe('2.700');
+    expect(schema.total_this_page).toBe('28 PKGS / 546 KGS / 2.700 M3');
     expect(schema.consignment_total).toBe(schema.total_this_page);
+  });
+
+  it('작은 화물의 총 CBM도 0으로 적지 않는다', () => {
+    const base = request();
+    const small = mapTransportRequestToSchema(request({
+      items: [{ ...base.items[0], measurement: '0.000022' }],
+    }));
+    expect(small.measurement).toBe('0.000022');
+    expect(small.total_this_page).toContain('0.000022 M3');
   });
 
   it('부킹 이후에 정해지는 칸은 비워 둔다 — 화주가 채울 수 없는 값', () => {
