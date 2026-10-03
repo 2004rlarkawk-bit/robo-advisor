@@ -44,7 +44,6 @@ supabase/backups/
 !templates/export_declaration_template.docx
 !templates/bill_of_lading_template.docx
 !templates/shipping_instruction_template.docx
-!templates/import_dispatch_request_template.docx
 !templates/import_declaration_request_template.docx
 !templates/import_declaration_template.docx
 !templates/air_waybill_template.docx

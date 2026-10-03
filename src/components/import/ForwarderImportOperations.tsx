@@ -27,7 +27,7 @@ export default function ForwarderImportOperations({ item, userId, saving, locked
   const stored = (item.trade.forwarderCase as ForwarderCaseState | undefined)?.importOperations;
   const [draft, setDraft] = useState<ForwarderImportOperationsState>(() => stored ?? {
     brokerName: '', declarationNo: '', declarationStatus: 'preparing',
-    doStatus: 'waiting', doNumber: item.trade.forwarderCase?.dispatchRequest?.doNo ?? '', doIssuer: '', doDocument: null,
+    doStatus: 'waiting', doNumber: '', doIssuer: '', doDocument: null,
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

@@ -569,7 +569,6 @@ export default function ImportTradeFlow({
         duty: duty ?? undefined,
         risks,
         cargo: state.cargo ?? undefined,
-        deliveryRequest: state.deliveryRequest,
         generatedAt,
       };
       const tradeId = await onGenerate(generatedSnapshot);
@@ -738,7 +737,6 @@ export default function ImportTradeFlow({
         duty: state.duty ?? undefined,
         risks: state.risks,
         cargo: state.cargo ?? undefined,
-        deliveryRequest: state.deliveryRequest,
         generatedAt: state.generatedAt,
         flowCompletedAt: new Date().toISOString(),
       });
