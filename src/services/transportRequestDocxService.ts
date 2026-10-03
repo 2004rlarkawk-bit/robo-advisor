@@ -2,6 +2,7 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { renderAsync } from 'docx-preview';
 import type { TransportRequestData } from '../types';
+import { formatCbm } from '../utils/packageCbm';
 // 고정 템플릿(Shipping Instruction 표준 양식) — XML/서식 무수정, {{placeholder}} 값만 주입.
 import templateUrl from '../../templates/shipping_instruction_template.docx?url';
 
@@ -107,7 +108,7 @@ export function mapTransportRequestToSchema(sr: TransportRequestData): ShippingI
   const summary = [
     totalPackages > 0 ? `${totalPackages.toLocaleString('en-US')} PKGS` : '',
     totalGross > 0 ? `${totalGross.toLocaleString('en-US')} KGS` : '',
-    totalCbm > 0 ? `${totalCbm.toLocaleString('en-US')} M3` : '',
+    totalCbm > 0 ? `${formatCbm(totalCbm)} M3` : '',
   ].filter(Boolean).join(' / ');
 
   const incoterms = [sr.incoterms, sr.incotermsPlace].map(text).filter(Boolean).join(' ');
@@ -148,7 +149,8 @@ export function mapTransportRequestToSchema(sr: TransportRequestData): ShippingI
     packages: joinLines(packageLines),
     description_of_goods: joinLines(descriptionLines),
     gross_weight: totalGross > 0 ? totalGross.toLocaleString('en-US') : '',
-    measurement: totalCbm > 0 ? totalCbm.toLocaleString('en-US') : '',
+    // CBM은 서류 표기 규칙(소수 3자리, 작은 화물은 자릿수 확장)을 따른다 — toLocaleString은 0.000022를 "0"으로 적는다.
+    measurement: totalCbm > 0 ? formatCbm(totalCbm) : '',
     total_this_page: summary,
     consignment_total: summary,
     hazardous: sr.dangerousGoods ? 'YES' : 'NO',
