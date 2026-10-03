@@ -37,6 +37,12 @@ function customMatches(condition: string, specialty: string): boolean {
 /** 처음에 보여 줄 후보 수. 나머지는 '더 보기'로 펼친다 — 시연·실사용 모두 상위 몇 곳만 비교한다. */
 const VISIBLE_CANDIDATES = 3;
 
+/**
+ * '조건 추가'에서 빼 두는 분야. 프로필 선택지와 DB 키는 그대로라 이미 고른 포워더 데이터는 남고,
+ * 거래 정보에서 자동으로 뽑힌 경우에는 추천 조건 줄에 그대로 붙는다.
+ */
+const HIDDEN_EXTRA_OPTIONS = new Set<ForwarderSpecialtyKey>(['route_cis']);
+
 function candidateName(candidate: ForwarderMatchCandidate): string {
   return candidate.contactName?.trim() || '담당자명 미등록';
 }
@@ -135,7 +141,9 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
   if (suggestions === null) return <p className="fwd-assign-loading">거래 내용을 확인하는 중입니다.</p>;
 
   const selectedSet = new Set(selectedSpecialties);
-  const extraOptions = FORWARDER_SPECIALTIES.filter((item) => !selectedSet.has(item.key));
+  const extraOptions = FORWARDER_SPECIALTIES.filter(
+    (item) => !selectedSet.has(item.key) && !HIDDEN_EXTRA_OPTIONS.has(item.key),
+  );
   const top = candidates?.[0] ?? null;
   const visibleCandidates = candidates
     ? (showAllCandidates ? candidates : candidates.slice(0, VISIBLE_CANDIDATES))

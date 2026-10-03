@@ -125,6 +125,7 @@ describe('ForwarderRecommendList', () => {
   it('조건을 바꾸면 그 조건으로 추천을 다시 불러온다', async () => {
     await render();
     await act(async () => { button('조건 추가').click(); });
+    expect(button('러시아·CIS 항로')).toBeUndefined();
     await act(async () => { button('LCL 콘솔').click(); });
     let calls = requestService.matchForwarderForTrade.mock.calls;
     expect(calls[calls.length - 1][1]).toEqual(['route_cn', 'cargo_cold', 'cargo_lcl']);

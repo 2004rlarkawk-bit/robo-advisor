@@ -1105,6 +1105,8 @@
 .fwd-cond-add { border-style: dashed; color: #475569; }
 .fwd-cond-add[aria-expanded='true'] { border-style: solid; border-color: #94a3b8; }
 .fwd-cond-more { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; }
+/* 각 줄이 양 끝까지 차도록 칩을 늘린다 — 줄마다 오른쪽 끝이 들쭉날쭉하지 않게. */
+.fwd-cond-more .fwd-cond-chip { flex: 1 1 auto; justify-content: center; }
 .fwd-cond-chip.is-custom { border-color: #1759c9; background: #fff; color: #1759c9; }
 .fwd-cond-custom { display: flex; gap: 6px; width: 100%; margin-top: 4px; }
 .fwd-cond-custom input {
