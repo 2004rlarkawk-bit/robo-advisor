@@ -14,7 +14,6 @@ import type {
   ArrivalNoticeMeta,
   CargoTrackingResult,
   ImportAnalysisResult,
-  ImportDeliveryRequest,
   ImportDocumentMeta,
   ImportDutyEstimate,
   ImportHSCodeSuggestion,
@@ -54,8 +53,6 @@ export interface CachedState {
   risks: ImportRisk[];
   cargo: CargoTrackingResult | null;
   arrivalNotice: ArrivalNoticeMeta | null;
-  /** 화주가 입력한 배송 요청 — 제출 시 스냅샷에 실려 포워더에게 전달된다 */
-  deliveryRequest?: ImportDeliveryRequest;
   generatedAt: string | null;
   tradeId?: string;
   existingStatus?: PersistedTradeStatus;
@@ -144,7 +141,6 @@ export function importDraftFormData(
       duty: state.duty ?? undefined,
       risks: state.risks,
       cargo: state.cargo ?? undefined,
-      deliveryRequest: state.deliveryRequest,
       generatedAt: state.generatedAt ?? '',
     }).formData;
   }

@@ -256,6 +256,19 @@ export interface ImportDutyItemEstimate {
   basicDuty: number;
 }
 
+/** Incoterms에 따라 과세가격에 더한 운임·보험료와 확인할 점 */
+export interface ImportDutyValuation {
+  incoterms: string | null;
+  /** Invoice 통화로 더한 운임·보험료 */
+  freight: number;
+  insurance: number;
+  /** 서류에 원화로 적혀 환율 없이 그대로 더한 금액 */
+  krw: number;
+  /** 반영하지 못한 항목 — 하나라도 있으면 세액은 참고값이다 */
+  unconfirmed: string[];
+  notes: string[];
+}
+
 export interface ImportDutyEstimate {
   status: 'calculated';
   invoiceCurrency: string;
@@ -263,6 +276,9 @@ export interface ImportDutyEstimate {
   exchangeRate: number;
   exchangeRateDate: string;
   convertedInvoiceKrw: number;
+  /** 과세가격에 더한 운임·보험료 등(원화). 이 필드가 생기기 전에 저장된 거래에는 없다. */
+  additionsKrw?: number;
+  valuation?: ImportDutyValuation;
   customsValue: number;
   basicRate: number;
   basicDuty: number;
@@ -300,21 +316,6 @@ export const isFtaReviewChoice = (value?: string): boolean =>
   value === '적용 여부 미확인' || value === 'FTA 적용 요청';
 
 /** 원산지증명서 보유 여부 — chosenValues[CO_HOLDING_KEY] */
-/**
- * 화주가 포워더에게 알려주는 배송 요청.
- * 배송지·희망 일시·수령 담당자는 서류에 없고 화주만 아는 값이라 직접 입력받는다.
- */
-export interface ImportDeliveryRequest {
-  deliveryAddress: string;
-  /** 희망 배송일시 — datetime-local 문자열 */
-  deliveryAt: string;
-  contactName: string;
-  contactTel: string;
-  /** 화주가 운송사에 전달할 요청사항 */
-  remarks: string;
-  updatedAt: string;
-}
-
 export const CO_HOLDING_KEY = 'fta:co';
 export const CO_HOLDING_CHOICES = ['있음', '없음 / 발급 예정'] as const;
 export type CoHolding = typeof CO_HOLDING_CHOICES[number];
@@ -395,8 +396,6 @@ export interface ImportTradeSnapshot {
   duty?: ImportDutyEstimate;
   risks: ImportRisk[];
   cargo?: CargoTrackingResult;
-  /** 화주가 입력한 배송 요청 — 포워더가 운송사에 전달할 때 참고한다 */
-  deliveryRequest?: ImportDeliveryRequest;
   generatedAt: string;
   flowCompletedAt?: string;
 }
