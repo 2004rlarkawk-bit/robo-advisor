@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Plus, X } from 'lucide-react';
+import {
+  Boxes, Check, ChevronDown, Container, Flame, Package, Plane, Plus, Ship, Snowflake, Tag, Weight, X,
+  type LucideIcon,
+} from 'lucide-react';
 import type { SavedTrade } from '../../types';
 import type { ForwarderMatchCandidate } from '../../types/forwarderRequest';
 import { matchForwarderForTrade } from '../../services/forwarderRequestService';
@@ -42,6 +45,48 @@ const VISIBLE_CANDIDATES = 3;
  * 거래 정보에서 자동으로 뽑힌 경우에는 추천 조건 줄에 그대로 붙는다.
  */
 const HIDDEN_EXTRA_OPTIONS = new Set<ForwarderSpecialtyKey>(['route_cis']);
+
+/** 카드에 띄울 특화 분야 수. 많이 늘어놓으면 무엇 때문에 추천됐는지 오히려 안 읽힌다. */
+const CARD_TAG_LIMIT = 2;
+
+const CARGO_ICONS: Record<string, LucideIcon> = {
+  cargo_fcl: Container,
+  cargo_lcl: Boxes,
+  cargo_cold: Snowflake,
+  cargo_dg: Flame,
+  cargo_air: Plane,
+  cargo_oog: Weight,
+  cargo_express: Package,
+};
+
+function specialtyIcon(key: string): LucideIcon {
+  if (key.startsWith('route_')) return Ship;
+  return CARGO_ICONS[key] ?? Tag;
+}
+
+interface CardTag { key: string; label: string; icon: LucideIcon; match: boolean }
+
+/**
+ * 카드에 띄울 특화 분야 두 개. 조건과 일치한 분야를 먼저, 그다음 포워더가 등록한 나머지 분야 순으로 채운다.
+ * 직접 적은 분야는 배정 점수와 무관해, 화주가 직접 적은 조건과 겹칠 때만 일치로 친다.
+ */
+function cardTags(candidate: ForwarderMatchCandidate, customConditions: string[]): CardTag[] {
+  const matched = new Set(candidate.matchedSpecialties);
+  const preset = (key: string, match: boolean): CardTag => ({ key, label: specialtyLabel(key), icon: specialtyIcon(key), match });
+  const custom = (label: string): CardTag => ({
+    key: `custom-${label}`,
+    label,
+    icon: Tag,
+    match: customConditions.some((condition) => customMatches(condition, label)),
+  });
+  const customTags = (candidate.customSpecialties ?? []).map(custom);
+  return [
+    ...candidate.matchedSpecialties.map((key) => preset(key, true)),
+    ...customTags.filter((tag) => tag.match),
+    ...candidate.specialties.filter((key) => !matched.has(key)).map((key) => preset(key, false)),
+    ...customTags.filter((tag) => !tag.match),
+  ].slice(0, CARD_TAG_LIMIT);
+}
 
 function candidateName(candidate: ForwarderMatchCandidate): string {
   return candidate.contactName?.trim() || '담당자명 미등록';
@@ -198,7 +243,6 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
               />
               <button type="submit" disabled={!customDraft.trim() || customConditions.length >= CUSTOM_SPECIALTY_MAX_COUNT}>추가</button>
             </form>
-            <p className="fwd-cond-custom-hint">직접 적은 조건은 요청 메시지와 함께 포워더에게 전달됩니다.</p>
           </div>
         )}
       </div>
@@ -214,15 +258,7 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
         <ul className="fwd-pick-list" role="radiogroup" aria-label="추천 포워더">
           {visibleCandidates.map((candidate) => {
             const on = candidate.id === pickedId;
-            const tags = [
-              ...candidate.matchedSpecialties.map((key) => ({ key, label: specialtyLabel(key), match: true })),
-              // 직접 적은 분야 — 배정 점수와 무관하다. 화주가 직접 적은 조건과 겹칠 때만 일치로 칠한다.
-              ...(candidate.customSpecialties ?? []).map((label) => ({
-                key: `custom-${label}`,
-                label,
-                match: customConditions.some((condition) => customMatches(condition, label)),
-              })),
-            ];
+            const tags = cardTags(candidate, customConditions);
             return (
               <li key={candidate.id}>
                 <button
@@ -246,14 +282,17 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
                       <i aria-hidden="true">·</i>
                       완료 {candidate.completedCount}건
                     </span>
-                    {tags.length > 0 && (
-                      <span className="fwd-pick-basis">
-                        {tags.map((tag) => (
-                          <span key={tag.key} className={`fwd-basis-chip${tag.match ? ' is-match' : ''}`}>{tag.label}</span>
-                        ))}
-                      </span>
-                    )}
                   </span>
+                  {tags.length > 0 && (
+                    <span className="fwd-pick-basis">
+                      {tags.map(({ key, label, icon: Icon, match }) => (
+                        <span key={key} className={`fwd-basis-chip${match ? ' is-match' : ''}`}>
+                          <Icon size={12} aria-hidden="true" />
+                          {label}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </button>
               </li>
             );
@@ -268,12 +307,6 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
         </button>
       )}
 
-      {top && !loading && (
-        <p className="fwd-assign-note" aria-live="polite">
-          {pickedId === null && '목록에서 의뢰할 포워더를 직접 선택해 주세요. '}
-          {preferExperienced && `서류 검증에서 확인 항목이 ${issueCount}건 있어 처리 경험이 많은 담당자를 우선했습니다. `}
-        </p>
-      )}
     </div>
   );
 }

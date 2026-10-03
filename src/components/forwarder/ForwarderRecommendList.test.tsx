@@ -88,16 +88,28 @@ describe('ForwarderRecommendList', () => {
     expect(second.querySelector('.fwd-pick-partner')).toBeNull();
   });
 
-  it('추천 근거로 특화 분야·담당자·진행 건수를 함께 적는다', async () => {
+  it('담당자·진행 건수와 함께 특화 분야를 아이콘 칩 두 개까지만 보여 준다', async () => {
     await render();
     const [first] = rows();
-    expect(first.textContent).toContain('중국 항로');
-    expect(first.textContent).toContain('콜드체인');
-    expect(first.textContent).toContain('삼국간 무역');
     expect(first.textContent).toContain('담당 Kim');
     expect(first.textContent).toContain('현재 진행 2건');
     expect(first.textContent).toContain('완료 14건');
-    expect(container.textContent).toContain('확인 항목이 2건');
+    const chips = [...first.querySelectorAll('.fwd-basis-chip')];
+    // 일치한 분야가 먼저 오고, 세 번째(직접 적은 '삼국간 무역')는 잘린다.
+    expect(chips.map((chip) => chip.textContent)).toEqual(['중국 항로', '콜드체인']);
+    expect(chips.every((chip) => chip.classList.contains('is-match') && chip.querySelector('svg'))).toBe(true);
+    // 안내 문구는 띄우지 않는다.
+    expect(container.textContent).not.toContain('확인 항목이');
+  });
+
+  it('조건과 일치한 분야가 없으면 포워더가 등록한 분야로 채운다', async () => {
+    requestService.matchForwarderForTrade.mockResolvedValue([
+      { ...plain, specialties: ['cargo_dg', 'cargo_express', 'route_us'], matchedSpecialties: [] },
+    ]);
+    await render();
+    const chips = [...rows()[0].querySelectorAll('.fwd-basis-chip')];
+    expect(chips.map((chip) => chip.textContent)).toEqual(['위험물', '특송·이커머스']);
+    expect(chips.some((chip) => chip.classList.contains('is-match'))).toBe(false);
   });
 
   it('미리 고르지 않고 1순위에 추천 배지만 붙인다 — 화주가 직접 눌러야 선택된다', async () => {
@@ -106,12 +118,10 @@ describe('ForwarderRecommendList', () => {
     expect(rows().every((row) => row.getAttribute('aria-checked') === 'false')).toBe(true);
     expect(rows()[0].querySelector('.fwd-pick-top')?.textContent).toBe('추천');
     expect(rows()[1].querySelector('.fwd-pick-top')).toBeNull();
-    expect(container.textContent).toContain('직접 선택해 주세요');
 
     await act(async () => { rows()[1].click(); });
     expect(onSelected).toHaveBeenLastCalledWith(plain);
     expect(rows()[1].getAttribute('aria-checked')).toBe('true');
-    expect(container.textContent).not.toContain('직접 선택해 주세요');
   });
 
   it('조건을 바꿔 다시 추천해도 고른 포워더가 남아 있으면 선택을 유지한다', async () => {
@@ -156,6 +166,9 @@ describe('ForwarderRecommendList', () => {
 
   it('조건 추가를 펼치면 기타 조건을 직접 적을 수 있고, 포워더가 적은 분야와 겹치면 일치로 표시한다', async () => {
     const onCustomConditionsChange = vi.fn();
+    requestService.matchForwarderForTrade.mockResolvedValue([
+      { ...plain, specialties: ['route_us'], matchedSpecialties: [], customSpecialties: ['삼국간 무역'] },
+    ]);
     await render({ onCustomConditionsChange });
     expect(container.querySelector('.fwd-cond-custom')).toBeNull();
     await act(async () => { button('조건 추가').click(); });
@@ -175,8 +188,10 @@ describe('ForwarderRecommendList', () => {
     expect(container.querySelector('.fwd-cond-chip.is-custom')?.textContent).toBe('삼국간');
     // 직접 적은 조건은 서버 추천을 다시 부르지 않는다.
     expect(requestService.matchForwarderForTrade).toHaveBeenCalledTimes(1);
-    const customTag = [...rows()[0].querySelectorAll('.fwd-basis-chip')].find((chip) => chip.textContent === '삼국간 무역');
-    expect(customTag?.classList.contains('is-match')).toBe(true);
+    // 겹치는 직접 적은 분야는 등록 분야보다 앞으로 올라와 일치로 칠해진다.
+    const [firstTag] = [...rows()[0].querySelectorAll('.fwd-basis-chip')];
+    expect(firstTag.textContent).toBe('삼국간 무역');
+    expect(firstTag.classList.contains('is-match')).toBe(true);
 
     await act(async () => { (container.querySelector('.fwd-cond-chip.is-custom') as HTMLButtonElement).click(); });
     expect(onCustomConditionsChange).toHaveBeenLastCalledWith([]);

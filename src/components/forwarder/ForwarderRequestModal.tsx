@@ -204,9 +204,6 @@ export default function ForwarderRequestModal({ trade, onClose, onSent, onViewRe
                   <div className="fwd-search-result-row"><span>담당자명</span><span>{searchResult.contactName || '-'}</span></div>
                   <div className="fwd-field" style={{ marginTop: 12, marginBottom: 0 }}>
                     <label htmlFor="fwd-internal-message">요청 메시지</label>
-                    {customConditions.length > 0 && (
-                      <p className="fwd-message-extra">함께 전달 · 추가 조건: {customConditions.join(', ')}</p>
-                    )}
                     <textarea
                       id="fwd-internal-message"
                       rows={3}
