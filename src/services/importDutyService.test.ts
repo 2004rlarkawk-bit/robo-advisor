@@ -115,12 +115,49 @@ describe('수입 예상세액 계산', () => {
   it('FOB인데 운임이 없으면 0으로 넘기지 않고 확인 안내를 남긴다', () => {
     const valuation = resolveDutiableAdditions({ incoterms: 'FOB', freight: '', insurance: '' });
     expect(valuation.freight).toBe(0);
-    expect(valuation.notes.join(' ')).toContain('운임을 찾지 못했습니다');
+    expect(valuation.unconfirmed).toContain('운임');
   });
 
   it('Incoterms를 모르면 가산하지 않고 확인 안내를 남긴다', () => {
     const valuation = resolveDutiableAdditions({ incoterms: '', freight: '100', insurance: '10' });
     expect(valuation.freight + valuation.insurance).toBe(0);
-    expect(valuation.notes[0]).toContain('Incoterms를 확인하지 못해');
+    expect(valuation.unconfirmed).toEqual(['Incoterms']);
+  });
+});
+
+describe('과세가격 가산 — 미확인·통화·중복 가산', () => {
+  it('빈 운임은 0원이 아니라 미확인으로 남는다', () => {
+    const missing = resolveDutiableAdditions({ incoterms: 'FOB', freight: '', insurance: '10' }, 'USD');
+    expect(missing.unconfirmed).toContain('운임');
+    const zero = resolveDutiableAdditions({ incoterms: 'FOB', freight: '0', insurance: '10' }, 'USD');
+    expect(zero.unconfirmed).not.toContain('운임');
+  });
+
+  it('원화로 적힌 운임에는 환율을 다시 곱하지 않는다', () => {
+    const valuation = resolveDutiableAdditions({ incoterms: 'FOB', freight: 'KRW 500,000', insurance: 'USD 10' }, 'USD');
+    expect(valuation.krw).toBe(500_000);
+    expect(valuation.freight).toBe(0);
+    expect(valuation.insurance).toBe(10);
+  });
+
+  it('Invoice와 다른 외화 운임은 가산하지 않고 미확인으로 남긴다', () => {
+    const valuation = resolveDutiableAdditions({ incoterms: 'FOB', freight: 'EUR 300', insurance: '10' }, 'USD');
+    expect(valuation.freight).toBe(0);
+    expect(valuation.unconfirmed).toContain('운임');
+  });
+
+  it('CIF는 운임이 추출돼 있어도 다시 더하지 않는다', () => {
+    const valuation = resolveDutiableAdditions({ incoterms: 'CIF Busan', freight: 'USD 300', insurance: 'USD 10' }, 'USD');
+    expect(valuation.freight + valuation.insurance + valuation.krw).toBe(0);
+    expect(valuation.unconfirmed).toEqual([]);
+  });
+
+  it('EXW·FCA·FAS는 수출국 내 운송비를 미확인으로 남긴다', () => {
+    expect(resolveDutiableAdditions({ incoterms: 'FCA', freight: '100', insurance: '10' }, 'USD').unconfirmed)
+      .toEqual(['수출국 내 운송비']);
+  });
+
+  it('D조건은 Invoice 그대로의 값을 참고값으로 표시한다', () => {
+    expect(resolveDutiableAdditions({ incoterms: 'DAP Seoul' }, 'USD').unconfirmed).toEqual(['수입항 이후 비용 공제']);
   });
 });

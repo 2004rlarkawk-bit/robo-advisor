@@ -256,11 +256,16 @@ export interface ImportDutyItemEstimate {
   basicDuty: number;
 }
 
-/** Incoterms에 따라 과세가격에 더한 운임·보험료(Invoice 통화)와 확인할 점 */
+/** Incoterms에 따라 과세가격에 더한 운임·보험료와 확인할 점 */
 export interface ImportDutyValuation {
   incoterms: string | null;
+  /** Invoice 통화로 더한 운임·보험료 */
   freight: number;
   insurance: number;
+  /** 서류에 원화로 적혀 환율 없이 그대로 더한 금액 */
+  krw: number;
+  /** 반영하지 못한 항목 — 하나라도 있으면 세액은 참고값이다 */
+  unconfirmed: string[];
   notes: string[];
 }
 
