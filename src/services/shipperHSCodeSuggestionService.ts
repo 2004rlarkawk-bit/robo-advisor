@@ -30,16 +30,22 @@ import {
   bagPrefixesForQuery,
 } from './hsBagNomenclature';
 import { furnitureSubheadingForQuery } from './hsFurnitureMaterial';
+import {
+  annotateProductNames,
+  productDisambiguationForQuery,
+  productPrefixesForQuery,
+} from './hsProductScopes';
 import { isSearchableItemName } from './hsItemName';
 
-/** 소호 보조표(의류·가방)로 후보 품명에 분류 기준을 덧붙인다. */
+/** 소호 보조표(의류·가방·사무용품·가구·시계)로 후보 품명에 분류 기준을 덧붙인다. */
 function annotateCandidateNames(
   code: string,
   koreanName: string,
   englishName: string
 ): { koreanName: string; englishName: string } {
   const apparel = annotateApparelNames(code, koreanName, englishName);
-  return annotateBagNames(code, apparel.koreanName, apparel.englishName);
+  const bag = annotateBagNames(code, apparel.koreanName, apparel.englishName);
+  return annotateProductNames(code, bag.koreanName, bag.englishName);
 }
 
 const LOCAL_CANDIDATE_LIMIT = 30;
@@ -426,6 +432,14 @@ export function detectDisambiguation(
   itemName: string,
   candidates: HSCodeCandidateContext[]
 ): HSCodeDisambiguation | null {
+  // 보조표 품목(시계·의자·컴퓨터 등)은 공식 품명에 제품명이 없어 아래 점수 비교로는
+  // 구분할 수 없다. 표에 정리한 분류 기준으로 바로 되묻는다.
+  const scoped = productDisambiguationForQuery(
+    itemName,
+    candidates.map((candidate) => candidate.code)
+  );
+  if (scoped) return scoped;
+
   const tokens = distinguishingTokens(itemName);
   if (tokens.length === 0 || candidates.length === 0) return null;
 
@@ -652,7 +666,11 @@ export async function recommendShipperHSCode(
   const bagPrefixes = chosenSubheading
     ? []
     : bagPrefixesForQuery(normalizedItemName);
-  const indexedPrefixes = [...apparelPrefixes, ...bagPrefixes];
+  // 시계·의자·컴퓨터 등도 사전 품명에 제품명이 없어 색인으로 소호를 끌어온다.
+  const productPrefixes = chosenSubheading
+    ? []
+    : productPrefixesForQuery(normalizedItemName);
+  const indexedPrefixes = [...apparelPrefixes, ...bagPrefixes, ...productPrefixes];
   // AI 방향이 틀려도 소호 제목에 품명 단어가 그대로 있으면 그 소호를 함께 본다.
   const titlePrefixes = chosenSubheading
     ? []
@@ -668,7 +686,9 @@ export async function recommendShipperHSCode(
     discoveryPrefixes,
     debugItemId,
     // 의류는 성별·소재 조합으로 여러 호를 한꺼번에 끌어오므로 상한을 넉넉히 둔다.
-    apparelPrefixes.length > 0 ? APPAREL_CANDIDATE_LIMIT : LOCAL_CANDIDATE_LIMIT
+    apparelPrefixes.length > 0 || productPrefixes.length > 1
+      ? APPAREL_CANDIDATE_LIMIT
+      : LOCAL_CANDIDATE_LIMIT
   );
   // 사용자가 고른 소호가 있으면 그 안에서만 추천한다.
   // 확장 과정에서 다른 소호가 다시 섞이면 선택이 무시된 것처럼 보인다.
