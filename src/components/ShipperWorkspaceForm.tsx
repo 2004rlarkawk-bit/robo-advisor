@@ -378,6 +378,16 @@ export default function ShipperWorkspaceForm({
   const cbmFieldValue = manualCbm
     ? profile.measurement ?? ''
     : computedCbm === null ? '' : formatCbm(computedCbm);
+  // 추천 HS Code를 적용한 순간 그 품목의 HS Code 칸을 CBM처럼 잠깐 강조한다.
+  const [hsFlashItemId, setHsFlashItemId] = useState<string | null>(null);
+  const hsFlashTimer = useRef<number | undefined>(undefined);
+  const flashHsCode = useCallback((itemId: string) => {
+    setHsFlashItemId(itemId);
+    window.clearTimeout(hsFlashTimer.current);
+    hsFlashTimer.current = window.setTimeout(() => setHsFlashItemId(null), 1100);
+  }, []);
+  useEffect(() => () => window.clearTimeout(hsFlashTimer.current), []);
+
   // 계산이 다시 돌았다는 걸 눈에 보이게 — 값이 바뀌는 순간 CBM 칸을 잠깐 강조한다.
   const [cbmJustComputed, setCbmJustComputed] = useState(false);
   const previousCbmValue = useRef(cbmFieldValue);
@@ -838,10 +848,39 @@ export default function ShipperWorkspaceForm({
                     </button>
                   </div>
                 </div>
-                <div className="form-group" data-field="hsCode"><label className="form-label">HS Code <Req /></label><input className="form-input" value={item.hsCode} onChange={(e) => {
-                  hsCodeSuggestions.markHSCodeManuallyEdited(item.id);
-                  updateItem(item.id, 'hsCode', e.target.value);
-                }} placeholder={index === 0 ? 'e.g. 6109.10' : ''} /></div>
+                {(() => {
+                  // 추천을 적용한 HS Code는 이 화면의 결과값이라 CBM처럼 크게 보이고 배지·품명을 붙인다.
+                  const hsState = hsCodeSuggestions.getState(item.id);
+                  const hsApplied = hsState.appliedSuggestionCode !== null
+                    && hsState.appliedSuggestionCode === item.hsCode.replace(/[\s.-]/g, '');
+                  const appliedSuggestion = hsApplied
+                    ? hsState.suggestions.find((suggestion) => suggestion.code === hsState.appliedSuggestionCode)
+                    : undefined;
+                  const flashing = hsFlashItemId === item.id;
+                  return (
+                    <div className={`form-group shipper-hs-result${hsApplied ? ' is-applied' : ''}`} data-field="hsCode">
+                      <div className="shipper-cbm-head">
+                        <label className="form-label">HS Code <Req /></label>
+                        {hsApplied && (
+                          <span className={`shipper-cbm-badge${flashing ? ' is-flash' : ''}`}>
+                            {flashing ? '적용 완료' : '추천 적용'}
+                          </span>
+                        )}
+                      </div>
+                      <div className={`shipper-cbm-field${flashing ? ' is-updated' : ''}`}>
+                        <input className={`form-input${hsApplied ? ' shipper-cbm-input' : ''}`} value={item.hsCode} onChange={(e) => {
+                          hsCodeSuggestions.markHSCodeManuallyEdited(item.id);
+                          updateItem(item.id, 'hsCode', e.target.value);
+                        }} placeholder={index === 0 ? 'e.g. 6109.10' : ''} />
+                      </div>
+                      {appliedSuggestion && (
+                        <div className="shipper-cbm-formula">
+                          {appliedSuggestion.formattedCode} · {appliedSuggestion.koreanName}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {(() => {
                   const state = hsCodeSuggestions.getState(item.id);
                   const applied =
@@ -909,52 +948,75 @@ export default function ShipperWorkspaceForm({
                         </div>
                       )}
 
-                      {state.suggestions.length > 0 && (
-                        <>
-                          <div className="shipper-hs-suggestion-heading">
-                            <strong>AI 추천 - 관세청 기반</strong>
-                            <small>관세청 공식 HS 품목분류 사전 12,469건과 대조해 검증한 추천입니다.</small>
-                          </div>
-                          <div className="shipper-hs-suggestion-list">
-                            {state.suggestions.map((suggestion) => (
-                              <article className="shipper-hs-suggestion" key={suggestion.code}>
-                                <header className="shipper-hs-suggestion__head">
-                                  <div className="shipper-hs-suggestion__code">
-                                    <strong>{suggestion.formattedCode}</strong>
-                                    <span className={`shipper-hs-confidence${suggestion.confidenceLabel === '보통' ? ' is-medium' : ''}`}>
-                                      {suggestion.confidenceLabel === '높음'
-                                        ? '높은 일치 가능성'
-                                        : '추가 확인 필요'}
-                                    </span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    className="btn btn-primary btn-sm"
-                                    onClick={() => {
-                                      updateItem(item.id, 'hsCode', suggestion.code);
-                                      hsCodeSuggestions.markSuggestionApplied(item.id, suggestion.code);
-                                    }}
-                                  >
-                                    {item.hsCode && item.hsCode.replace(/[\s.-]/g, '') !== suggestion.code
-                                      ? '이 코드로 변경'
-                                      : '적용'}
-                                  </button>
-                                </header>
-                                <div className="shipper-hs-suggestion__body">
-                                  <p>{suggestion.koreanName}{suggestion.classificationName ? ` ${suggestion.classificationName}` : ''}</p>
-                                  <small>{suggestion.reasoning}</small>
-                                  {(suggestion.distinguishingFactors?.length ?? 0) > 0 && (
-                                    <small>구분 조건: {suggestion.distinguishingFactors?.join(', ')}</small>
-                                  )}
-                                  {(suggestion.missingInformation?.length ?? 0) > 0 && (
-                                    <small>후보 확인사항: {suggestion.missingInformation?.join(', ')}</small>
-                                  )}
+                      {state.suggestions.length > 0 && (() => {
+                        // 1순위 후보 하나를 크게 보여 주고, 나머지는 접어 둔다 — 한눈에 무엇을 고를지 보이게.
+                        const renderSuggestion = (suggestion: typeof state.suggestions[number], primary: boolean) => (
+                          <article className={`shipper-hs-suggestion${primary ? ' is-primary' : ''}`} key={suggestion.code}>
+                            <header className="shipper-hs-suggestion__head">
+                              <div className="shipper-hs-suggestion__title">
+                                <div className="shipper-hs-suggestion__code">
+                                  {primary && <span className="shipper-hs-rank">1순위 추천</span>}
+                                  <strong>{suggestion.formattedCode}</strong>
+                                  <span className={`shipper-hs-confidence${suggestion.confidenceLabel === '보통' ? ' is-medium' : ''}`}>
+                                    {suggestion.confidenceLabel === '높음'
+                                      ? '높은 일치 가능성'
+                                      : '추가 확인 필요'}
+                                  </span>
                                 </div>
-                              </article>
-                            ))}
-                          </div>
-                        </>
-                      )}
+                                <p className="shipper-hs-suggestion__name">
+                                  {suggestion.koreanName}{suggestion.classificationName ? ` ${suggestion.classificationName}` : ''}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className={`btn ${primary ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+                                onClick={() => {
+                                  updateItem(item.id, 'hsCode', suggestion.code);
+                                  hsCodeSuggestions.markSuggestionApplied(item.id, suggestion.code);
+                                  flashHsCode(item.id);
+                                }}
+                              >
+                                {item.hsCode && item.hsCode.replace(/[\s.-]/g, '') !== suggestion.code
+                                  ? '이 코드로 변경'
+                                  : '적용'}
+                              </button>
+                            </header>
+                            <div className="shipper-hs-suggestion__body">
+                              <small>{suggestion.reasoning}</small>
+                              {(suggestion.distinguishingFactors?.length ?? 0) > 0 && (
+                                <div className="shipper-hs-factors">
+                                  {suggestion.distinguishingFactors?.map((factor) => (
+                                    <span key={factor} className="shipper-hs-factor">{factor}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {(suggestion.missingInformation?.length ?? 0) > 0 && (
+                                <small>후보 확인사항: {suggestion.missingInformation?.join(', ')}</small>
+                              )}
+                            </div>
+                          </article>
+                        );
+                        const [first, ...others] = state.suggestions;
+                        return (
+                          <>
+                            <div className="shipper-hs-suggestion-heading">
+                              <strong>AI 추천 HS Code</strong>
+                              <small>관세청 HS 품목분류 사전 12,469건과 대조한 결과입니다.</small>
+                            </div>
+                            <div className="shipper-hs-suggestion-list">
+                              {renderSuggestion(first, true)}
+                              {others.length > 0 && (
+                                <details className="shipper-hs-more">
+                                  <summary>다른 후보 {others.length}개 보기</summary>
+                                  <div className="shipper-hs-suggestion-list">
+                                    {others.map((suggestion) => renderSuggestion(suggestion, false))}
+                                  </div>
+                                </details>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
 
                       {state.additionalInformationRequired && !state.loading && !state.error && !state.disambiguation && (
                         <div className="shipper-hs-additional-info">
@@ -963,11 +1025,15 @@ export default function ShipperWorkspaceForm({
                             <p>현재 입력과 충분히 관련된 관세청 HS Code 후보를 찾지 못했습니다. 품목명, 재질, 용도 또는 제품 형태를 더 구체적으로 입력해주세요.</p>
                           )}
                           {state.requiredAdditionalInfo.length > 0 && (
-                            <ul>
-                              {state.requiredAdditionalInfo.map((info) => (
-                                <li key={info}>{info}</li>
-                              ))}
-                            </ul>
+                            // 추천이 이미 있으면 확인사항은 접어 둔다 — 추천 카드가 먼저 눈에 들어오게.
+                            <details className="shipper-hs-more" open={state.suggestions.length === 0}>
+                              <summary>더 정확하게 하려면 확인할 정보 {state.requiredAdditionalInfo.length}개</summary>
+                              <ul>
+                                {state.requiredAdditionalInfo.map((info) => (
+                                  <li key={info}>{info}</li>
+                                ))}
+                              </ul>
+                            </details>
                           )}
                           {renderDescribeBox(item, '상세 정보를 더 입력해 주세요', true)}
                         </div>
@@ -1245,7 +1311,7 @@ export default function ShipperWorkspaceForm({
 
       <div className="form-actions">
         <button type="button" className="btn btn-secondary" onClick={handleResetClick}><RotateCcw size={16} /> 초기화</button>
-        <button type="button" className="btn btn-primary" onClick={handleGenerateClick} disabled={isProcessing}><FileText size={16} />{isProcessing ? '생성 중...' : '필요 서류 자동 생성'}</button>
+        <button type="button" className="btn btn-primary" onClick={handleGenerateClick} disabled={isProcessing}><FileText size={16} />{isProcessing ? '분석 중...' : 'AI 분석 실행'}</button>
       </div>
     </div>
   );

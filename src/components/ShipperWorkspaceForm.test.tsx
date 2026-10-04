@@ -191,7 +191,7 @@ describe('화주용 통관 입력 폼', () => {
     const rendered = renderForm([{ ...firstItem, itemName: 'Cotton 티셔츠' }]);
     const generateButton = Array.from(
       rendered.container.querySelectorAll<HTMLButtonElement>('button')
-    ).find((button) => button.textContent?.includes('필요 서류 자동 생성'));
+    ).find((button) => button.textContent?.includes('AI 분석 실행'));
 
     expect(rendered.container.textContent).toContain(
       '상업송장과 포장명세서에 표시할 영문 품명을 입력해주세요.'
@@ -204,7 +204,7 @@ describe('화주용 통관 입력 폼', () => {
     const rendered = renderForm([{ ...firstItem, itemName: '' }]);
     const generateButton = Array.from(
       rendered.container.querySelectorAll<HTMLButtonElement>('button')
-    ).find((button) => button.textContent?.includes('필요 서류 자동 생성'));
+    ).find((button) => button.textContent?.includes('AI 분석 실행'));
 
     act(() => generateButton?.click());
     expect(rendered.container.textContent).toContain(
@@ -613,9 +613,12 @@ describe('화주용 통관 입력 폼', () => {
     });
 
     expect(rendered.container.textContent).toContain('추가 확인 필요');
-    expect(rendered.container.textContent).toContain(
-      '구분 조건: 면 소재, 편물제'
-    );
+    // 구분 조건은 알약 모양 태그로 하나씩 보여 준다.
+    expect(
+      Array.from(rendered.container.querySelectorAll('.shipper-hs-factor')).map((chip) => chip.textContent)
+    ).toEqual(['면 소재', '편물제']);
+    // 1순위 후보는 강조 카드로 보인다.
+    expect(rendered.container.querySelector('.shipper-hs-suggestion.is-primary')?.textContent).toContain('6109.10-1000');
     expect(rendered.container.textContent).toContain(
       '성인용 또는 아동용 여부'
     );

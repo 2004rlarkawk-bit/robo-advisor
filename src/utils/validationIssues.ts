@@ -23,6 +23,7 @@ export function issueToFieldKey(issue: ValidationIssue): string {
 export function shortIssueLabel(issue: ValidationIssue): string {
   // 메시지가 "총 0.088 CBM …"으로 시작해 첫 마침표에서 자르면 "총 0"이 된다.
   if (issue.id === 'r23-small-cargo-lcl') return 'FCL/LCL 운송방식 재확인';
+  if (issue.id === 'r21-transit-too-long') return '도착 예정일 연도·월 확인';
   const message = issue.message
     .replace(/\[[^\]]*\]/g, '')
     .replace(/\([^)]*\)/g, '')

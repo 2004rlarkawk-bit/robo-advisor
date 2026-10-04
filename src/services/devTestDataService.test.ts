@@ -122,7 +122,7 @@ describe('개발 테스트 데이터', () => {
 });
 
 describe('createDemoRehearsalProfile', () => {
-  it('품목·포장 값은 그대로 두고, 시연용 오류(원산지·신용장 날짜)와 LCL 안내가 걸리게 채운다', async () => {
+  it('품목·포장 값은 그대로 두고, 시연용 오류(신용장 날짜)와 도착 예정일 안내가 걸리게 채운다', async () => {
     const { createDemoRehearsalProfile } = await import('./devTestDataService');
     const { runComplianceRules } = await import('../agents/complianceRules');
     const current = { tradeType: 'export', itemName: 'desk', hsCode: '9403301000', quantity: 10, unitPrice: 100, totalAmount: 1000, currency: 'USD', unit: 'EA', weight: 120, measurement: '0.300' } as never;
@@ -130,12 +130,19 @@ describe('createDemoRehearsalProfile', () => {
 
     expect(profile.itemName).toBe('desk');
     expect(profile.currency).toBe('USD');
+    expect(profile.shipperItems?.[0]).toMatchObject({ itemName: 'desk', currency: 'USD', brand: 'NO BRAND', composition: 'Wood (Oak) 100%' });
+    expect(profile).toMatchObject({ packageType: 'CARTON', eaPerBox: 10, packageCount: 8 });
+    expect(profile.packageDimensions?.[0]?.boxes).toBe(8);
+    expect(profile.exportDeclaration?.goodsCondition).toBe('N');
     expect(profile.measurement).toBe('0.300');
     expect(profile.departureDate).toBe('2026-10-10');
     expect(profile.lcDate).toBe('2026-10-31');
 
     const ids = runComplianceRules(profile).map((issue) => issue.id);
-    expect(ids).toEqual(expect.arrayContaining(['r15-origin-not-korea', 'r14-lc-after-shipment', 'r23-small-cargo-lcl']));
+    expect(ids).toEqual(expect.arrayContaining(['r14-lc-after-shipment', 'r21-transit-too-long']));
+    expect(ids).not.toContain('r23-small-cargo-lcl');
+    expect(ids).not.toContain('r21-date-out-of-range');
+    expect(ids).not.toContain('r15-origin-not-korea');
     expect(ids).not.toContain('r22-contact-format');
   });
 });

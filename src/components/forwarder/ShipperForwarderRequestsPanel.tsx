@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   ArrowRight,
   FileCheck2,
@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Send,
   Ship,
+  Trash2,
   X,
 } from 'lucide-react';
 import type { SavedTrade } from '../../types';
@@ -56,6 +57,11 @@ const FILTER_LABELS: Array<{ key: RequestFilter; label: string }> = [
   { key: 'active', label: '처리 중' },
   { key: 'done', label: '완료' },
 ];
+
+/** 행을 이만큼 왼쪽으로 밀고 놓으면 삭제를 묻는다. */
+const SWIPE_DELETE_PX = 140;
+/** 행이 따라 움직이는 최대 거리 */
+const SWIPE_MAX_PX = 240;
 
 function timeValue(iso: string | null | undefined): number {
   if (!iso) return 0;
@@ -174,6 +180,51 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
   const [threadTrade, setThreadTrade] = useState<SavedTrade | null>(null);
   const [unreadByRequest, setUnreadByRequest] = useState<Record<string, number>>({});
 
+  // 행을 꾹 누른 채 왼쪽으로 밀면 목록에서 지운다. DB의 거래는 그대로 두고 이 브라우저에서만 숨긴다
+  // (포워더 쪽 의뢰·대화를 건드리지 않게). 버튼 위에서 시작한 드래그는 무시한다.
+  const hiddenKey = `portai:hidden-shipper-requests:${currentUserId}`;
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => {
+    try {
+      const raw = window.localStorage.getItem(hiddenKey);
+      return new Set(raw ? JSON.parse(raw) as string[] : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const saveHidden = (next: Set<string>) => {
+    setHiddenIds(next);
+    try { window.localStorage.setItem(hiddenKey, JSON.stringify([...next])); } catch { /* 저장 실패는 무시 */ }
+  };
+  const [swipe, setSwipe] = useState<{ id: string; dx: number } | null>(null);
+  const dragRef = useRef<{ id: string; startX: number; startY: number; dx: number; active: boolean } | null>(null);
+
+  const hideTrade = (trade: SavedTrade) => saveHidden(new Set(hiddenIds).add(trade.id));
+
+  const handleSwipeStart = (event: ReactPointerEvent<HTMLElement>, id: string) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest('button, a')) return;
+    dragRef.current = { id, startX: event.clientX, startY: event.clientY, dx: 0, active: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const handleSwipeMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.active) {
+      // 세로 스크롤과 구분 — 가로로 확실히 움직였을 때만 밀기로 본다.
+      if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
+      drag.active = true;
+    }
+    drag.dx = Math.max(Math.min(dx, 0), -SWIPE_MAX_PX);
+    setSwipe({ id: drag.id, dx: drag.dx });
+  };
+  const handleSwipeEnd = (trade: SavedTrade) => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setSwipe(null);
+    if (drag?.active && drag.dx <= -SWIPE_DELETE_PX) hideTrade(trade);
+  };
+
   const loadUnread = useCallback(async () => {
     try {
       setUnreadByRequest(await listUnreadTradeMessageCounts('shipper'));
@@ -212,14 +263,14 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { void loadUnread(); }, [loadUnread, internalRequests]);
 
-  const rows = useMemo(() => trades.map((trade) => {
+  const rows = useMemo(() => trades.filter((trade) => !hiddenIds.has(trade.id)).map((trade) => {
     const internal = latestForTrade(internalRequests, trade.id);
     return {
       trade,
       internal,
       view: deriveTradeRequestView(trade, internal, latestForTrade(externalRequests, trade.id)),
     };
-  }), [trades, internalRequests, externalRequests]);
+  }), [trades, internalRequests, externalRequests, hiddenIds]);
 
   const counts = useMemo(() => ({
     all: rows.length,
@@ -282,6 +333,14 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
               </button>
             ))}
           </div>
+          <span className="shipper-requests-swipe-hint">
+            행을 왼쪽으로 밀면 목록에서 삭제
+            {hiddenIds.size > 0 && (
+              <button type="button" className="shipper-requests-unhide" onClick={() => saveHidden(new Set())}>
+                삭제한 {hiddenIds.size}건 되돌리기
+              </button>
+            )}
+          </span>
           <button type="button" className="shipper-requests-refresh" aria-label="의뢰 목록 새로고침" onClick={() => void load()}>
             <RefreshCw size={17} />
           </button>
@@ -309,7 +368,18 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
               const reference = profile.blNo || profile.invoiceNo || profile.documentNo || `거래 ${trade.id.slice(0, 8)}`;
               const direction = trade.tradeDirection ?? profile.tradeType;
               return (
-                <article key={trade.id} className="shipper-request-row">
+                <div key={trade.id} className="shipper-request-swipe">
+                <div className={`shipper-request-swipe-bg${swipe?.id === trade.id && swipe.dx <= -SWIPE_DELETE_PX ? ' is-armed' : ''}`} aria-hidden="true">
+                  <Trash2 size={17} /> {swipe?.id === trade.id && swipe.dx <= -SWIPE_DELETE_PX ? '놓으면 삭제' : '삭제'}
+                </div>
+                <article
+                  className={`shipper-request-row${swipe?.id === trade.id ? ' is-swiping' : ''}`}
+                  style={swipe?.id === trade.id ? { transform: `translateX(${swipe.dx}px)` } : undefined}
+                  onPointerDown={(event) => handleSwipeStart(event, trade.id)}
+                  onPointerMove={handleSwipeMove}
+                  onPointerUp={() => handleSwipeEnd(trade)}
+                  onPointerCancel={() => { dragRef.current = null; setSwipe(null); }}
+                >
                   <div className="shipper-request-trade">
                     <div>
                       <span className={`trade-type-badge ${direction}`}>{direction === 'export' ? '수출' : '수입'}</span>
@@ -343,6 +413,7 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
                     )}
                   </div>
                 </article>
+                </div>
               );
             })}
           </div>

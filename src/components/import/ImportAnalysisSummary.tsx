@@ -66,6 +66,55 @@ function TextField({
   );
 }
 
+interface FieldSpec {
+  key: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+  /** 신고·세액 계산에 꼭 필요한 칸 — 비어 있어도 항상 보여 채우게 한다. */
+  required?: boolean;
+}
+
+/**
+ * 서류에서 값을 찾은 칸과 꼭 필요한 칸만 보여 준다.
+ * 비어 있는 선택 칸은 숨기고, 아래 [+ 칸 이름] 버튼으로 필요할 때 하나씩 꺼낸다.
+ */
+function AdaptiveFieldGrid({
+  specs,
+  revealed,
+  onReveal,
+  readOnly,
+}: {
+  specs: FieldSpec[];
+  revealed: Set<string>;
+  onReveal: (key: string) => void;
+  readOnly: boolean;
+}) {
+  const isShown = (spec: FieldSpec) => spec.required || spec.value.trim() !== '' || revealed.has(spec.key);
+  const hidden = specs.filter((spec) => !isShown(spec));
+  return (
+    <>
+      <div className="import-field-grid">
+        {specs.filter(isShown).map((spec) => (
+          <TextField key={spec.key} label={spec.label} value={spec.value} type={spec.type} placeholder={spec.placeholder} onChange={spec.onChange} />
+        ))}
+      </div>
+      {!readOnly && hidden.length > 0 && (
+        <div className="import-hidden-fields" aria-label="서류에 없어 숨긴 칸">
+          <span className="import-hidden-fields-label">서류에 없던 칸 추가</span>
+          {hidden.map((spec) => (
+            <button key={spec.key} type="button" className="import-hidden-field-chip" onClick={() => onReveal(spec.key)}>
+              <Plus size={13} /> {spec.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function ImportAnalysisSummary({
   analysis,
   onChange,
@@ -73,6 +122,12 @@ export default function ImportAnalysisSummary({
   readOnly = false,
 }: Props) {
   const [open, setOpen] = useState(true);
+  // 사용자가 [+ 칸 이름]으로 꺼낸 빈 칸 — 값을 지워도 바로 사라지지 않게 기억한다.
+  const [revealed, setRevealed] = useState<Set<string>>(() => new Set());
+  const reveal = (key: string) => setRevealed((current) => new Set(current).add(key));
+  const grid = (specs: FieldSpec[]) => (
+    <AdaptiveFieldGrid specs={specs} revealed={revealed} onReveal={reveal} readOnly={readOnly} />
+  );
   const fields = analysis.extracted;
   const commit = (next: ImportExtractedFields) => onChange(syncLegacyImportFields(next));
   const setField = (field: keyof ImportExtractedFields, value: string) => commit({ ...fields, [field]: value });
@@ -111,6 +166,24 @@ export default function ImportAnalysisSummary({
       ] as const).map(([partyKey, title]) => (
         <fieldset className="import-party-fieldset" key={partyKey}>
           <legend>{title}</legend>
+          {partyKey === 'importerDetails' && fields.importerDetails.name.trim()
+            && JSON.stringify(fields.importerDetails) === JSON.stringify(fields.consigneeDetails) && (
+            <small className="import-party-note">
+              Consignee와 같은 정보로 채워져 있습니다. 수입자가 다르면 고쳐 주세요.
+            </small>
+          )}
+          {partyKey === 'importerDetails' && (
+            <div className="import-party-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!fields.consigneeDetails.name.trim()}
+                onClick={() => commit({ ...fields, importerDetails: { ...fields.consigneeDetails } })}
+              >
+                Consignee 정보를 Importer에 복사
+              </button>
+            </div>
+          )}
           {partyKey === 'consigneeDetails' && (
             <div className="import-party-actions">
               <button
@@ -133,41 +206,43 @@ export default function ImportAnalysisSummary({
               </button>
             </div>
           )}
-          <div className="import-field-grid">
-            {PARTY_FIELDS.map(([field, label]) => (
-              <TextField key={field} label={label} value={fields[partyKey][field]} onChange={(value) => setParty(partyKey, field, value)} />
-            ))}
-          </div>
+          {grid(PARTY_FIELDS.map(([field, label]) => ({
+            key: `${partyKey}.${field}`,
+            label,
+            value: fields[partyKey][field],
+            onChange: (value: string) => setParty(partyKey, field, value),
+            required: field === 'name' && partyKey !== 'notifyPartyDetails',
+          })))}
         </fieldset>
       ))}
       </details>
 
       <details className="form-section">
       <summary className="form-section-summary"><span>B. Invoice 정보</span></summary>
-      <div className="import-field-grid">
-        <TextField label="Invoice 번호" value={fields.invoiceNo} onChange={(value) => setField('invoiceNo', value)} />
-        <TextField label="Invoice 발행일" type="date" value={fields.invoiceDate} onChange={(value) => setField('invoiceDate', value)} />
-        <TextField label="통화" value={fields.currency} onChange={(value) => setField('currency', value)} />
-        <TextField label="Invoice 총금액" value={fields.totalAmount} onChange={(value) => setField('totalAmount', value)} />
-        <TextField label="Incoterms" value={fields.incoterms} onChange={(value) => setField('incoterms', value)} />
-        <TextField label="결제조건" value={fields.paymentTerms} onChange={(value) => setField('paymentTerms', value)} />
-      </div>
+      {grid([
+        { key: 'invoiceNo', label: 'Invoice 번호', value: fields.invoiceNo, onChange: (value) => setField('invoiceNo', value), required: true },
+        { key: 'invoiceDate', label: 'Invoice 발행일', type: 'date', value: fields.invoiceDate, onChange: (value) => setField('invoiceDate', value) },
+        { key: 'currency', label: '통화', value: fields.currency, onChange: (value) => setField('currency', value), required: true },
+        { key: 'totalAmount', label: 'Invoice 총금액', value: fields.totalAmount, onChange: (value) => setField('totalAmount', value), required: true },
+        { key: 'incoterms', label: 'Incoterms', value: fields.incoterms, onChange: (value) => setField('incoterms', value), required: true },
+        { key: 'paymentTerms', label: '결제조건', value: fields.paymentTerms, onChange: (value) => setField('paymentTerms', value) },
+      ])}
       </details>
 
       <details className="form-section">
       <summary className="form-section-summary"><span>C. 해상운송 정보</span></summary>
-      <div className="import-field-grid">
-        <TextField label="B/L 번호" value={fields.blNo} onChange={(value) => setField('blNo', value)} />
-        <TextField label="선박명" value={fields.vesselName} onChange={(value) => setField('vesselName', value)} />
-        <TextField label="항차" value={fields.voyageNo} onChange={(value) => setField('voyageNo', value)} />
-        <TextField label="적재항" value={fields.loadPort} onChange={(value) => setField('loadPort', value)} />
-        <TextField label="양륙항" value={fields.dischargePort} onChange={(value) => setField('dischargePort', value)} />
-        <TextField label="수입국" value={fields.destinationCountry} onChange={(value) => setField('destinationCountry', value)} />
-        <TextField label="선적일" type="date" value={fields.shipmentDate} onChange={(value) => setField('shipmentDate', value)} />
-        <TextField label="입항예정일" type="date" value={fields.estimatedArrivalDate} onChange={(value) => setField('estimatedArrivalDate', value)} />
-        <TextField label="컨테이너 번호 (쉼표 구분)" value={fields.containerNumbers.join(', ')} placeholder="선택" onChange={(value) => commit({ ...fields, containerNumbers: value.split(',').map((v) => v.trim()).filter(Boolean) })} />
-        <TextField label="Seal 번호 (쉼표 구분)" value={fields.sealNumbers.join(', ')} placeholder="선택" onChange={(value) => commit({ ...fields, sealNumbers: value.split(',').map((v) => v.trim()).filter(Boolean) })} />
-      </div>
+      {grid([
+        { key: 'blNo', label: 'B/L 번호', value: fields.blNo, onChange: (value) => setField('blNo', value), required: true },
+        { key: 'vesselName', label: '선박명', value: fields.vesselName, onChange: (value) => setField('vesselName', value) },
+        { key: 'voyageNo', label: '항차', value: fields.voyageNo, onChange: (value) => setField('voyageNo', value) },
+        { key: 'loadPort', label: '적재항', value: fields.loadPort, onChange: (value) => setField('loadPort', value), required: true },
+        { key: 'dischargePort', label: '양륙항', value: fields.dischargePort, onChange: (value) => setField('dischargePort', value) },
+        { key: 'destinationCountry', label: '수입국', value: fields.destinationCountry, onChange: (value) => setField('destinationCountry', value) },
+        { key: 'shipmentDate', label: '선적일', type: 'date', value: fields.shipmentDate, onChange: (value) => setField('shipmentDate', value) },
+        { key: 'estimatedArrivalDate', label: '입항예정일', type: 'date', value: fields.estimatedArrivalDate, onChange: (value) => setField('estimatedArrivalDate', value) },
+        { key: 'containerNumbers', label: '컨테이너 번호 (쉼표 구분)', value: fields.containerNumbers.join(', '), onChange: (value) => commit({ ...fields, containerNumbers: value.split(',').map((v) => v.trim()).filter(Boolean) }) },
+        { key: 'sealNumbers', label: 'Seal 번호 (쉼표 구분)', value: fields.sealNumbers.join(', '), onChange: (value) => commit({ ...fields, sealNumbers: value.split(',').map((v) => v.trim()).filter(Boolean) }) },
+      ])}
       </details>
 
       <details className="form-section">
@@ -184,30 +259,31 @@ export default function ImportAnalysisSummary({
           <button type="button" className="icon-btn import-delete" aria-label={`품목 ${index + 1} 삭제`} onClick={() => commit({ ...fields, items: fields.items.filter((entry) => entry.id !== item.id) })}>
             <Trash2 size={16} />
           </button>
-          <div className="import-field-grid">
-            <TextField label="품명" value={item.description} onChange={(value) => setItem(item.id, 'description', value)} />
-            {/* 수입신고서의 '모델·규격' 칸과 같게 한 칸으로 보여준다. 고치면 규격에 담고 모델명은 비운다. */}
-            <TextField
-              label="모델·규격"
-              value={[item.modelName, item.specification].filter((value) => value?.trim()).join(', ')}
-              placeholder="선택 (예: VF-500, 500ML)"
-              onChange={(value) => commit({
+          {grid([
+            { key: `${item.id}.description`, label: '품명', value: item.description, onChange: (value) => setItem(item.id, 'description', value), required: true },
+            // 수입신고서의 '모델·규격' 칸과 같게 한 칸으로 보여준다. 고치면 규격에 담고 모델명은 비운다.
+            {
+              key: `${item.id}.spec`,
+              label: '모델·규격',
+              value: [item.modelName, item.specification].filter((value) => value?.trim()).join(', '),
+              placeholder: '예: VF-500, 500ML',
+              onChange: (value) => commit({
                 ...fields,
                 items: fields.items.map((entry) => entry.id === item.id ? { ...entry, modelName: '', specification: value } : entry),
-              })}
-            />
-            <TextField label="재질" value={item.material} placeholder="선택" onChange={(value) => setItem(item.id, 'material', value)} />
-            <TextField label="성분" value={item.composition} placeholder="선택" onChange={(value) => setItem(item.id, 'composition', value)} />
-            <TextField label="용도" value={item.intendedUse} placeholder="선택" onChange={(value) => setItem(item.id, 'intendedUse', value)} />
-            {fields.certificateOfOriginAvailable && (
-              <TextField label="원산지" value={item.originCountry} onChange={(value) => setItem(item.id, 'originCountry', value)} />
-            )}
-            <TextField label="수량" value={item.quantity} onChange={(value) => setItem(item.id, 'quantity', value)} />
-            <TextField label="수량 단위" value={item.quantityUnit} onChange={(value) => setItem(item.id, 'quantityUnit', value)} />
-            <TextField label="단가" value={item.unitPrice} onChange={(value) => setItem(item.id, 'unitPrice', value)} />
-            <TextField label="통화" value={item.currency} onChange={(value) => setItem(item.id, 'currency', value)} />
-            <TextField label="품목 금액" value={item.amount} onChange={(value) => setItem(item.id, 'amount', value)} />
-          </div>
+              }),
+            },
+            { key: `${item.id}.material`, label: '재질', value: item.material, onChange: (value) => setItem(item.id, 'material', value) },
+            { key: `${item.id}.composition`, label: '성분', value: item.composition, onChange: (value) => setItem(item.id, 'composition', value) },
+            { key: `${item.id}.intendedUse`, label: '용도', value: item.intendedUse, onChange: (value) => setItem(item.id, 'intendedUse', value) },
+            ...(fields.certificateOfOriginAvailable
+              ? [{ key: `${item.id}.originCountry`, label: '원산지', value: item.originCountry, onChange: (value: string) => setItem(item.id, 'originCountry', value), required: true }]
+              : []),
+            { key: `${item.id}.quantity`, label: '수량', value: item.quantity, onChange: (value) => setItem(item.id, 'quantity', value), required: true },
+            { key: `${item.id}.quantityUnit`, label: '수량 단위', value: item.quantityUnit, onChange: (value) => setItem(item.id, 'quantityUnit', value), required: true },
+            { key: `${item.id}.unitPrice`, label: '단가', value: item.unitPrice, onChange: (value) => setItem(item.id, 'unitPrice', value), required: true },
+            { key: `${item.id}.currency`, label: '통화', value: item.currency, onChange: (value) => setItem(item.id, 'currency', value), required: true },
+            { key: `${item.id}.amount`, label: '품목 금액', value: item.amount, onChange: (value) => setItem(item.id, 'amount', value), required: true },
+          ])}
           <small>추출 출처: {item.sourceDocumentIds.length ? item.sourceDocumentIds.join(', ') : '첨부문서에서 출처 식별값을 확인할 수 없음'}</small>
         </fieldset>
       ))}
@@ -215,14 +291,14 @@ export default function ImportAnalysisSummary({
 
       <details className="form-section">
       <summary className="form-section-summary"><span>E. 포장 및 중량</span></summary>
-      <div className="import-field-grid">
-        <TextField label="포장수량" value={fields.totalPackageCount} onChange={(value) => setField('totalPackageCount', value)} />
-        <TextField label="포장단위" value={fields.packageUnit} onChange={(value) => setField('packageUnit', value)} />
-        <TextField label="순중량" value={fields.netWeight} onChange={(value) => setField('netWeight', value)} />
-        <TextField label="순중량 단위" value={fields.netWeightUnit} onChange={(value) => setField('netWeightUnit', value)} />
-        <TextField label="총중량" value={fields.grossWeight} onChange={(value) => setField('grossWeight', value)} />
-        <TextField label="총중량 단위" value={fields.grossWeightUnit} onChange={(value) => setField('grossWeightUnit', value)} />
-      </div>
+      {grid([
+        { key: 'totalPackageCount', label: '포장수량', value: fields.totalPackageCount, onChange: (value) => setField('totalPackageCount', value), required: true },
+        { key: 'packageUnit', label: '포장단위', value: fields.packageUnit, onChange: (value) => setField('packageUnit', value), required: true },
+        { key: 'netWeight', label: '순중량', value: fields.netWeight, onChange: (value) => setField('netWeight', value) },
+        { key: 'netWeightUnit', label: '순중량 단위', value: fields.netWeightUnit, onChange: (value) => setField('netWeightUnit', value) },
+        { key: 'grossWeight', label: '총중량', value: fields.grossWeight, onChange: (value) => setField('grossWeight', value), required: true },
+        { key: 'grossWeightUnit', label: '총중량 단위', value: fields.grossWeightUnit, onChange: (value) => setField('grossWeightUnit', value), required: true },
+      ])}
       </details>
 
       <details className="form-section">

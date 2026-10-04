@@ -544,6 +544,14 @@ export async function validateTradeDocumentsAsync(
 ): Promise<ValidationIssue[]> {
   const issues = validateTradeDocuments(profile);
 
+  // 사업자번호 조회는 아래 환율 조회와 서로 기다릴 이유가 없어 먼저 띄워 둔다(대기 시간 단축).
+  // 결과는 7번 단계에서 받아 쓰고, 실패도 그때 처리한다.
+  const earlyBizNo = (profile.businessRegistrationNo || '').replace(/[^0-9]/g, '');
+  const bizLookup = earlyBizNo.length > 0
+    ? withTimeout(verifyBusinessRegistration(earlyBizNo), 8000, '사업자번호 조회')
+      .then((value) => ({ ok: true as const, value }), (error: unknown) => ({ ok: false as const, error }))
+    : null;
+
   // 6. 외화 인보이스 → 관세청 주간환율 기준 원화 과세가격 환산 안내
   const currency = profile.currency || 'KRW';
 
@@ -669,13 +677,11 @@ export async function validateTradeDocumentsAsync(
     });
   }
 
-  if (bizNo.length > 0) {
+  if (bizNo.length > 0 && bizLookup) {
     try {
-      const biz = await withTimeout(
-        verifyBusinessRegistration(bizNo),
-        8000,
-        '사업자번호 조회'
-      );
+      const lookup = await bizLookup;
+      if (!lookup.ok) throw lookup.error;
+      const biz = lookup.value;
 
       if (!biz.valid) {
         issues.push({

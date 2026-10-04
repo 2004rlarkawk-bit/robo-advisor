@@ -56,7 +56,7 @@ describe('OnboardingTour 다시 보기', () => {
 describe('GuidePanel 수출/수입 탭', () => {
   it('기본은 수출 흐름과 서류 6종을 보여주고, 수입 탭을 누르면 수입 흐름으로 바뀐다', () => {
     const view = renderWithMenu();
-    expect(view.textContent).toContain('필요 서류 자동 생성');
+    expect(view.textContent).toContain('AI 분석 실행');
     expect(view.textContent).toContain('수출 서류 6종');
     expect(view.textContent).not.toContain('서류 업로드 · AI 분석');
 
