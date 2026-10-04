@@ -1269,9 +1269,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
 
   // 시연용 숨은 입력 — 사이드바 고객지원센터 전화번호를 누르면 품목·포장을 뺀 나머지를 시연 데이터로 채운다.
   // 화면에 버튼·안내 문구를 남기지 않고, 실제 발표와 같게 테스트 모드(검증 우회)도 켜지 않는다.
-  // 실제 사용자의 입력을 덮어쓰지 않도록 로컬 개발 환경(IS_DEV_TEST_ENABLED)에서만 동작한다.
+  // 발표를 배포 사이트에서 하므로 배포 빌드에서도 동작한다. 검증 우회(IS_DEV_TEST_ENABLED)와는 무관하다.
   const handleSupportPhoneClick = () => {
-    if (!IS_DEV_TEST_ENABLED || isProcessing || workspaceRole !== 'shipper') return;
+    if (isProcessing || workspaceRole !== 'shipper') return;
     setProfile((current) => createDemoRehearsalProfile(current));
     setDevTestMode(null);
     setDevTestMessage('');
@@ -1279,7 +1279,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
 
   // '고객지원센터' 제목을 누르면 입력과 생성 결과를 모두 비워 리허설을 처음부터 다시 한다.
   const handleSupportTitleClick = () => {
-    if (!IS_DEV_TEST_ENABLED || isProcessing || workspaceRole !== 'shipper') return;
+    if (isProcessing || workspaceRole !== 'shipper') return;
     handleReset();
   };
 
