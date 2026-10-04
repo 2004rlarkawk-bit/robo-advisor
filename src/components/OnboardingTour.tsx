@@ -69,9 +69,9 @@ const STEPS: Step[] = [
   },
   {
     goto: gotoWorkspace,
-    find: () => findButtonByText('필요 서류 자동 생성'),
+    find: () => findButtonByText('AI 분석 실행'),
     chip: 'STEP 4',
-    title: '③ 버튼 하나로 서류 자동 생성',
+    title: '③ AI 분석 실행 한 번으로 서류 자동 생성',
     desc: '이 버튼을 누르면 AI 에이전트가 필요한 서류를 판별하고, 만들고, 통관 규정에 맞는지 검증해요. 작성하다 나가도 작업실 맨 아래 임시보관함에 저장돼요.',
   },
   {

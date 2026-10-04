@@ -303,6 +303,21 @@ function normalizeChosenValues(value: unknown): Pick<ImportAnalysisResult, 'chos
   return entries.length ? { chosenValues: Object.fromEntries(entries) } : {};
 }
 
+/**
+ * 서류에 Importer(수입자)가 따로 없으면 Consignee(수하인) 정보로 채운다.
+ *
+ * 해외 서류의 정식 칸은 보통 Shipper·Consignee·Buyer뿐이라 수입자가 빠지기 쉽고,
+ * 국내 수입 화주 거래에서는 대부분 Consignee가 곧 수입자(납세의무자)다.
+ * 단 Consignee가 "TO ORDER(지시식)"면 은행 등 다른 당사자일 수 있어 채우지 않는다.
+ */
+export function fillImporterFromConsignee(fields: ImportExtractedFields): ImportExtractedFields {
+  const importer = fields.importerDetails;
+  const consignee = fields.consigneeDetails;
+  const importerEmpty = !importer.name.trim() && !importer.address.trim();
+  if (!importerEmpty || !consignee.name.trim() || /\bto\s+order\b/i.test(consignee.name)) return fields;
+  return syncLegacyImportFields({ ...fields, importerDetails: { ...consignee } });
+}
+
 export function syncLegacyImportFields(fields: ImportExtractedFields): ImportExtractedFields {
   const firstItem = fields.items[0];
   return {

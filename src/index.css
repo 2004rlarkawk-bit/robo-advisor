@@ -521,6 +521,17 @@ body {
 
 /* 수입 분석 결과 접이식 섹션 — 내용물에 수출 섹션과 같은 안쪽 여백 */
 .form-section > .import-field-grid { padding: 12px 18px 20px; }
+.import-party-note { display: block; margin: 2px 0 6px; font-size: 12px; color: #1d4ed8; }
+/* 수입 AI 추출값 — 서류에 없어 숨긴 칸을 하나씩 꺼내는 버튼 줄 */
+.import-hidden-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.form-section > .import-hidden-fields { margin: -8px 18px 18px; }
+.import-hidden-fields-label { font-size: 12px; font-weight: 600; color: var(--text-light); margin-right: 2px; }
+.import-hidden-field-chip {
+  display: inline-flex; align-items: center; gap: 3px; padding: 4px 10px;
+  border: 1px dashed #aab7c8; border-radius: 999px; background: #fff;
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--text-dark); cursor: pointer;
+}
+.import-hidden-field-chip:hover { border-style: solid; border-color: var(--primary-color); color: var(--primary-color); }
 .form-section > .import-party-fieldset,
 .form-section > .import-item-fieldset { margin: 12px 18px 16px; }
 .form-section > .import-section-heading { padding: 12px 18px 0; margin: 0; }
@@ -684,6 +695,22 @@ body {
 /* 영문 품명은 파란 톤으로 강조해 한글명과 구분 */
 .shipper-hs-confidence { border-radius: 999px; padding: 2px 7px; background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 700; }
 .shipper-hs-confidence.is-medium { background: #fffbeb; color: #b45309; }
+/* 추천을 적용한 HS Code 칸 — 적용된 동안 파란 테두리를 유지해 결과값임을 보여 준다. */
+.shipper-hs-result.is-applied .form-input { border: 2px solid #2f6edb; background: #f5f9ff; color: #0b3d91; }
+/* 1순위 후보 카드 — 이 패널에서 가장 먼저 눈에 들어와야 하는 값 */
+.shipper-hs-suggestion.is-primary { border: 2px solid #2f6edb; background: #f5f9ff; box-shadow: 0 2px 8px rgba(47, 110, 219, 0.10); }
+.shipper-hs-suggestion.is-primary .shipper-hs-suggestion__code strong { font-size: 22px; color: #0b3d91; }
+.shipper-hs-suggestion.is-primary .shipper-hs-suggestion__body { border-top-color: #cfe0fb; }
+.shipper-hs-suggestion__title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.shipper-hs-suggestion__name { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-dark); }
+.shipper-hs-rank { padding: 2px 8px; border-radius: 999px; background: #2f6edb; color: #fff; font-size: 11px; font-weight: 700; }
+.shipper-hs-factors { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+.shipper-hs-factor { padding: 2px 8px; border-radius: 999px; background: #eef2f7; color: var(--text-dark); font-size: 11.5px; font-weight: 600; }
+/* 다른 후보·추가 확인 정보는 접어 둔다 */
+.shipper-hs-more { margin-top: 2px; }
+.shipper-hs-more > summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--text-light); padding: 4px 2px; }
+.shipper-hs-more > summary:hover { color: var(--primary-color); }
+.shipper-hs-more[open] > .shipper-hs-suggestion-list { margin-top: 6px; }
 .shipper-hs-applied { margin-top: 8px; color: #047857; font-size: 12px; font-weight: 700; }
 .shipper-item-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 18px 18px; color: var(--text-dark); font-size: 14px; }
 .shipper-item-actions .form-message { margin: 0; }

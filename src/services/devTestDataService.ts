@@ -1,4 +1,6 @@
 import type { GeneratedDocuments, TradeProfile } from '../types';
+import { createPackageDimension } from '../utils/packageCbm';
+import { tradeProfileToPrimaryShipperItem } from '../utils/shipperForm';
 
 export type DevTestMode = 'perfect' | 'needs_revision';
 
@@ -150,12 +152,12 @@ export function createPerfectTestProfile(currentProfile: TradeProfile, now = new
 }
 
 /**
- * 시연 연습용 — 품목(3)·포장(5) 섹션만 비워 두고 나머지 섹션을 고정값으로 채운다.
- * 품목·포장 입력값은 현재 화면 값을 그대로 둔다(발표 때 직접 입력하는 부분).
+ * 시연 연습용 — 발표 때 직접 입력할 품명·HS·수량·단가·화물 규격만 남기고 나머지를 고정값으로 채운다.
+ * 품목은 통화·상표명·성분만, 포장은 박스 수·박스당 수량·포장 종류만 채운다.
  *
  * 생성하면 일부러 아래 항목이 걸리게 맞춰 두었다.
- * - 반드시 수정: 원산지 Japan(R15), 신용장 개설일이 출항일보다 늦음(R14)
- * - 확인 권장: 운송방식 FCL인 소량 화물(R23)
+ * - 반드시 수정: 신용장 개설일이 출항일보다 늦음(R14)
+ * - 확인 권장: 도착 예정일 연도 오타(R21)
  * 패킹리스트·상업송장 수량 불일치(R10)는 품목·포장 입력으로 만든다.
  */
 export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = new Date()): TradeProfile {
@@ -163,11 +165,26 @@ export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = n
   return {
     ...currentProfile,
     tradeType: 'export',
-    // 통화만은 USD로 고정 — 관세청 환율 환산을 시연에서 보여주기 위해. 품목의 나머지 값은 그대로 둔다.
+    // 품목: 품명·HS·수량·단가는 발표 때 직접 입력하고, 통화(USD)·상표명·성분만 채운다.
+    // 통화를 USD로 고정하는 건 관세청 환율 환산을 시연에서 보여주기 위해서다.
     currency: 'USD',
-    ...(currentProfile.shipperItems
-      ? { shipperItems: currentProfile.shipperItems.map((item) => ({ ...item, currency: 'USD' as const })) }
-      : {}),
+    shipperItems: (currentProfile.shipperItems?.length
+      ? currentProfile.shipperItems
+      : [tradeProfileToPrimaryShipperItem(currentProfile)]
+    ).map((item) => ({
+      ...item,
+      currency: 'USD' as const,
+      brand: 'NO BRAND',
+      composition: 'Wood (Oak) 100%',
+    })),
+    // 5. 포장: 박스 8개 × 박스당 10개 = 포장명세서 80개. 규격(가로·세로·높이)은 발표 때 입력해 CBM을 보여 준다.
+    // 사무용 책상은 분해(flat-pack)해 카톤에 담아 보내는 게 일반적이라 CARTON으로 둔다.
+    packageType: 'CARTON',
+    eaPerBox: 10,
+    packageCount: 8,
+    packageDimensions: currentProfile.packageDimensions?.length
+      ? currentProfile.packageDimensions.map((row, index) => (index === 0 ? { ...row, boxes: 8 } : row))
+      : [{ ...createPackageDimension('package-dimension-1'), boxes: 8 }],
     // 1. 화주 기본정보
     companyName: 'PortAI Trading Co., Ltd.',
     companyAddress: '123 Teheran-ro, Gangnam-gu, Seoul, Korea',
@@ -196,13 +213,15 @@ export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = n
     loadPort: 'Busan Port',
     dischargePort: 'Los Angeles Port',
     departureDate,
-    arrivalDate: futureDate(19, now),
-    loadingMode: 'FCL',
+    // 도착 예정일 연도 오타(1년 뒤) — 운송 기간이 120일을 넘어 확인 권장(R21)이 걸린다.
+    arrivalDate: futureDate(19 + 365, now),
+    // 소량 화물이라 LCL — 확인 권장은 도착 예정일 한 건만 뜨게 한다.
+    loadingMode: 'LCL',
     placeOfReceipt: 'Busan, Korea',
     placeOfDelivery: 'Los Angeles, CA, USA',
     freightTerms: 'COLLECT',
-    // 7. 원산지 — 일부러 Japan
-    countryOfOrigin: 'Japan',
+    // 7. 원산지
+    countryOfOrigin: 'South Korea',
     exportDeclaration: {
       ...currentProfile.exportDeclaration,
       ownerCeoName: '홍길동',
@@ -210,6 +229,7 @@ export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = n
       postalCode: '44776',
       buyerCustomsCode: 'USTICO0001',
       tradeKind: 'GENERAL',
+      goodsCondition: 'N',
       lcPaymentType: 'SIGHT',
       freightKrw: 1200000,
       insuranceKrw: 1200000,

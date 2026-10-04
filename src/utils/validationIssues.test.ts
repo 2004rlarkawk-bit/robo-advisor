@@ -46,6 +46,7 @@ describe('validation issue helpers', () => {
     expect(shortIssueLabel(issue())).toBe('품명 입력');
     expect(shortIssueLabel(issue({ message: '품명에 한글이 포함되어 있습니다.' }))).toBe('품명 영문으로 수정');
     expect(shortIssueLabel(issue({ id: 'r23-small-cargo-lcl', message: '총 0.088 CBM 소량 화물로 LCL(혼재) 운송이 일반적입니다.' }))).toBe('FCL/LCL 운송방식 재확인');
+    expect(shortIssueLabel(issue({ id: 'r21-transit-too-long', message: '출항일(2026-10-11)부터 도착예정일(2027-10-24)까지 378일입니다.' }))).toBe('도착 예정일 연도·월 확인');
   });
 
   it('입력값만으로 다시 판정할 수 있는 이슈 id만 실시간 재평가 대상으로 본다', () => {

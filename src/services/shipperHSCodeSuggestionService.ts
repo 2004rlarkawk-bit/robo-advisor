@@ -29,6 +29,7 @@ import {
   annotateBagNames,
   bagPrefixesForQuery,
 } from './hsBagNomenclature';
+import { furnitureSubheadingForQuery } from './hsFurnitureMaterial';
 import { isSearchableItemName } from './hsItemName';
 
 /** 소호 보조표(의류·가방)로 후보 품명에 분류 기준을 덧붙인다. */
@@ -577,7 +578,7 @@ export async function recommendShipperHSCode(
   itemDetails?: HSCodeItemDetails,
   debugItemId?: string,
   /** 사용자가 선택지에서 고른 6자리 소호. 있으면 그 범위로만 추천한다. */
-  chosenSubheading?: string | null
+  userChosenSubheading?: string | null
 ): Promise<HSCodeSuggestionResponse> {
   const normalizedItemName = itemName.trim();
   if (!isSearchableItemName(normalizedItemName)) {
@@ -588,6 +589,17 @@ export async function recommendShipperHSCode(
       disambiguation: null,
     };
   }
+
+  // 가구(9403)는 재질이 소호를 가른다. 품명·상세에 가구 종류와 재질이 하나씩 분명하면
+  // 사용자가 소호를 고른 것과 같이 그 범위에서만 추천한다(돌 책상이 목제 책상·숫돌로 가는 것 방지).
+  const chosenSubheading = userChosenSubheading
+    ?? furnitureSubheadingForQuery([
+      normalizedItemName,
+      itemDetails?.material,
+      itemDetails?.composition,
+      itemDetails?.specification,
+      itemDetails?.koreanDescription,
+    ].filter(Boolean).join(' '));
 
   const allCandidateCodes =
     await buildCandidateContext(

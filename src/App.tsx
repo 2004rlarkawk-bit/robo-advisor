@@ -62,12 +62,10 @@ import { useTradeDraft } from './hooks/useTradeDraft';
 import { loadTradeDraft, removeDraftFromLocal, saveTradeDraft } from './services/draftCacheService';
 import { userProfileToTradeDefaults } from './services/profileService';
 import {
-  createPerfectTestProfile,
   createProfileForNewTrade,
   createNormalDocumentIdentifiers,
   createDemoRehearsalProfile,
   createTestSubmissionMeta,
-  removeDevOnlyFields,
   type DevTestMode,
 } from './services/devTestDataService';
 import { EMPTY_TRADE_PROFILE } from './constants/tradeProfile';
@@ -1269,25 +1267,20 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     }));
   };
 
-  const handleFillPerfectTestData = () => {
-    if (!IS_DEV_TEST_ENABLED || isProcessing) return;
-    setProfile((current) => createPerfectTestProfile(current));
-    setDevTestMode('perfect');
-    setDevTestMessage('완성형 테스트 데이터가 입력되었습니다. 내용을 확인한 뒤 필요 서류 자동생성을 직접 눌러주세요.');
-  };
-
-  // 시연 연습 — 품목·포장만 비워 두고 나머지를 채운다. 실제 발표와 같게 테스트 모드(검증 우회)는 켜지 않는다.
-  const handleFillDemoRehearsalData = () => {
-    if (!IS_DEV_TEST_ENABLED || isProcessing) return;
+  // 시연용 숨은 입력 — 사이드바 고객지원센터 전화번호를 누르면 품목·포장을 뺀 나머지를 시연 데이터로 채운다.
+  // 화면에 버튼·안내 문구를 남기지 않고, 실제 발표와 같게 테스트 모드(검증 우회)도 켜지 않는다.
+  // 실제 사용자의 입력을 덮어쓰지 않도록 로컬 개발 환경(IS_DEV_TEST_ENABLED)에서만 동작한다.
+  const handleSupportPhoneClick = () => {
+    if (!IS_DEV_TEST_ENABLED || isProcessing || workspaceRole !== 'shipper') return;
     setProfile((current) => createDemoRehearsalProfile(current));
     setDevTestMode(null);
-    setDevTestMessage('시연 연습 데이터가 입력되었습니다. 품목 정보와 포장 정보만 입력한 뒤 필요 서류 자동생성을 눌러주세요.');
+    setDevTestMessage('');
   };
 
-  const handleDisableDevTestMode = () => {
-    setDevTestMode(null);
-    setProfile((current) => removeDevOnlyFields(current));
-    setDevTestMessage('테스트 모드가 해제되었습니다. 거래 입력값은 유지되며 테스트 전용 표시가 제거되고 일반 검증 규칙이 적용됩니다.');
+  // '고객지원센터' 제목을 누르면 입력과 생성 결과를 모두 비워 리허설을 처음부터 다시 한다.
+  const handleSupportTitleClick = () => {
+    if (!IS_DEV_TEST_ENABLED || isProcessing || workspaceRole !== 'shipper') return;
+    handleReset();
   };
 
   const handleReset = () => {
@@ -1462,8 +1455,10 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       const result = await orchestrator.run({ profile: generationProfile, useLLM: getSettings().useLLM });
 
       // Simulate terminal printing for all logs chronologically
+      // 로그가 많아도 출력 연출은 약 3초 안에 끝낸다(줄당 최대 120ms).
+      const logDelayMs = Math.min(120, Math.floor(3000 / Math.max(1, result.logs.length)));
       for (let i = 0; i < result.logs.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 120));
+        await new Promise(resolve => setTimeout(resolve, logDelayMs));
         setConsoleLogs(prev => [...prev, result.logs[i]]);
       }
 
@@ -2405,7 +2400,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
 
     const tradeId = currentTradeId;
     if (!tradeId) {
-      alert('먼저 필요 서류 자동생성을 실행해 거래를 생성해주세요.');
+      alert('먼저 AI 분석 실행으로 거래를 생성해주세요.');
       return;
     }
 
@@ -2647,6 +2642,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         role={workspaceRole}
         onNavigate={handleAppNavigate}
         onLogoClick={handleLogoClick}
+        onSupportPhoneClick={handleSupportPhoneClick}
+        onSupportTitleClick={handleSupportTitleClick}
         badges={{ docs: workspaceRole === 'forwarder' ? 0 : returnRequestCount }}
       />
 
@@ -2903,17 +2900,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   fixNotice={shipperFixNotice}
                   onDismissFixNotice={clearFieldHighlight}
                   fixRevealKey={fixRevealKey}
-                  toolbar={IS_DEV_TEST_ENABLED ? (
-                    <div className="dev-test-actions">
-                      <span className="dev-badge">DEV</span>
-                      <button type="button" className="dev-test-button dev-test-button-perfect" onClick={handleFillPerfectTestData} disabled={isProcessing}>완벽 테스트</button>
-                      <button type="button" className="dev-test-button dev-test-button-demo" onClick={handleFillDemoRehearsalData} disabled={isProcessing}>시연 연습</button>
-                      {devTestMode && <button type="button" className="dev-test-disable" onClick={handleDisableDevTestMode}>테스트 모드 해제</button>}
-                    </div>
-                  ) : undefined}
                   statusContent={(
                     <>
-                      {devTestMode && <div className="dev-test-mode-label" role="status">DEV · {devTestMode === 'perfect' ? '완벽 테스트 모드' : '수정 필요 테스트 모드'}</div>}
                       {devTestMessage && <div className="form-message info" role="status">{devTestMessage}</div>}
                       {draftSaveLabel && (
                         <div className={`draft-save-status ${draftSaveStatus}`} role="status" aria-live="polite">
@@ -3357,18 +3345,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                       <h3 className="rv-fixes-title">AI 검증 결과</h3>
                     </div>
 
-                      {/* 요약 칩 — 검토 완료·확인 필요 개수. 숫자는 아래 실제 렌더 항목 수와 일치한다. */}
-                      {feedbackReport && (
-                        <div className="review-summary-chips">
-                          <span className="review-chip review-chip-done">
-                            <CheckCircle2 size={14} /> 검토 완료 {feedbackReport.summary.reviewed}
-                          </span>
-                          <span className="review-chip review-chip-check">
-                            <AlertTriangle size={14} /> 확인 필요 {feedbackReport.summary.needsCheck}
-                          </span>
-                        </div>
-                      )}
-
                       {/* 사실 카드 — 과세가격 환산·예상 관세액 등. 값은 실 API/룰에서 결정론적으로 산출. */}
                       {feedbackReport && feedbackReport.facts.length > 0 && (
                         <div className="fact-card-list">
@@ -3387,7 +3363,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                               </div>
                               {f.value && f.valueLabel && <div className="fact-card-value-label">{f.valueLabel}</div>}
                               {f.value && <div className="fact-card-value">{f.value}</div>}
-                              {f.formula && <div className="fact-card-formula">{f.formula}</div>}
+                              {/* 수출신고 금액 카드는 시연 화면을 단순하게 두려고 계산식·환율 설명을 감춘다. */}
+                              {f.formula && f.id !== 'export-fob-value' && <div className="fact-card-formula">{f.formula}</div>}
                               {f.notice && <p className="fact-card-notice">{f.notice}</p>}
                               {f.action && !isDocumentManagerReadOnlyView && (
                                 <button
@@ -3398,7 +3375,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   {f.action.label} →
                                 </button>
                               )}
-                              {f.meta && <div className="fact-card-meta">{f.meta}</div>}
+                              {f.meta && f.id !== 'export-fob-value' && <div className="fact-card-meta">{f.meta}</div>}
                             </div>
                           ))}
                         </div>

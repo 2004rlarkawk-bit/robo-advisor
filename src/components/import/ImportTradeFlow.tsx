@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Eye, RefreshCw, Search, Terminal } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
+import {
+  computeImportAnalysisCacheKey,
+  loadImportAnalysisCache,
+  saveImportAnalysisCache,
+} from '../../services/importAnalysisCache';
 import ImportAnalysisSummary from './ImportAnalysisSummary';
 import DutySummary from './ImportDutySummary';
 import RiskSummary from './ImportRiskSummary';
@@ -27,6 +32,7 @@ import ImportDocumentComparison from './ImportDocumentComparison';
 import ArrivalNoticeUploader from './ArrivalNoticeUploader';
 import {
   analyzeImportDocuments,
+  fillImporterFromConsignee,
   IMPORT_DOCUMENT_TYPE_LABELS,
   normalizeImportExtractedFields,
   syncLegacyImportFields,
@@ -315,11 +321,53 @@ export default function ImportTradeFlow({
       }
       setSourceFiles(resolvedFiles);
       pushAnalysisLog('Document Agent', `파일 ${analyzableDocuments.length}건 로드 완료`, 'success');
-      pushAnalysisLog('Document Agent', `AI가 서류 ${analyzableDocuments.length}건을 읽고 서로 대조하는 중이에요.`);
-      const analysisStartedAt = Date.now();
-      setAnalysisPhase({ label: '서류 분석 중', startedAt: analysisStartedAt });
-      const result = await analyzeImportDocuments(analyzableDocuments, resolvedFiles);
-      pushAnalysisLog('Document Agent', `서류 분석 완료 (${elapsedSeconds(analysisStartedAt)}초)`, 'success');
+      // 같은 파일 묶음을 이미 분석했다면 그 실제 AI 결과를 다시 쓴다(서류 읽기·HS 추천 재실행 생략).
+      const cacheKey = failures.length === 0
+        ? await computeImportAnalysisCacheKey(analyzableDocuments, resolvedFiles, role)
+        : null;
+      const cached = cacheKey ? loadImportAnalysisCache(cacheKey.key, cacheKey.hashById) : null;
+      let result;
+      if (cached) {
+        result = cached.result;
+        // 저장된 실제 분석 결과를 에이전트별로 약 10초에 걸쳐 차례로 보여 준다.
+        // 문구는 모두 앞서 AI가 실제로 뽑아낸 값이며, 지금 다시 읽는 중이라고 표시하지 않는다.
+        const replayStartedAt = Date.now();
+        setAnalysisPhase({ label: '저장된 분석 결과 정리 중', startedAt: replayStartedAt });
+        const ex = cached.result.analysis.extracted;
+        const formatHsk = (code: string) => code.length === 10 ? `${code.slice(0, 4)}.${code.slice(4, 6)}-${code.slice(6)}` : code;
+        const steps: Array<[string, string]> = [
+          ['Orchestrator Agent', `같은 서류 ${analyzableDocuments.length}건의 AI 분석 이력을 확인했습니다 — 저장된 분석 결과로 진행합니다 (재분석 생략).`],
+          ...cached.result.classifications.map((item): [string, string] => {
+            const name = analyzableDocuments.find((document) => document.id === item.id)?.name ?? '서류';
+            return ['Document Agent', `"${name}" → ${IMPORT_DOCUMENT_TYPE_LABELS[item.type] ?? item.type} 분류 확인`];
+          }),
+          ...(ex.invoiceNo || ex.totalAmount
+            ? [['Document Agent', `상업송장: Invoice ${ex.invoiceNo || '-'} · ${ex.currency || ''} ${ex.totalAmount || '-'}`.trim()] as [string, string]]
+            : []),
+          ...(ex.blNo
+            ? [['Document Agent', `선하증권: B/L ${ex.blNo}${ex.loadPort || ex.dischargePort ? ` · ${ex.loadPort || '-'} → ${ex.dischargePort || '-'}` : ''}`] as [string, string]]
+            : []),
+          ...(ex.totalPackageCount || ex.grossWeight
+            ? [['Document Agent', `포장명세서: ${ex.totalPackageCount || '-'} ${ex.packageUnit || ''} · 총중량 ${ex.grossWeight || '-'} ${ex.grossWeightUnit || ''}`.replace(/\s+/g, ' ').trim()] as [string, string]]
+            : []),
+          ['Document Agent', `품목 ${ex.items.length}건 추출: ${ex.items.map((item) => item.description).filter(Boolean).join(', ') || '-'}`],
+          ...cached.suggestions.map((suggestion): [string, string] => {
+            const item = ex.items.find((candidate) => candidate.id === suggestion.itemId);
+            return ['HSCode Agent', `${item?.description || '품목'} → HSK ${formatHsk(suggestion.code)} ${suggestion.description}`.trim()];
+          }),
+        ];
+        const stepDelayMs = Math.floor(10_000 / Math.max(1, steps.length));
+        for (const [agent, line] of steps) {
+          await new Promise((resolve) => setTimeout(resolve, stepDelayMs));
+          pushAnalysisLog(agent, line, 'success');
+        }
+      } else {
+        pushAnalysisLog('Document Agent', `AI가 서류 ${analyzableDocuments.length}건을 읽고 서로 대조하는 중이에요.`);
+        const analysisStartedAt = Date.now();
+        setAnalysisPhase({ label: '서류 분석 중', startedAt: analysisStartedAt });
+        result = await analyzeImportDocuments(analyzableDocuments, resolvedFiles);
+        pushAnalysisLog('Document Agent', `서류 분석 완료 (${elapsedSeconds(analysisStartedAt)}초)`, 'success');
+      }
       const failedIds = new Set(failures.map((failure) => failure.documentId));
       const documents = state.documents.map((document) => {
           if (failedIds.has(document.id)) {
@@ -343,13 +391,15 @@ export default function ImportTradeFlow({
         });
       const analysis: ImportAnalysisResult = {
         ...result.analysis,
-        extracted: {
+        // 서류에 수입자가 따로 없으면 Consignee로 채운다(분석 화면에 그 사실을 표시한다).
+        extracted: fillImporterFromConsignee({
           ...result.analysis.extracted,
           certificateOfOriginAvailable: documents.some((document) => document.type === 'certificate_of_origin'),
-        },
+        }),
       };
-      let suggestions: ImportHSCodeSuggestion[] = [];
-      if (role === 'shipper' && analysis.extracted.items.length > 0) {
+      let suggestions: ImportHSCodeSuggestion[] = cached?.suggestions ?? [];
+      // 캐시에 추천 결과가 있으면 위 정리 단계에서 이미 보여 줬으니 다시 추천하지 않는다.
+      if (!(cached && suggestions.length > 0) && role === 'shipper' && analysis.extracted.items.length > 0) {
         const hsStartedAt = Date.now();
         pushAnalysisLog('HSCode Agent', `품목 ${analysis.extracted.items.length}건의 대한민국 HS 코드를 추천하는 중이에요.`);
         setAnalysisPhase({ label: 'HS 코드 추천 중', startedAt: hsStartedAt, done: 0, total: analysis.extracted.items.length });
@@ -358,9 +408,10 @@ export default function ImportTradeFlow({
         });
         pushAnalysisLog('HSCode Agent', `HS 코드 추천 완료 (${elapsedSeconds(hsStartedAt)}초)`, 'success');
       }
+      if (cacheKey && !cached) saveImportAnalysisCache(cacheKey.key, cacheKey.hashById, result, suggestions);
       setAnalysisPhase(null);
-      pushAnalysisLog('Orchestrator Agent', '분석 완료 — 추출값을 분석 결과 폼에 반영했습니다.', 'success');
-      setTimeout(() => setShowAnalysisConsole(false), 900);
+      // 자동 닫힘 없음 — 수출처럼 사용자가 [콘솔 닫기]를 눌러야 HSK 검토 화면이 보인다.
+      pushAnalysisLog('Orchestrator Agent', '분석 완료 — 추출값을 분석 결과 폼에 반영했습니다. [콘솔 닫기]를 누르면 HSK 검토로 이동합니다.', 'success');
       setManualHsInputs({});
       setManualHsErrors({});
       setState((current) => {

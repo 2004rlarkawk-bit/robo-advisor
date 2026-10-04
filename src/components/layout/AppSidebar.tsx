@@ -52,12 +52,16 @@ interface AppSidebarProps {
   role: WorkspaceRole;
   /** 로고 클릭 시 실행 — 현재 작업 중인 화면을 첫 화면(빈 입력 폼)으로 되돌린다. */
   onLogoClick: () => void;
+  /** 고객지원센터 전화번호를 눌렀을 때 — 시연용 입력 채우기에 쓴다. */
+  onSupportPhoneClick?: () => void;
+  /** '고객지원센터' 제목을 눌렀을 때 — 시연용 입력 비우기에 쓴다. */
+  onSupportTitleClick?: () => void;
   onNavigate: (menu: AppMenu) => void;
   /** 메뉴별 알림 수 — 0이면 표시하지 않는다 (예: 문서 관리의 포워더 보완 요청) */
   badges?: Partial<Record<AppMenu, number>>;
 }
 
-export default function AppSidebar({ activeMenu, collapsed, role, onNavigate, onLogoClick, badges }: AppSidebarProps) {
+export default function AppSidebar({ activeMenu, collapsed, role, onNavigate, onLogoClick, onSupportPhoneClick, onSupportTitleClick, badges }: AppSidebarProps) {
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       {/* 로고 클릭 = 작업실 첫 화면으로 이동. 새로고침(F5)은 진행 중 작업을 이어보여주지만
@@ -97,12 +101,13 @@ export default function AppSidebar({ activeMenu, collapsed, role, onNavigate, on
         ))}
       </ul>
 
+      {/* 시연용 숨은 동작: 전화번호 = 입력 채우기, 제목 = 입력 비우기(App 참고). 겉모습은 바꾸지 않는다. */}
       <div className="support-card">
-        <div className="support-title">
+        <div className="support-title" onClick={onSupportTitleClick}>
           <PhoneCall size={14} />
           고객지원센터
         </div>
-        <div className="support-phone">02-1234-5678</div>
+        <div className="support-phone" onClick={onSupportPhoneClick}>02-1234-5678</div>
         <div className="support-time">평일 09:00 - 18:00</div>
       </div>
     </aside>
