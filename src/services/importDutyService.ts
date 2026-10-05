@@ -2,6 +2,7 @@ import { getCustomsExchangeRateStrict } from './customsApiService';
 import { normalizeCurrencyCode } from '../utils/currencyCode';
 import { getTariffRates, pickBasicRate } from './unipassService';
 import type { ImportDutyEstimate, ImportDutyValuation, ImportItem } from '../types/importTrade';
+import { buildFtaCandidate } from './ftaAgreementService';
 import { parseTradeNumber } from '../utils/number';
 
 const numberValue = (value: string | number | undefined): number => parseTradeNumber(value) ?? 0;
@@ -141,9 +142,11 @@ export async function calculateEstimatedImportDuty(input: ImportDutyInput): Prom
   const itemAmountTotal = itemAmounts.reduce((sum, amount) => sum + amount, 0);
 
   const itemEstimates = await Promise.all(input.items.map(async (item, index) => {
+    let rates;
     let basic;
     try {
-      basic = pickBasicRate(await getTariffRates(item.confirmedHSCode));
+      rates = await getTariffRates(item.confirmedHSCode);
+      basic = pickBasicRate(rates);
     } catch (error) {
       throw new Error(`관세율 API 조회 실패 (${item.confirmedHSCode}): ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -160,8 +163,11 @@ export async function calculateEstimatedImportDuty(input: ImportDutyInput): Prom
       customsValue: allocatedValue,
       basicRate: basic.rate,
       basicDuty: Math.round(allocatedValue * basic.rate / 100),
+      rates,
     };
   }));
+  // 같은 조회 결과에 협정세율 행도 들어 있으므로 다시 부르지 않고 FTA 후보를 뽑는다.
+  const fta = buildFtaCandidate(input.originCountry, input.destinationCountry, itemEstimates);
 
   const basicDuty = itemEstimates.reduce((sum, item) => sum + item.basicDuty, 0);
   const vat = Math.round((customsValue + basicDuty) * 0.1);
@@ -181,14 +187,15 @@ export async function calculateEstimatedImportDuty(input: ImportDutyInput): Prom
     customsValue,
     basicRate: Number(weightedBasicRate.toFixed(4)),
     basicDuty,
-    ftaAgreement: '확인 필요',
+    fta,
+    ftaAgreement: fta.agreement ?? (fta.agreements.length ? '확인 필요' : '해당 없음'),
     ftaRate: null,
     ftaDuty: null,
     estimatedSavings: null,
     vat,
     otherTaxes: null,
     totalTax: basicDuty + vat,
-    items: itemEstimates,
+    items: itemEstimates.map(({ rates: _rates, ...item }) => item),
     source: 'api',
   };
 }

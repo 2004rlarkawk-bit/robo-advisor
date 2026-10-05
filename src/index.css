@@ -2448,6 +2448,17 @@ body {
 .import-fta-review { margin: 4px 0 12px; padding: 14px; border: 1px solid var(--border-color); border-radius: 10px; background: #f8fafc; }
 .import-fta-review .form-label { display: block; margin-bottom: 8px; }
 .import-fta-checks { margin: 10px 0 0; padding-left: 18px; color: var(--text-light); font-size: 13px; line-height: 1.8; }
+/* FTA 적용 가능성 결과 — 상태 띠와 자동 확인 항목. 띠 색은 가능/증빙 필요/대상 아님을 뜻과 함께 글자로도 적는다. */
+.import-fta-status { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 800; }
+.import-fta-status--possible { background: #dcfce7; color: #166534; }
+.import-fta-status--needs-evidence { background: #fef3c7; color: #92400e; }
+.import-fta-status--not-applicable { background: #f1f5f9; color: #475569; }
+.import-fta-checks--result { margin: 10px 0 14px; padding-left: 0; list-style: none; }
+.import-fta-checks--result li { position: relative; padding-left: 20px; }
+.import-fta-checks--result li::before { content: '•'; position: absolute; left: 4px; }
+.import-fta-checks--result li.is-ok::before { content: '✓'; color: #15803d; font-weight: 800; }
+.import-fta-checks--result li.is-missing::before { content: '!'; color: #b45309; font-weight: 800; }
+.import-fta-checks--result li span { font-weight: 700; color: var(--text-color); }
 /* 확인 목록과 붙어 보이지 않게 — 서류 추가 버튼은 한 칸 띄운다. */
 .import-fta-review .btn-primary { margin-top: 12px; }
 
@@ -2478,6 +2489,9 @@ body {
 .duty-grid div { padding: 13px; background: #fff; }
 .duty-grid dt { color: var(--text-light); font-size: 11px; }
 .duty-grid dd { margin: 4px 0 0; font-weight: 700; }
+/* 협정세율 기준 행 — 원산지증명서가 붙어 적용 가능할 때만 나온다 */
+.duty-grid .duty-grid-fta { background: #f0fdf4; }
+.duty-grid .duty-grid-fta dd { color: #166534; }
 .import-notice { margin: 14px 0 0; padding: 11px; border-radius: 8px; background: #fffbeb; color: #92400e; font-size: 12px; line-height: 1.5; }
 .import-analysis-disclaimer { margin: -4px 6px 6px; color: var(--text-light); font-size: 12.5px; line-height: 1.5; }
 .import-analysis-disclaimer p { margin: 0; }

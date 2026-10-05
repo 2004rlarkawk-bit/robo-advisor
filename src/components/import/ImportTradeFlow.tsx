@@ -37,6 +37,7 @@ import {
   syncLegacyImportFields,
 } from '../../services/importDocumentAnalysisService';
 import { calculateEstimatedImportDuty } from '../../services/importDutyService';
+import { assessFtaEligibility } from '../../services/ftaAgreementService';
 import {
   recommendImportHSKForItems,
   validateOfficialImportHSK,
@@ -865,6 +866,18 @@ export default function ImportTradeFlow({
   const ftaReviewing = isFtaReviewChoice(ftaChoice);
   const coHolding = state.analysis?.chosenValues?.[CO_HOLDING_KEY] as CoHolding | undefined;
   const hasCertificateOfOrigin = state.documents.some((document) => document.type === 'certificate_of_origin');
+  // FTA 적용 가능성 — 협정·협정세율·절감액은 예상세액 계산 때 함께 받아 두고, 증빙(C/O)은 여기서 본다.
+  const ftaEligibility = useMemo(() => {
+    if (!state.duty?.fta || !state.analysis) return null;
+    const coRows = state.analysis.comparison.filter((row) => row.certificateOfOrigin && row.certificateOfOrigin !== '-');
+    return assessFtaEligibility(state.duty.fta, {
+      originCountry: state.analysis.extracted.items.map((item) => item.originCountry).filter(Boolean).join(', '),
+      basicRate: state.duty.basicRate,
+      basicDuty: state.duty.basicDuty,
+      hasCertificateOfOrigin,
+      certificateMismatches: hasCertificateOfOrigin && coRows.length ? coRows.filter((row) => !row.matches).length : null,
+    });
+  }, [state.duty, state.analysis, hasCertificateOfOrigin]);
   const clearRiskValue = (key: string) => setState((current) => (current.analysis ? {
     ...current,
     analysis: clearChosenValue(current.analysis, key),
@@ -1170,7 +1183,7 @@ export default function ImportTradeFlow({
               {/* 설명은 길어서 카드 머리를 밀어내므로 TIP을 눌렀을 때만 펼친다. */}
               <details className="import-tip">
                 <summary>TIP</summary>
-                <p>협정세율을 적용하면 관세를 줄일 수 있습니다. 적용 안 함을 골라도 기본 관세율로 예상세액은 계산됩니다.</p>
+                <p>FTA 세율은 국가·HSK·원산지 요건 확인 후 적용됩니다. 확인 전에는 기본세율로 계산합니다.</p>
               </details>
             </div>
             <div className="import-fta-choices" role="group" aria-label="FTA 적용 여부">
@@ -1180,7 +1193,7 @@ export default function ImportTradeFlow({
                 disabled={readOnly}
                 onClick={() => (ftaChoice === 'FTA 적용 안 함' ? clearRiskValue(FTA_CHOICE_KEY) : chooseRiskValue(FTA_CHOICE_KEY, 'FTA 적용 안 함'))}
               >
-                적용 안 함
+                기본세율로 계산
               </button>
               <button
                 type="button"
@@ -1188,12 +1201,29 @@ export default function ImportTradeFlow({
                 disabled={readOnly}
                 onClick={() => (ftaReviewing ? clearRiskValue(FTA_CHOICE_KEY) : chooseRiskValue(FTA_CHOICE_KEY, FTA_REVIEW_CHOICE))}
               >
-                적용 가능 여부 확인
+                FTA 적용 가능성 확인
               </button>
             </div>
 
             {ftaReviewing && (
               <div className="import-fta-review">
+                {ftaEligibility ? (
+                  <>
+                    <div className={`import-fta-status import-fta-status--${ftaEligibility.status}`} role="status">
+                      {ftaEligibility.label}
+                    </div>
+                    <ul className="import-fta-checks import-fta-checks--result">
+                      {ftaEligibility.checks.map((check) => (
+                        <li key={check.label} className={check.ok === true ? 'is-ok' : check.ok === false ? 'is-missing' : 'is-unknown'}>
+                          <span>{check.label}</span> {check.value}
+                        </li>
+                      ))}
+                      {state.duty?.fta?.notes.map((note) => <li key={note} className="is-unknown">{note}</li>)}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="import-card-note">예상세액을 계산하면 협정과 협정세율을 함께 확인합니다.</p>
+                )}
                 <span className="form-label">원산지증명서(C/O) 보유</span>
                 <div className="import-fta-choices" role="group" aria-label="원산지증명서 보유 여부">
                   {CO_HOLDING_CHOICES.map((choice) => {
@@ -1214,7 +1244,6 @@ export default function ImportTradeFlow({
                 <ul className="import-fta-checks">
                   <li>원산지: {state.analysis.extracted.items.map((item) => item.originCountry).filter(Boolean).join(', ') || '확인 필요'}</li>
                   <li>HSK: {state.analysis.extracted.items.map((item) => item.confirmedHSCode).filter(Boolean).join(', ') || '확정 필요'}</li>
-                  <li>협정세율: {state.duty?.ftaRate == null ? '확인 필요 (관세사 또는 관세법령정보포털)' : `${state.duty.ftaRate}%`}</li>
                   <li>원산지증명서: {hasCertificateOfOrigin ? '첨부됨' : coHolding === '있음' ? '서류 추가 필요' : coHolding ? '발급 후 첨부하면 협정세율 적용 가능' : '보유 여부 선택 필요'}</li>
                 </ul>
                 {coHolding === '있음' && !hasCertificateOfOrigin && !readOnly && (
@@ -1227,8 +1256,8 @@ export default function ImportTradeFlow({
               {!ftaChoice
                 ? '고르지 않으면 기본 관세율로 예상세액을 계산합니다.'
                 : ftaChoice === 'FTA 적용 안 함'
-                  ? '기본 관세율로 진행합니다. 원산지증명서는 제출하지 않아도 됩니다.'
-                  : '협정 적용 요건은 이 앱이 판정하지 않습니다. 위 항목을 확인한 뒤 관세사와 최종 적용 여부를 정하세요.'}
+                  ? '기본 관세율로 계산합니다. 원산지증명서는 제출하지 않아도 됩니다.'
+                  : 'PortAI는 협정 유무·HSK별 협정세율·원산지증명서 첨부 여부로 적용 가능성만 안내합니다. 최종 적용 여부는 원산지 결정기준과 증빙을 확인한 뒤 관세사와 확정하세요.'}
             </p>
           </section>
           <DutySummary
@@ -1236,6 +1265,7 @@ export default function ImportTradeFlow({
             error={state.dutyError}
             busy={dutyBusy}
             ftaReviewing={ftaReviewing}
+            ftaEligibility={ftaEligibility}
             readOnly={readOnly}
             onRetry={() => {
               // 남아 있던 실패 사유를 지워야 자동 재계산 조건에도 다시 걸린다.
