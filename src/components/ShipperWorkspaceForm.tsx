@@ -42,6 +42,7 @@ import {
   summarizeShipperItems,
   getShipperPackageTypeOptionValue,
 } from '../utils/shipperForm';
+import { formatFixNoticeMessage } from '../utils/fixNoticeMessage';
 
 interface Props {
   profile: TradeProfile;
@@ -206,7 +207,15 @@ export default function ShipperWorkspaceForm({
               </p>
             </>
           ) : (
-            <p className="ifc-text">{fixNotice.message}</p>
+            <p className="ifc-text">
+              {formatFixNoticeMessage(fixNotice.message).map((line, lineIndex) => (
+                <span key={lineIndex} className="ifc-line">
+                  {line.map((segment, segmentIndex) => (segment.tone
+                    ? <b key={segmentIndex} className={segment.tone === 'value' ? 'hl-bad' : 'hl-key'}>{segment.text}</b>
+                    : segment.text))}
+                </span>
+              ))}
+            </p>
           )}
           <div className="ifc-foot">
             {fixNotice.basis && <span className="ifc-basis">근거: {fixNotice.basis}</span>}

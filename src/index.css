@@ -3975,6 +3975,8 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .inline-fix-card .ifc-text { margin: 5px 0 0; font-size: 13px; color: #e2e8f0; line-height: 1.6; white-space: pre-line; }
 .inline-fix-card .hl-bad { color: #fb923c; font-weight: 800; }
 .inline-fix-card .hl-good { color: #60a5fa; font-weight: 800; }
+.inline-fix-card .hl-key { color: #fde68a; font-weight: 800; }
+.inline-fix-card .ifc-line { display: block; }
 .inline-fix-card .ifc-foot { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 9px; }
 /* 품목 섹션(3) 인라인 안내 카드는 form-grid 안에서 한 줄 전체를 차지해 대상 필드 바로 위에 붙는다. */
 .inline-fix-card--grid { grid-column: 1 / -1; margin: 4px 0 10px; }
