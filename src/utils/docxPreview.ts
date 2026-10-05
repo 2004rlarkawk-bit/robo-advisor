@@ -17,7 +17,9 @@ export function renderDocxPreview(
       const host = hostRef.current;
       if (!blob || cancelled || !host) return;
       await render(blob, host);
-    } catch {
+    } catch (error) {
+      // 원인을 알 수 있게 콘솔에 남긴다(화면에는 짧은 안내만).
+      console.error(`[${label} 미리보기] 생성 실패:`, error);
       const host = hostRef.current;
       if (host) host.innerHTML = `<p style="padding:16px;color:#b91c1c;">${label} 미리보기 생성에 실패했습니다.</p>`;
     }

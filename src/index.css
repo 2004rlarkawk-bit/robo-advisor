@@ -497,6 +497,12 @@ body {
   transition: transform 0.2s ease;
 }
 
+/* 초기화 버튼이 보일 때(펼친 섹션)는 버튼이 오른쪽 여백을 차지하고 화살표는 그 옆에 붙는다.
+   둘 다 margin-left:auto면 남는 폭을 나눠 가져 버튼이 가운데에 뜬다. */
+.form-section[open] > .form-section-summary:has(.section-reset-btn)::after {
+  margin-left: 10px;
+}
+
 .form-section[open] > .form-section-summary::after {
   transform: rotate(180deg);
 }
@@ -2340,6 +2346,8 @@ body {
 .import-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; background: #fff; }
 .import-steps li { position: relative; border-right: 1px solid var(--border-color); }
 .import-steps li:last-child { border-right: 0; }
+/* 수출 작업실 단계 표시 — 입력 폼·결과 화면과 간격 */
+.workspace-area > .import-steps { margin-bottom: 16px; }
 .import-steps button { width: 100%; border: 0; padding: 14px 8px; background: transparent; color: var(--text-light); font: inherit; font-size: 12px; font-weight: 600; }
 .import-steps button span { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 7px; border-radius: 50%; background: #e2e8f0; }
 .import-steps li.current button { color: var(--primary-color); background: var(--primary-light); }
@@ -3218,7 +3226,8 @@ body {
 .rv-ib:hover { background: #f8fafc; color: var(--text-dark); }
 
 /* 4) 해결하면 제출 — 헤더만 정리 (내부 보완 입력은 기존 스타일 유지) */
-.rv-fixes-head { padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid #eef2f7; }
+.rv-fixes-head { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid #eef2f7; }
+.rv-fixes-count { padding: 3px 10px; border-radius: 999px; background: #fef2f2; color: #b91c1c; font-size: 12.5px; font-weight: 800; }
 .rv-fixes-title { font-size: 15px; font-weight: 700; color: #0f172a; margin: 0; }
 .rv-fixes-sub { margin: 5px 0 0; font-size: 12.5px; color: var(--text-light); }
 
@@ -3975,6 +3984,8 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .inline-fix-card .ifc-text { margin: 5px 0 0; font-size: 13px; color: #e2e8f0; line-height: 1.6; white-space: pre-line; }
 .inline-fix-card .hl-bad { color: #fb923c; font-weight: 800; }
 .inline-fix-card .hl-good { color: #60a5fa; font-weight: 800; }
+.inline-fix-card .hl-key { color: #fde68a; font-weight: 800; }
+.inline-fix-card .ifc-line { display: block; }
 .inline-fix-card .ifc-foot { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 9px; }
 /* 품목 섹션(3) 인라인 안내 카드는 form-grid 안에서 한 줄 전체를 차지해 대상 필드 바로 위에 붙는다. */
 .inline-fix-card--grid { grid-column: 1 / -1; margin: 4px 0 10px; }

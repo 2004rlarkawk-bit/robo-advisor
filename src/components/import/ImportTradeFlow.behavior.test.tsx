@@ -303,7 +303,7 @@ describe('수입 문서관리 조회 모드', () => {
     expect(container?.textContent).not.toContain('완료 및 제출');
 
     act(() => button('4단계 신고자료 준비 보기').click());
-    expect(container?.textContent).toContain('수입신고 의뢰서');
+    expect(container?.textContent).toContain('수입신고서(초안)');
 
     const hskStepButton = Array.from(container!.querySelectorAll<HTMLButtonElement>('button'))
       .find((candidate) => candidate.textContent?.includes('HSK 검토'))!;

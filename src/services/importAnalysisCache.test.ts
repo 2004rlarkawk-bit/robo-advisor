@@ -54,4 +54,16 @@ describe('수입 서류 분석 캐시', () => {
     const key = (await computeImportAnalysisCacheKey([doc('d1')], { d1: file('new') }, 'shipper'))!;
     expect(loadImportAnalysisCache(key.key, key.hashById)).toBeNull();
   });
+
+  it('시연용 스위트콘 서류 해시면 저장소가 비어 있어도 내장된 실제 분석 결과를 쓴다', () => {
+    const hashById = {
+      n1: '772cc258a4968ac97d5ec86b3c4f5470589f0e9577eaa2da159d5f126e670d59',
+      n2: '81b2e05949dfece8ae99e276fe16ab78160502661ee0b674d6e7ea5bcba0216b',
+      n3: '9e086293c47567d6048ca964eea5ed1821e00b3d4afad8536fb61fa7a4365f4e',
+    };
+    const loaded = loadImportAnalysisCache('686f9e2dea34892da83f60809375d2cc72229f61d6c5a8cf86b367ae6b728c1e', hashById);
+    expect(loaded?.result.analysis.extracted.invoiceNo).toBe('SF-INV-260915');
+    expect(loaded?.result.classifications.map((item) => item.id).sort()).toEqual(['n1', 'n2', 'n3']);
+    expect(loaded?.suggestions[0]?.code).toBe('0710400000');
+  });
 });

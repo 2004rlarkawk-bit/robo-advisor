@@ -26,6 +26,8 @@ interface AppHeaderProps {
   /** 알림 벨 폴링을 다시 트리거하는 값 (예: activeMenu 변경 시) */
   notificationPollKey?: unknown;
   onToggleSidebar: () => void;
+  /** 'PortAI'를 누르면 작업실을 처음 화면으로 되돌린다 */
+  onProductNameClick?: () => void;
   onNavigate: (menu: AppMenu) => void;
   onOpenNotification?: (notification: NotificationRecord, menu: AppMenu) => void;
   onLogout: () => void;
@@ -40,6 +42,7 @@ export default function AppHeader({
   onRoleChange,
   notificationPollKey,
   onToggleSidebar,
+  onProductNameClick,
   onNavigate,
   onOpenNotification,
   onLogout,
@@ -58,7 +61,13 @@ export default function AppHeader({
         >
           {collapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
         </button>
-        <span className="header-product-name">PortAI</span>
+        {onProductNameClick ? (
+          <button type="button" className="header-product-name header-product-name--button" onClick={onProductNameClick} title="처음 화면으로">
+            PortAI
+          </button>
+        ) : (
+          <span className="header-product-name">PortAI</span>
+        )}
         {canSwitchRole && onRoleChange ? (
           // 겸용 계정: 칩 하나를 누르면 반대 역할로 전환한다.
           <button
