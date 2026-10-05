@@ -219,6 +219,13 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     reload: reloadUserProfile,
     saveProfile: saveUserProfile,
   } = useUserProfile(user?.id ?? null);
+  // 수입신고서(초안) 납세의무자 칸 — 서류에 수입자 연락처가 없을 때 회원 프로필로 채운다.
+  const importerContact = useMemo(() => ({
+    tel: userProfile?.phone ?? undefined,
+    email: userProfile?.email ?? undefined,
+    address: userProfile?.company_address ?? undefined,
+    contactName: userProfile?.contact_name ?? undefined,
+  }), [userProfile?.phone, userProfile?.email, userProfile?.company_address, userProfile?.contact_name]);
 
   useEffect(() => {
     if (userProfile?.service_role === 'integrated') setIntegratedWorkspaceRole('shipper');
@@ -2828,6 +2835,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   key={`import-shipper-${user.id}-${importWorkspaceVersion}`}
                   userId={user.id}
                   importerCompanyName={userProfile.company_name ?? ''}
+                  importerContact={importerContact}
                   onGenerate={handleImportGenerate}
                   onComplete={handleImportComplete}
                   onSaved={handleImportSaved}

@@ -93,6 +93,8 @@ interface Props {
   role: UserTradeRole;
   userId: string;
   importerCompanyName?: string;
+  /** 서류에 수입자 연락처가 없을 때 신고서 납세의무자 칸을 채우는 회원 프로필 값 */
+  importerContact?: { tel?: string; email?: string; address?: string; contactName?: string };
   onGenerate: (snapshot: ImportTradeSnapshot) => Promise<string>;
   onComplete: (snapshot: ImportTradeSnapshot) => Promise<SavedTrade>;
   onSaved?: (trade: SavedTrade) => void;
@@ -105,6 +107,7 @@ export default function ImportTradeFlow({
   role,
   userId,
   importerCompanyName = '',
+  importerContact,
   onGenerate,
   onComplete,
   onSaved,
@@ -924,7 +927,11 @@ export default function ImportTradeFlow({
     fields: state.analysis?.extracted ?? normalizeImportExtractedFields({}),
     duty: state.duty,
     importerCompanyName,
-  }), [state.analysis, state.duty, importerCompanyName]);
+    importerTel: importerContact?.tel,
+    importerEmail: importerContact?.email,
+    importerAddress: importerContact?.address,
+    importerContactName: importerContact?.contactName,
+  }), [state.analysis, state.duty, importerCompanyName, importerContact]);
 
   /** 미리보기에 얹을 값 — 다운로드 docx와 같은 매핑을 쓴다. */
   const declarationFormValues = useMemo(

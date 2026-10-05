@@ -89,4 +89,31 @@ describe('수입신고서(초안) 값 채우기', () => {
     });
     expect(mapImportDeclarationForm({ fields: many }).first_goods_name).toBe('FLASK 외 2건');
   });
+
+  it('결제방법은 방식만 남기고, 숫자가 아닌 운임 표기와 C/O 없음은 칸에 맞게 적는다', () => {
+    const form = mapImportDeclarationForm({
+      fields: fields({ paymentTerms: 'T/T 30 DAYS AFTER B/L DATE', freight: 'AS ARRANGED', insurance: '', certificateOfOriginAvailable: false }),
+      duty,
+    });
+    expect(form.payment_amount).toBe('FOB-USD-7,800-T/T');
+    expect(form.freight).toBe('');
+    expect(form.insurance).toBe('');
+    expect(form.co_yn).toBe('N');
+  });
+
+  it('서류에 납세의무자 연락처가 없으면 회원 프로필 값으로 채운다', () => {
+    const form = mapImportDeclarationForm({
+      fields: fields({ importerDetails: { name: '' } }),
+      duty,
+      importerCompanyName: 'PORTAI TRADING CO., LTD.',
+      importerTel: '051-123-4567',
+      importerEmail: 'trade@portai.com',
+      importerAddress: '부산 중구 중앙대로 45',
+      importerContactName: '김지민',
+    });
+    expect(form.taxpayer_tel).toBe('051-123-4567');
+    expect(form.taxpayer_email).toBe('trade@portai.com');
+    expect(form.taxpayer_address).toBe('부산 중구 중앙대로 45');
+    expect(form.taxpayer_name).toBe('김지민');
+  });
 });
