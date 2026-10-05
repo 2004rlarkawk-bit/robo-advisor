@@ -1,11 +1,14 @@
 import type { ImportDutyEstimate } from '../../types/importTrade';
+import type { FtaEligibility } from '../../services/ftaAgreementService';
 
-export default function ImportDutySummary({ duty, error, busy = false, ftaReviewing = false, readOnly = false, onRetry }: {
+export default function ImportDutySummary({ duty, error, busy = false, ftaReviewing = false, ftaEligibility = null, readOnly = false, onRetry }: {
   duty: ImportDutyEstimate | null;
   error: string;
   busy?: boolean;
-  /** FTA 적용 가능 여부를 확인 중인지 */
+  /** FTA 적용 가능성 확인을 골랐는지 */
   ftaReviewing?: boolean;
+  /** 확인 결과 — applyRate가 참일 때만 협정세율을 예상세액에 반영한다 */
+  ftaEligibility?: FtaEligibility | null;
   /** 문서 관리에서 조회로 연 화면 — 다시 계산하지 않고 저장된 값만 보여준다. */
   readOnly?: boolean;
   onRetry?: () => void;
@@ -39,6 +42,14 @@ export default function ImportDutySummary({ duty, error, busy = false, ftaReview
   const missing = valuation?.unconfirmed ?? [];
   const provisional = missing.length > 0;
   const krw = (value: number | null) => value == null ? '확인 필요' : `${Math.round(value).toLocaleString('ko-KR')}원`;
+  const fta = duty.fta;
+  const ftaApplied = Boolean(ftaReviewing && ftaEligibility?.applyRate && fta?.duty != null && fta.rate != null);
+  const ftaVat = fta?.duty == null ? null : Math.round((duty.customsValue + fta.duty) * 0.1);
+  const ftaRateText = !ftaReviewing
+    ? '미적용'
+    : fta?.rate == null
+      ? '확인 필요'
+      : ftaApplied ? `${fta.rate}%` : `${fta.rate}% · 증빙 확인 후 적용`;
   // 환율 기준일 YYYYMMDD → YYYY.MM.DD (수출 과세가격 카드와 표기 통일)
   const ymd = (d: string) => /^\d{8}$/.test(d) ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d;
   return (
@@ -53,13 +64,20 @@ export default function ImportDutySummary({ duty, error, busy = false, ftaReview
         <div><dt>운임·보험료 가산{valuation?.incoterms ? ` (${valuation.incoterms})` : ''}</dt><dd>{duty.additionsKrw == null ? '확인 필요' : krw(duty.additionsKrw)}</dd></div>
         <div><dt>예상 과세가격</dt><dd>{krw(duty.customsValue)}</dd></div>
         <div><dt>기본 관세율</dt><dd>{duty.basicRate}%</dd></div>
-        <div><dt>FTA 협정</dt><dd>{duty.ftaAgreement}</dd></div>
-        <div><dt>FTA 세율</dt><dd>{duty.ftaRate == null ? (ftaReviewing ? '확인 필요' : '미적용') : `${duty.ftaRate}%`}</dd></div>
-        <div><dt>예상 관세</dt><dd>{krw(duty.basicDuty)}</dd></div>
+        <div><dt>FTA 협정</dt><dd>{ftaReviewing ? duty.ftaAgreement : '미적용'}</dd></div>
+        <div><dt>FTA 세율</dt><dd>{ftaRateText}</dd></div>
+        <div><dt>{ftaApplied ? '기본세율 기준 예상 관세' : '예상 관세'}</dt><dd>{krw(duty.basicDuty)}</dd></div>
         <div><dt>부가가치세</dt><dd>{krw(duty.vat)}</dd></div>
         <div><dt>기타 세금</dt><dd>{krw(duty.otherTaxes)}</dd></div>
-        <div><dt>{provisional ? `${missing.join('·')} 미반영 참고세액` : '총 예상세액'}</dt><dd>{krw(duty.totalTax)}</dd></div>
-        <div><dt>예상 절감액</dt><dd>{krw(duty.estimatedSavings)}</dd></div>
+        <div><dt>{provisional ? `${missing.join('·')} 미반영 참고세액` : ftaApplied ? '기본세율 기준 총 예상세액' : '총 예상세액'}</dt><dd>{krw(duty.totalTax)}</dd></div>
+        <div><dt>예상 절감액</dt><dd>{ftaApplied ? krw(fta?.savings ?? null) : ftaReviewing && fta?.savings != null ? '증빙 확인 후 표시' : '확인 필요'}</dd></div>
+        {ftaApplied && fta && (
+          <>
+            <div className="duty-grid-fta"><dt>FTA 적용 시 예상 관세</dt><dd>{krw(fta.duty)}</dd></div>
+            <div className="duty-grid-fta"><dt>FTA 적용 시 부가가치세</dt><dd>{krw(ftaVat)}</dd></div>
+            <div className="duty-grid-fta"><dt>FTA 적용 시 총 예상세액</dt><dd>{krw(fta.duty == null || ftaVat == null ? null : fta.duty + ftaVat)}</dd></div>
+          </>
+        )}
       </dl>
       {valuation && valuation.notes.length > 0 && (
         <div className="form-message warning" role="status">
@@ -67,11 +85,11 @@ export default function ImportDutySummary({ duty, error, busy = false, ftaReview
         </div>
       )}
       <p className="import-notice">
-        {ftaReviewing
-          ? duty.ftaRate == null
-            ? '위 금액은 기본 관세율 기준입니다. 협정세율을 확인하면 FTA 적용 예상세액과 절감액을 함께 보여줍니다.'
-            : '원산지증명서와 협정 요건을 관세사와 확인한 뒤 협정세율을 적용하세요.'
-          : '위 금액은 기본 관세율 기준입니다. FTA 협정세율은 원산지증명서와 적용 요건 확인 전에는 적용하지 않습니다.'}
+        {ftaApplied
+          ? '원산지증명서가 첨부되어 협정세율 기준 예상세액을 함께 보여줍니다. 원산지 결정기준 충족 여부는 관세사와 확인한 뒤 신고하세요.'
+          : ftaReviewing
+            ? '위 금액은 기본 관세율 기준입니다. 원산지증명서와 적용 요건이 확인되면 협정세율 기준 예상세액과 절감액을 반영합니다.'
+            : '위 금액은 기본 관세율 기준입니다. FTA 협정세율은 원산지증명서와 적용 요건 확인 전에는 적용하지 않습니다.'}
         {' '}수수료·로열티 등 운임·보험료 외의 가산·공제 요소는 반영하지 않은 추정치입니다.
       </p>
     </section>

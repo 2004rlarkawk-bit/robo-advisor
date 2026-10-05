@@ -5,6 +5,7 @@ import type { SavedTrade } from '../../types';
 export default function ImportShipperFlow(props: {
   userId: string;
   importerCompanyName?: string;
+  importerContact?: { tel?: string; email?: string; address?: string; contactName?: string };
   onGenerate: (snapshot: ImportTradeSnapshot) => Promise<string>;
   onComplete: (snapshot: ImportTradeSnapshot) => Promise<SavedTrade>;
   onSaved?: (trade: SavedTrade) => void;

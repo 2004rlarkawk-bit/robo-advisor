@@ -36,6 +36,16 @@ const numberText = (value: string): string => {
   const parsed = parseTradeNumber(value);
   return parsed === null ? text(value) : parsed.toLocaleString('en-US');
 };
+/** 금액 칸 — "AS ARRANGED"처럼 숫자가 아닌 표기는 금액이 아니므로 비운다. */
+const amountOnly = (value: string): string => {
+  const parsed = parseTradeNumber(value);
+  return parsed === null ? '' : parsed.toLocaleString('en-US');
+};
+/** 결제방법 — "T/T 30 DAYS AFTER B/L DATE"에서 방식(T/T)만 남긴다. 조건 문장은 칸에 들어가지 않는다. */
+const paymentMethodText = (value: string): string => {
+  const method = text(value).match(/\b(T\/?T|L\/?C|D\/?P|D\/?A|O\/?A|CAD|COD)\b/i)?.[1];
+  return method ? method.toUpperCase().replace(/^([A-Z])([A-Z])$/, '$1/$2') : text(value).split(/\s+/)[0];
+};
 const dateText = (value: Date): string =>
   `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 
@@ -63,7 +73,7 @@ function paymentAmountText(fields: ImportExtractedFields): string {
     text(fields.incoterms).split(/\s+/)[0],
     text(fields.currency),
     numberText(text(fields.totalAmount)),
-    text(fields.paymentTerms),
+    paymentMethodText(fields.paymentTerms),
   ].filter(Boolean).join('-');
 }
 
@@ -104,7 +114,7 @@ export function mapImportDeclarationForm(data: ImportDeclarationFormData): Recor
     decl_kind: '',
     trade_kind: '',
     goods_kind: '',
-    co_yn: fields.certificateOfOriginAvailable ? 'Y' : '',
+    co_yn: fields.certificateOfOriginAvailable ? 'Y' : 'N',
     price_decl_yn: '',
     total_weight: [numberText(text(fields.grossWeight)), text(fields.grossWeightUnit) || 'KG'].filter(Boolean).join(' '),
     total_packages: packagesText(fields),
@@ -139,9 +149,9 @@ export function mapImportDeclarationForm(data: ImportDeclarationFormData): Recor
     exchange_rate: duty ? duty.exchangeRate.toLocaleString('ko-KR') : '',
     total_customs_value_usd: numberText(text(fields.totalAmount)),
     total_customs_value_krw: money(duty?.customsValue),
-    freight: numberText(text(fields.freight)),
-    insurance: numberText(text(fields.insurance)),
-    addition_amount: numberText(text(fields.otherAdditions)),
+    freight: amountOnly(text(fields.freight)),
+    insurance: amountOnly(text(fields.insurance)),
+    addition_amount: amountOnly(text(fields.otherAdditions)),
     deduction_amount: '',
     total_vat_base: duty ? money(duty.customsValue + duty.basicDuty) : '',
     // (59)(61) 세액 — 계산한 관세·부가세만 채우고 나머지 내국세는 비운다.

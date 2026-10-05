@@ -256,6 +256,22 @@ export interface ImportDutyItemEstimate {
   basicDuty: number;
 }
 
+/**
+ * 원산지·HSK 기준으로 찾은 FTA 후보. 협정세율이 기본세율보다 낮은지와 절감액까지만 계산하고,
+ * 실제 적용 여부(원산지증명서·원산지 결정기준)는 화면에서 따로 판단한다.
+ */
+export interface ImportFtaCandidate {
+  /** 원산지 국가와 발효된 협정 이름들 */
+  agreements: string[];
+  /** 관세율 조회 결과에서 실제로 세율 행을 찾은 협정 */
+  agreement: string | null;
+  rate: number | null;
+  duty: number | null;
+  savings: number | null;
+  coverage: 'all' | 'partial' | 'none';
+  notes: string[];
+}
+
 /** Incoterms에 따라 과세가격에 더한 운임·보험료와 확인할 점 */
 export interface ImportDutyValuation {
   incoterms: string | null;
@@ -282,6 +298,8 @@ export interface ImportDutyEstimate {
   customsValue: number;
   basicRate: number;
   basicDuty: number;
+  /** 사전 확인한 FTA 후보. 이 필드가 생기기 전에 저장된 거래에는 없다. */
+  fta?: ImportFtaCandidate;
   ftaAgreement: string;
   ftaRate: number | null;
   ftaDuty: number | null;

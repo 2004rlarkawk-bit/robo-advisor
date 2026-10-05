@@ -37,6 +37,7 @@ import {
   syncLegacyImportFields,
 } from '../../services/importDocumentAnalysisService';
 import { calculateEstimatedImportDuty } from '../../services/importDutyService';
+import { assessFtaEligibility } from '../../services/ftaAgreementService';
 import {
   recommendImportHSKForItems,
   validateOfficialImportHSK,
@@ -44,6 +45,12 @@ import {
 import { resolveImportRisks } from '../../services/importRiskService';
 import { applyChosenValue, clearChosenValue, mergeEditedChoices } from '../../services/importValueChoiceService';
 import { IMPORT_DEMO_SCENARIO } from '../../services/importReconciliationFixtures';
+import {
+  buildImportDeclarationDocx,
+  downloadImportDeclarationDocx,
+  printImportDeclarationAsPdf,
+  renderImportDeclarationPreview,
+} from '../../services/importDeclarationService';
 import { duplicateImportDocumentsMessage, findDuplicateImportDocuments } from '../../utils/importDocumentDuplicates';
 import { lookupImportCargo } from '../../services/cargoProgressService';
 import { saveShipperReturnReply } from '../../services/forwarderCaseService';
@@ -86,6 +93,8 @@ interface Props {
   role: UserTradeRole;
   userId: string;
   importerCompanyName?: string;
+  /** 서류에 수입자 연락처가 없을 때 신고서 납세의무자 칸을 채우는 회원 프로필 값 */
+  importerContact?: { tel?: string; email?: string; address?: string; contactName?: string };
   onGenerate: (snapshot: ImportTradeSnapshot) => Promise<string>;
   onComplete: (snapshot: ImportTradeSnapshot) => Promise<SavedTrade>;
   onSaved?: (trade: SavedTrade) => void;
@@ -98,6 +107,7 @@ export default function ImportTradeFlow({
   role,
   userId,
   importerCompanyName = '',
+  importerContact,
   onGenerate,
   onComplete,
   onSaved,
@@ -144,6 +154,7 @@ export default function ImportTradeFlow({
     scrollPageToTop();
   }, [state.step]);
   const [message, setMessage] = useState('');
+  const [preview, setPreview] = useState(false);
   const [showInProgressConfirmation, setShowInProgressConfirmation] = useState(false);
   const [manualHsInputs, setManualHsInputs] = useState<Record<string, string>>({});
   const [manualHsErrors, setManualHsErrors] = useState<Record<string, string>>({});
@@ -151,6 +162,8 @@ export default function ImportTradeFlow({
   const skipNextLocalCacheWriteRef = useRef(false);
   const onWorkspaceStateChangeRef = useRef(onWorkspaceStateChange);
   onWorkspaceStateChangeRef.current = onWorkspaceStateChange;
+  const declarationPreviewRef = useRef<HTMLDivElement | null>(null);
+  const [declarationError, setDeclarationError] = useState('');
   const [declarationFormPreview, setDeclarationFormPreview] = useState(false);
   const [declarationFormError, setDeclarationFormError] = useState('');
   // 포워더 보완 요청에 대한 화주 회신 메모 — 요청·회신이 같은 의뢰에 남는다
@@ -572,7 +585,7 @@ export default function ImportTradeFlow({
     {
       const stages = [
         '관세율 조회 · 예상세액 계산 중...',
-        '수입신고서 초안 구성 중...',
+        '수입신고서 초안 · 수입신고 의뢰서 구성 중...',
         '신고자료 완성도 점검 중 (필수 항목 채움 확인)...',
         '결과 저장 · 정리 중...',
       ];
@@ -865,17 +878,60 @@ export default function ImportTradeFlow({
   const ftaReviewing = isFtaReviewChoice(ftaChoice);
   const coHolding = state.analysis?.chosenValues?.[CO_HOLDING_KEY] as CoHolding | undefined;
   const hasCertificateOfOrigin = state.documents.some((document) => document.type === 'certificate_of_origin');
+  // FTA 적용 가능성 — 협정·협정세율·절감액은 예상세액 계산 때 함께 받아 두고, 증빙(C/O)은 여기서 본다.
+  const ftaEligibility = useMemo(() => {
+    if (!state.duty?.fta || !state.analysis) return null;
+    const coRows = state.analysis.comparison.filter((row) => row.certificateOfOrigin && row.certificateOfOrigin !== '-');
+    return assessFtaEligibility(state.duty.fta, {
+      originCountry: state.analysis.extracted.items.map((item) => item.originCountry).filter(Boolean).join(', '),
+      basicRate: state.duty.basicRate,
+      basicDuty: state.duty.basicDuty,
+      hasCertificateOfOrigin,
+      certificateMismatches: hasCertificateOfOrigin && coRows.length ? coRows.filter((row) => !row.matches).length : null,
+    });
+  }, [state.duty, state.analysis, hasCertificateOfOrigin]);
   const clearRiskValue = (key: string) => setState((current) => (current.analysis ? {
     ...current,
     analysis: clearChosenValue(current.analysis, key),
   } : current));
+
+  // 수입신고 의뢰서 — 관세사에게 넘기는 의뢰 양식. 신고서 초안과 같은 값으로 만든다.
+  const declarationData = useMemo(() => (state.analysis ? {
+    fields: state.analysis.extracted,
+    duty: state.duty ?? undefined,
+    dutyError: state.dutyError,
+    risks: state.risks,
+    documents: state.documents,
+    importerCompanyName,
+    tradeId: state.tradeId,
+    ftaChoice: state.analysis.chosenValues?.[FTA_CHOICE_KEY],
+  } : null), [state.analysis, state.duty, state.dutyError, state.risks, state.documents, state.tradeId, importerCompanyName]);
+
+  // 보기를 누르면 다운로드와 같은 docx를 그대로 렌더한다.
+  useEffect(() => {
+    const container = declarationPreviewRef.current;
+    if (!preview || !declarationData || !container) return;
+    let cancelled = false;
+    setDeclarationError('');
+    void buildImportDeclarationDocx(declarationData)
+      .then((blob) => (cancelled ? undefined : renderImportDeclarationPreview(blob, container)))
+      .catch((error) => {
+        console.error('[수입신고의뢰서] 미리보기 실패:', error);
+        if (!cancelled) setDeclarationError('수입신고의뢰서를 만들지 못했습니다. 다시 시도해 주세요.');
+      });
+    return () => { cancelled = true; };
+  }, [preview, declarationData]);
 
   // 수입신고서(초안) — 관세청 서식에 확인된 값만 채운다.
   const declarationFormData = useMemo(() => ({
     fields: state.analysis?.extracted ?? normalizeImportExtractedFields({}),
     duty: state.duty,
     importerCompanyName,
-  }), [state.analysis, state.duty, importerCompanyName]);
+    importerTel: importerContact?.tel,
+    importerEmail: importerContact?.email,
+    importerAddress: importerContact?.address,
+    importerContactName: importerContact?.contactName,
+  }), [state.analysis, state.duty, importerCompanyName, importerContact]);
 
   /** 미리보기에 얹을 값 — 다운로드 docx와 같은 매핑을 쓴다. */
   const declarationFormValues = useMemo(
@@ -1170,7 +1226,7 @@ export default function ImportTradeFlow({
               {/* 설명은 길어서 카드 머리를 밀어내므로 TIP을 눌렀을 때만 펼친다. */}
               <details className="import-tip">
                 <summary>TIP</summary>
-                <p>협정세율을 적용하면 관세를 줄일 수 있습니다. 적용 안 함을 골라도 기본 관세율로 예상세액은 계산됩니다.</p>
+                <p>FTA 세율은 국가·HSK·원산지 요건 확인 후 적용됩니다. 확인 전에는 기본세율로 계산합니다.</p>
               </details>
             </div>
             <div className="import-fta-choices" role="group" aria-label="FTA 적용 여부">
@@ -1180,7 +1236,7 @@ export default function ImportTradeFlow({
                 disabled={readOnly}
                 onClick={() => (ftaChoice === 'FTA 적용 안 함' ? clearRiskValue(FTA_CHOICE_KEY) : chooseRiskValue(FTA_CHOICE_KEY, 'FTA 적용 안 함'))}
               >
-                적용 안 함
+                기본세율로 계산
               </button>
               <button
                 type="button"
@@ -1188,12 +1244,29 @@ export default function ImportTradeFlow({
                 disabled={readOnly}
                 onClick={() => (ftaReviewing ? clearRiskValue(FTA_CHOICE_KEY) : chooseRiskValue(FTA_CHOICE_KEY, FTA_REVIEW_CHOICE))}
               >
-                적용 가능 여부 확인
+                FTA 적용 가능성 확인
               </button>
             </div>
 
             {ftaReviewing && (
               <div className="import-fta-review">
+                {ftaEligibility ? (
+                  <>
+                    <div className={`import-fta-status import-fta-status--${ftaEligibility.status}`} role="status">
+                      {ftaEligibility.label}
+                    </div>
+                    <ul className="import-fta-checks import-fta-checks--result">
+                      {ftaEligibility.checks.map((check) => (
+                        <li key={check.label} className={check.ok === true ? 'is-ok' : check.ok === false ? 'is-missing' : 'is-unknown'}>
+                          <span>{check.label}</span> {check.value}
+                        </li>
+                      ))}
+                      {state.duty?.fta?.notes.map((note) => <li key={note} className="is-unknown">{note}</li>)}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="import-card-note">예상세액을 계산하면 협정과 협정세율을 함께 확인합니다.</p>
+                )}
                 <span className="form-label">원산지증명서(C/O) 보유</span>
                 <div className="import-fta-choices" role="group" aria-label="원산지증명서 보유 여부">
                   {CO_HOLDING_CHOICES.map((choice) => {
@@ -1214,7 +1287,6 @@ export default function ImportTradeFlow({
                 <ul className="import-fta-checks">
                   <li>원산지: {state.analysis.extracted.items.map((item) => item.originCountry).filter(Boolean).join(', ') || '확인 필요'}</li>
                   <li>HSK: {state.analysis.extracted.items.map((item) => item.confirmedHSCode).filter(Boolean).join(', ') || '확정 필요'}</li>
-                  <li>협정세율: {state.duty?.ftaRate == null ? '확인 필요 (관세사 또는 관세법령정보포털)' : `${state.duty.ftaRate}%`}</li>
                   <li>원산지증명서: {hasCertificateOfOrigin ? '첨부됨' : coHolding === '있음' ? '서류 추가 필요' : coHolding ? '발급 후 첨부하면 협정세율 적용 가능' : '보유 여부 선택 필요'}</li>
                 </ul>
                 {coHolding === '있음' && !hasCertificateOfOrigin && !readOnly && (
@@ -1227,8 +1299,8 @@ export default function ImportTradeFlow({
               {!ftaChoice
                 ? '고르지 않으면 기본 관세율로 예상세액을 계산합니다.'
                 : ftaChoice === 'FTA 적용 안 함'
-                  ? '기본 관세율로 진행합니다. 원산지증명서는 제출하지 않아도 됩니다.'
-                  : '협정 적용 요건은 이 앱이 판정하지 않습니다. 위 항목을 확인한 뒤 관세사와 최종 적용 여부를 정하세요.'}
+                  ? '기본 관세율로 계산합니다. 원산지증명서는 제출하지 않아도 됩니다.'
+                  : 'PortAI는 협정 유무·HSK별 협정세율·원산지증명서 첨부 여부로 적용 가능성만 안내합니다. 최종 적용 여부는 원산지 결정기준과 증빙을 확인한 뒤 관세사와 확정하세요.'}
             </p>
           </section>
           <DutySummary
@@ -1236,6 +1308,7 @@ export default function ImportTradeFlow({
             error={state.dutyError}
             busy={dutyBusy}
             ftaReviewing={ftaReviewing}
+            ftaEligibility={ftaEligibility}
             readOnly={readOnly}
             onRetry={() => {
               // 남아 있던 실패 사유를 지워야 자동 재계산 조건에도 다시 걸린다.
@@ -1260,13 +1333,34 @@ export default function ImportTradeFlow({
         </>
       )}
 
-      {state.step === 4 && state.analysis && role === 'shipper' && (
+      {state.step === 4 && state.analysis && role === 'shipper' && declarationData && (
         <>
           <ImportHandoffReadyCard
             documentTypes={state.documents.map((document) => document.type)}
             fields={state.analysis.extracted}
             confirmedHsCodes={state.analysis.extracted.items.map((item) => item.confirmedHSCode)}
           />
+          <section className="form-card import-card">
+            <div className="import-card-heading"><div><h2>수입신고 의뢰서</h2></div></div>
+            <div className="document-preview-actions">
+              <button className="btn btn-secondary" onClick={() => setPreview((value) => !value)}><Eye size={17} /> {preview ? '닫기' : '보기'}</button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => void downloadImportDeclarationDocx(declarationData).catch(() => setDeclarationError('DOCX를 만들지 못했습니다. 다시 시도해 주세요.'))}
+              >
+                <Download size={17} /> DOCX 다운로드
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => void printImportDeclarationAsPdf(declarationData).catch(() => setDeclarationError('PDF 인쇄 창을 열지 못했습니다. 다시 시도해 주세요.'))}
+              >
+                <Download size={17} /> PDF 저장
+              </button>
+            </div>
+            {declarationError && <p className="form-message error" role="alert">{declarationError}</p>}
+            {preview && <div className="declaration-preview" ref={declarationPreviewRef} />}
+          </section>
+
           {/* 수입신고서(초안) — 관세법 시행규칙 별지 제1호의3서식에 확인된 값만 채운다. */}
           <section className="form-card import-card">
             <div className="import-card-heading">

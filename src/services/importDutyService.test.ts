@@ -160,4 +160,25 @@ describe('과세가격 가산 — 미확인·통화·중복 가산', () => {
   it('D조건은 Invoice 그대로의 값을 참고값으로 표시한다', () => {
     expect(resolveDutiableAdditions({ incoterms: 'DAP Seoul' }, 'USD').unconfirmed).toEqual(['수입항 이후 비용 공제']);
   });
+
+  it('미국산이면 같은 관세율 조회 결과에서 한·미 FTA 세율을 후보로 뽑되 예상세액에는 반영하지 않는다', async () => {
+    tariffMock.mockResolvedValueOnce([
+      { hsCode: '0710400000', typeCode: 'A', typeName: '기본세율', rate: 30, applyStart: '20260101', applyEnd: '20261231', source: 'api' },
+      { hsCode: '0710400000', typeCode: 'FUS1', typeName: '한·미 FTA협정세율', rate: 0, applyStart: '20260101', applyEnd: '20261231', source: 'api' },
+    ]);
+    const duty = await calculateEstimatedImportDuty({
+      items: normalizeImportExtractedFields({ items: [{ id: '1', description: 'Frozen sweet corn', confirmedHSCode: '0710400000', originCountry: 'U.S.A.', amount: '1000' }] }).items,
+      invoiceCurrency: 'CNY',
+      invoiceAmount: '1000',
+      originCountry: 'U.S.A.',
+      destinationCountry: 'KOREA',
+      incoterms: 'CIF',
+    });
+    expect(duty.fta?.agreement).toBe('한·미 FTA');
+    expect(duty.fta?.rate).toBe(0);
+    expect(duty.fta?.savings).toBe(duty.basicDuty);
+    expect(duty.ftaAgreement).toBe('한·미 FTA');
+    expect(duty.ftaRate).toBeNull();
+    expect(duty.totalTax).toBe(duty.basicDuty + duty.vat);
+  });
 });
