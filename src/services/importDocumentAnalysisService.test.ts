@@ -67,4 +67,29 @@ describe('수입 문서 품목 정규화', () => {
 
     expect(fields.items).toHaveLength(2);
   });
+
+  it('같은 냉동 옥수수에 포장 설명이 붙어도 한 품목으로 합친다', () => {
+    const fields = normalizeImportExtractedFields({
+      items: [
+        { id: 'ci-item', description: 'FROZEN SWEET CORN', documentHSCode: '0710.40', sourceDocumentIds: ['ci'] },
+        { id: 'pl-item', description: 'FROZEN SWEET CORN (2.5KG X 4 BAGS / CTN)', sourceDocumentIds: ['pl'] },
+        { id: 'bl-item', description: 'FROZEN SWEET CORN', documentHSCode: '0710.40', sourceDocumentIds: ['bl'] },
+      ],
+    });
+
+    expect(fields.items).toHaveLength(1);
+    expect(fields.items[0].sourceDocumentIds).toEqual(['ci', 'pl', 'bl']);
+    expect(fields.items[0].documentHSCode).toBe('0710.40');
+  });
+
+  it('HS 코드가 같아도 다른 품명은 별도 품목으로 둔다', () => {
+    const fields = normalizeImportExtractedFields({
+      items: [
+        { id: 'corn', description: 'FROZEN SWEET CORN', documentHSCode: '0710.40', sourceDocumentIds: ['ci'] },
+        { id: 'vegetables', description: 'FROZEN MIXED VEGETABLES', documentHSCode: '0710.40', sourceDocumentIds: ['pl'] },
+      ],
+    });
+
+    expect(fields.items).toHaveLength(2);
+  });
 });

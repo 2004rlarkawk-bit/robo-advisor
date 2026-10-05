@@ -152,6 +152,7 @@ function normalizedItemIdentity(value: string): string {
     .normalize('NFKC')
     .toLowerCase()
     .replace(/^\s*item\s*\d+\s*[:.)-]?\s*/i, '')
+    .replace(/\s*\(?\s*\d+(?:\.\d+)?\s*(?:kg|g)\s*[x×]\s*\d+\s*(?:bags?|packs?)\s*\/\s*(?:ctns?|cartons?)\s*\)?\s*$/i, '')
     .replace(/[^a-z0-9가-힣]/g, '');
 }
 
