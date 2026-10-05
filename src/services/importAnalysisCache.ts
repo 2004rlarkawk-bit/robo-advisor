@@ -6,14 +6,22 @@
  * 결과는 그 파일로 실제 AI가 낸 값 그대로이고, 문서 id만 이번 업로드의 id로 바꿔 끼운다.
  *
  * 저장소는 localStorage(브라우저별)라 다른 브라우저·시크릿 창에서는 처음 한 번은 실제 분석을 한다.
+ * 단, 시연용 스위트콘 서류 3장은 같은 방식으로 실제 AI가 분석한 결과를 importAnalysisSeed.json에
+ * 담아 두어, 어느 브라우저에서든 첫 업로드부터 그 결과를 쓴다.
  */
 import type {
   ImportDocumentAnalysisResponse,
   ImportDocumentMeta,
   ImportHSCodeSuggestion,
 } from '../types/importTrade';
+import seedEntry from './importAnalysisSeed.json';
 
 const CACHE_PREFIX = 'portai:import-analysis-cache:v1:';
+
+/** 캐시 키 → 함께 배포되는 분석 결과(시연용 스위트콘 서류). */
+const SEEDED_ENTRIES: Record<string, ImportAnalysisCacheEntry> = {
+  [seedEntry.key]: seedEntry as unknown as ImportAnalysisCacheEntry,
+};
 
 export interface ImportAnalysisCacheEntry {
   result: ImportDocumentAnalysisResponse;
@@ -65,8 +73,8 @@ export function loadImportAnalysisCache(
 ): { result: ImportDocumentAnalysisResponse; suggestions: ImportHSCodeSuggestion[] } | null {
   try {
     const raw = globalThis.localStorage?.getItem(CACHE_PREFIX + key);
-    if (!raw) return null;
-    const entry = JSON.parse(raw) as ImportAnalysisCacheEntry;
+    const entry = raw ? JSON.parse(raw) as ImportAnalysisCacheEntry : SEEDED_ENTRIES[key];
+    if (!entry) return null;
     if (!entry?.result?.analysis || !Array.isArray(entry.suggestions)) return null;
     const idMap: Record<string, string> = {};
     for (const [newId, hash] of Object.entries(hashById)) {

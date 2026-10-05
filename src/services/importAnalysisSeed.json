@@ -1,0 +1,296 @@
+{
+  "key": "686f9e2dea34892da83f60809375d2cc72229f61d6c5a8cf86b367ae6b728c1e",
+  "result": {
+    "analysis": {
+      "extracted": {
+        "shipper": "SUNRISE FOODS INC.",
+        "consignee": "PORTAI TRADING CO., LTD.",
+        "notifyParty": "PORTAI TRADING CO., LTD.",
+        "importer": "PORTAI TRADING CO., LTD.",
+        "invoiceNo": "SF-INV-260915",
+        "productDescription": "FROZEN SWEET CORN",
+        "quantity": "1,200",
+        "grossWeight": "12,600",
+        "netWeight": "12,000",
+        "originCountry": "U.S.A.",
+        "destinationCountry": "KOREA",
+        "currency": "USD",
+        "totalAmount": "34200.00",
+        "loadPort": "LONG BEACH, U.S.A.",
+        "dischargePort": "BUSAN, KOREA",
+        "blNo": "SHLAXPUS2609150",
+        "containerNo": "HMMU7654321",
+        "sealNo": "HM556677",
+        "vesselName": "HMM ALGECIRAS",
+        "voyageNo": "0143W",
+        "exportDeclarationNo": "",
+        "loadingMode": "",
+        "measurement": "58.2 CBM",
+        "shippingMarks": "PORTAI\nBUSAN\nC/NO. 1-1200\nMADE IN U.S.A.",
+        "exporterDetails": {
+          "name": "SUNRISE FOODS INC.",
+          "address": "800 HARBOR BLVD, LONG BEACH, CA 90802",
+          "country": "U.S.A.",
+          "contactName": "MICHAEL TURNER / EXPORT MANAGER",
+          "phone": "+1-562-555-0100",
+          "email": ""
+        },
+        "importerDetails": {
+          "name": "PORTAI TRADING CO., LTD.",
+          "address": "45, JUNGANG-DAERO, JUNG-GU, BUSAN",
+          "country": "KOREA",
+          "contactName": "",
+          "phone": "051-123-4567",
+          "email": ""
+        },
+        "consigneeDetails": {
+          "name": "PORTAI TRADING CO., LTD.",
+          "address": "45, JUNGANG-DAERO, JUNG-GU, BUSAN",
+          "country": "KOREA",
+          "contactName": "",
+          "phone": "051-123-4567",
+          "email": ""
+        },
+        "notifyPartyDetails": {
+          "name": "PORTAI TRADING CO., LTD.",
+          "address": "45, JUNGANG-DAERO, JUNG-GU, BUSAN",
+          "country": "KOREA",
+          "contactName": "",
+          "phone": "051-123-4567",
+          "email": ""
+        },
+        "invoiceDate": "SEP. 15, 2026",
+        "incoterms": "CIF BUSAN",
+        "paymentTerms": "T/T 30 DAYS AFTER B/L DATE",
+        "shipmentDate": "SEP. 18, 2026",
+        "estimatedArrivalDate": "",
+        "containerNumbers": [
+          "HMMU7654321"
+        ],
+        "sealNumbers": [
+          "HM556677"
+        ],
+        "items": [
+          {
+            "id": "demo-corn-ci-item-1",
+            "itemNo": "",
+            "sku": "",
+            "description": "FROZEN SWEET CORN",
+            "koreanDescription": "",
+            "documentHSCode": "0710.40",
+            "confirmedHSCode": "",
+            "modelName": "",
+            "specification": "2.5KG X 4 BAGS / CTN",
+            "material": "",
+            "composition": "",
+            "fabricConstruction": "",
+            "productForm": "",
+            "processingState": "",
+            "gender": "",
+            "intendedUse": "",
+            "originCountry": "U.S.A.",
+            "quantity": "1,200",
+            "quantityUnit": "CTNS",
+            "unitPrice": "28.50",
+            "currency": "USD",
+            "amount": "34200.00",
+            "packageCount": "1,200",
+            "packageUnit": "CTNS",
+            "netWeight": "12,000 KG",
+            "grossWeight": "12,600 KG",
+            "measurement": "58.2 CBM",
+            "shippingMarks": "PORTAI\nBUSAN\nC/NO. 1-1200\nMADE IN U.S.A.",
+            "sourceDocumentIds": [
+              "demo-corn-ci",
+              "demo-corn-pl",
+              "demo-corn-bl"
+            ]
+          }
+        ],
+        "cargoTotals": {
+          "numberOfPackages": "1,200 CTNS",
+          "grossWeight": "12,600 KG",
+          "measurement": "58.2 CBM"
+        },
+        "certificateOfOriginAvailable": false,
+        "totalPackageCount": "1,200",
+        "packageUnit": "CTNS",
+        "grossWeightUnit": "KG",
+        "netWeightUnit": "KG",
+        "freight": "AS ARRANGED",
+        "insurance": "",
+        "insuredAmount": "",
+        "insuredCurrency": "",
+        "otherAdditions": ""
+      },
+      "validations": [],
+      "comparison": [
+        {
+          "field": "품명",
+          "invoice": "FROZEN SWEET CORN (2.5KG X 4 BAGS / CTN)",
+          "packingList": "FROZEN SWEET CORN (2.5KG X 4 BAGS / CTN)",
+          "billOfLading": "FROZEN SWEET CORN (2.5KG X 4 BAGS / CTN)",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "첨부된 상업송장, 포장명세서 및 선하증권의 품명이 일치합니다."
+        },
+        {
+          "field": "수량/단위",
+          "invoice": "1,200 CTNS",
+          "packingList": "1,200 CTNS",
+          "billOfLading": "1,200 CTNS",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "세 문서의 포장수량이 일치합니다."
+        },
+        {
+          "field": "원산지",
+          "invoice": "U.S.A.",
+          "packingList": "U.S.A.",
+          "billOfLading": "U.S.A.",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "상업송장의 COUNTRY OF ORIGIN 및 각 문서의 MADE IN U.S.A. 표기가 일치합니다."
+        },
+        {
+          "field": "선적항",
+          "invoice": "LONG BEACH, U.S.A.",
+          "packingList": "LONG BEACH, U.S.A.",
+          "billOfLading": "LONG BEACH, U.S.A.",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "세 문서의 출발지 또는 Port of Loading이 일치합니다."
+        },
+        {
+          "field": "도착항",
+          "invoice": "BUSAN, KOREA",
+          "packingList": "BUSAN, KOREA",
+          "billOfLading": "BUSAN, KOREA",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "세 문서의 도착지 또는 Port of Discharge가 일치합니다."
+        },
+        {
+          "field": "Consignee",
+          "invoice": "PORTAI TRADING CO., LTD.",
+          "packingList": "PORTAI TRADING CO., LTD.",
+          "billOfLading": "PORTAI TRADING CO., LTD.",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "세 문서의 Consignee가 일치합니다."
+        },
+        {
+          "field": "Invoice 번호",
+          "invoice": "SF-INV-260915",
+          "packingList": "SF-INV-260915",
+          "billOfLading": "SF-INV-260915",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "세 문서의 Invoice 번호가 일치합니다."
+        },
+        {
+          "field": "포장",
+          "invoice": "1,200 CTNS",
+          "packingList": "1,200 CTNS",
+          "billOfLading": "1,200 CTNS",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "세 문서의 포장수량 및 단위가 일치합니다."
+        },
+        {
+          "field": "총중량",
+          "invoice": "12,600 KG",
+          "packingList": "12,600 KG",
+          "billOfLading": "12,600 KGS",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "단위 표기 방식만 다르며 기재된 총중량 수치는 일치합니다."
+        },
+        {
+          "field": "통화",
+          "invoice": "USD",
+          "packingList": "",
+          "billOfLading": "",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "통화는 상업송장에만 USD로 기재되어 있습니다."
+        },
+        {
+          "field": "컨테이너",
+          "invoice": "",
+          "packingList": "HMMU7654321",
+          "billOfLading": "HMMU7654321",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "포장명세서와 선하증권의 컨테이너 번호가 일치합니다."
+        },
+        {
+          "field": "Seal",
+          "invoice": "",
+          "packingList": "HM556677",
+          "billOfLading": "HM556677",
+          "certificateOfOrigin": "",
+          "matches": true,
+          "detail": "포장명세서와 선하증권의 Seal 번호가 일치합니다."
+        }
+      ]
+    },
+    "classifications": [
+      {
+        "id": "demo-corn-ci",
+        "type": "commercial_invoice",
+        "confidence": 1,
+        "summary": "문서 내부 제목이 'COMMERCIAL INVOICE'이며 Invoice No., Seller, Consignee, 단가 및 금액이 기재되어 있습니다.",
+        "sourceId": "demo-corn-ci"
+      },
+      {
+        "id": "demo-corn-pl",
+        "type": "packing_list",
+        "confidence": 1,
+        "summary": "문서 내부 제목이 'PACKING LIST'이며 포장수량, 순중량, 총중량 및 Measurement가 기재되어 있습니다.",
+        "sourceId": "demo-corn-pl"
+      },
+      {
+        "id": "demo-corn-bl",
+        "type": "bill_of_lading",
+        "confidence": 1,
+        "summary": "문서 내부 제목이 'BILL OF LADING'이며 B/L No., Shipper, Consignee, Vessel, 선적항, 양하항, 컨테이너 및 Seal이 기재되어 있습니다.",
+        "sourceId": "demo-corn-bl"
+      }
+    ],
+    "source": "openai",
+    "model": "gpt-5.6",
+    "timing": {
+      "requestParseMs": 4,
+      "openAiMs": 21748,
+      "responseParseMs": 0,
+      "inputTokens": 7173,
+      "outputTokens": 2555,
+      "reasoningTokens": 381,
+      "totalMs": 21754,
+      "inputBytes": 392706
+    }
+  },
+  "suggestions": [
+    {
+      "itemId": "demo-corn-ci-item-1",
+      "code": "0710400000",
+      "description": "스위트콘",
+      "reasoning": "FROZEN SWEET CORN의 특정화된 품목명과 제공된 HS 코드(0710.40)가 정확히 일치하며, 제품의 상태와 포장이 명확함.",
+      "confidence": 0.85,
+      "missingInformation": [
+        "제품의 냉동 방식 또는 추가 성분",
+        "최종 확정 전 확인할 정보",
+        "제품 형태",
+        "구체적인 용도"
+      ],
+      "source": "official_hsk_ai_ranked"
+    }
+  ],
+  "documentIdByHash": {
+    "772cc258a4968ac97d5ec86b3c4f5470589f0e9577eaa2da159d5f126e670d59": "demo-corn-ci",
+    "81b2e05949dfece8ae99e276fe16ab78160502661ee0b674d6e7ea5bcba0216b": "demo-corn-pl",
+    "9e086293c47567d6048ca964eea5ed1821e00b3d4afad8536fb61fa7a4365f4e": "demo-corn-bl"
+  },
+  "savedAt": "2026-10-05T10:13:00.000Z"
+}

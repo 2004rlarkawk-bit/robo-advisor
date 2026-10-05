@@ -78,6 +78,7 @@ import AgentConsoleOverlay from './components/AgentConsoleOverlay';
 import NoticeModal from './components/NoticeModal';
 import DocumentPreviewModal from './components/DocumentPreviewModal';
 import OverrideReasonModal from './components/OverrideReasonModal';
+import ImportStepIndicator from './components/import/ImportStepIndicator';
 import { saveBlobAs } from './utils/saveBlob';
 import { importDraftCacheKey } from './utils/importDraftCacheKey';
 import { renderDocxPreview } from './utils/docxPreview';
@@ -1785,11 +1786,20 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
    * 맞지 않는다.
    */
   const handleLogoClick = () => {
-    handleReset();
-    // handleReset은 화주 수출 상태만 비운다 — 수입/포워더 플로우는 자체 내부 상태를 갖고 있어
-    // 리마운트 키를 올려서 함께 첫 화면으로 되돌린다.
-    setImportWorkspaceVersion((version) => version + 1);
+    // 이동을 먼저 한다 — 문서 관리 조회 화면에서 누르면 handleAppNavigate가 조회 전 작업실을
+    // 복원하는데, 리셋보다 뒤에 오면 복원한 결과 화면이 그대로 남는다.
     handleAppNavigate('dashboard');
+    handleReset();
+    setTradeOpenMode('normal');
+    // handleReset은 화주 수출 상태만 비운다 — 수입 플로우는 자체 상태를 localStorage에 두고
+    // 마운트할 때 다시 읽으므로, 그 캐시를 지운 뒤 리마운트해야 1단계로 돌아간다.
+    if (user) {
+      for (const role of ['shipper', 'forwarder'] as const) {
+        try { localStorage.removeItem(importDraftCacheKey(user.id, role)); } catch { /* 저장소 접근 불가 시 무시 */ }
+      }
+    }
+    setImportWorkspaceVersion((version) => version + 1);
+    window.scrollTo({ top: 0 });
   };
 
   const handleAppNavigate = (menu: AppMenu) => {
@@ -2658,6 +2668,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
           onRoleChange={handleWorkspaceRoleChange}
           notificationPollKey={activeMenu}
           onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
+          onProductNameClick={handleLogoClick}
           onNavigate={handleAppNavigate}
           onOpenNotification={handleOpenNotification}
           onLogout={() => void handleLogout()}
@@ -2875,7 +2886,17 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 defaultShipperEmail={appliedExportRequestShipperContact?.email}
                 defaultShipperCompany={appliedExportRequestShipperContact?.company}
               />
-            ) : !hasGenerated ? (
+            ) : (<>
+              {/* 수출 화주 진행 단계 — 수입 작업실과 같은 단계 표시. 결과에서 1단계를 누르면 입력으로 돌아간다. */}
+              <ImportStepIndicator
+                current={hasGenerated ? 2 : 1}
+                labels={['거래정보 입력', 'AI 검증 · 서류 생성']}
+                ariaLabel="수출 거래 진행 단계"
+                onMove={isProcessing ? undefined : (step) => {
+                  if (step === 1) { setHasGenerated(false); setWorkspaceCurrentStep(1); }
+                }}
+              />
+              {!hasGenerated ? (
               /* --- 거래 정보 입력 모드 --- */
               <div className="dashboard-grid">
                 <ShipperWorkspaceForm
@@ -3343,6 +3364,11 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     <>
                     <div className="rv-fixes-head">
                       <h3 className="rv-fixes-title">AI 검증 결과</h3>
+                      {(() => {
+                        // 아래 목록(반드시 수정 + 확인 권장)과 같은 기준으로 센다 — 사실 카드·참고(info)·경고 무시된 항목 제외.
+                        const fixCount = issues.filter((i) => !i.card && i.severity !== 'info' && !(i.severity === 'error' && overrides[issueKey(i)])).length;
+                        return fixCount > 0 ? <span className="rv-fixes-count">수정 {fixCount}건</span> : null;
+                      })()}
                     </div>
 
                       {/* 사실 카드 — 과세가격 환산·예상 관세액 등. 값은 실 API/룰에서 결정론적으로 산출. */}
@@ -3780,17 +3806,11 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                               </div>
                             )}
 
-                            {/* overridable error: 사유 입력 후 override(진행) / override됨 배지 */}
-                            {issue.severity === 'error' && issue.overridable && (
-                              overrides[issueKey(issue)] ? (
-                                <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e8edf3', color: '#334155', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <span style={{ color: '#15803d', fontWeight: 800 }}>✓</span> 경고 무시 처리됨 — 사유: {overrides[issueKey(issue)]}
-                                </div>
-                              ) : (
-                                <button className="mobile-btn mobile-btn-secondary" onClick={() => { setOverrideTarget(issue); setOverrideReason(''); }}>
-                                  경고 무시하고 생성 (사유 필요)
-                                </button>
-                              )
+                            {/* overridable error: 이미 사유를 적어 둔 항목만 표시한다. 결과 화면에서 새로 '경고 무시'하는 버튼은 두지 않는다. */}
+                            {issue.severity === 'error' && issue.overridable && overrides[issueKey(issue)] && (
+                              <div style={{ marginTop: 10, padding: '12px 14px', borderRadius: 10, background: '#f8fafc', border: '1px solid #e8edf3', color: '#334155', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: '#15803d', fontWeight: 800 }}>✓</span> 경고 무시 처리됨 — 사유: {overrides[issueKey(issue)]}
+                              </div>
                             )}
                             </>}
 
@@ -3827,6 +3847,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
 
               </div>
             )}
+            </>)}
 
             {/* 임시보관함은 [문서 관리] 탭으로 이동함 */}
             </>}

@@ -25,7 +25,6 @@ import {
   mapImportDeclarationForm,
 } from '../../services/importDeclarationFormService';
 import ImportDeclarationFormPreview from './ImportDeclarationFormPreview';
-import ImportUnipassSubmit from './ImportUnipassSubmit';
 import ImportHandoffReadyCard from './ImportHandoffReadyCard';
 import { scrollPageToTop } from '../../utils/scrollPageToTop';
 import ImportDocumentComparison from './ImportDocumentComparison';
@@ -45,12 +44,6 @@ import {
 import { resolveImportRisks } from '../../services/importRiskService';
 import { applyChosenValue, clearChosenValue, mergeEditedChoices } from '../../services/importValueChoiceService';
 import { IMPORT_DEMO_SCENARIO } from '../../services/importReconciliationFixtures';
-import {
-  buildImportDeclarationDocx,
-  downloadImportDeclarationDocx,
-  printImportDeclarationAsPdf,
-  renderImportDeclarationPreview,
-} from '../../services/importDeclarationService';
 import { duplicateImportDocumentsMessage, findDuplicateImportDocuments } from '../../utils/importDocumentDuplicates';
 import { lookupImportCargo } from '../../services/cargoProgressService';
 import { saveShipperReturnReply } from '../../services/forwarderCaseService';
@@ -151,7 +144,6 @@ export default function ImportTradeFlow({
     scrollPageToTop();
   }, [state.step]);
   const [message, setMessage] = useState('');
-  const [preview, setPreview] = useState(false);
   const [showInProgressConfirmation, setShowInProgressConfirmation] = useState(false);
   const [manualHsInputs, setManualHsInputs] = useState<Record<string, string>>({});
   const [manualHsErrors, setManualHsErrors] = useState<Record<string, string>>({});
@@ -159,8 +151,6 @@ export default function ImportTradeFlow({
   const skipNextLocalCacheWriteRef = useRef(false);
   const onWorkspaceStateChangeRef = useRef(onWorkspaceStateChange);
   onWorkspaceStateChangeRef.current = onWorkspaceStateChange;
-  const declarationPreviewRef = useRef<HTMLDivElement | null>(null);
-  const [declarationError, setDeclarationError] = useState('');
   const [declarationFormPreview, setDeclarationFormPreview] = useState(false);
   const [declarationFormError, setDeclarationFormError] = useState('');
   // 포워더 보완 요청에 대한 화주 회신 메모 — 요청·회신이 같은 의뢰에 남는다
@@ -329,7 +319,7 @@ export default function ImportTradeFlow({
       let result;
       if (cached) {
         result = cached.result;
-        // 저장된 실제 분석 결과를 에이전트별로 약 10초에 걸쳐 차례로 보여 준다.
+        // 저장된 실제 분석 결과를 에이전트별로 약 3초에 걸쳐(수출 콘솔과 같은 속도) 차례로 보여 준다.
         // 문구는 모두 앞서 AI가 실제로 뽑아낸 값이며, 지금 다시 읽는 중이라고 표시하지 않는다.
         const replayStartedAt = Date.now();
         setAnalysisPhase({ label: '저장된 분석 결과 정리 중', startedAt: replayStartedAt });
@@ -356,7 +346,7 @@ export default function ImportTradeFlow({
             return ['HSCode Agent', `${item?.description || '품목'} → HSK ${formatHsk(suggestion.code)} ${suggestion.description}`.trim()];
           }),
         ];
-        const stepDelayMs = Math.floor(10_000 / Math.max(1, steps.length));
+        const stepDelayMs = Math.floor(3_000 / Math.max(1, steps.length));
         for (const [agent, line] of steps) {
           await new Promise((resolve) => setTimeout(resolve, stepDelayMs));
           pushAnalysisLog(agent, line, 'success');
@@ -582,7 +572,7 @@ export default function ImportTradeFlow({
     {
       const stages = [
         '관세율 조회 · 예상세액 계산 중...',
-        '수입신고 의뢰서 초안 구성 중...',
+        '수입신고서 초안 구성 중...',
         '신고자료 완성도 점검 중 (필수 항목 채움 확인)...',
         '결과 저장 · 정리 중...',
       ];
@@ -767,7 +757,7 @@ export default function ImportTradeFlow({
   const complete = async () => {
     if (readOnly) return;
     if (!state.analysis || busy) return;
-    if (!state.generatedAt) return setMessage('수입신고 의뢰서를 먼저 생성해 주세요.');
+    if (!state.generatedAt) return setMessage('신고자료를 먼저 생성해 주세요.');
     const unresolvedHigh = state.risks.filter((risk) => risk.level === 'high' && risk.status !== 'resolved');
     if (unresolvedHigh.length && !window.confirm(`확인이 끝나지 않은 신고 항목이 ${unresolvedHigh.length}건 있습니다. 내용을 확인했으며 계속 진행할까요?`)) return;
     if (state.dutyError && !window.confirm(`예상세액이 계산되지 않았습니다.\n${state.dutyError}\n사유를 확인했으며 계속 진행할까요?`)) return;
@@ -880,32 +870,6 @@ export default function ImportTradeFlow({
     analysis: clearChosenValue(current.analysis, key),
   } : current));
 
-  const declarationData = useMemo(() => (state.analysis ? {
-    fields: state.analysis.extracted,
-    duty: state.duty ?? undefined,
-    dutyError: state.dutyError,
-    risks: state.risks,
-    documents: state.documents,
-    importerCompanyName,
-    tradeId: state.tradeId,
-    ftaChoice: state.analysis.chosenValues?.[FTA_CHOICE_KEY],
-  } : null), [state.analysis, state.duty, state.dutyError, state.risks, state.documents, state.tradeId, importerCompanyName]);
-
-  // 보기를 누르면 다운로드와 같은 docx를 그대로 렌더한다.
-  useEffect(() => {
-    const container = declarationPreviewRef.current;
-    if (!preview || !declarationData || !container) return;
-    let cancelled = false;
-    setDeclarationError('');
-    void buildImportDeclarationDocx(declarationData)
-      .then((blob) => (cancelled ? undefined : renderImportDeclarationPreview(blob, container)))
-      .catch((error) => {
-        console.error('[수입신고의뢰서] 미리보기 실패:', error);
-        if (!cancelled) setDeclarationError('수입신고의뢰서를 만들지 못했습니다. 다시 시도해 주세요.');
-      });
-    return () => { cancelled = true; };
-  }, [preview, declarationData]);
-
   // 수입신고서(초안) — 관세청 서식에 확인된 값만 채운다.
   const declarationFormData = useMemo(() => ({
     fields: state.analysis?.extracted ?? normalizeImportExtractedFields({}),
@@ -918,25 +882,6 @@ export default function ImportTradeFlow({
     () => mapImportDeclarationForm(declarationFormData),
     [declarationFormData],
   );
-
-  /** UNI-PASS 전송 전에 확인시킬 요약 — 신고서에 들어간 값을 그대로 보여준다. */
-  const unipassSummary = useMemo(() => {
-    const form = declarationFormValues;
-    return [
-      { label: 'B/L 번호', value: form.bl_no ?? '' },
-      { label: '신고 물품', value: form.first_goods_name ?? '' },
-      { label: 'HSK', value: form.first_hs_code ?? '' },
-    ];
-  }, [declarationFormValues]);
-
-  /** 금액은 전송 버튼과 나란히 두어 보내기 직전에 한 번 더 보게 한다. */
-  const unipassTotals = useMemo(() => {
-    const form = declarationFormValues;
-    return [
-      { label: '총 과세가격', value: form.total_customs_value_krw ? `${form.total_customs_value_krw}원` : '' },
-      { label: '총 예상세액', value: form.total_tax ? `${form.total_tax}원` : '' },
-    ];
-  }, [declarationFormValues]);
 
   return (
     <div className="import-flow">
@@ -1315,34 +1260,13 @@ export default function ImportTradeFlow({
         </>
       )}
 
-      {state.step === 4 && state.analysis && role === 'shipper' && declarationData && (
+      {state.step === 4 && state.analysis && role === 'shipper' && (
         <>
           <ImportHandoffReadyCard
             documentTypes={state.documents.map((document) => document.type)}
             fields={state.analysis.extracted}
             confirmedHsCodes={state.analysis.extracted.items.map((item) => item.confirmedHSCode)}
           />
-          <section className="form-card import-card">
-            <div className="import-card-heading"><div><h2>수입신고 의뢰서</h2></div></div>
-            <div className="document-preview-actions">
-              <button className="btn btn-secondary" onClick={() => setPreview((value) => !value)}><Eye size={17} /> {preview ? '닫기' : '보기'}</button>
-              <button
-                className="btn btn-secondary"
-                onClick={() => void downloadImportDeclarationDocx(declarationData).catch(() => setDeclarationError('DOCX를 만들지 못했습니다. 다시 시도해 주세요.'))}
-              >
-                <Download size={17} /> DOCX 다운로드
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={() => void printImportDeclarationAsPdf(declarationData).catch(() => setDeclarationError('PDF 인쇄 창을 열지 못했습니다. 다시 시도해 주세요.'))}
-              >
-                <Download size={17} /> PDF 저장
-              </button>
-            </div>
-            {declarationError && <p className="form-message error" role="alert">{declarationError}</p>}
-            {preview && <div className="declaration-preview" ref={declarationPreviewRef} />}
-          </section>
-
           {/* 수입신고서(초안) — 관세법 시행규칙 별지 제1호의3서식에 확인된 값만 채운다. */}
           <section className="form-card import-card">
             <div className="import-card-heading">
@@ -1363,13 +1287,6 @@ export default function ImportTradeFlow({
             {declarationFormError && <p className="form-message error" role="alert">{declarationFormError}</p>}
             {declarationFormPreview && <ImportDeclarationFormPreview values={declarationFormValues} />}
           </section>
-
-          <ImportUnipassSubmit
-            seed={declarationFormValues.bl_no ?? ''}
-            customsOffice={declarationFormValues.customs_office}
-            summary={unipassSummary}
-            totals={unipassTotals}
-          />
 
           {readOnly && onClose ? <DocumentManagerReadOnlyAction
             onClose={onClose}
