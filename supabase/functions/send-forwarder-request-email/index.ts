@@ -157,13 +157,16 @@ Deno.serve(async (request) => {
 
     return jsonResponse({ ok: true, id: insertedRow.id });
   } catch (err) {
-    console.error('[send-forwarder-request-email] Resend 발송 실패:', err instanceof Error ? err.message : err);
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error('[send-forwarder-request-email] Resend 발송 실패:', detail);
+    // 발송 업체가 준 사유(도메인 미인증, 수신 제한 등)를 그대로 남긴다 — 'email_provider_error'만으로는
+    // 설정 문제인지 코드 문제인지 알 수 없어 원인 추적이 안 됐다.
     await admin
       .from(historyTable)
       .update({
         status: 'failed',
         failed_at: new Date().toISOString(),
-        error_message: 'email_provider_error',
+        error_message: `email_provider_error: ${detail.slice(0, 300)}`,
       })
       .eq('id', insertedRow.id);
     return jsonResponse({ error: 'send_failed' }, 502);

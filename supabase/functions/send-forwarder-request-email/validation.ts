@@ -8,6 +8,7 @@ export const ATTACHABLE_DOCUMENT_TYPES = [
   'transport_request',
   'invoice',
   'packing_list',
+  'export_declaration',
   'bill_of_lading',
 ] as const;
 
@@ -19,10 +20,11 @@ export const DOCUMENT_TYPE_TO_GENERATED_KEY: Record<AttachableDocumentType, stri
   transport_request: 'transportRequest',
   invoice: 'invoice',
   packing_list: 'packingList',
+  export_declaration: 'customsDeclaration',
   bill_of_lading: 'billOfLading',
 };
 
-export const MAX_DOCUMENTS = 4;
+export const MAX_DOCUMENTS = 5;
 export const MAX_FILE_BYTES = 15 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 40 * 1024 * 1024;
 export const MAX_RECIPIENT_TEXT_LENGTH = 200;

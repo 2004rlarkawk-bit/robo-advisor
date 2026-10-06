@@ -10,6 +10,7 @@ import { buildInvoiceDocx } from './invoiceDocxService';
 import { buildPackingListDocx } from './packingListDocxService';
 import { buildBillOfLadingDocx } from './billOfLadingDocxService';
 import { buildTransportRequestDocx } from './transportRequestDocxService';
+import { buildExportDeclarationDocx } from './exportDeclarationDocxService';
 import { portaiFileName, type PortaiDocumentKey } from '../utils/documentFileName';
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -55,6 +56,8 @@ export function getAttachableDocumentTypes(trade: SavedTrade): AttachableDocumen
   if (docs?.transportRequest) types.push('transport_request');
   if (docs?.invoice) types.push('invoice');
   if (docs?.packingList) types.push('packing_list');
+  // 수출신고서 초안은 수출 거래에만 있다 — 수입의 customsDeclaration은 수입신고서라 다른 서식이다.
+  if (docs?.customsDeclaration && (trade.tradeDirection ?? trade.profile.tradeType) === 'export') types.push('export_declaration');
   if (docs?.billOfLading) types.push('bill_of_lading');
   return types;
 }
@@ -101,6 +104,10 @@ async function buildAttachment(
       if (!docs?.packingList) throw new Error('Packing List가 생성되지 않았습니다.');
       blob = await buildPackingListDocx(docs.packingList);
       break;
+    case 'export_declaration':
+      if (!docs?.customsDeclaration) throw new Error('수출신고서 초안이 생성되지 않았습니다.');
+      blob = await buildExportDeclarationDocx(docs.customsDeclaration);
+      break;
     case 'bill_of_lading':
       if (!docs?.billOfLading) throw new Error('B/L이 생성되지 않았습니다.');
       blob = await buildBillOfLadingDocx(docs.billOfLading);
@@ -115,6 +122,7 @@ const DOCUMENT_FILE_KEYS: Record<AttachableDocumentType, PortaiDocumentKey> = {
   transport_request: 'transport_request',
   invoice: 'invoice',
   packing_list: 'packing_list',
+  export_declaration: 'customs_dec',
   bill_of_lading: 'bl',
 };
 

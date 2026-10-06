@@ -88,27 +88,28 @@ describe('ForwarderRecommendList', () => {
     expect(second.querySelector('.fwd-pick-partner')).toBeNull();
   });
 
-  it('담당자·진행 건수와 함께 특화 분야를 아이콘 칩 두 개까지만 보여 준다', async () => {
+  it('담당자·진행 건수와 함께 특화 분야를 아이콘 칩 세 개까지만 보여 준다', async () => {
     await render();
     const [first] = rows();
     expect(first.textContent).toContain('담당 Kim');
     expect(first.textContent).toContain('현재 진행 2건');
     expect(first.textContent).toContain('완료 14건');
     const chips = [...first.querySelectorAll('.fwd-basis-chip')];
-    // 일치한 분야가 먼저 오고, 세 번째(직접 적은 '삼국간 무역')는 잘린다.
-    expect(chips.map((chip) => chip.textContent)).toEqual(['중국 항로', '콜드체인']);
-    expect(chips.every((chip) => chip.classList.contains('is-match') && chip.querySelector('svg'))).toBe(true);
+    // 일치한 분야가 먼저 오고, 직접 적은 '삼국간 무역'은 일치 표시 없이 뒤에 붙는다.
+    expect(chips.map((chip) => chip.textContent)).toEqual(['중국 항로', '콜드체인', '삼국간 무역']);
+    expect(chips.slice(0, 2).every((chip) => chip.classList.contains('is-match') && chip.querySelector('svg'))).toBe(true);
+    expect(chips[2].classList.contains('is-match')).toBe(false);
     // 안내 문구는 띄우지 않는다.
     expect(container.textContent).not.toContain('확인 항목이');
   });
 
   it('조건과 일치한 분야가 없으면 포워더가 등록한 분야로 채운다', async () => {
     requestService.matchForwarderForTrade.mockResolvedValue([
-      { ...plain, specialties: ['cargo_dg', 'cargo_express', 'route_us'], matchedSpecialties: [] },
+      { ...plain, specialties: ['cargo_dg', 'cargo_express', 'route_us', 'goods_food'], matchedSpecialties: [] },
     ]);
     await render();
     const chips = [...rows()[0].querySelectorAll('.fwd-basis-chip')];
-    expect(chips.map((chip) => chip.textContent)).toEqual(['위험물', '특송·이커머스']);
+    expect(chips.map((chip) => chip.textContent)).toEqual(['위험물', '특송·이커머스', '미국 항로']);
     expect(chips.some((chip) => chip.classList.contains('is-match'))).toBe(false);
   });
 

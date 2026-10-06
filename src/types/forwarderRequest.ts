@@ -110,11 +110,12 @@ export interface TradeRequestPreview {
 }
 
 /** 실제 생성 로직이 존재하는 첨부 가능 문서 유형만 (Certificate of Origin은 파일 생성기가 없어 제외). */
-export type AttachableDocumentType = 'transport_request' | 'invoice' | 'packing_list' | 'bill_of_lading';
+export type AttachableDocumentType = 'transport_request' | 'invoice' | 'packing_list' | 'export_declaration' | 'bill_of_lading';
 
 export const ATTACHABLE_DOCUMENT_LABELS: Record<AttachableDocumentType, string> = {
-  transport_request: '운송의뢰서',
+  transport_request: '운송의뢰서(S/I)',
   invoice: 'Commercial Invoice',
   packing_list: 'Packing List',
+  export_declaration: '수출신고서(초안)',
   bill_of_lading: 'B/L',
 };
