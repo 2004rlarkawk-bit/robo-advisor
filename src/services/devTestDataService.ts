@@ -153,11 +153,10 @@ export function createPerfectTestProfile(currentProfile: TradeProfile, now = new
 
 /**
  * 시연 연습용 — 발표 때 직접 입력할 품명·HS·수량·단가·화물 규격만 남기고 나머지를 고정값으로 채운다.
- * 품목은 통화·상표명·성분만, 포장은 박스 수·박스당 수량·포장 종류만 채운다.
+ * 품목은 통화·상표명·성분만, 포장은 박스 수·박스당 수량·포장 종류·중량만 채운다.
  *
  * 생성하면 일부러 아래 항목이 걸리게 맞춰 두었다.
- * - 반드시 수정: 신용장 개설일이 출항일보다 늦음(R14)
- * - 확인 권장: 도착 예정일 연도 오타(R21)
+ * - 반드시 수정: 신용장 개설일이 출항일보다 늦음(R14), 도착 예정일 연도 오타(R21 — 운송 기간 반년 초과)
  * 패킹리스트·상업송장 수량 불일치(R10)는 품목·포장 입력으로 만든다.
  */
 export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = new Date()): TradeProfile {
@@ -177,11 +176,16 @@ export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = n
       brand: 'NO BRAND',
       composition: 'Wood (Oak) 100%',
     })),
-    // 5. 포장: 박스 8개 × 박스당 10개 = 포장명세서 80개. 규격(가로·세로·높이)은 발표 때 입력해 CBM을 보여 준다.
+    // 5. 포장: 박스 8개 × 박스당 20개 = 포장명세서 160개. 규격(가로·세로·높이)은 발표 때 입력해 CBM을 보여 준다.
     // 사무용 책상은 분해(flat-pack)해 카톤에 담아 보내는 게 일반적이라 CARTON으로 둔다.
     packageType: 'CARTON',
-    eaPerBox: 10,
+    eaPerBox: 20,
     packageCount: 8,
+    // 중량은 미리 채운다 — 비어 있으면 '중량 입력' 확인 권장과 패킹리스트 '검토 필요'가 함께 뜬다.
+    // 카톤 8개 × 130kg(포장재 10kg 포함) = G.W. 1,040kg, N.W. 960kg.
+    grossWeight: 1040,
+    netWeight: 960,
+    weight: 1040,
     packageDimensions: currentProfile.packageDimensions?.length
       ? currentProfile.packageDimensions.map((row, index) => (index === 0 ? { ...row, boxes: 8 } : row))
       : [{ ...createPackageDimension('package-dimension-1'), boxes: 8 }],
@@ -213,9 +217,9 @@ export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = n
     loadPort: 'Busan Port',
     dischargePort: 'Los Angeles Port',
     departureDate,
-    // 도착 예정일 연도 오타(1년 뒤) — 운송 기간이 120일을 넘어 확인 권장(R21)이 걸린다.
+    // 도착 예정일 연도 오타(1년 뒤) — 운송 기간이 반년을 넘어 반드시 수정(R21)이 걸린다.
     arrivalDate: futureDate(19 + 365, now),
-    // 소량 화물이라 LCL — 확인 권장은 도착 예정일 한 건만 뜨게 한다.
+    // 소량 화물이라 LCL — 컨테이너 정보 확인 권장이 끼어들지 않게 한다.
     loadingMode: 'LCL',
     placeOfReceipt: 'Busan, Korea',
     placeOfDelivery: 'Los Angeles, CA, USA',

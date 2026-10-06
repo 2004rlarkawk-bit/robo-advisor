@@ -177,8 +177,7 @@
 .shipper-request-swipe-bg.is-armed { background: #dc2626; color: #fff; }
 .shipper-request-swipe > .shipper-request-row { position: relative; background: #fff; touch-action: pan-y; transition: transform .2s ease; }
 .shipper-request-swipe > .shipper-request-row.is-swiping { transition: none; user-select: none; cursor: grabbing; }
-.shipper-requests-swipe-hint { margin-left: auto; margin-right: 10px; font-size: 12px; color: #94a3b8; }
-.shipper-requests-unhide { margin-left: 8px; padding: 0; border: 0; background: none; font: inherit; font-weight: 700; color: #2f6edb; cursor: pointer; text-decoration: underline; }
+.shipper-requests-trash { margin-left: auto; margin-right: 10px; }
 .shipper-request-row:hover { background: #fbfdff; }
 
 .shipper-request-trade,

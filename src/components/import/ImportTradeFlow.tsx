@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ForwarderReturnRequestContent from './ForwarderReturnRequestContent';
+import { returnRequestChips } from '../../utils/returnRequestDocuments';
+import '../../styles/returnRequest.css';
 import { Download, Eye, RefreshCw, Search, Terminal } from 'lucide-react';
 import ImportStepIndicator from './ImportStepIndicator';
 import ImportDocumentUploader from './ImportDocumentUploader';
@@ -102,6 +105,12 @@ interface Props {
   readOnly?: boolean;
   onClose?: () => void;
 }
+
+/**
+ * 에이전트 진행 콘솔을 보여 주는 시간. 저장된 분석 결과를 다시 쓰거나 세액 계산이 금방 끝나면
+ * 콘솔이 1~3초 만에 지나가 각 에이전트가 무엇을 했는지 읽을 틈이 없어, 이 시간에 걸쳐 나눠 보여 준다.
+ */
+const CONSOLE_PACE_MS = 7_500;
 
 export default function ImportTradeFlow({
   role,
@@ -332,7 +341,7 @@ export default function ImportTradeFlow({
       let result;
       if (cached) {
         result = cached.result;
-        // 저장된 실제 분석 결과를 에이전트별로 약 3초에 걸쳐(수출 콘솔과 같은 속도) 차례로 보여 준다.
+        // 저장된 실제 분석 결과를 에이전트별로 약 7.5초(CONSOLE_PACE_MS)에 걸쳐 차례로 보여 준다.
         // 문구는 모두 앞서 AI가 실제로 뽑아낸 값이며, 지금 다시 읽는 중이라고 표시하지 않는다.
         const replayStartedAt = Date.now();
         setAnalysisPhase({ label: '저장된 분석 결과 정리 중', startedAt: replayStartedAt });
@@ -359,7 +368,7 @@ export default function ImportTradeFlow({
             return ['HSCode Agent', `${item?.description || '품목'} → HSK ${formatHsk(suggestion.code)} ${suggestion.description}`.trim()];
           }),
         ];
-        const stepDelayMs = Math.floor(3_000 / Math.max(1, steps.length));
+        const stepDelayMs = Math.floor(CONSOLE_PACE_MS / Math.max(1, steps.length));
         for (const [agent, line] of steps) {
           await new Promise((resolve) => setTimeout(resolve, stepDelayMs));
           pushAnalysisLog(agent, line, 'success');
@@ -580,6 +589,9 @@ export default function ImportTradeFlow({
     // 문구는 새 전제(검증이 아니라 신고자료 준비)를 따른다 — '불일치 점검' 표현을 쓰지 않는다.
     setAnalysisLogs([]);
     setShowAnalysisConsole(true);
+    const consoleStartedAt = Date.now();
+    let consoleStages: string[] = [];
+    let consoleStageIndex = 0;
     pushAnalysisLog('Orchestrator Agent', '세액·신고자료 산출 파이프라인 가동 시작...');
     pushAnalysisLog('HSCode Agent', `품목 ${fields.items.length}건 HSK 코드 확정값 검증 완료`, 'success');
     {
@@ -589,11 +601,14 @@ export default function ImportTradeFlow({
         '신고자료 완성도 점검 중 (필수 항목 채움 확인)...',
         '결과 저장 · 정리 중...',
       ];
-      let stageIndex = 0;
+      // 단계 문구를 CONSOLE_PACE_MS에 걸쳐 나눠 띄운다. 계산이 먼저 끝나도 아래에서 이 시간을 채운 뒤
+      // 남은 단계를 마저 띄우고 완료를 알린다 — 4단계 중 1~2단계만 보이고 끝나지 않게.
+      consoleStages = stages;
+      consoleStageIndex = 0;
       if (analysisTickerRef.current) clearInterval(analysisTickerRef.current);
       analysisTickerRef.current = setInterval(() => {
-        if (stageIndex < stages.length) pushAnalysisLog('Compliance Agent', stages[stageIndex++]);
-      }, 1000);
+        if (consoleStageIndex < stages.length) pushAnalysisLog('Compliance Agent', stages[consoleStageIndex++]);
+      }, Math.floor(CONSOLE_PACE_MS / (stages.length + 1)));
     }
     try {
       duty = role === 'shipper'
@@ -684,7 +699,10 @@ export default function ImportTradeFlow({
         tradeId,
       });
       setMessage(dutyError ? `${dutyError} 사유를 표시한 상태로 다음 단계로 이동했습니다.` : '');
+      const remainingMs = CONSOLE_PACE_MS - (Date.now() - consoleStartedAt);
+      if (remainingMs > 0) await new Promise((resolve) => setTimeout(resolve, remainingMs));
       if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
+      while (consoleStageIndex < consoleStages.length) pushAnalysisLog('Compliance Agent', consoleStages[consoleStageIndex++]);
       // 자동 닫힘 없음 — 사용자가 [콘솔 닫기]를 눌러야 결과 페이지가 보인다.
       pushAnalysisLog('Orchestrator Agent', '산출 완료 — [콘솔 닫기]를 누르면 결과 페이지로 이동합니다.', 'success');
     } catch (error) {
@@ -1077,7 +1095,15 @@ export default function ImportTradeFlow({
                   </button>
                 )}
               </div>
-              <p className="revise-notice-text">{state.reviseNotice.reason}</p>
+              {returnRequestChips(state.reviseNotice).length > 0 && (
+                <div className="rr-card-docs revise-notice-docs">
+                  <span>보완 서류</span>
+                  <ul>{returnRequestChips(state.reviseNotice).map((chip) => <li key={chip}>{chip}</li>)}</ul>
+                </div>
+              )}
+              <div className="rr-content revise-notice-body">
+                <ForwarderReturnRequestContent reason={state.reviseNotice.reason} />
+              </div>
               {!readOnly && state.tradeId && (
                 <div className="revise-reply">
                   <input

@@ -729,6 +729,11 @@ export default function ShipperWorkspaceForm({
       partnerCountry: partner.consignee.country,
       notifyPartyName: partner.notifyParty.name,
       notifyPartyAddress: partner.notifyParty.address,
+      // 화면에 칸은 없지만 B/L·운송의뢰서에 들어가는 연락처도 그 거래처 값으로 맞춘다.
+      partnerContact: partner.consignee.contact,
+      notifyPartyContact: partner.notifyParty.contact,
+      // 다른 Buyer의 구매자부호가 남지 않도록, 비어 있어도 그 거래처 값으로 덮는다.
+      exportDeclaration: { ...declaration, buyerCustomsCode: partner.buyerCustomsCode },
     });
     onSupplementalChange({
       ...supplemental,

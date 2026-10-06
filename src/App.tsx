@@ -23,6 +23,7 @@ import {
   Calendar,
   OctagonAlert,
   PenLine,
+  ChevronDown,
   ChevronRight,
   Paperclip,
   Mail,
@@ -387,6 +388,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const [openExportMessagesOnLoad, setOpenExportMessagesOnLoad] = useState(false);
   // 알림이 가리키는 거래를 더 이상 찾을 수 없을 때만 쓰는 안내 배너.
   const [notificationTargetError, setNotificationTargetError] = useState('');
+  // 보완 요청 알림으로 들어온 거래 — 포워더 의뢰 화면이 그 거래의 요청·대화 창을 바로 연다.
+  const [requestsFocusTradeId, setRequestsFocusTradeId] = useState<string | null>(null);
   useEffect(() => {
     if (!notificationTargetError) return;
     const timeout = window.setTimeout(() => setNotificationTargetError(''), 6000);
@@ -541,6 +544,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const blockedGenRef = useRef<{ result: any; generationProfile: TradeProfile; writeMode: ReturnType<typeof decideGeneratedTradeWrite> } | null>(null);
   const [feedbackReport, setFeedbackReport] = useState<FeedbackReport | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+  // 서류 현황에서 [검토 필요]를 눌러 사유를 펼친 서류
+  const [openReasonDocId, setOpenReasonDocId] = useState<string | null>(null);
   const documentManagerPreviewOriginRef = useRef<{
     contentScrollTop: number;
     windowScrollY: number;
@@ -1674,11 +1679,10 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
             | null;
           // 이미 회신 처리된 요청이면 안내 카드를 다시 띄우지 않는다(지난 요청이 새 요청처럼 보이지 않게).
           const pendingRequest = forwarderState?.returnRequest?.resolvedAt ? null : forwarderState?.returnRequest;
-          const reason = pendingRequest?.reason ?? '';
           localStorage.setItem(cacheKey, JSON.stringify({
             ...cached,
             step: 2,
-            reviseNotice: reason ? { reason } : null,
+            reviseNotice: pendingRequest?.reason ? pendingRequest : null,
           }));
           setWorkspaceCurrentStep(2);
           setImportWorkspaceVersion((version) => version + 1);
@@ -1856,21 +1860,31 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       });
   };
 
+  // 보완 요청 거래가 포워더 의뢰 목록에 없으면(이미 수정하려고 다시 연 건) 수정 화면으로 바로 연다.
+  // 그 화면 2단계 상단에도 같은 요청 카드가 뜬다.
+  const handleRequestsFocusMissing = (tradeId: string) => {
+    void fetchSavedTradeById(tradeId)
+      .then(async (trade) => {
+        if (!trade) {
+          setNotificationTargetError('해당 보완 요청의 거래를 찾을 수 없습니다.');
+          return;
+        }
+        await handleReviseReturnedImportTrade(trade);
+      })
+      .catch((err) => {
+        console.warn('[알림] 보완 요청 거래 열기 실패:', err);
+        setNotificationTargetError('해당 보완 요청의 거래를 찾을 수 없습니다.');
+      });
+  };
+
   const handleOpenNotification = (notification: NotificationRecord, menu: AppMenu) => {
     handleAppNavigate(menu);
     if (workspaceRole !== 'forwarder') {
-      // 화주가 보완 요청 알림을 누르면 문서관리 탭만 여는 게 아니라, 해당 거래를 다시 열고
-      // 포워더의 요청 사유 카드까지 펼친다(문서관리에서 [지금 수정하러 가기]와 같은 경로).
+      // 화주가 보완 요청 알림을 누르면 바로 수정 화면으로 보내지 않는다 — 어떤 서류를 왜 고쳐야
+      // 하는지 모른 채 2단계에 떨어지기 때문이다. 포워더 의뢰 화면에서 그 거래의 요청 카드와
+      // 대화를 먼저 열고, 거기서 [문서 수정하러 가기]로 넘어간다.
       if (notification.type === 'trade_return_requested' && notification.tradeId) {
-        void fetchSavedTradeById(notification.tradeId)
-          .then(async (trade) => {
-            if (!trade) {
-              console.warn('[알림] 보완 요청 거래를 찾지 못했습니다:', notification.tradeId);
-              return;
-            }
-            await handleReviseReturnedImportTrade(trade);
-          })
-          .catch((err) => console.warn('[알림] 보완 요청 거래 열기 실패:', err));
+        setRequestsFocusTradeId(notification.tradeId);
       }
       return;
     }
@@ -2083,6 +2097,16 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       ...profile,
       insuranceConfirmed: true
     };
+    setProfile(updatedProfile);
+    await rerunAgents(updatedProfile);
+  };
+
+  // 서류 현황 줄의 [필요]/[불필요] — 답을 저장하고 바로 다시 판정해 그 줄의 상태를 갱신한다.
+  // (이슈 카드의 C/O 'yes'는 원산지 선택을 이어서 보여주려고 재검증을 미루지만, 여기서는 줄이 곧 결과다.)
+  const handleDocNeedAnswer = async (docId: 'co' | 'insurance', answer: 'yes' | 'no') => {
+    const updatedProfile = docId === 'co'
+      ? { ...profile, coNeeded: answer }
+      : { ...profile, insuranceNeeded: answer };
     setProfile(updatedProfile);
     await rerunAgents(updatedProfile);
   };
@@ -2716,6 +2740,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   currentUserId={user.id}
                   onOpenTrade={handleLoadSavedTradeFromDocumentManager}
                   onRevise={handleReviseReturnedImportTrade}
+                  focusTradeId={requestsFocusTradeId}
+                  onFocusHandled={() => setRequestsFocusTradeId(null)}
+                  onFocusMissing={handleRequestsFocusMissing}
                 />
               )
             )
@@ -3321,23 +3348,73 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     const fileReady = hasDoc(doc.id);
                     const isOwnDoc = doc.id === 'invoice' || doc.id === 'packing_list' || doc.id === 'transport_request' || doc.id === 'customs_dec';
                     // 표시 상태 규칙:
-                    //  - 화주 서류 + 파일 있음 + 차단 중  → '초안' (볼 수 있지만 제출 전 검토 필요)
+                    //  - 화주 서류 + 파일 있음 + 걸린 항목 없음 → 연두색 '초안'. 관세사·포워더에게 넘기는 초안이라는
+                    //    서류 성격으로 통일한다(예전엔 생성 완료·초안 생성·초안이 섞여, 같은 '초안'이 초록·주황 두 뜻이었다).
+                    //  - 화주 서류 + 파일 있음 + 걸린 항목 있음 → 주황 '검토 필요'. 누르면 이름 밑에 사유가 펼쳐진다
+                    //    (위 확인 목록 카드와 같은 제목 — 예: 중량 입력).
                     //  - 화주 서류 + completed + 파일 없음 → '생성 대기' (아직 미생성)
                     //  - 그 외 → rulesEngine 상태문구 그대로
                     let displayText = doc.statusText;
                     let sbClass = doc.status === 'completed' ? 'ok'
                       : doc.status === 'review_required' ? 'rev' : 'na';
-                    if (isOwnDoc && fileReady && isGenerationBlocked) {
-                      displayText = '초안'; sbClass = 'rev';
+                    const docIssues = isOwnDoc ? fixListIssues.filter((issue) => issue.docType === doc.id) : [];
+                    const needsReview = isOwnDoc && fileReady && docIssues.length > 0;
+                    if (needsReview) {
+                      displayText = '검토 필요'; sbClass = 'rev';
+                    } else if (isOwnDoc && fileReady) {
+                      displayText = '초안'; sbClass = 'ok';
                     } else if (isOwnDoc && doc.status === 'completed' && !fileReady) {
                       displayText = '생성 대기'; sbClass = 'na';
                     }
+                    const reasonOpen = needsReview && openReasonDocId === doc.id;
+                    // 외부 발급 서류(C/O·보험)는 우리가 판단한 결과와 근거를 보여준다 — 확인할 것만 주황.
+                    const isNeedJudged = doc.id === 'co' || doc.id === 'insurance';
+                    if (isNeedJudged) {
+                      sbClass = doc.status === 'completed' ? 'ok' : doc.status === 'not_needed' ? 'na' : 'rev';
+                    }
+                    // 최종 필요 여부는 구매자·계약이 정하므로, 화주가 아직 답하지 않았으면 줄에서 바로 고르게 한다.
+                    const needDocId = doc.id === 'co' || doc.id === 'insurance' ? doc.id : null;
+                    const askNeed = !fileReady && (
+                      (needDocId === 'co' && profile.tradeType === 'export' && !profile.coNeeded)
+                      || (needDocId === 'insurance' && doc.status === 'external_pending')
+                    );
                     return (
                       <div className="rv-row" key={doc.id}>
                         <span className={`rv-abbr ${fileReady ? '' : 'gray'}`}>{abbr}</span>
-                        <span className="rv-nm">{doc.name}</span>
-                        <span className={`rv-sb rv-sb-${sbClass}`}>{displayText}</span>
+                        <span className="rv-nm-wrap">
+                          <span className="rv-nm">{doc.name}</span>
+                          {reasonOpen && (
+                            <ul className="rv-reasons" id={`rv-reasons-${doc.id}`}>
+                              {docIssues.map((issue) => (
+                                <li key={issueKey(issue)} className={`rv-reason is-${issue.severity === 'error' ? 'err' : 'warn'}`}>
+                                  {presentIssue(issue)?.title ?? shortIssueLabel(issue)}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {/* 외부 발급 서류(C/O·보험)의 판단 근거는 늘 보인다 — 무엇을 근거로 판단했는지가 곧 안내다. */}
+                          {!needsReview && doc.statusReason && <span className="rv-reason is-info">{doc.statusReason}</span>}
+                        </span>
+                        {needsReview ? (
+                          <button
+                            type="button"
+                            className={`rv-sb rv-sb-${sbClass} rv-sb-toggle`}
+                            aria-expanded={reasonOpen}
+                            aria-controls={`rv-reasons-${doc.id}`}
+                            onClick={() => setOpenReasonDocId(reasonOpen ? null : doc.id)}
+                          >
+                            {displayText} <ChevronDown size={13} aria-hidden="true" />
+                          </button>
+                        ) : (
+                          <span className={`rv-sb rv-sb-${sbClass}`}>{displayText}</span>
+                        )}
                         <div className="rv-act">
+                          {askNeed && needDocId && (
+                            <div className="rv-need" role="group" aria-label={`${doc.name} 필요 여부`}>
+                              <button type="button" disabled={isRevalidating} onClick={() => void handleDocNeedAnswer(needDocId, 'yes')}>필요</button>
+                              <button type="button" disabled={isRevalidating} onClick={() => void handleDocNeedAnswer(needDocId, 'no')}>불필요</button>
+                            </div>
+                          )}
                           {fileReady && (
                             <>
                               <button className="rv-view" onClick={() => setPreviewDocId(doc.id)}>

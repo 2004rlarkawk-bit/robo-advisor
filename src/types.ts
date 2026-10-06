@@ -305,6 +305,8 @@ export interface DocumentStatus {
   name: string;
   status: DocumentStatusType;
   statusText: string;
+  /** 상태의 근거 한 줄 — 서류 현황에서 이름 밑에 보여준다(예: "FOB 조건이라 운송 중 보험은 구매자가 들어요"). */
+  statusReason?: string;
   lastReviewed?: string;
 }
 

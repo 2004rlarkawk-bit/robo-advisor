@@ -71,6 +71,23 @@ describe('자주 거래한 거래처 계산', () => {
     expect(result[0].notifyParty).toEqual(latestNotify);
   });
 
+  it('구매자부호도 그 Buyer의 최신 거래 값으로 불러오고, 없으면 빈 값이다', () => {
+    const abc = party('ABC Trading');
+    const withCode = (submittedAt: string, code?: string) => ({
+      ...row(abc, submittedAt),
+      form_data: {
+        parties: { buyer: abc, partner: abc, notifyParty: abc },
+        ...(code === undefined ? {} : { exportDeclaration: { buyerCustomsCode: code } }),
+      } as unknown as TradeFormDataV3,
+    });
+
+    expect(calculateFrequentTradePartners([
+      withCode('2026-07-01T00:00:00Z', 'USABCT0001'),
+      withCode('2026-08-01T00:00:00Z', ' USABCT0002 '),
+    ])[0].buyerCustomsCode).toBe('USABCT0002');
+    expect(calculateFrequentTradePartners([withCode('2026-08-01T00:00:00Z')])[0].buyerCustomsCode).toBe('');
+  });
+
   it('로그인 사용자와 완료된 수출 화주 거래 조건을 쿼리에 모두 명시한다', async () => {
     const select = vi.fn();
     const eq = vi.fn();

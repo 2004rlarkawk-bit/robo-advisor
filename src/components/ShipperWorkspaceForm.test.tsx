@@ -113,12 +113,13 @@ function renderForm(
 
 describe('화주용 통관 입력 폼', () => {
   it('자주 거래한 거래처의 최신 Buyer·Consignee·Notify Party 전체와 동일 체크 상태를 불러온다', async () => {
-    const shared = { name: 'Global Import LLC', address: '250 Market Street', country: 'US', contactName: '', contact: '', businessNumber: '', taxNumber: '' };
+    const shared = { name: 'Global Import LLC', address: '250 Market Street', country: 'US', contactName: '', contact: '+1-213-555-0100', businessNumber: '', taxNumber: '' };
     frequentPartnersMock.mockResolvedValueOnce([{
       key: 'global', transactionCount: 8, lastTransactionDate: '2026-08-12T00:00:00Z',
       buyer: shared,
       consignee: { ...shared },
       notifyParty: { ...shared },
+      buyerCustomsCode: 'USGLOB0001',
     }]);
     const rendered = renderForm([firstItem], false, {}, {}, '', 'user-a');
 
@@ -142,6 +143,9 @@ describe('화주용 통관 입력 폼', () => {
       partnerCountry: shared.country,
       notifyPartyName: shared.name,
       notifyPartyAddress: shared.address,
+      partnerContact: '+1-213-555-0100',
+      notifyPartyContact: '+1-213-555-0100',
+      exportDeclaration: expect.objectContaining({ buyerCustomsCode: 'USGLOB0001' }),
     });
     expect(rendered.onSupplementalChange).toHaveBeenCalledWith(expect.objectContaining({
       buyerMatchesConsignee: true,

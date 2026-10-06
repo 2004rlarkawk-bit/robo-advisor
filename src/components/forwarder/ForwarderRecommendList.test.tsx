@@ -66,7 +66,7 @@ describe('ForwarderRecommendList', () => {
   it('거래에서 뽑은 조건을 미리 체크해 보여준다', async () => {
     await render();
     const conditions = [...container.querySelectorAll('.fwd-cond-chip.is-on')];
-    expect(conditions.map((chip) => chip.textContent)).toEqual(['중국 항로', '콜드체인']);
+    expect(conditions.map((chip) => chip.textContent)).toEqual(['중국 항로', '콜드체인', '식품·농수산물']);
     expect(conditions.every((chip) => chip.getAttribute('aria-checked') === 'true')).toBe(true);
     // 나머지 조건은 '조건 추가'를 눌러야 펼쳐진다.
     expect(container.querySelector('.fwd-cond-more')).toBeNull();
@@ -75,7 +75,7 @@ describe('ForwarderRecommendList', () => {
   it('버튼을 더 누르지 않아도 조건으로 추천을 바로 불러온다', async () => {
     await render();
     // 오류 1 + 경고 1 = 2건 → 경험 우선
-    expect(requestService.matchForwarderForTrade).toHaveBeenCalledWith('trade-1', ['route_cn', 'cargo_cold'], true);
+    expect(requestService.matchForwarderForTrade).toHaveBeenCalledWith('trade-1', ['route_cn', 'cargo_cold', 'goods_food'], true);
     expect(rows()).toHaveLength(2);
   });
 
@@ -136,13 +136,13 @@ describe('ForwarderRecommendList', () => {
     await render();
     await act(async () => { button('조건 추가').click(); });
     expect(button('러시아·CIS 항로')).toBeUndefined();
-    await act(async () => { button('LCL 콘솔').click(); });
+    await act(async () => { button('소량 혼적(LCL)').click(); });
     let calls = requestService.matchForwarderForTrade.mock.calls;
-    expect(calls[calls.length - 1][1]).toEqual(['route_cn', 'cargo_cold', 'cargo_lcl']);
+    expect(calls[calls.length - 1][1]).toEqual(['route_cn', 'cargo_cold', 'goods_food', 'cargo_lcl']);
 
     await act(async () => { button('콜드체인').click(); });
     calls = requestService.matchForwarderForTrade.mock.calls;
-    expect(calls[calls.length - 1][1]).toEqual(['route_cn', 'cargo_lcl']);
+    expect(calls[calls.length - 1][1]).toEqual(['route_cn', 'goods_food', 'cargo_lcl']);
   });
 
   it('제휴사명이 따로 등록돼 있으면 담당자 프로필 업체명 대신 제휴사명을 보여준다', async () => {

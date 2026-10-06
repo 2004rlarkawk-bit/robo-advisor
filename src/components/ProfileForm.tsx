@@ -49,7 +49,7 @@ const formValues = (p: UserProfile, requireExplicitServiceRole: boolean): UserPr
   forwarder_specialties_custom: p.forwarder_specialties_custom ?? [],
 });
 
-const SPECIALTY_GROUPS: ForwarderSpecialtyGroup[] = ['route', 'cargo'];
+const SPECIALTY_GROUPS: ForwarderSpecialtyGroup[] = ['route', 'cargo', 'goods'];
 
 export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, requireExplicitServiceRole = false, secondaryAction }: Props) {
   const [values, setValues] = useState<UserProfileUpdate>(() => formValues(profile, requireExplicitServiceRole));

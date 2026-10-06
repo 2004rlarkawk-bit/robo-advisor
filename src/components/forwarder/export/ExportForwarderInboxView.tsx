@@ -43,6 +43,7 @@ export default function ExportForwarderInboxView({
   return (
     <div className="forwarder-workspace-form fwd-export-refresh fwd-export-list">
       <ForwarderExportRequestInbox
+        userId={userId}
         onApply={onApplyExportRequest}
         appliedTradeId={appliedRequestTradeId ?? null}
         headerAction={<button

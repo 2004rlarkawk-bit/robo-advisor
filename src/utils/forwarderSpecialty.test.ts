@@ -38,19 +38,26 @@ describe('suggestSpecialtiesForTrade', () => {
 
   it('수산물(03류)은 HS만으로, 과일(08류)은 냉동·신선 단서가 있을 때만 콜드체인으로 본다', () => {
     expect(suggestSpecialtiesForTrade(trade({ hsCode: '0303.89-0000', itemName: 'Mackerel' }), countryOf))
-      .toEqual([{ key: 'cargo_cold', reason: 'HS 03류 · 온도 관리 품목' }]);
-    expect(keys(suggestSpecialtiesForTrade(trade({ hsCode: '0811900000', itemName: 'Frozen Blueberry' }), countryOf))).toEqual(['cargo_cold']);
-    expect(suggestSpecialtiesForTrade(trade({ hsCode: '0813400000', itemName: 'Dried Persimmon' }), countryOf)).toEqual([]);
+      .toEqual([
+        { key: 'cargo_cold', reason: 'HS 03류 · 온도 관리 품목' },
+        { key: 'goods_food', reason: 'HS 03류 · 식품·농수산물' },
+      ]);
+    expect(keys(suggestSpecialtiesForTrade(trade({ hsCode: '0811900000', itemName: 'Frozen Blueberry' }), countryOf))).toEqual(['cargo_cold', 'goods_food']);
+    // 건조 과일은 식품이지만 상온 화물이다.
+    expect(keys(suggestSpecialtiesForTrade(trade({ hsCode: '0813400000', itemName: 'Dried Persimmon' }), countryOf))).toEqual(['goods_food']);
   });
 
   it('다른 류의 품명에 fresh가 들어 있다고 콜드체인으로 보지 않는다', () => {
-    expect(suggestSpecialtiesForTrade(trade({ hsCode: '3307490000', itemName: 'Air Freshener Fresh Scent' }), countryOf)).toEqual([]);
+    expect(keys(suggestSpecialtiesForTrade(trade({ hsCode: '3307490000', itemName: 'Air Freshener Fresh Scent' }), countryOf))).toEqual(['goods_chemical']);
   });
 
   it('위험물은 품명에 명시적 단서가 있을 때만 제안한다', () => {
     expect(suggestSpecialtiesForTrade(trade({ hsCode: '8507600000', itemName: 'Lithium-ion Battery Pack' }), countryOf))
-      .toEqual([{ key: 'cargo_dg', reason: '품명에 "Lithium"' }]);
-    expect(suggestSpecialtiesForTrade(trade({ hsCode: '2909110000', itemName: 'Diethyl Ether' }), countryOf)).toEqual([]);
+      .toEqual([
+        { key: 'cargo_dg', reason: '품명에 "Lithium"' },
+        { key: 'goods_electronics', reason: 'HS 85류 · 전기·전자기기' },
+      ]);
+    expect(keys(suggestSpecialtiesForTrade(trade({ hsCode: '2909110000', itemName: 'Diethyl Ether' }), countryOf))).toEqual(['goods_chemical']);
   });
 
   it('공항이 항구 칸에 있으면 항공 운송을 제안한다', () => {
@@ -61,7 +68,22 @@ describe('suggestSpecialtiesForTrade', () => {
     const result = suggestSpecialtiesForTrade(trade({
       dischargePort: 'Los Angeles Port', loadingMode: 'LCL', hsCode: '0304', itemName: 'Frozen Fish Fillet',
     }), countryOf);
-    expect(keys(result)).toEqual(['route_us', 'cargo_lcl', 'cargo_cold']);
+    expect(keys(result)).toEqual(['route_us', 'cargo_lcl', 'cargo_cold', 'goods_food']);
+  });
+
+  it('HS 류로 품목 조건을 고르고, 무엇 때문인지 근거를 남긴다', () => {
+    const goods = (hsCode: string, itemName = 'item') =>
+      suggestSpecialtiesForTrade(trade({ hsCode, itemName }), countryOf);
+    // 사무용 책상처럼 특별한 취급이 필요 없는 화물도 품목 조건이 잡힌다.
+    expect(goods('9403301000', 'Wooden Office Desk')).toEqual([{ key: 'goods_consumer', reason: 'HS 94류 · 가구·조명' }]);
+    expect(keys(goods('9102110000', 'Watch'))).toEqual(['goods_consumer']);
+    expect(keys(goods('6109100000', 'Cotton T-Shirts'))).toEqual(['goods_apparel']);
+    // 가죽 의류(4203)는 42류(가죽제품)지만 의류로 본다. 가방(4202)은 소비재다.
+    expect(goods('4203100000', 'Leather Coat')).toEqual([{ key: 'goods_apparel', reason: 'HS 4203 · 가죽 의류' }]);
+    expect(keys(goods('4202210000', 'Handbag'))).toEqual(['goods_consumer']);
+    // 철강처럼 어느 묶음에도 딱 맞지 않는 원료·중간재는 넣지 않는다.
+    expect(goods('7208100000', 'Hot-rolled Steel')).toEqual([]);
+    expect(goods('', 'desk')).toEqual([]);
   });
 });
 

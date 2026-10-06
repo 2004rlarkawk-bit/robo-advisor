@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Boxes, Check, ChevronDown, Container, Flame, Package, Plane, Plus, Ship, Snowflake, Tag, Weight, X,
+  Armchair, Boxes, Check, ChevronDown, Container, Cpu, FlaskConical, Flame, Package, Plane, Plus, Shirt, Ship, Snowflake, Tag, Weight, Wheat, X,
   type LucideIcon,
 } from 'lucide-react';
 import type { SavedTrade } from '../../types';
@@ -57,6 +57,11 @@ const CARGO_ICONS: Record<string, LucideIcon> = {
   cargo_air: Plane,
   cargo_oog: Weight,
   cargo_express: Package,
+  goods_consumer: Armchair,
+  goods_apparel: Shirt,
+  goods_electronics: Cpu,
+  goods_food: Wheat,
+  goods_chemical: FlaskConical,
 };
 
 function specialtyIcon(key: string): LucideIcon {
