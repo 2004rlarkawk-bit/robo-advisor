@@ -46,8 +46,8 @@ const VISIBLE_CANDIDATES = 3;
  */
 const HIDDEN_EXTRA_OPTIONS = new Set<ForwarderSpecialtyKey>(['route_cis']);
 
-/** 카드에 띄울 특화 분야 수. 많이 늘어놓으면 무엇 때문에 추천됐는지 오히려 안 읽힌다. */
-const CARD_TAG_LIMIT = 2;
+/** 카드에 띄울 특화 분야 수 — 항로·화물·품목 하나씩. 더 늘어놓으면 무엇 때문에 추천됐는지 오히려 안 읽힌다. */
+const CARD_TAG_LIMIT = 3;
 
 const CARGO_ICONS: Record<string, LucideIcon> = {
   cargo_fcl: Container,

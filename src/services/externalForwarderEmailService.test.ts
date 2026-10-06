@@ -59,6 +59,13 @@ describe('getAttachableDocumentTypes', () => {
     expect(getAttachableDocumentTypes(trade)).toEqual(['transport_request']);
   });
 
+  it('수출신고서 초안은 수출 거래에서만 보낼 수 있다 — 수입의 customsDeclaration은 다른 서식이다', () => {
+    const exportTrade = makeTrade({ invoice: {} as never, customsDeclaration: {} as never });
+    expect(getAttachableDocumentTypes(exportTrade)).toEqual(['invoice', 'export_declaration']);
+    const importTrade = { ...makeTrade({ customsDeclaration: {} as never }), tradeDirection: 'import' } as SavedTrade;
+    expect(getAttachableDocumentTypes(importTrade)).toEqual([]);
+  });
+
   it('생성된 문서가 전혀 없으면 빈 배열을 반환한다', () => {
     expect(getAttachableDocumentTypes(makeTrade(undefined))).toEqual([]);
   });
