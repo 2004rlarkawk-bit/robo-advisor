@@ -60,3 +60,17 @@
 }
 
 /* 수출·수입 받은 의뢰는 동일한 선택형 표와 하단 열기 버튼을 사용한다. */
+
+/* 받은 수출 의뢰 — 행을 꾹 누른 채 왼쪽으로 밀어 목록에서 지운다(화주 '포워더 의뢰'와 같은 동작).
+   표 행은 감쌀 수 없어 칸을 함께 밀고, 비는 오른쪽 자리에 마지막 칸 기준으로 빨간 삭제 표시를 붙인다. */
+.fwd-export-inbox-table tbody tr { touch-action: pan-y; }
+.fwd-export-inbox-table tbody td { transition: transform .2s ease; }
+.fwd-export-inbox-table tbody td:last-child { position: relative; }
+.fwd-export-inbox-table tbody tr.is-swiping { cursor: grabbing; user-select: none; }
+.fwd-export-inbox-table tbody tr.is-swiping td { background: inherit; transform: translateX(var(--swipe-dx, 0)); transition: none; }
+.fwd-swipe-label {
+  position: absolute; top: 0; bottom: 0; left: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;
+  overflow: hidden; background: #fca5a5; color: #7f1d1d; font-size: 13px; font-weight: 700; white-space: nowrap;
+  transition: background .15s;
+}
+.fwd-export-inbox-table tbody tr.is-armed .fwd-swipe-label { background: #dc2626; color: #fff; }

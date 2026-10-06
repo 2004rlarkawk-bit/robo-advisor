@@ -3,6 +3,15 @@
  */
 import { TradeProfile, DocumentStatus } from '../types';
 import { getIncotermsRule } from '../agents/incotermsRules';
+import { findAgreementsForOrigin, ftaCountryCode } from '../services/ftaAgreementService';
+
+// 적하보험을 누가 드는지는 인코텀즈가 정한다(Incoterms 2020).
+/** 매도인이 보험을 들어야 하는 조건 */
+const SELLER_MUST_INSURE = ['CIF', 'CIP'];
+/** 매도인이 도착지까지 위험을 지는 조건 — 의무는 아니지만 드는 게 안전하다 */
+const SELLER_RISK_TO_DESTINATION = ['DAP', 'DPU', 'DDP'];
+/** 운송 중 보험을 매수인이 드는 조건 */
+const BUYER_INSURES = ['EXW', 'FCA', 'FAS', 'FOB', 'CFR', 'CPT'];
 
 export function determineRequiredDocuments(
   profile: TradeProfile
@@ -113,78 +122,86 @@ export function determineRequiredDocuments(
 
   // 5. 원산지증명서(C/O)
   // 실제 발급은 대한상공회의소 원산지증명센터에서 진행 — 우리는 신청자료 정리만 돕는다.
-  // 구매자가 FTA 적용/증명서를 요청했는지(coNeeded)에 따라 3상태로 나뉜다:
-  //   미확인 → "필요 여부 확인" / yes → 발급기관 신청 대상 / no → 불필요.
+  // 화주가 답했으면(coNeeded) 그대로 따르고, 답하기 전에는 도착국 FTA로 먼저 판단해 근거를 적는다.
+  // 최종 필요 여부는 구매자 요청에 달려 있어 FTA 체결국이라도 '확인 권장'까지만 말한다.
   const isExport = profile.tradeType === 'export';
+  const coName = '원산지증명서(C/O)';
 
   if (!isExport) {
-    docs.push({
-      id: 'co',
-      name: '원산지증명서(C/O)',
-      status: 'not_needed',
-      statusText: '해당 없음',
-    });
+    docs.push({ id: 'co', name: coName, status: 'not_needed', statusText: '해당 없음' });
   } else if (profile.coNeeded === 'no') {
     docs.push({
-      id: 'co',
-      name: '원산지증명서(C/O)',
-      status: 'not_needed',
-      statusText: '불필요 (구매자 요청 없음)',
+      id: 'co', name: coName, status: 'not_needed', statusText: '불필요',
+      statusReason: '구매자가 요청하지 않았어요',
     });
   } else if (profile.coNeeded === 'yes') {
     docs.push({
-      id: 'co',
-      name: '원산지증명서(C/O)',
-      status: 'external_pending',
-      statusText: '상공회의소 발급 대상',
+      id: 'co', name: coName, status: 'external_pending', statusText: '발급 필요',
+      statusReason: '대한상공회의소에서 발급받으세요',
     });
   } else {
-    docs.push({
-      id: 'co',
-      name: '원산지증명서(C/O)',
-      status: 'external_pending',
-      statusText: '필요 여부 확인',
-    });
+    const destination = profile.partnerCountry || profile.buyerCountry || '';
+    const agreement = findAgreementsForOrigin(destination)[0];
+    if (agreement) {
+      docs.push({
+        id: 'co', name: coName, status: 'external_pending', statusText: '확인 권장',
+        statusReason: `${agreement.name} 대상국이라 구매자가 관세 혜택을 받으려면 필요해요 · 발급: 대한상공회의소`,
+      });
+    } else if (ftaCountryCode(destination)) {
+      docs.push({
+        id: 'co', name: coName, status: 'not_needed', statusText: '불필요',
+        statusReason: 'FTA 미체결국이라 구매자가 요청할 때만 발급받으면 돼요',
+      });
+    } else {
+      docs.push({
+        id: 'co', name: coName, status: 'external_pending', statusText: '확인 권장',
+        statusReason: '거래처(Consignee) 국가를 입력하면 필요 여부를 판단해 드려요',
+      });
+    }
   }
 
   // 6. 적하보험증권(Insurance Policy)
   // CIF처럼 Incoterms상 매도인 부보가 의무인 조건은 질문 없이 항상 준비 대상.
   // 그 외 조건(FOB 등)은 계약에 따라 갈리므로 C/O처럼 필요 여부(insuranceNeeded)를
   // 먼저 묻고 — yes면 준비 확인 흐름, no면 불필요로 정리한다.
+  const term = (profile.incoterms ?? '').trim().toUpperCase().slice(0, 3);
   const insuranceMandatory = Boolean(
-    rule && rule.requiredDocuments.includes('insurance')
+    (rule && rule.requiredDocuments.includes('insurance')) || SELLER_MUST_INSURE.includes(term)
   );
+  const insuranceName = '적하보험증권(Insurance Policy)';
 
   if (insuranceMandatory || profile.insuranceNeeded === 'yes') {
     docs.push({
       id: 'insurance',
-      name: '적하보험증권(Insurance Policy)',
+      name: insuranceName,
       status: profile.insuranceConfirmed
         ? 'completed'
         : 'not_started',
-      statusText: profile.insuranceConfirmed
-        ? '준비 완료 확인됨'
-        : insuranceMandatory
-          ? 'CIF 조건 - 준비 필요'
-          : '계약상 부보 - 준비 필요',
+      statusText: profile.insuranceConfirmed ? '준비 완료' : '발급 필요',
+      statusReason: insuranceMandatory
+        ? `${term} 조건이라 매도인이 보험을 들어야 해요 · 발급: 보험사`
+        : '계약에 따라 매도인이 보험을 들어요 · 발급: 보험사',
       lastReviewed: profile.insuranceConfirmed
         ? timestamp
         : undefined,
     });
   } else if (profile.insuranceNeeded === 'no') {
     docs.push({
-      id: 'insurance',
-      name: '적하보험증권(Insurance Policy)',
-      status: 'not_needed',
-      statusText: '불필요 (부보 의무 없음)',
+      id: 'insurance', name: insuranceName, status: 'not_needed', statusText: '불필요',
+      statusReason: '보험을 들 의무가 없다고 확인했어요',
+    });
+  } else if (isExport && BUYER_INSURES.includes(term)) {
+    docs.push({
+      id: 'insurance', name: insuranceName, status: 'not_needed', statusText: '불필요',
+      statusReason: `${term} 조건이라 운송 중 보험은 구매자가 들어요`,
     });
   } else if (isExport) {
-    // 미확인 — 화주가 만들 서류는 아니고 보험사가 발급하므로 준비도 분모에서 제외.
+    // 화주가 만들 서류는 아니고 보험사가 발급하므로 준비도 분모에서 제외한다.
     docs.push({
-      id: 'insurance',
-      name: '적하보험증권(Insurance Policy)',
-      status: 'external_pending',
-      statusText: '필요 여부 확인',
+      id: 'insurance', name: insuranceName, status: 'external_pending', statusText: '확인 권장',
+      statusReason: SELLER_RISK_TO_DESTINATION.includes(term)
+        ? `${term} 조건은 의무는 아니지만 도착지까지 위험을 매도인이 져서 드는 게 안전해요`
+        : '거래 조건(인코텀즈)을 입력하면 필요 여부를 판단해 드려요',
     });
   }
 

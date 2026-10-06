@@ -15,13 +15,20 @@ export const FORWARDER_SPECIALTIES = [
   { key: 'route_me', group: 'route', label: '중동 항로' },
   { key: 'route_cis', group: 'route', label: '러시아·CIS 항로' },
   { key: 'route_latam', group: 'route', label: '중남미 항로' },
-  { key: 'cargo_fcl', group: 'cargo', label: 'FCL 만재' },
-  { key: 'cargo_lcl', group: 'cargo', label: 'LCL 콘솔' },
+  // 화주·심사위원도 알아보게 풀어 쓰고 업계 용어는 괄호로 남긴다.
+  { key: 'cargo_fcl', group: 'cargo', label: '컨테이너 단독(FCL)' },
+  { key: 'cargo_lcl', group: 'cargo', label: '소량 혼적(LCL)' },
   { key: 'cargo_cold', group: 'cargo', label: '콜드체인' },
   { key: 'cargo_dg', group: 'cargo', label: '위험물' },
   { key: 'cargo_air', group: 'cargo', label: '항공 운송' },
   { key: 'cargo_oog', group: 'cargo', label: '중량물·특수화물' },
   { key: 'cargo_express', group: 'cargo', label: '특송·이커머스' },
+  // 품목 — HS 류(앞 2자리)로 뽑는다. 무엇을 실어 보내는지에 익숙한 담당자를 찾는 조건이다.
+  { key: 'goods_consumer', group: 'goods', label: '일반 소비재' },
+  { key: 'goods_apparel', group: 'goods', label: '의류·섬유' },
+  { key: 'goods_electronics', group: 'goods', label: '전자·기계' },
+  { key: 'goods_food', group: 'goods', label: '식품·농수산물' },
+  { key: 'goods_chemical', group: 'goods', label: '화학·화장품' },
 ] as const;
 
 export type ForwarderSpecialtyKey = (typeof FORWARDER_SPECIALTIES)[number]['key'];
@@ -30,6 +37,7 @@ export type ForwarderSpecialtyGroup = (typeof FORWARDER_SPECIALTIES)[number]['gr
 export const FORWARDER_SPECIALTY_GROUP_LABEL: Record<ForwarderSpecialtyGroup, string> = {
   route: '항로',
   cargo: '화물',
+  goods: '품목',
 };
 
 const SPECIALTY_KEYS = new Set<string>(FORWARDER_SPECIALTIES.map((item) => item.key));

@@ -33,21 +33,58 @@ describe('PortAI Harness Engineering - 비즈니스 규칙 및 검증 엔진 테
     contact: '010-1234-5678'
   };
 
-  it('수출 거래의 원산지증명서는 필요 여부 답변(coNeeded)에 따라 3상태로 나뉜다', () => {
-    // 미확인 → 필요 여부 확인
-    const unanswered = determineRequiredDocuments(mockValidProfile).find(d => d.id === 'co');
-    expect(unanswered?.status).toBe('external_pending');
-    expect(unanswered?.statusText).toBe('필요 여부 확인');
-
-    // 예 → 상공회의소 발급 대상 (여전히 화주가 생성하지 않는 external_pending)
+  it('수출 거래의 원산지증명서는 화주의 답(coNeeded)을 먼저 따른다', () => {
+    // 예 → 발급 필요 (여전히 화주가 생성하지 않는 external_pending)
     const yes = determineRequiredDocuments({ ...mockValidProfile, coNeeded: 'yes' }).find(d => d.id === 'co');
     expect(yes?.status).toBe('external_pending');
-    expect(yes?.statusText).toBe('상공회의소 발급 대상');
+    expect(yes?.statusText).toBe('발급 필요');
+    expect(yes?.statusReason).toContain('대한상공회의소');
 
     // 아니오 → 불필요 처리
     const no = determineRequiredDocuments({ ...mockValidProfile, coNeeded: 'no' }).find(d => d.id === 'co');
     expect(no?.status).toBe('not_needed');
-    expect(no?.statusText).toBe('불필요 (구매자 요청 없음)');
+    expect(no?.statusText).toBe('불필요');
+  });
+
+  it('답하기 전 원산지증명서는 도착국 FTA로 판단하고 근거를 적는다', () => {
+    const co = (country: string) =>
+      determineRequiredDocuments({ ...mockValidProfile, partnerCountry: country }).find(d => d.id === 'co');
+
+    // FTA 체결국 — 필요할 가능성이 높지만 구매자 요청이 최종이라 '확인 권장'까지만
+    expect(co('United States')).toMatchObject({ status: 'external_pending', statusText: '확인 권장' });
+    expect(co('United States')?.statusReason).toContain('한·미 FTA 대상국');
+    // FTA 미체결국 — 요청할 때만
+    expect(co('Taiwan')).toMatchObject({ status: 'not_needed', statusText: '불필요' });
+    expect(co('Taiwan')?.statusReason).toContain('FTA 미체결국');
+    // 국가를 모르면 판단을 미루고 무엇을 넣으면 되는지 알려준다
+    expect(co('')).toMatchObject({ status: 'external_pending', statusText: '확인 권장' });
+    expect(co('')?.statusReason).toContain('국가를 입력하면');
+    // Consignee 국가가 없으면 Buyer 국가로 판단한다
+    const byBuyer = determineRequiredDocuments({ ...mockValidProfile, buyerCountry: 'Vietnam' }).find(d => d.id === 'co');
+    expect(byBuyer?.statusReason).toContain('한·베트남 FTA');
+  });
+
+  it('적하보험증권은 인코텀즈로 누가 보험을 드는지 판단한다', () => {
+    const insurance = (incoterms: string, extra: Partial<TradeProfile> = {}) =>
+      determineRequiredDocuments({ ...mockValidProfile, incoterms: incoterms as TradeProfile['incoterms'], ...extra }).find(d => d.id === 'insurance');
+
+    // 매도인이 보험을 들어야 하는 조건 — CIP도 CIF와 같다
+    expect(insurance('CIF')).toMatchObject({ status: 'not_started', statusText: '발급 필요' });
+    expect(insurance('CIP')).toMatchObject({ status: 'not_started', statusText: '발급 필요' });
+    expect(insurance('CIP')?.statusReason).toContain('매도인이 보험을 들어야');
+    expect(insurance('CIF', { insuranceConfirmed: true })).toMatchObject({ status: 'completed', statusText: '준비 완료' });
+    // 매수인이 드는 조건
+    expect(insurance('FOB')).toMatchObject({ status: 'not_needed', statusText: '불필요' });
+    expect(insurance('FOB')?.statusReason).toBe('FOB 조건이라 운송 중 보험은 구매자가 들어요');
+    expect(insurance('FCA')?.status).toBe('not_needed');
+    // 도착지까지 위험을 매도인이 지는 조건 — 의무는 아니어서 확인 권장
+    expect(insurance('DAP')).toMatchObject({ status: 'external_pending', statusText: '확인 권장' });
+    expect(insurance('DDP')?.statusReason).toContain('도착지까지 위험을 매도인이');
+    // 화주가 답했으면 그 답을 따른다
+    expect(insurance('DAP', { insuranceNeeded: 'no' })).toMatchObject({ status: 'not_needed', statusText: '불필요' });
+    expect(insurance('FOB', { insuranceNeeded: 'yes' })).toMatchObject({ status: 'not_started', statusText: '발급 필요' });
+    // 조건을 모르면 판단을 미룬다
+    expect(insurance('')?.statusReason).toContain('인코텀즈');
   });
 
   it('수입 거래의 경우 원산지증명서는 해당 없음으로 나타나야 한다', () => {

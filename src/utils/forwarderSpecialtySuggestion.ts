@@ -48,6 +48,33 @@ const COLD_KEYWORD = /frozen|chilled|refrigerat|fresh|냉동|냉장|신선/i;
 const DG_KEYWORD = /lithium|battery|배터리|flammable|인화성|dangerous goods|위험물|\bUN\s?\d{4}\b/i;
 const AIR_KEYWORD = /airport|공항/i;
 
+/** HS 류(앞 2자리) → 품목 조건. 원료·중간재처럼 어느 쪽에도 딱 맞지 않는 류는 넣지 않는다. */
+const GOODS_BY_CHAPTER: Record<string, ForwarderSpecialtyKey> = {};
+const GOODS_CHAPTER_NAME: Record<string, string> = {};
+function goodsChapters(key: ForwarderSpecialtyKey, chapters: Record<string, string>) {
+  for (const [chapter, name] of Object.entries(chapters)) {
+    GOODS_BY_CHAPTER[chapter] = key;
+    GOODS_CHAPTER_NAME[chapter] = name;
+  }
+}
+goodsChapters('goods_food', Object.fromEntries(
+  Array.from({ length: 24 }, (_, index) => [String(index + 1).padStart(2, '0'), '식품·농수산물']),
+));
+goodsChapters('goods_chemical', {
+  28: '무기화학품', 29: '유기화학품', 30: '의약품', 32: '염료·도료', 33: '화장품·향료', 34: '세제·비누', 38: '화학제품',
+});
+goodsChapters('goods_apparel', {
+  50: '견직물', 51: '모직물', 52: '면직물', 54: '합성 필라멘트', 55: '합성 단섬유', 56: '부직포', 58: '특수 직물',
+  60: '편물', 61: '편물제 의류', 62: '직물제 의류', 63: '섬유제품', 64: '신발', 65: '모자',
+});
+goodsChapters('goods_electronics', { 84: '기계', 85: '전기·전자기기', 90: '광학·측정기기' });
+goodsChapters('goods_consumer', {
+  42: '가죽제품·가방', 44: '목제품', 46: '짚·버들 제품', 48: '종이제품', 69: '도자기', 70: '유리제품',
+  71: '귀금속·장신구', 91: '시계', 92: '악기', 94: '가구·조명', 95: '완구·운동용품', 96: '생활 잡화',
+});
+/** 가죽 의류(4203)는 42류지만 의류로 본다. */
+const LEATHER_APPAREL_HEADING = '4203';
+
 type CountryResolver = (port: string | undefined) => string | null;
 
 /**
@@ -86,6 +113,12 @@ export function suggestSpecialtiesForTrade(
 
   const airPort = [profile.loadPort, profile.dischargePort].find((port) => port && AIR_KEYWORD.test(port));
   if (airPort) suggestions.push({ key: 'cargo_air', reason: `${airPort}` });
+
+  if (hsDigits.startsWith(LEATHER_APPAREL_HEADING)) {
+    suggestions.push({ key: 'goods_apparel', reason: `HS ${LEATHER_APPAREL_HEADING} · 가죽 의류` });
+  } else if (GOODS_BY_CHAPTER[chapter]) {
+    suggestions.push({ key: GOODS_BY_CHAPTER[chapter], reason: `HS ${chapter}류 · ${GOODS_CHAPTER_NAME[chapter]}` });
+  }
 
   return suggestions;
 }

@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { ArrowRight, Inbox, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { ArrowRight, Inbox, RefreshCw, Trash2 } from 'lucide-react';
 import {
   listForwarderExportRequests,
   type ForwarderExportRequest,
 } from '../services/forwarderExportRequestService';
 import '../styles/forwarderImportInbox.css';
 import { formatKstDateTime } from '../utils/formatDate';
+import { useSwipeToHide } from '../hooks/useSwipeToHide';
+import TrashBin from './common/TrashBin';
 
 interface Props {
+  /** 목록에서 숨긴 의뢰를 사용자별로 기억하는 데 쓴다. */
+  userId?: string;
   /** 선택한 의뢰를 포워더 입력 폼에 반영 */
   onApply: (request: ForwarderExportRequest) => void;
   /** 이미 불러온 의뢰 — 목록에서 '불러옴'으로 표시 */
@@ -21,14 +25,19 @@ interface Props {
  * 의뢰를 불러오면 당사자·화물·구간 정보가 채워지고,
  * 포워더는 부킹 결과(선사·선박·항차·컨테이너)만 이어서 입력하면 된다.
  */
-export default function ForwarderExportRequestInbox({ onApply, appliedTradeId, headerAction }: Props) {
+export default function ForwarderExportRequestInbox({ userId, onApply, appliedTradeId, headerAction }: Props) {
   const [requests, setRequests] = useState<ForwarderExportRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | 'new' | 'loaded'>('all');
   const [pickedId, setPickedId] = useState<string | null>(null);
-  const loadedCount = requests.filter(request => request.tradeId === appliedTradeId).length;
-  const visibleRequests = requests.filter(request => filter === 'all' || (filter === 'loaded' ? request.tradeId === appliedTradeId : request.tradeId !== appliedTradeId));
+  // 행을 꾹 누른 채 왼쪽으로 밀면 목록에서 지운다 — 화주의 거래·의뢰는 그대로 두고 이 사용자 목록에서만 숨긴다.
+  const { hiddenIds, swipe, isArmed, rowProps, restore, restoreAll, consumeSwipeClick } =
+    useSwipeToHide(`portai:hidden-forwarder-export-requests:${userId ?? 'anonymous'}`);
+  const shownRequests = requests.filter(request => !hiddenIds.has(request.tradeId));
+  const trashedRequests = requests.filter(request => hiddenIds.has(request.tradeId));
+  const loadedCount = shownRequests.filter(request => request.tradeId === appliedTradeId).length;
+  const visibleRequests = shownRequests.filter(request => filter === 'all' || (filter === 'loaded' ? request.tradeId === appliedTradeId : request.tradeId !== appliedTradeId));
   const picked = visibleRequests.find(request => request.tradeId === pickedId) ?? visibleRequests[0] ?? null;
 
   const load = useCallback(async () => {
@@ -50,9 +59,18 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId, h
     <section className="fwd-inbox">
       <div className="fwd-inbox-panel" aria-busy={isLoading}>
       <div className="fwd-inbox-panel-heading">
-        <h2>받은 의뢰 <span>{requests.length}건</span></h2>
+        <h2>받은 의뢰 <span>{shownRequests.length}건</span></h2>
         <div className="fwd-inbox-heading-actions">
         {headerAction}
+        <TrashBin
+          items={trashedRequests.map(request => ({
+            id: request.tradeId,
+            title: `${request.exporterName || '화주명 미입력'} · ${request.itemSummary}`,
+            detail: `${request.requestNo} · 접수 ${formatKstDateTime(request.requestedAt)}`,
+          }))}
+          onRestore={restore}
+          onRestoreAll={restoreAll}
+        />
         <button
           type="button"
           className="btn btn-secondary fwd-inbox-refresh"
@@ -66,8 +84,8 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId, h
       </div>
       <div className="fwd-inbox-filters" role="group" aria-label="수출 의뢰 필터">
         {([
-          ['all', '전체', requests.length],
-          ['new', '신규', requests.length - loadedCount],
+          ['all', '전체', shownRequests.length],
+          ['new', '신규', shownRequests.length - loadedCount],
           ['loaded', '불러옴', loadedCount],
         ] as const).map(([value, label, count]) => (
           <button key={value} type="button" className={filter === value ? 'is-active' : undefined}
@@ -98,9 +116,18 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId, h
               {visibleRequests.map((request) => {
                 const applied = appliedTradeId === request.tradeId;
                 const route = [request.loadPort, request.dischargePort].filter(Boolean).join(' → ');
+                const swiping = swipe?.id === request.tradeId;
+                const armed = isArmed(request.tradeId);
+                const rowClass = [
+                  picked?.tradeId === request.tradeId ? 'is-selected' : '',
+                  swiping ? 'is-swiping' : '',
+                  armed ? 'is-armed' : '',
+                ].filter(Boolean).join(' ') || undefined;
                 return (
-                  <tr key={request.tradeId} className={picked?.tradeId === request.tradeId ? 'is-selected' : undefined}
-                    onClick={() => setPickedId(request.tradeId)}>
+                  <tr key={request.tradeId} className={rowClass}
+                    style={swiping ? { '--swipe-dx': `${swipe.dx}px` } as CSSProperties : undefined}
+                    {...rowProps(request.tradeId)}
+                    onClick={() => { if (!consumeSwipeClick()) setPickedId(request.tradeId); }}>
                     <td><input type="radio" name="forwarder-export-request"
                       aria-label={`${request.exporterName || '화주명 미입력'} · ${request.requestNo} 선택`}
                       checked={picked?.tradeId === request.tradeId}
@@ -116,7 +143,14 @@ export default function ForwarderExportRequestInbox({ onApply, appliedTradeId, h
                         ? <span className="fwd-inbox-badge is-done">불러옴</span>
                         : <span className="fwd-inbox-badge is-new">신규</span>}
                     </td>
-                    <td>{applied ? '의뢰 내용 확인' : '부킹 정보 등록'}</td>
+                    <td>
+                      {applied ? '의뢰 내용 확인' : '부킹 정보 등록'}
+                      {swiping && (
+                        <span className="fwd-swipe-label" style={{ width: `${-swipe.dx}px` }} aria-hidden="true">
+                          <Trash2 size={16} /> {armed ? '놓으면 삭제' : '삭제'}
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}

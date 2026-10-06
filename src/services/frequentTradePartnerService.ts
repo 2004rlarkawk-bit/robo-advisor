@@ -13,6 +13,12 @@ export interface FrequentTradePartner {
   buyer: TradeFormParty;
   consignee: TradeFormParty;
   notifyParty: TradeFormParty;
+  /** 그 Buyer와의 최신 거래에 적은 구매자부호(해외거래처부호). 없으면 빈 문자열. */
+  buyerCustomsCode: string;
+}
+
+function buyerCustomsCodeOf(row: SubmittedShipperTradeRow): string {
+  return row.form_data?.exportDeclaration?.buyerCustomsCode?.trim() ?? '';
 }
 
 function normalizeIdentityPart(value: string): string {
@@ -53,6 +59,7 @@ export function calculateFrequentTradePartners(
         buyer: parties.buyer,
         consignee: parties.partner,
         notifyParty: parties.notifyParty,
+        buyerCustomsCode: buyerCustomsCodeOf(row),
       });
       continue;
     }
@@ -63,6 +70,7 @@ export function calculateFrequentTradePartners(
       current.buyer = parties.buyer;
       current.consignee = parties.partner;
       current.notifyParty = parties.notifyParty;
+      current.buyerCustomsCode = buyerCustomsCodeOf(row);
     }
   }
 

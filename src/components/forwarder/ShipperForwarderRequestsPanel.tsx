@@ -27,6 +27,8 @@ import { fetchSubmittedTrades } from '../../services/storageService';
 import { filterDocumentManagerTrades } from '../../services/tradeListPolicy';
 import ForwarderRequestModal from './ForwarderRequestModal';
 import TradeMessageThread from './TradeMessageThread';
+import ShipperReturnRequestCard from './ShipperReturnRequestCard';
+import TrashBin from '../common/TrashBin';
 import { formatKstDate } from '../../utils/formatDate';
 import '../../styles/forwarderRequest.css';
 
@@ -39,6 +41,11 @@ interface Props {
   currentUserId: string;
   onOpenTrade: (trade: SavedTrade) => void;
   onRevise?: (trade: SavedTrade) => void;
+  /** 알림에서 들어온 거래 — 목록을 불러온 뒤 그 거래의 보완 요청·대화 창을 바로 연다. */
+  focusTradeId?: string | null;
+  onFocusHandled?: () => void;
+  /** 목록에 없는 거래(이미 수정하려고 다시 연 건 등)면 호출한다. */
+  onFocusMissing?: (tradeId: string) => void;
 }
 
 interface TradeRequestView {
@@ -99,7 +106,9 @@ export function deriveTradeRequestView(
     };
   }
 
-  if (latestInternal?.status === 'accepted' || (trade.forwarderUserId && !latestExternal)) {
+  // 이미 맡은 포워더가 있으면, 뒤에 보낸 이메일이 실패했거나 다른 의뢰가 자동 취소됐어도 진행 중으로 본다.
+  const externalActive = latestExternal?.status === 'sent' || latestExternal?.status === 'pending';
+  if (latestInternal?.status === 'accepted' || (trade.forwarderUserId && !externalActive)) {
     const direction = trade.tradeDirection ?? trade.profile.tradeType;
     const importState = trade.forwarderCase as ForwarderCaseState | null;
     const exportState = trade.exportForwarderCase as ExportForwarderCaseState | null;
@@ -151,23 +160,27 @@ export function deriveTradeRequestView(
     };
   }
 
-  const failed = latestInternal?.status === 'rejected'
-    || latestInternal?.status === 'cancelled'
-    || latestExternal?.status === 'failed';
+  // 의뢰가 닿지 못하고 끝난 원인을 그대로 보여준다 — 화주가 왜 다시 의뢰해야 하는지 알 수 있게.
+  // 모두 다시 의뢰하면 되는 상태라 경고(노랑)로 두고, 아직 의뢰하지 않은 건은 배지 없이 둔다.
+  const rejected = latestInternal?.status === 'rejected';
+  const cancelled = latestInternal?.status === 'cancelled';
+  const emailFailed = latestExternal?.status === 'failed';
+  const statusLabel = rejected ? '거절됨' : emailFailed ? '전송 실패' : cancelled ? '재의뢰 필요' : '';
   return {
     category: 'ready',
-    statusLabel: failed ? '재의뢰 필요' : '의뢰 전',
-    statusTone: failed ? 'danger' : 'neutral',
-    forwarderLabel: failed
-      ? latestExternal?.recipientCompany || latestExternal?.recipientEmail || '이전 포워더'
-      : '미지정',
+    statusLabel,
+    statusTone: statusLabel ? 'warning' : 'neutral',
+    // 회원 포워더 이름은 의뢰 기록에 없고 화주가 상대 프로필을 읽을 수 없어 '회원 포워더'로 둔다.
+    forwarderLabel: emailFailed
+      ? latestExternal?.recipientCompany || latestExternal?.recipientEmail || '이메일 포워더'
+      : rejected || cancelled ? '회원 포워더' : '미지정',
     requestedAt: latestInternal?.createdAt ?? latestExternal?.createdAt ?? null,
     canRequest: true,
     needsRevision: false,
   };
 }
 
-export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTrade, onRevise }: Props) {
+export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTrade, onRevise, focusTradeId = null, onFocusHandled, onFocusMissing }: Props) {
   const [trades, setTrades] = useState<SavedTrade[]>([]);
   const [internalRequests, setInternalRequests] = useState<TradeRequest[]>([]);
   const [externalRequests, setExternalRequests] = useState<ExternalForwarderRequest[]>([]);
@@ -261,6 +274,16 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  // 보완 요청 알림으로 들어오면 그 거래의 요청 카드와 대화를 바로 연다.
+  // 숨긴 행이어도 알림으로 찾아온 건은 보여준다.
+  useEffect(() => {
+    if (!focusTradeId || isLoading) return;
+    const target = trades.find((trade) => trade.id === focusTradeId);
+    if (target) setThreadTrade(target);
+    else onFocusMissing?.(focusTradeId);
+    onFocusHandled?.();
+  }, [focusTradeId, isLoading, trades, onFocusHandled, onFocusMissing]);
   useEffect(() => { void loadUnread(); }, [loadUnread, internalRequests]);
 
   const rows = useMemo(() => trades.filter((trade) => !hiddenIds.has(trade.id)).map((trade) => {
@@ -333,13 +356,16 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
               </button>
             ))}
           </div>
-          <span className="shipper-requests-swipe-hint">
-            행을 왼쪽으로 밀면 목록에서 삭제
-            {hiddenIds.size > 0 && (
-              <button type="button" className="shipper-requests-unhide" onClick={() => saveHidden(new Set())}>
-                삭제한 {hiddenIds.size}건 되돌리기
-              </button>
-            )}
+          <span className="shipper-requests-trash">
+            <TrashBin
+              items={trades.filter((trade) => hiddenIds.has(trade.id)).map((trade) => ({
+                id: trade.id,
+                title: trade.profile.itemName || '품목명 미입력',
+                detail: `${trade.profile.blNo || trade.profile.invoiceNo || trade.profile.documentNo || `거래 ${trade.id.slice(0, 8)}`} · 제출 ${formatKstDate(trade.submittedAt ?? trade.createdAt)}`,
+              }))}
+              onRestore={(id) => { const next = new Set(hiddenIds); next.delete(id); saveHidden(next); }}
+              onRestoreAll={() => saveHidden(new Set())}
+            />
           </span>
           <button type="button" className="shipper-requests-refresh" aria-label="의뢰 목록 새로고침" onClick={() => void load()}>
             <RefreshCw size={17} />
@@ -388,14 +414,14 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
                     <span>{reference} · 제출 {formatKstDate(trade.submittedAt ?? trade.createdAt)}</span>
                   </div>
                   <div className="shipper-request-forwarder">
-                    <div><strong>{view.forwarderLabel}</strong><span className={`shipper-request-status is-${view.statusTone}`}>{view.statusLabel}</span></div>
+                    <div><strong>{view.forwarderLabel}</strong>{view.statusLabel && <span className={`shipper-request-status is-${view.statusTone}`}>{view.statusLabel}</span>}</div>
                     {/* 의뢰일이 없어도 줄을 유지해 행마다 라벨 높이가 어긋나지 않게 한다 */}
                     <span>{view.requestedAt ? `의뢰 ${formatKstDate(view.requestedAt)}` : ' '}</span>
                   </div>
                   <div className="shipper-request-next">
-                    {internal && (
+                    {(internal || view.needsRevision) && (
                       <button type="button" className="shipper-request-action" onClick={() => setThreadTrade(trade)}>
-                        <MessageSquare size={15} /> 대화{unread > 0 && <span className="tm-badge" aria-label={`안 읽은 메시지 ${unread}건`}>{unread}</span>}
+                        <MessageSquare size={15} /> {internal ? '대화' : '요청 보기'}{unread > 0 && <span className="tm-badge" aria-label={`안 읽은 메시지 ${unread}건`}>{unread}</span>}
                       </button>
                     )}
                     {view.needsRevision && onRevise ? (
@@ -445,25 +471,37 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
 
       {threadTrade && (() => {
         const internal = latestForTrade(internalRequests, threadTrade.id);
-        if (!internal) return null;
-        const closed = internal.status !== 'pending' && internal.status !== 'accepted';
+        const returnRequest = (threadTrade.forwarderCase as ForwarderCaseState | null)?.returnRequest ?? null;
+        if (!internal && !returnRequest) return null;
+        const closed = internal ? internal.status !== 'pending' && internal.status !== 'accepted' : true;
+        const reference = threadTrade.profile.blNo || threadTrade.profile.invoiceNo || threadTrade.profile.documentNo || '';
+        const requestCard = returnRequest ? (
+          <ShipperReturnRequestCard
+            request={returnRequest}
+            onRevise={onRevise ? () => { setThreadTrade(null); onRevise(threadTrade); } : undefined}
+          />
+        ) : null;
         return (
           <div className="fwd-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setThreadTrade(null); }}>
             <div className="fwd-modal tm-modal" role="dialog" aria-modal="true" aria-labelledby="thread-modal-title">
               <div className="fwd-modal-head">
                 <div>
                   <h2 id="thread-modal-title">{threadTrade.profile.itemName || '품목명 미입력'}</h2>
+                  {reference && <p>{reference}</p>}
                 </div>
                 <button type="button" className="fwd-modal-close" aria-label="닫기" onClick={() => setThreadTrade(null)}><X size={22} /></button>
               </div>
-              <TradeMessageThread
-                tradeRequestId={internal.id}
-                currentUserId={currentUserId}
-                currentRole="shipper"
-                counterpartLabel="지정 포워더"
-                readOnly={closed}
-                onMessagesChanged={() => void loadUnread()}
-              />
+              {internal ? (
+                <TradeMessageThread
+                  tradeRequestId={internal.id}
+                  currentUserId={currentUserId}
+                  currentRole="shipper"
+                  counterpartLabel="지정 포워더"
+                  readOnly={closed}
+                  pinned={requestCard}
+                  onMessagesChanged={() => void loadUnread()}
+                />
+              ) : requestCard}
             </div>
           </div>
         );

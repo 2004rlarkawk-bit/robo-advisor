@@ -37,6 +37,7 @@ import ImportHandoffReadyCard from './ImportHandoffReadyCard';
 import { scrollPageToTop } from '../../utils/scrollPageToTop';
 import ForwarderDocumentThumbnail from './ForwarderDocumentThumbnail';
 import ForwarderRequestMessages from './ForwarderRequestMessages';
+import ReturnRequestComposer from './ReturnRequestComposer';
 import TradeMessageThread from '../forwarder/TradeMessageThread';
 import { listIncomingTradeRequests } from '../../services/forwarderRequestService';
 import type { TradeRequest } from '../../types/forwarderRequest';
@@ -120,7 +121,8 @@ export default function ForwarderImportWorkspace({
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  // 이미 보낸 보완 요청의 전송 완료 안내 — 기존 데이터 표시용으로만 남긴다.
+  // 서류 보완 요청 작성창과, 보낸 직후의 전송 완료 안내
+  const [returnFormOpen, setReturnFormOpen] = useState(false);
   const [returnSentOpen, setReturnSentOpen] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>('review');
   const [docBusyId, setDocBusyId] = useState<string | null>(null);
@@ -269,6 +271,7 @@ export default function ForwarderImportWorkspace({
   const openCase = (tradeId: string) => {
     setSelectedId(tradeId);
     setDetailTab('review');
+    setReturnFormOpen(false);
     scrollPageToTop();
   };
 
@@ -438,17 +441,41 @@ export default function ForwarderImportWorkspace({
         )}
 
         {detailTab === 'review' && !selected.returnRequest && (selected.stage === 'received' || selected.stage === 'review') && (
-          <section className="fwd-batch-review" aria-label="다음 업무로 이동">
-            <div className="fwd-batch-toolbar">
-              <span>서류와 추출 정보를 확인했으면 통관 업무로 넘어갑니다.</span>
-              <div>
-                <button type="button" className="btn btn-primary" disabled={saving} onClick={async () => {
-                  if (saving) return;
-                  if (await persist(selected, { stage: 'clearance' }, ['전달 자료 확인 완료'])) setDetailTab('clearance');
-                }}>{saving ? '처리 중…' : '확인 완료 · 업무 진행'}</button>
+          returnFormOpen ? (
+            <ReturnRequestComposer
+              presentTypes={selected.snapshot.documents.map((document) => document.type)}
+              issuerName={issuerName}
+              senderContactName={senderContactName}
+              saving={saving}
+              onCancel={() => setReturnFormOpen(false)}
+              onSend={async (request) => {
+                if (saving || selected.returnRequest) return;
+                const sent = await persist(
+                  selected,
+                  { stage: 'review', returnRequest: { ...request, requestedAt: new Date().toISOString() } },
+                  [`화주에게 서류 보완 요청 (${request.issueTitles.join(', ')})`],
+                );
+                if (!sent) return;
+                setReturnFormOpen(false);
+                setReturnSentOpen(true);
+              }}
+            />
+          ) : (
+            <section className="fwd-batch-review" aria-label="다음 업무로 이동">
+              <div className="fwd-batch-toolbar">
+                <span>서류와 추출 정보를 확인했으면 통관 업무로 넘어갑니다. 다시 받아야 할 서류가 있으면 보완을 요청하세요.</span>
+                <div>
+                  <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => setReturnFormOpen(true)}>
+                    서류 보완 요청
+                  </button>
+                  <button type="button" className="btn btn-primary" disabled={saving} onClick={async () => {
+                    if (saving) return;
+                    if (await persist(selected, { stage: 'clearance' }, ['전달 자료 확인 완료'])) setDetailTab('clearance');
+                  }}>{saving ? '처리 중…' : '확인 완료 · 업무 진행'}</button>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          )
         )}
 
         {detailTab === 'messages' && selected.activity.length > 0 && (

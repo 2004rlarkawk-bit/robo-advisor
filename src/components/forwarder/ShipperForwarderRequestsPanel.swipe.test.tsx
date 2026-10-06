@@ -91,11 +91,13 @@ describe('포워더 의뢰 — 왼쪽으로 밀어 목록에서 삭제', () => {
     expect(container!.querySelector('.shipper-request-row')).not.toBeNull();
   });
 
-  it('[되돌리기]로 숨긴 거래를 다시 보인다', async () => {
+  it('지운 거래는 휴지통에 모이고, [복원]으로 다시 보인다', async () => {
     const row = await render();
     await swipe(row, -200)();
-    const undo = Array.from(container!.querySelectorAll('button')).find((button) => button.textContent?.includes('되돌리기'));
-    act(() => undo?.click());
+    act(() => container!.querySelector<HTMLButtonElement>('.trash-open')!.click());
+    expect(container!.querySelector('.trash-list li strong')?.textContent).toBe('desk');
+    const restore = Array.from(container!.querySelectorAll('.trash-list button')).find((button) => button.textContent?.includes('복원'));
+    act(() => (restore as HTMLButtonElement | undefined)?.click());
     expect(container!.querySelector('.shipper-request-row')).not.toBeNull();
   });
 });
