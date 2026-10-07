@@ -51,6 +51,8 @@ export interface VerifiedHSCodeSuggestion {
   confidenceLabel: '높음' | '보통';
   distinguishingFactors?: string[];
   missingInformation?: string[];
+  /** 입력 단어 → 분류 조건 짝 — 무엇을 근거로 골랐는지 보여 준다. */
+  matchedTerms?: { input: string; condition: string }[];
   source: 'openai-verified';
 }
 

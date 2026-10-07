@@ -826,6 +826,7 @@ export async function recommendShipperHSCode(
         suggestion.distinguishingFactors ?? [],
       missingInformation:
         suggestion.missingInformation ?? [],
+      matchedTerms: suggestion.matchedTerms ?? [],
       source: 'openai-verified',
     });
 

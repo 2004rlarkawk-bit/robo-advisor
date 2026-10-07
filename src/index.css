@@ -717,6 +717,11 @@ body {
 .shipper-hs-reason > summary:hover { color: var(--primary-color); }
 .shipper-hs-suggestion__body { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
 .shipper-hs-suggestion__body p { margin: 0; color: var(--text-light); font-size: 14px; line-height: 1.5; }
+/* 추천 근거 — 소제목(입력에서 찾은 조건 / 이 코드인 이유 / 이 코드가 맞는 경우) 아래 내용 한 덩어리씩 */
+.shipper-hs-reason-block { display: flex; flex-direction: column; gap: 6px; }
+.shipper-hs-reason-label { color: #435a78; font-size: 12.5px; font-weight: 700; }
+.shipper-hs-suggestion__body .shipper-hs-reason-block p { color: var(--text-dark); }
+.shipper-hs-term i { margin: 0 3px; color: #94a3b8; font-style: normal; }
 /* 영문 품명은 파란 톤으로 강조해 한글명과 구분 */
 .shipper-hs-confidence { border-radius: 999px; padding: 3px 8px; background: #ecfdf5; color: #047857; font-size: 12px; font-weight: 700; }
 .shipper-hs-confidence.is-medium { background: #fffbeb; color: #b45309; }

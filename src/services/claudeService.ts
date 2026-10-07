@@ -86,6 +86,12 @@ export function extractJson(
 /**
  * HS Code 추천 결과
  */
+/** 입력 단어가 어떤 분류 조건으로 읽혔는지 — 예: Wooden → 목재. */
+export interface HSCodeMatchedTerm {
+  input: string;
+  condition: string;
+}
+
 export interface HSCodeSuggestion {
   code: string;
   description: string;
@@ -93,6 +99,7 @@ export interface HSCodeSuggestion {
   reasoning: string;
   distinguishingFactors?: string[];
   missingInformation?: string[];
+  matchedTerms?: HSCodeMatchedTerm[];
 }
 
 export interface HSCodeRecommendationDecision {
@@ -149,6 +156,17 @@ function parseHSCodeSuggestions(
           .slice(0, 6)
       : null;
 
+    const matchedTerms = Array.isArray(candidate.matchedTerms)
+      ? candidate.matchedTerms
+          .filter(isRecord)
+          .map((term) => ({
+            input: typeof term.input === 'string' ? term.input.trim() : '',
+            condition: typeof term.condition === 'string' ? term.condition.trim() : '',
+          }))
+          .filter((term) => term.input && term.condition)
+          .slice(0, 4)
+      : null;
+
     suggestions.push({
       code,
       description: candidate.description.trim(),
@@ -159,6 +177,9 @@ function parseHSCodeSuggestions(
         : {}),
       ...(missingInformation
         ? { missingInformation }
+        : {}),
+      ...(matchedTerms && matchedTerms.length > 0
+        ? { matchedTerms }
         : {}),
     });
   }

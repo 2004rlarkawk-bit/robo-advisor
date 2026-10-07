@@ -634,6 +634,7 @@ describe('화주용 통관 입력 폼', () => {
         confidenceLabel: '보통',
         distinguishingFactors: ['면 소재', '편물제'],
         missingInformation: ['성인용 또는 아동용 여부'],
+        matchedTerms: [{ input: 'cotton', condition: '면 소재' }, { input: 'knitted', condition: '편물제' }],
         source: 'openai-verified',
       }],
       additionalInformationRequired: true,
@@ -657,10 +658,12 @@ describe('화주용 통관 입력 폼', () => {
     const reasonToggle = rendered.container.querySelector<HTMLElement>('.shipper-hs-reason > summary');
     act(() => reasonToggle?.click());
     expect(rendered.container.querySelector<HTMLDetailsElement>('.shipper-hs-reason')?.open).toBe(true);
-    // 구분 조건은 알약 모양 태그로 하나씩 보여 준다.
+    // 입력 단어 → 분류 조건 짝을 알약 모양 태그로 하나씩 보여 주고, 근거 문장에는 소제목을 붙인다.
     expect(
-      Array.from(rendered.container.querySelectorAll('.shipper-hs-factor')).map((chip) => chip.textContent)
-    ).toEqual(['면 소재', '편물제']);
+      Array.from(rendered.container.querySelectorAll('.shipper-hs-term')).map((chip) => chip.textContent)
+    ).toEqual(['cotton → 면 소재', 'knitted → 편물제']);
+    expect(rendered.container.textContent).toContain('입력에서 찾은 조건');
+    expect(rendered.container.textContent).toContain('이 코드인 이유');
     // 1순위 후보는 강조 카드로 보인다.
     expect(rendered.container.querySelector('.shipper-hs-suggestion.is-primary')?.textContent).toContain('6109.10-1000');
     expect(rendered.container.textContent).toContain(

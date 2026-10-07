@@ -974,20 +974,34 @@ export default function ShipperWorkspaceForm({
                                   : '적용'}
                               </button>
                             </header>
-                            {(suggestion.reasoning || suggestion.distinguishingFactors?.length || suggestion.missingInformation?.length) && (
+                            {(suggestion.reasoning || suggestion.matchedTerms?.length || suggestion.missingInformation?.length) && (
                               <details className="shipper-hs-reason">
                                 <summary>추천 근거 보기</summary>
                                 <div className="shipper-hs-suggestion__body">
-                                  {suggestion.reasoning && <p>{suggestion.reasoning}</p>}
-                                  {(suggestion.distinguishingFactors?.length ?? 0) > 0 && (
-                                    <div className="shipper-hs-factors">
-                                      {suggestion.distinguishingFactors?.map((factor) => (
-                                        <span key={factor} className="shipper-hs-factor">{factor}</span>
-                                      ))}
+                                  {/* 1순위는 '입력에서 찾은 조건 → 이 코드인 이유', 나머지는 '이 코드가 맞는 경우'만 보인다. */}
+                                  {primary && (suggestion.matchedTerms?.length ?? 0) > 0 && (
+                                    <div className="shipper-hs-reason-block">
+                                      <span className="shipper-hs-reason-label">입력에서 찾은 조건</span>
+                                      <div className="shipper-hs-factors">
+                                        {suggestion.matchedTerms?.map((term) => (
+                                          <span key={`${term.input}-${term.condition}`} className="shipper-hs-factor shipper-hs-term">
+                                            {term.input} <i aria-hidden="true">→</i> {term.condition}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {suggestion.reasoning && (
+                                    <div className="shipper-hs-reason-block">
+                                      <span className="shipper-hs-reason-label">{primary ? '이 코드인 이유' : '이 코드가 맞는 경우'}</span>
+                                      <p>{suggestion.reasoning}</p>
                                     </div>
                                   )}
                                   {(suggestion.missingInformation?.length ?? 0) > 0 && (
-                                    <p>확인할 정보: {suggestion.missingInformation?.join(', ')}</p>
+                                    <div className="shipper-hs-reason-block">
+                                      <span className="shipper-hs-reason-label">확인할 정보</span>
+                                      <p>{suggestion.missingInformation?.join(', ')}</p>
+                                    </div>
                                   )}
                                 </div>
                               </details>

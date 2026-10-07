@@ -59,6 +59,12 @@ interface DocumentRequest {
   profile?: DocumentProfile;
 }
 
+/** 사용자 입력의 단어가 어떤 분류 조건으로 읽혔는지 — 예: Wooden → 목재. */
+interface HSCodeMatchedTerm {
+  input: string;
+  condition: string;
+}
+
 interface HSCodeSuggestion {
   code: string;
   description: string;
@@ -66,6 +72,25 @@ interface HSCodeSuggestion {
   reasoning: string;
   distinguishingFactors?: string[];
   missingInformation?: string[];
+  matchedTerms?: HSCodeMatchedTerm[];
+}
+
+function normalizeMatchedTerms(value: unknown): HSCodeMatchedTerm[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const terms: HSCodeMatchedTerm[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) continue;
+    const input = getString(entry.input, 40);
+    const condition = getString(entry.condition, 40);
+    if (!input || !condition) continue;
+    const key = `${input.toLowerCase()}|${condition}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    terms.push({ input, condition });
+    if (terms.length >= 4) break;
+  }
+  return terms;
 }
 
 interface HSCodeDecision {
@@ -412,6 +437,9 @@ function normalizeHSCodeDecision(
       ),
       missingInformation: normalizeStringList(
         item.missingInformation,
+      ),
+      matchedTerms: normalizeMatchedTerms(
+        (item as { matchedTerms?: unknown }).matchedTerms,
       ),
     }))
     .filter((item) =>
@@ -845,7 +873,12 @@ ${JSON.stringify(candidateCodes)}
 - 유력 후보가 하나면 1개만, 의미 있게 다른 후보가 있으면 최대 3개까지 반환하세요.
 - 설명과 분류 조건이 같은 후보를 개수 채우기용으로 반복하지 마세요.
 - description에는 candidateCodes의 공식 명칭과 해당 코드만의 분류 조건을 반영하고 공식 데이터에 없는 특성을 만들지 마세요.
-- reasoning에는 유력한 이유, 다른 후보와 구분되는 조건, 현재 부족한 정보를 구체적으로 쓰세요.
+- suggestions는 가장 유력한 후보부터 순서대로 쓰세요.
+- reasoning은 한국어 한 문장, 50자 안팎으로 쓰고 "~해요"체로 끝내세요.
+  - 첫 번째 후보: 분류 경로로 이 코드인 이유를 쓰세요. 예) "사무실용 목제 가구(9403.30) 중 책상에 해당해요."
+  - 두 번째 이후 후보: 이 코드가 맞는 경우만 쓰세요. 예) "책상이 아닌 사무실용 목제 가구(서랍장·캐비닛 등)일 때 맞는 코드예요."
+  - "일치합니다", "연관성이 있습니다", "사용자의 품목명과" 같은 막연한 표현은 쓰지 마세요.
+- matchedTerms에는 사용자 품목명·상세정보의 단어가 어떤 분류 조건으로 읽혔는지를 짝으로 쓰세요. input은 입력에 실제로 있는 단어 그대로, condition은 분류 조건(재질·용도·제품 종류 등)을 2~6자 한국어로 쓰세요. 예) [{"input": "Wooden", "condition": "목재"}, {"input": "Office", "condition": "사무실용"}, {"input": "Desk", "condition": "책상"}]. 입력에 없는 단어는 넣지 마세요.
 - distinguishingFactors에는 후보를 구분하는 조건을, missingInformation에는 해당 후보를 최종 확인하려면 필요한 정보를 쓰세요.
 - requiredAdditionalInfo에는 모든 후보에 공통으로 추가 확인할 정보를 중복 없이 쓰세요.
 - missingInformation 또는 requiredAdditionalInfo가 하나라도 있으면 additionalInformationRequired를 true로 설정하세요.
@@ -858,7 +891,8 @@ ${JSON.stringify(candidateCodes)}
       "code": "10자리 코드",
       "description": "후보별 고유 설명",
       "confidence": "높음 또는 보통",
-      "reasoning": "후보별 고유 근거와 차이",
+      "reasoning": "첫 후보는 이 코드인 이유, 나머지는 이 코드가 맞는 경우 — 한 문장",
+      "matchedTerms": [{"input": "입력 단어", "condition": "분류 조건"}],
       "distinguishingFactors": ["후보를 구분하는 조건"],
       "missingInformation": ["이 후보의 최종 확인에 필요한 정보"]
     }

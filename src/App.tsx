@@ -2546,12 +2546,14 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     }
     fixPeakRef.current = 0;
   }, [openFixCount, hasGenerated]);
-  // 다시 생성해 강조 중이던 항목이 검증 결과에서 사라지면 입력칸 강조와 안내를 함께 지운다 —
-  // 결과 화면에서 '뒤로 가기'로 입력을 다시 볼 때 이미 고친 항목이 또 뜨지 않게.
+  // 강조 중이던 항목이 해결되면 입력칸 강조와 안내를 함께 지운다.
+  // - 다시 생성해 검증 결과에서 사라진 경우: 결과 화면에서 '뒤로 가기'로 돌아와도 또 뜨지 않게.
+  // - 입력만 고쳐 오른쪽 목록에 ✓가 붙은 경우: 폼 안 카드만 숨기면 위쪽 공용 배너가 대신 떠서 같이 지운다.
   useEffect(() => {
     if (!activeFixIssue || activeFixIssue.severity === 'info') return;
-    if (!fixListIssues.some((issue) => issueKey(issue) === issueKey(activeFixIssue))) clearFieldHighlight();
-  }, [fixListIssues]);
+    const key = issueKey(activeFixIssue);
+    if (resolvedFixKeys.has(key) || !fixListIssues.some((issue) => issueKey(issue) === key)) clearFieldHighlight();
+  }, [fixListIssues, resolvedFixKeys]);
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 

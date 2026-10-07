@@ -150,6 +150,7 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
       reasoning: '품목 설명과 후보가 일치',
       distinguishingFactors: [],
       missingInformation: [],
+      matchedTerms: [],
     }]);
     expect(body.additionalInformationRequired).toBe(false);
   });
@@ -205,6 +206,7 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
       reasoning: '오버코트에 해당',
       distinguishingFactors: [],
       missingInformation: [],
+      matchedTerms: [],
     }]);
     expect(body.additionalInformationRequired).toBe(true);
     expect(body.requiredAdditionalInfo).toEqual([

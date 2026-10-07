@@ -108,6 +108,7 @@ describe('수출 화주 HS Code 추천 서비스', () => {
       confidenceLabel: '높음',
       distinguishingFactors: [],
       missingInformation: [],
+      matchedTerms: [],
       source: 'openai-verified',
     }]);
   });
@@ -184,6 +185,7 @@ describe('수출 화주 HS Code 추천 서비스', () => {
       confidenceLabel: '보통',
       distinguishingFactors: ['농가 사육용'],
       missingInformation: ['실제 사육 목적'],
+      matchedTerms: [],
       source: 'openai-verified',
     }]);
     expect(result.additionalInformationRequired).toBe(true);
