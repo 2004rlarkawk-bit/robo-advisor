@@ -1273,3 +1273,6 @@
 }
 .fwd-cond-rerun:hover:not(:disabled) { background: #124aa8; }
 .fwd-cond-rerun:disabled { border-color: #dce3ed; background: #f1f5f9; color: #94a3b8; cursor: default; }
+
+/* 알림에서 들어온 수락 전 의뢰 — 그 카드를 잠깐 강조해 어디를 봐야 하는지 보여 준다. */
+.incoming-request-card.is-focused { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35); transition: box-shadow .3s ease; }

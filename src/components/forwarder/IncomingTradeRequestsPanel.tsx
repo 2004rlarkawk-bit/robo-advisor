@@ -14,7 +14,7 @@ import '../../styles/forwarderRequest.css';
 interface RequestCardProps {
   request: TradeRequest;
   onDecided: (requestId: string) => void;
-  onAccepted?: (direction: 'export' | 'import') => void;
+  onAccepted?: (direction: 'export' | 'import', tradeId: string) => void;
 }
 
 function RequestCard({ request, onDecided, onAccepted }: RequestCardProps) {
@@ -49,7 +49,7 @@ function RequestCard({ request, onDecided, onAccepted }: RequestCardProps) {
     setError('');
     try {
       await acceptTradeRequest(request.id);
-      onAccepted?.(acceptedDirection);
+      onAccepted?.(acceptedDirection, request.tradeId);
       onDecided(request.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : '요청 수락에 실패했습니다.');
@@ -79,7 +79,7 @@ function RequestCard({ request, onDecided, onAccepted }: RequestCardProps) {
   }
 
   return (
-    <div className="incoming-request-card incoming-request-card--unread">
+    <div className="incoming-request-card incoming-request-card--unread" data-request-id={request.id}>
       <div className="incoming-request-head">
         <div className="incoming-request-alert">
           <span className="incoming-request-alert-icon"><BellRing size={19} /></span>
@@ -119,7 +119,8 @@ function RequestCard({ request, onDecided, onAccepted }: RequestCardProps) {
 interface Props {
   userId?: string;
   embedded?: boolean;
-  onAccepted?: (direction: 'export' | 'import') => void;
+  /** 수락한 의뢰의 방향과 화주 거래 id — 수락하자마자 그 의뢰를 열 때 쓴다. */
+  onAccepted?: (direction: 'export' | 'import', tradeId: string) => void;
 }
 
 /** 포워더 수신함 — 나에게 온 pending 의뢰 요청 목록. */

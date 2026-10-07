@@ -86,6 +86,7 @@ import { saveBlobAs } from './utils/saveBlob';
 import { importDraftCacheKey } from './utils/importDraftCacheKey';
 import { renderDocxPreview } from './utils/docxPreview';
 import { isDemoRehearsalMode, setDemoRehearsalMode } from './services/demoRehearsalMode';
+import { listIncomingTradeRequests } from './services/forwarderRequestService';
 // 서류 생성·미리보기 코드는 본 번들에 함께 싣는다 — 따로 나뉜 조각 파일은 다시 배포하면 이름이 바뀌어,
 // 배포 전에 연 탭에서 미리보기가 '가끔' 실패했다(시연 중 실패 방지).
 import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
@@ -1855,6 +1856,81 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     setActiveMenu(menu);
   };
   /** 포워더 알림 클릭 — 방향(수입/수출)까지 확인한 뒤 해당 화면을 연다. */
+  // 수출 의뢰를 화주 거래 id로 연다 — 이미 시작한 내 거래가 있으면 그 거래를, 없으면 의뢰를 불러와 STEP 1로.
+  // 보고 있던 다른 거래의 화면(업무 메시지 등)은 업무 화면을 새로 그려 닫는다.
+  const openExportRequestByTradeId = async (tradeId: string) => {
+    setTradeDirection('export');
+    setForwarderDirectUpload(false);
+    handleResetForwarderTrade();
+    setImportWorkspaceVersion((version) => version + 1);
+    const ownTrade = await fetchForwarderTradeBySourceId(tradeId);
+    if (ownTrade) {
+      handleLoadSavedTrade(ownTrade, 'normal');
+      return;
+    }
+    const request = (await listForwarderExportRequests()).find((item) => item.tradeId === tradeId);
+    if (request) {
+      handleApplyExportRequest(request);
+      return;
+    }
+    setExportForwarderView('inbox');
+  };
+
+  // 수락 전 의뢰 — 보던 업무를 닫고 화면 맨 위 '신규 의뢰'의 그 카드로 스크롤해 잠깐 강조한다.
+  const showPendingIncomingRequest = (requestId: string, direction: 'import' | 'export' | null) => {
+    if (direction) setTradeDirection(direction);
+    setForwarderDirectUpload(false);
+    if (direction !== 'import') {
+      handleResetForwarderTrade();
+      setExportForwarderView('inbox');
+    }
+    setImportWorkspaceVersion((version) => version + 1);
+    const reveal = (attempt: number) => {
+      const card = document.querySelector<HTMLElement>(`.incoming-request-card[data-request-id="${requestId}"]`);
+      if (!card) {
+        if (attempt < 20) window.setTimeout(() => reveal(attempt + 1), 150);
+        else scrollPageToTop();
+        return;
+      }
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('is-focused');
+      window.setTimeout(() => card.classList.remove('is-focused'), 2400);
+    };
+    window.setTimeout(() => reveal(0), 50);
+  };
+
+  // 포워더가 '새 포워딩 의뢰' 알림을 누르면 그 의뢰를 바로 연다.
+  // - 수입: 기존 알림 경로로 의뢰 검토 화면을 연다.
+  // - 수출: 이미 시작한 거래면 그 거래를, 처음이면 의뢰를 불러와 STEP 1(화주 의뢰 확인)로 들어간다.
+  //   보고 있던 다른 거래의 화면(업무 메시지 등)은 업무 화면을 새로 그려 닫는다.
+  const openIncomingRequestFromNotification = (notification: NotificationRecord) => {
+    const tradeId = notification.tradeId!;
+    const payloadDirection = notification.payload?.direction;
+    const knownDirection = payloadDirection === 'import' || payloadDirection === 'export' ? payloadDirection : null;
+    const run = async () => {
+      // 아직 수락 전인 의뢰면 보던 업무를 닫고 맨 위 '신규 의뢰' 카드로 데려간다 — 수락해야 업무가 생긴다.
+      const incoming = notification.tradeRequestId
+        ? (await listIncomingTradeRequests()).find((item) => item.id === notification.tradeRequestId)
+        : undefined;
+      if (incoming?.status === 'pending') {
+        showPendingIncomingRequest(incoming.id, knownDirection);
+        return;
+      }
+      let direction = knownDirection ?? (await fetchTradeDirection(tradeId).catch(() => null));
+      // 알림에 방향이 없고 거래도 아직 못 읽으면, 수출 의뢰 목록에 있는지로 판단한다.
+      if (!direction) {
+        const inExport = (await listForwarderExportRequests()).some((item) => item.tradeId === tradeId);
+        direction = inExport ? 'export' : 'import';
+      }
+      if (direction === 'export') await openExportRequestByTradeId(tradeId);
+      else openForwarderNotificationTarget('import', tradeId, 'review');
+    };
+    void run().catch((err) => {
+      console.warn('[알림] 새 의뢰 열기 실패:', err);
+      setNotificationTargetError('새 의뢰를 열지 못했습니다. 포워더 업무함에서 확인해 주세요.');
+    });
+  };
+
   const openForwarderNotificationTarget = (direction: 'import' | 'export', tradeId: string, tab: 'review' | 'messages') => {
     setTradeDirection(direction);
     setForwarderDirectUpload(false);
@@ -1871,12 +1947,21 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     // 거래(같은 source_trade_id)에서 작업한다. 알림의 tradeId는 화주 원본 거래 id이므로,
     // 먼저 그 id를 source_trade_id로 갖는 내 포워더 거래를 찾아 기존 "이어서 작업" 경로로 연다.
     void fetchForwarderTradeBySourceId(tradeId)
-      .then((trade) => {
-        if (!trade) {
+      .then(async (trade) => {
+        if (trade) {
+          handleLoadSavedTrade(trade, 'normal');
+          if (tab === 'messages') setOpenExportMessagesOnLoad(true);
+          return;
+        }
+        // 수락만 하고 아직 업무를 시작하지 않은 의뢰 — 의뢰를 불러와 열고 업무 메시지 탭을 연다.
+        const request = (await listForwarderExportRequests()).find((item) => item.tradeId === tradeId);
+        if (!request) {
           setNotificationTargetError('해당 업무메시지의 거래를 찾을 수 없습니다.');
           return;
         }
-        handleLoadSavedTrade(trade, 'normal');
+        handleResetForwarderTrade();
+        setImportWorkspaceVersion((version) => version + 1);
+        handleApplyExportRequest(request);
         if (tab === 'messages') setOpenExportMessagesOnLoad(true);
       })
       .catch((err) => {
@@ -1920,6 +2005,11 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
         requestsFocusKindRef.current = notification.type === 'trade_message_received' ? 'message' : 'return';
         setRequestsFocusTradeId(notification.tradeId);
       }
+      return;
+    }
+    // 새 의뢰 알림 — 보고 있던 다른 거래(메시지 창 등)를 닫고 그 의뢰의 첫 화면을 연다.
+    if (notification.type === 'trade_request_received' && notification.tradeId) {
+      openIncomingRequestFromNotification(notification);
       return;
     }
     const target = resolveForwarderNotificationTarget(notification);
@@ -2825,7 +2915,12 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               <IncomingTradeRequestsPanel
                 userId={user.id}
                 embedded
-                onAccepted={(direction) => {
+                onAccepted={(direction, tradeId) => {
+                  // 수출은 수락한 그 의뢰의 STEP 1을 바로 연다(보던 다른 거래 화면은 닫힌다).
+                  if (direction === 'export') {
+                    void openExportRequestByTradeId(tradeId).then(() => scrollPageToTop());
+                    return;
+                  }
                   setTradeDirection(direction);
                   setWorkspaceCurrentStep(1);
                   setForwarderDirectUpload(false);
