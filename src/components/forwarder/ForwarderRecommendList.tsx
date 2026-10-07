@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Armchair, Boxes, Check, ChevronDown, Container, Cpu, FlaskConical, Flame, Package, Plane, Plus, Shirt, Ship, Snowflake, Tag, Weight, Wheat, X,
+  Armchair, Boxes, Check, ChevronDown, Container, Cpu, FlaskConical, Flame, Package, Plane, Plus, RotateCcw, Shirt, Ship, Snowflake, Tag, Weight, Wheat, X,
   type LucideIcon,
 } from 'lucide-react';
 import type { SavedTrade } from '../../types';
@@ -93,6 +93,18 @@ function cardTags(candidate: ForwarderMatchCandidate, customConditions: string[]
   ].slice(0, CARD_TAG_LIMIT);
 }
 
+/** 직접 적은 조건과 겹치는 포워더 자체 분야 수 — 재추천 때 같은 서버 순위 안에서 앞으로 올리는 데 쓴다. */
+function customMatchCount(candidate: ForwarderMatchCandidate, customConditions: string[]): number {
+  return (candidate.customSpecialties ?? [])
+    .filter((label) => customConditions.some((condition) => customMatches(condition, label)))
+    .length;
+}
+
+/** 추천 조건(분야 + 직접 적은 조건)을 비교용 문자열로 — 마지막 추천 뒤 조건이 바뀌었는지 본다. */
+function conditionSignature(specialties: string[], custom: string[]): string {
+  return JSON.stringify([[...specialties].sort(), [...custom].sort()]);
+}
+
 function candidateName(candidate: ForwarderMatchCandidate): string {
   return candidate.contactName?.trim() || '담당자명 미등록';
 }
@@ -116,6 +128,9 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
   const [customDraft, setCustomDraft] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // 마지막으로 추천을 불러온 조건 — 조건을 바꾸면 [포워더 재추천하기]를 눌러야 다시 부른다.
+  const [appliedSignature, setAppliedSignature] = useState<string | null>(null);
+  const [appliedCustom, setAppliedCustom] = useState<string[]>([]);
 
   const issueCount = useMemo(() => countTradeReviewIssues(trade), [trade]);
   const preferExperienced = issueCount >= EXPERIENCE_PRIORITY_ISSUE_THRESHOLD;
@@ -160,11 +175,18 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
     }
   }, [trade.id, preferExperienced]);
 
-  // 조건이 정해지면 바로 추천을 불러온다 — 화주가 버튼을 한 번 더 누르게 하지 않는다.
+  // 처음에는 거래에서 뽑은 조건으로 바로 추천한다. 이후 조건을 바꾸면 [포워더 재추천하기]로 다시 부른다.
+  const recommend = useCallback((specialties: ForwarderSpecialtyKey[], custom: string[]) => {
+    setAppliedSignature(conditionSignature(specialties, custom));
+    setAppliedCustom(custom);
+    setShowAllCandidates(false);
+    void loadCandidates(specialties);
+  }, [loadCandidates]);
+
   useEffect(() => {
     if (suggestions === null) return;
-    void loadCandidates(selectedSpecialties);
-  }, [suggestions, selectedSpecialties, loadCandidates]);
+    recommend(suggestions.map((item) => item.key), []);
+  }, [suggestions, recommend]);
 
   const toggleSpecialty = (key: ForwarderSpecialtyKey) => {
     setSelectedSpecialties((current) => (
@@ -194,11 +216,17 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
   const extraOptions = FORWARDER_SPECIALTIES.filter(
     (item) => !selectedSet.has(item.key) && !HIDDEN_EXTRA_OPTIONS.has(item.key),
   );
-  const top = candidates?.[0] ?? null;
-  const visibleCandidates = candidates
-    ? (showAllCandidates ? candidates : candidates.slice(0, VISIBLE_CANDIDATES))
+  // 서버 순위를 유지하되, 재추천할 때 적어 둔 기타 조건과 겹치는 포워더를 앞으로 올린다(안정 정렬).
+  const ranked = candidates
+    ? [...candidates].sort((a, b) => customMatchCount(b, appliedCustom) - customMatchCount(a, appliedCustom))
+    : null;
+  const top = ranked?.[0] ?? null;
+  const visibleCandidates = ranked
+    ? (showAllCandidates ? ranked : ranked.slice(0, VISIBLE_CANDIDATES))
     : [];
-  const hiddenCount = (candidates?.length ?? 0) - visibleCandidates.length;
+  const hiddenCount = (ranked?.length ?? 0) - visibleCandidates.length;
+  const conditionsChanged = appliedSignature !== null
+    && appliedSignature !== conditionSignature(selectedSpecialties, customConditions);
 
   return (
     <div className="fwd-assign">
@@ -250,6 +278,18 @@ export default function ForwarderRecommendList({ trade, onSelected, onCustomCond
             </form>
           </div>
         )}
+        <div className="fwd-cond-rerun-row">
+          {conditionsChanged && <span className="fwd-cond-rerun-hint">조건이 바뀌었어요. 다시 추천받으세요.</span>}
+          <button
+            type="button"
+            className="fwd-cond-rerun"
+            disabled={loading || !conditionsChanged}
+            onClick={() => recommend(selectedSpecialties, customConditions)}
+          >
+            <RotateCcw size={14} aria-hidden="true" />
+            포워더 재추천하기
+          </button>
+        </div>
       </div>
 
       {loading && <p className="fwd-assign-loading">맞는 포워더를 찾는 중입니다.</p>}
