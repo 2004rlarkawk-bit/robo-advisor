@@ -112,6 +112,15 @@ function renderForm(
 }
 
 describe('화주용 통관 입력 폼', () => {
+  it('HS Code 입력칸만 색으로 강조하고 기존 값은 유지한다', () => {
+    const rendered = renderForm([{ ...firstItem, itemName: 'Pine nuts, shelled', hsCode: '0802920000' }]);
+    const hsField = rendered.container.querySelector<HTMLElement>('[data-field="hsCode"]');
+    expect(hsField?.classList.contains('shipper-hs-highlight')).toBe(true);
+    expect(hsField?.querySelector<HTMLInputElement>('input')?.value).toBe('0802920000');
+    expect(hsField?.querySelector('.shipper-hs-highlight-badge')).toBeNull();
+    expect(rendered.container.querySelector('[data-field="itemName"]')?.classList.contains('shipper-hs-highlight')).toBe(false);
+  });
+
   it('자주 거래한 거래처의 최신 Buyer·Consignee·Notify Party 전체와 동일 체크 상태를 불러온다', async () => {
     const shared = { name: 'Global Import LLC', address: '250 Market Street', country: 'US', contactName: '', contact: '+1-213-555-0100', businessNumber: '', taxNumber: '' };
     frequentPartnersMock.mockResolvedValueOnce([{
@@ -575,9 +584,8 @@ describe('화주용 통관 입력 폼', () => {
       await Promise.resolve();
     });
 
-    expect(rendered.container.textContent).toContain(
-      '현재 입력과 충분히 관련된 관세청 HS Code 후보를 찾지 못했습니다.'
-    );
+    expect(rendered.container.textContent).toContain('관련 HS Code 후보를 찾지 못했습니다.');
+    expect(rendered.container.querySelector<HTMLDetailsElement>('.shipper-hs-followup')?.open).toBe(true);
     expect(rendered.container.textContent).toContain(
       '재질'
     );
@@ -617,6 +625,12 @@ describe('화주용 통관 입력 폼', () => {
     });
 
     expect(rendered.container.textContent).toContain('추가 확인 필요');
+    expect(rendered.container.querySelector<HTMLDetailsElement>('.shipper-hs-reason')?.open).toBe(false);
+    expect(rendered.container.querySelector<HTMLDetailsElement>('.shipper-hs-followup')?.open).toBe(false);
+    expect(rendered.container.textContent).not.toContain('관세청 HS 품목분류 사전 12,469건');
+    const reasonToggle = rendered.container.querySelector<HTMLElement>('.shipper-hs-reason > summary');
+    act(() => reasonToggle?.click());
+    expect(rendered.container.querySelector<HTMLDetailsElement>('.shipper-hs-reason')?.open).toBe(true);
     // 구분 조건은 알약 모양 태그로 하나씩 보여 준다.
     expect(
       Array.from(rendered.container.querySelectorAll('.shipper-hs-factor')).map((chip) => chip.textContent)

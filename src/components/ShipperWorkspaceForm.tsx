@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronDown, FileSignature, FileText, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
+import { FileSignature, FileText, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import PortLocodeHint from './trade/PortLocodeHint';
 import {
   EXPORT_POD_OPTIONS,
@@ -254,8 +254,6 @@ export default function ShipperWorkspaceForm({
   const [describeText, setDescribeText] = useState<Record<string, string>>({});
   const [describeBusy, setDescribeBusy] = useState<Record<string, boolean>>({});
   const [describeError, setDescribeError] = useState<Record<string, string>>({});
-  // 접이식 설명칸의 펼침 여부. 추천 결과를 먼저 보이게 기본은 접어 둔다.
-  const [describeOpen, setDescribeOpen] = useState<Record<string, boolean>>({});
 
   /**
    * "검정색 남자 가죽 재킷" → 품명 "Men's Leather Jacket" + 상세 "Black" 으로 채우고,
@@ -263,31 +261,12 @@ export default function ShipperWorkspaceForm({
    */
 
   /** 자연어 설명 → 영문 품명 정리 입력칸. 추가 확인사항·되묻기 패널에서 함께 쓴다. */
-  const renderDescribeBox = (item: ShipperItem, title: string, collapsible = false) => {
-    // 입력 중이거나 오류가 있으면 접히지 않게 둔다.
-    const open = !collapsible
-      || Boolean(describeOpen[item.id])
-      || Boolean(describeBusy[item.id])
-      || Boolean(describeError[item.id]);
+  const renderDescribeBox = (item: ShipperItem, title: string) => {
     return (
       <div className="shipper-describe">
-        {collapsible ? (
-          <button
-            type="button"
-            className="shipper-describe-toggle"
-            aria-expanded={open}
-            aria-controls={`describe-body-${item.id}`}
-            onClick={() => setDescribeOpen((current) => ({ ...current, [item.id]: !open }))}
-          >
-            <span>{title}</span>
-            <ChevronDown size={16} className={open ? 'is-open' : undefined} />
-          </button>
-        ) : (
-          <label className="form-label" htmlFor={`describe-${item.id}`}>
-            {title}
-          </label>
-        )}
-        {open && (
+        <label className="form-label" htmlFor={`describe-${item.id}`}>
+          {title}
+        </label>
         <div id={`describe-body-${item.id}`} className="shipper-describe-body">
         <div className="shipper-describe-row">
           <input
@@ -320,7 +299,6 @@ export default function ShipperWorkspaceForm({
           <small className="form-help form-help-error" role="alert">{describeError[item.id]}</small>
         )}
         </div>
-        )}
       </div>
     );
   };
@@ -872,7 +850,7 @@ export default function ShipperWorkspaceForm({
                     : undefined;
                   const flashing = hsFlashItemId === item.id;
                   return (
-                    <div className={`form-group shipper-hs-result${hsApplied ? ' is-applied' : ''}`} data-field="hsCode">
+                    <div className={`form-group shipper-hs-result shipper-hs-highlight${hsApplied ? ' is-applied' : ''}`} data-field="hsCode">
                       <div className="shipper-cbm-head">
                         <label className="form-label">HS Code <Req /></label>
                         {hsApplied && (
@@ -969,7 +947,6 @@ export default function ShipperWorkspaceForm({
                             <header className="shipper-hs-suggestion__head">
                               <div className="shipper-hs-suggestion__title">
                                 <div className="shipper-hs-suggestion__code">
-                                  {primary && <span className="shipper-hs-rank">1순위 추천</span>}
                                   <strong>{suggestion.formattedCode}</strong>
                                   <span className={`shipper-hs-confidence${suggestion.confidenceLabel === '보통' ? ' is-medium' : ''}`}>
                                     {suggestion.confidenceLabel === '높음'
@@ -995,19 +972,24 @@ export default function ShipperWorkspaceForm({
                                   : '적용'}
                               </button>
                             </header>
-                            <div className="shipper-hs-suggestion__body">
-                              <small>{suggestion.reasoning}</small>
-                              {(suggestion.distinguishingFactors?.length ?? 0) > 0 && (
-                                <div className="shipper-hs-factors">
-                                  {suggestion.distinguishingFactors?.map((factor) => (
-                                    <span key={factor} className="shipper-hs-factor">{factor}</span>
-                                  ))}
+                            {(suggestion.reasoning || suggestion.distinguishingFactors?.length || suggestion.missingInformation?.length) && (
+                              <details className="shipper-hs-reason">
+                                <summary>추천 근거 보기</summary>
+                                <div className="shipper-hs-suggestion__body">
+                                  {suggestion.reasoning && <p>{suggestion.reasoning}</p>}
+                                  {(suggestion.distinguishingFactors?.length ?? 0) > 0 && (
+                                    <div className="shipper-hs-factors">
+                                      {suggestion.distinguishingFactors?.map((factor) => (
+                                        <span key={factor} className="shipper-hs-factor">{factor}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {(suggestion.missingInformation?.length ?? 0) > 0 && (
+                                    <p>확인할 정보: {suggestion.missingInformation?.join(', ')}</p>
+                                  )}
                                 </div>
-                              )}
-                              {(suggestion.missingInformation?.length ?? 0) > 0 && (
-                                <small>후보 확인사항: {suggestion.missingInformation?.join(', ')}</small>
-                              )}
-                            </div>
+                              </details>
+                            )}
                           </article>
                         );
                         const [first, ...others] = state.suggestions;
@@ -1015,7 +997,6 @@ export default function ShipperWorkspaceForm({
                           <>
                             <div className="shipper-hs-suggestion-heading">
                               <strong>AI 추천 HS Code</strong>
-                              <small>관세청 HS 품목분류 사전 12,469건과 대조한 결과입니다.</small>
                             </div>
                             <div className="shipper-hs-suggestion-list">
                               {renderSuggestion(first, true)}
@@ -1034,22 +1015,24 @@ export default function ShipperWorkspaceForm({
 
                       {state.additionalInformationRequired && !state.loading && !state.error && !state.disambiguation && (
                         <div className="shipper-hs-additional-info">
-                          <strong>추가 확인사항</strong>
-                          {state.suggestions.length === 0 && (
-                            <p>현재 입력과 충분히 관련된 관세청 HS Code 후보를 찾지 못했습니다. 품목명, 재질, 용도 또는 제품 형태를 더 구체적으로 입력해주세요.</p>
-                          )}
-                          {state.requiredAdditionalInfo.length > 0 && (
-                            // 추천이 이미 있으면 확인사항은 접어 둔다 — 추천 카드가 먼저 눈에 들어오게.
-                            <details className="shipper-hs-more" open={state.suggestions.length === 0}>
-                              <summary>더 정확하게 하려면 확인할 정보 {state.requiredAdditionalInfo.length}개</summary>
-                              <ul>
-                                {state.requiredAdditionalInfo.map((info) => (
-                                  <li key={info}>{info}</li>
-                                ))}
-                              </ul>
-                            </details>
-                          )}
-                          {renderDescribeBox(item, '상세 정보를 더 입력해 주세요', true)}
+                          <details className="shipper-hs-followup" open={state.suggestions.length === 0}>
+                            <summary>{state.suggestions.length > 0
+                              ? `정확도 높이기${state.requiredAdditionalInfo.length > 0 ? ` · 확인할 정보 ${state.requiredAdditionalInfo.length}개` : ''}`
+                              : '품목 정보를 더 입력해 주세요'}</summary>
+                            <div className="shipper-hs-followup__body">
+                              {state.suggestions.length === 0 && (
+                                <p>관련 HS Code 후보를 찾지 못했습니다. 품목명, 재질, 용도 또는 제품 형태를 더 구체적으로 입력해 주세요.</p>
+                              )}
+                              {state.requiredAdditionalInfo.length > 0 && (
+                                <ul>
+                                  {state.requiredAdditionalInfo.map((info) => (
+                                    <li key={info}>{info}</li>
+                                  ))}
+                                </ul>
+                              )}
+                              {renderDescribeBox(item, '품목 설명 추가')}
+                            </div>
+                          </details>
                         </div>
                       )}
 

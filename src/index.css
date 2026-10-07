@@ -680,12 +680,16 @@ body {
   font-size: 14px;
 }
 .shipper-hs-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #b91c1c; font-size: 13px; }
-/* 추천 카드와 1.5줄 정도 띄워 섹션 경계를 분명히 한다 */
-.shipper-hs-additional-info { color: var(--text-color); font-size: 13px; line-height: 1.5; margin-top: 20px; }
-.shipper-hs-additional-info p { margin: 4px 0; }
-.shipper-hs-additional-info ul { margin: 7px 0 0; padding-left: 19px; color: var(--text-light); }
+/* 보충 설명은 필요할 때만 열어 추천 코드의 가독성을 지킨다. */
+.shipper-hs-additional-info { color: var(--text-color); font-size: 14px; line-height: 1.5; margin-top: 12px; }
+.shipper-hs-additional-info p { margin: 0; }
+.shipper-hs-additional-info ul { margin: 10px 0 0; padding-left: 19px; color: var(--text-light); }
 .shipper-hs-additional-info li + li { margin-top: 4px; }
 .shipper-hs-additional-info small { display: block; color: var(--text-light); }
+.shipper-hs-followup { border-top: 1px solid var(--border-color); }
+.shipper-hs-followup > summary { padding: 12px 2px 4px; cursor: pointer; color: #435a78; font-weight: 700; }
+.shipper-hs-followup > summary:hover { color: var(--primary-color); }
+.shipper-hs-followup__body { padding: 10px 2px 4px; }
 /* 제목 아래 부제를 세로로 쌓아 좌측 정렬 — 카드 첫인상에서 제목이 먼저 읽히게 */
 .shipper-hs-suggestion-heading { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
 .shipper-hs-suggestion-heading strong { font-size: 14.5px; }
@@ -696,26 +700,33 @@ body {
 .shipper-hs-suggestion__code { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .shipper-hs-suggestion__code strong { font-size: 19px; font-weight: 800; letter-spacing: 0.2px; }
 .shipper-hs-suggestion__head .btn { flex-shrink: 0; }
-.shipper-hs-suggestion__body { display: flex; flex-direction: column; gap: 4px; padding: 11px 12px; border-top: 1px solid var(--border-color); }
-.shipper-hs-suggestion__body p { margin: 0; font-size: 13px; font-weight: 600; }
-.shipper-hs-suggestion__body small { color: var(--text-light); line-height: 1.45; }
+.shipper-hs-reason { border-top: 1px solid var(--border-color); }
+.shipper-hs-reason > summary { padding: 10px 12px; cursor: pointer; color: #435a78; font-size: 14px; font-weight: 700; }
+.shipper-hs-reason > summary:hover { color: var(--primary-color); }
+.shipper-hs-suggestion__body { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
+.shipper-hs-suggestion__body p { margin: 0; color: var(--text-light); font-size: 14px; line-height: 1.5; }
 /* 영문 품명은 파란 톤으로 강조해 한글명과 구분 */
-.shipper-hs-confidence { border-radius: 999px; padding: 2px 7px; background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 700; }
+.shipper-hs-confidence { border-radius: 999px; padding: 3px 8px; background: #ecfdf5; color: #047857; font-size: 12px; font-weight: 700; }
 .shipper-hs-confidence.is-medium { background: #fffbeb; color: #b45309; }
+.shipper-hs-highlight {
+  min-width: 0; padding: 10px 12px; border: 1px solid #cfe2ff;
+  border-radius: 10px; background: #eff6ff;
+}
+.shipper-hs-highlight .form-label { color: #193b67; }
+.shipper-hs-highlight .form-input { border: 2px solid #2f80ed; color: #1c2c44; }
 /* 추천을 적용한 HS Code 칸 — 적용된 동안 파란 테두리를 유지해 결과값임을 보여 준다. */
 .shipper-hs-result.is-applied .form-input { border: 2px solid #2f6edb; background: #f5f9ff; color: #0b3d91; }
 /* 1순위 후보 카드 — 이 패널에서 가장 먼저 눈에 들어와야 하는 값 */
 .shipper-hs-suggestion.is-primary { border: 2px solid #2f6edb; background: #f5f9ff; box-shadow: 0 2px 8px rgba(47, 110, 219, 0.10); }
 .shipper-hs-suggestion.is-primary .shipper-hs-suggestion__code strong { font-size: 22px; color: #0b3d91; }
-.shipper-hs-suggestion.is-primary .shipper-hs-suggestion__body { border-top-color: #cfe0fb; }
+.shipper-hs-suggestion.is-primary .shipper-hs-reason { border-top-color: #cfe0fb; }
 .shipper-hs-suggestion__title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .shipper-hs-suggestion__name { margin: 0; font-size: 14px; font-weight: 700; color: var(--text-dark); }
-.shipper-hs-rank { padding: 2px 8px; border-radius: 999px; background: #2f6edb; color: #fff; font-size: 11px; font-weight: 700; }
 .shipper-hs-factors { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
-.shipper-hs-factor { padding: 2px 8px; border-radius: 999px; background: #eef2f7; color: var(--text-dark); font-size: 11.5px; font-weight: 600; }
+.shipper-hs-factor { padding: 3px 9px; border-radius: 999px; background: #eef2f7; color: var(--text-dark); font-size: 13px; font-weight: 600; }
 /* 다른 후보·추가 확인 정보는 접어 둔다 */
 .shipper-hs-more { margin-top: 2px; }
-.shipper-hs-more > summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--text-light); padding: 4px 2px; }
+.shipper-hs-more > summary { cursor: pointer; font-size: 14px; font-weight: 700; color: var(--text-light); padding: 8px 2px; }
 .shipper-hs-more > summary:hover { color: var(--primary-color); }
 .shipper-hs-more[open] > .shipper-hs-suggestion-list { margin-top: 6px; }
 .shipper-hs-applied { margin-top: 8px; color: #047857; font-size: 12px; font-weight: 700; }
@@ -4628,13 +4639,6 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 }
 .shipper-describe .form-label { margin: 0; font-weight: 700; color: var(--text-dark); }
 .shipper-describe-body { display: flex; flex-direction: column; gap: 6px; }
-.shipper-describe-toggle {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  width: 100%; padding: 0; border: 0; background: none; cursor: pointer;
-  font: inherit; font-weight: 700; color: var(--text-dark); text-align: left;
-}
-.shipper-describe-toggle svg { flex-shrink: 0; transition: transform 0.15s ease; }
-.shipper-describe-toggle svg.is-open { transform: rotate(180deg); }
 .shipper-describe-row { display: flex; gap: 8px; align-items: stretch; }
 .shipper-describe-row .form-input { flex: 1; min-width: 0; }
 .shipper-describe-row .btn { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -4822,5 +4826,3 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .unipass-submit-result dt { flex: 0 0 76px; color: var(--text-secondary); }
 .unipass-submit-result dd { margin: 0; }
 .unipass-submit-result strong { font-size: 16px; letter-spacing: .02em; }
-
-
