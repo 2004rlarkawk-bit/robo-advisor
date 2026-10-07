@@ -2551,7 +2551,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   useEffect(() => {
     if (!activeFixIssue || activeFixIssue.severity === 'info') return;
     if (!fixListIssues.some((issue) => issueKey(issue) === issueKey(activeFixIssue))) clearFieldHighlight();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fixListIssues]);
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);

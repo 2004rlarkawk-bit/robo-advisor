@@ -672,14 +672,9 @@ body {
 .shipper-basic-section > .form-grid,
 .shipper-partner-section > .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
 .shipper-basic-section > .form-grid { padding-bottom: 0; }
-.shipper-basic-optional { margin: 16px 0 0; padding-top: 14px; border-top: 1px dashed #dbe3ed; }
-.shipper-basic-optional > summary { display: flex; align-items: center; gap: 8px; width: fit-content; color: var(--text-light); font-size: 13px; font-weight: 600; cursor: pointer; }
-.shipper-basic-optional > summary span { color: #1762d1; font-size: 12px; }
-.shipper-basic-optional > .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; margin: 16px 0 0; }
 @media (max-width: 720px) {
   .shipper-basic-section > .form-grid,
-  .shipper-partner-section > .form-grid,
-  .shipper-basic-optional > .form-grid { grid-template-columns: 1fr; }
+  .shipper-partner-section > .form-grid { grid-template-columns: 1fr; }
 }
 .shipper-workspace-form .frequent-partners { margin: 0 0 16px; }
 .shipper-workspace-form .shipper-checkbox-row { padding: 0 0 16px; }
