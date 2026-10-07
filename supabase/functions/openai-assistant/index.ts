@@ -120,6 +120,7 @@ interface OpenAIResponseBody {
   status?: string;
   output_text?: string;
   output?: OpenAIResponseOutput[];
+  incomplete_details?: { reason?: string };
   error?: {
     message?: string;
     type?: string;
@@ -208,9 +209,17 @@ async function callOpenAI(
   systemPrompt: string,
   userMessage: string,
 ): Promise<string> {
+  // OPENAI_MODEL은 수입 서류 분석 함수도 예비로 읽으므로, 이 함수만 바꿀 때는 전용 변수를 쓴다.
   const model =
+    Deno.env.get("OPENAI_ASSISTANT_MODEL")?.trim() ||
     Deno.env.get("OPENAI_MODEL")?.trim() ||
     DEFAULT_MODEL;
+  // 5.x 추론 모델은 추론 토큰도 응답 상한에 포함된다 — 상한을 넉넉히, 추론 강도는 낮게.
+  // 추론 강도를 빼면 기본값(medium)이 적용되므로 항상 명시한다. 끄려면 "none".
+  const isReasoningModel = /^gpt-5/i.test(model);
+  const reasoningEffort =
+    Deno.env.get("OPENAI_ASSISTANT_REASONING_EFFORT")?.trim() ||
+    "low";
 
   const response = await fetch(
     OPENAI_RESPONSES_URL,
@@ -224,7 +233,10 @@ async function callOpenAI(
         model,
         instructions: systemPrompt,
         input: userMessage,
-        max_output_tokens: 2048,
+        max_output_tokens: isReasoningModel ? 6000 : 2048,
+        ...(isReasoningModel
+          ? { reasoning: { effort: reasoningEffort } }
+          : {}),
         store: false,
       }),
     },
@@ -256,6 +268,13 @@ async function callOpenAI(
     throw new Error(
       responseData.error?.message ||
         "OpenAI 응답 생성에 실패했습니다.",
+    );
+  }
+
+  // 응답 상한에 걸려 잘리면 JSON이 깨진다 — 파싱 오류 대신 원인을 그대로 알린다.
+  if (responseData.status === "incomplete") {
+    throw new Error(
+      `OpenAI 응답이 잘렸습니다: ${responseData.incomplete_details?.reason ?? "unknown"}`,
     );
   }
 

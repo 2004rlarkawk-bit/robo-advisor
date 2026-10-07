@@ -29,6 +29,17 @@ describe('가구 재질 보조표 (9403)', () => {
     expect(furnitureSubheadingForQuery('Metal Desk with Glass Top')).toBeNull();
   });
 
+  it('가구 단어가 수식어로만 쓰인 다른 물건은 정하지 않는다', () => {
+    // HSCodeComp 측정에서 샹들리에·책상 정리함이 책상 소호로 강제된 사례
+    expect(furnitureSubheadingForQuery('Nordic Front Desk Lamps Simple Iron Art Bar Tree Chandelier')).toBeNull();
+    expect(furnitureSubheadingForQuery('Drawer-style Storage Rack Desk Sundries Organizer Wood')).toBeNull();
+    expect(furnitureSubheadingForQuery('Wooden Desk Organizer')).toBeNull();
+    expect(furnitureSubheadingForQuery('Metal Table Lamp')).toBeNull();
+    expect(furnitureSubheadingForQuery('Glass Table Cloth Cover')).toBeNull();
+    expect(furnitureSubheadingForQuery('Wooden Storage Box')).toBeNull();
+    expect(furnitureSubheadingForQuery('나무 책상 스탠드 조명')).toBeNull();
+  });
+
   it('앉는 가구와 가구가 아닌 품목은 다루지 않는다', () => {
     expect(furnitureSubheadingForQuery('Wooden Chair')).toBeNull();
     expect(furnitureSubheadingForQuery('Steel Pipe')).toBeNull();

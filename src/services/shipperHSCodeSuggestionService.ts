@@ -754,6 +754,10 @@ export async function recommendShipperHSCode(
     candidateCodes.map((candidate) => candidate.code)
   );
   const verified = new Map<string, VerifiedHSCodeSuggestion>();
+  // 이미 고른 후보와 6자리가 같은 후보는 뒤로 미룬다. 서로 다른 소호를 먼저 보여 줘야
+  // 상위 3개가 실제로 다른 선택지가 된다. 사용자가 소호를 정했으면 모두 같은 소호라 미루지 않는다.
+  const sameSubheadingLater: VerifiedHSCodeSuggestion[] = [];
+  const shownSubheadings = new Set<string>();
 
   for (const suggestion of decision.suggestions) {
     const code = normalizeHSKCode(suggestion.code);
@@ -812,7 +816,7 @@ export async function recommendShipperHSCode(
       continue;
     }
 
-    verified.set(code, {
+    const entry: VerifiedHSCodeSuggestion = {
       code,
       formattedCode: formatCode(code),
       koreanName: officialEntry.ko,
@@ -828,9 +832,22 @@ export async function recommendShipperHSCode(
         suggestion.missingInformation ?? [],
       matchedTerms: suggestion.matchedTerms ?? [],
       source: 'openai-verified',
-    });
+    };
+
+    const subheading = subheadingOf(code);
+    if (!chosenSubheading && shownSubheadings.has(subheading)) {
+      sameSubheadingLater.push(entry);
+      continue;
+    }
+    shownSubheadings.add(subheading);
+    verified.set(code, entry);
 
     if (verified.size >= DISPLAY_SUGGESTION_LIMIT) break;
+  }
+  // 다른 소호가 모자라면 미뤄 둔 같은 소호 후보로 채운다.
+  for (const entry of sameSubheadingLater) {
+    if (verified.size >= DISPLAY_SUGGESTION_LIMIT) break;
+    verified.set(entry.code, entry);
   }
 
   // 방향이 불확실해도 추천 자체는 내보낸다.

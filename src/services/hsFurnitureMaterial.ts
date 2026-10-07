@@ -15,6 +15,11 @@
 type Material = 'metal' | 'wood' | 'plastic' | 'bamboo' | 'rattan' | 'other';
 
 const FURNITURE = /\b(desks?|tables?|cabinets?|book ?cases?|book ?shelf|book ?shelves|shelf|shelves|shelving|wardrobes?|drawers?|dressers?)\b|책상|테이블|탁자|캐비닛|책장|선반|서랍장|옷장/i;
+/**
+ * 가구 단어가 수식어로만 쓰인 다른 물건 — "Desk Lamp", "Desk Organizer", "Table Cloth".
+ * 이 규칙은 소호를 강제로 정하므로, 여기 걸리면 정하지 않고 AI 추천에 맡긴다.
+ */
+const NOT_FURNITURE = /\b(lamps?|lights?|lighting|chandeliers?|organi[sz]ers?|sundries|boxes|box|trays?|mats?|pads?|clocks?|fans?|calendars?|cloths?|covers?|hooks?|knobs?|handles?|legs?|parts?|accessor(y|ies))\b|스탠드|조명|램프|정리함|수납함|트레이|매트|패드|시계|선풍기|달력|커버|손잡이|부품/i;
 const SEAT = /\b(chairs?|stools?|sofas?|benches|bench|seats?)\b|의자|소파|스툴|벤치/i;
 const OFFICE = /\b(desks?|office|filing)\b|책상|사무/i;
 
@@ -31,7 +36,7 @@ const MATERIALS: Array<[Material, RegExp]> = [
 /** 가구 품명이면 재질에 맞는 6자리 소호(예: "940310"), 판단할 수 없으면 null. */
 export function furnitureSubheadingForQuery(text: string): string | null {
   const query = text.trim();
-  if (!query || !FURNITURE.test(query) || SEAT.test(query)) return null;
+  if (!query || !FURNITURE.test(query) || SEAT.test(query) || NOT_FURNITURE.test(query)) return null;
 
   const found = MATERIALS.filter(([, pattern]) => pattern.test(query)).map(([material]) => material);
   if (found.length !== 1) return null;

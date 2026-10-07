@@ -297,6 +297,24 @@ describe('수출 화주 HS Code 추천 서비스', () => {
     expect(candidates[0].classificationName.length).toBeLessThanOrEqual(300);
   });
 
+  it('상위 3개는 서로 다른 6자리 소호를 먼저 채우고, 모자라면 같은 소호로 채운다', async () => {
+    const entry = (code: string) => ({ ...localTenDigit, code, formattedCode: code });
+    // 7117.19 아래 10자리 3개 + 7117.90 1개 — AI는 같은 소호를 연달아 1·2·3순위로 낸다.
+    const codes = ['7117191000', '7117192000', '7117199000', '7117909000'];
+    searchMock.mockResolvedValue(codes.map(entry));
+    lookupMock.mockImplementation(async (code: string) => entry(code));
+    suggestFromCandidatesMock.mockResolvedValue({
+      suggestions: codes.map((code) => ({ code, description: '', confidence: '높음', reasoning: '근거' })),
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+
+    const result = await recommendShipperHSCode('imitation jewelry necklace');
+
+    // 서로 다른 소호(7117.19, 7117.90)가 먼저, 남은 자리는 같은 소호 다음 순위로 채운다.
+    expect(result.suggestions.map((s) => s.code)).toEqual(['7117191000', '7117909000', '7117192000']);
+  });
+
   it('한글은 2글자부터, 영문은 3글자부터 검색 대상으로 본다', () => {
     expect(isSearchableItemName('백팩')).toBe(true);
     expect(isSearchableItemName('라면')).toBe(true);
