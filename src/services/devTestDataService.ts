@@ -151,27 +151,38 @@ export function createPerfectTestProfile(currentProfile: TradeProfile, now = new
   ) as unknown as TradeProfile;
 }
 
+// 시연 품목 수량 — 포장(8박스 × 20개 = 160개)보다 10개 적게 넣어 수량 불일치(R10)가 걸리게 한다.
+const DEMO_ITEM_QUANTITY = 150;
+const DEMO_ITEM_UNIT_PRICE = 120;
+
 /**
- * 시연 연습용 — 발표 때 직접 입력할 품명·HS·수량·단가·화물 규격만 남기고 나머지를 고정값으로 채운다.
- * 품목은 통화·상표명·성분만, 포장은 박스 수·박스당 수량·포장 종류·중량만 채운다.
+ * 시연 연습용 — 발표 때 직접 입력할 품명·HS·화물 규격과 거래처(자주 거래한 거래처 불러오기)만 남기고 나머지를 고정값으로 채운다.
+ * 품목은 수량·단가·통화·상표명·성분을, 포장은 박스 수·박스당 수량·포장 종류·중량을 채운다.
  *
  * 생성하면 일부러 아래 항목이 걸리게 맞춰 두었다.
- * - 반드시 수정: 신용장 개설일이 출항일보다 늦음(R14), 도착 예정일 연도 오타(R21 — 운송 기간 반년 초과)
- * 패킹리스트·상업송장 수량 불일치(R10)는 품목·포장 입력으로 만든다.
+ * - 반드시 수정: 패킹리스트·상업송장 수량 불일치(R10 — 상업송장 150개, 포장 160개),
+ *   신용장 개설일이 출항일보다 늦음(R14), 도착 예정일 연도 오타(R21 — 운송 기간 반년 초과)
+ * 중량은 총중량 ≥ 순중량으로 맞춰 오류가 나지 않게 한다.
  */
 export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = new Date()): TradeProfile {
   const departureDate = futureDate(7, now);
   return {
     ...currentProfile,
     tradeType: 'export',
-    // 품목: 품명·HS·수량·단가는 발표 때 직접 입력하고, 통화(USD)·상표명·성분만 채운다.
+    // 품목: 품명·HS는 발표 때 직접 입력하고, 수량·단가·통화(USD)·상표명·성분을 채운다.
     // 통화를 USD로 고정하는 건 관세청 환율 환산을 시연에서 보여주기 위해서다.
     currency: 'USD',
+    unit: 'EA',
+    quantity: DEMO_ITEM_QUANTITY,
+    unitPrice: DEMO_ITEM_UNIT_PRICE,
+    totalAmount: DEMO_ITEM_QUANTITY * DEMO_ITEM_UNIT_PRICE,
+    invoiceAmount: DEMO_ITEM_QUANTITY * DEMO_ITEM_UNIT_PRICE,
     shipperItems: (currentProfile.shipperItems?.length
       ? currentProfile.shipperItems
       : [tradeProfileToPrimaryShipperItem(currentProfile)]
-    ).map((item) => ({
+    ).map((item, index) => ({
       ...item,
+      ...(index === 0 ? { quantity: DEMO_ITEM_QUANTITY, unit: 'EA' as const, unitPrice: DEMO_ITEM_UNIT_PRICE } : {}),
       currency: 'USD' as const,
       brand: 'NO BRAND',
       composition: 'Wood (Oak) 100%',
@@ -196,17 +207,7 @@ export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = n
     contact: '+82-2-1234-5678',
     businessRegistrationNo: '124-81-00998',
     taxNo: '124-81-00998',
-    // 2. 거래처 정보
-    buyerName: 'Test Import Company',
-    buyerAddress: '100 Test Street, Los Angeles, CA',
-    buyerCountry: 'United States',
-    partnerName: 'Test Import Company',
-    partnerAddress: '100 Test Street, Los Angeles, CA',
-    partnerCountry: 'United States',
-    partnerContact: '+1-213-555-0100',
-    notifyPartyName: 'Test Import Company',
-    notifyPartyAddress: '100 Test Street, Los Angeles, CA',
-    notifyPartyContact: '+1-213-555-0100',
+    // 2. 거래처 정보는 채우지 않는다 — 발표 때 '자주 거래한 거래처'를 눌러 불러오는 걸 보여 준다.
     // 4. 거래 조건 — 신용장 개설일을 출항일 뒤로 둬 R14가 걸리게 한다.
     incoterms: 'FOB',
     paymentTerms: 'L/C',
@@ -231,7 +232,6 @@ export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = n
       ownerCeoName: '홍길동',
       customsCode: 'PORTA2026001',
       postalCode: '44776',
-      buyerCustomsCode: 'USTICO0001',
       tradeKind: 'GENERAL',
       goodsCondition: 'N',
       lcPaymentType: 'SIGHT',

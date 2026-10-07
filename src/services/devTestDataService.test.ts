@@ -122,7 +122,7 @@ describe('개발 테스트 데이터', () => {
 });
 
 describe('createDemoRehearsalProfile', () => {
-  it('품목 값은 그대로 두고, 시연용 반드시 수정 두 건(신용장 날짜·도착 예정일 연도)이 걸리게 채운다', async () => {
+  it('품명·HS는 그대로 두고, 시연용 반드시 수정 세 건(수량 불일치·신용장 날짜·도착 예정일 연도)이 걸리게 채운다', async () => {
     const { createDemoRehearsalProfile } = await import('./devTestDataService');
     const { runComplianceRules } = await import('../agents/complianceRules');
     const current = { tradeType: 'export', itemName: 'desk', hsCode: '9403301000', quantity: 10, unitPrice: 100, totalAmount: 1000, currency: 'USD', unit: 'EA', weight: 120, measurement: '0.300' } as never;
@@ -130,10 +130,17 @@ describe('createDemoRehearsalProfile', () => {
 
     expect(profile.itemName).toBe('desk');
     expect(profile.currency).toBe('USD');
-    expect(profile.shipperItems?.[0]).toMatchObject({ itemName: 'desk', currency: 'USD', brand: 'NO BRAND', composition: 'Wood (Oak) 100%' });
+    expect(profile.shipperItems?.[0]).toMatchObject({ itemName: 'desk', quantity: 150, unit: 'EA', unitPrice: 120, currency: 'USD', brand: 'NO BRAND', composition: 'Wood (Oak) 100%' });
+    expect(profile).toMatchObject({ quantity: 150, unitPrice: 120, totalAmount: 18000, invoiceAmount: 18000 });
+    // 상업송장 150개 ≠ 포장 8박스 × 20개 = 160개 — 서류 생성 후 수량 불일치(R10)로 잡힌다.
+    expect(Number(profile.packageCount) * Number(profile.eaPerBox)).toBe(160);
     expect(profile).toMatchObject({ packageType: 'CARTON', eaPerBox: 20, packageCount: 8, grossWeight: 1040, netWeight: 960 });
     expect(profile.packageDimensions?.[0]?.boxes).toBe(8);
     expect(profile.exportDeclaration?.goodsCondition).toBe('N');
+    // 거래처는 발표 때 '자주 거래한 거래처'로 불러오므로 비워 둔다.
+    expect(profile.partnerName).toBeUndefined();
+    expect(profile.buyerName).toBeUndefined();
+    expect(profile.exportDeclaration?.buyerCustomsCode).toBeUndefined();
     expect(profile.measurement).toBe('0.300');
     expect(profile.departureDate).toBe('2026-10-10');
     expect(profile.lcDate).toBe('2026-10-31');

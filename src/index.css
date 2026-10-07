@@ -3336,7 +3336,10 @@ body {
 .shipper-dimension-row {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px;
 }
-.shipper-dimension-row .form-input { width: 84px; flex: 0 0 auto; }
+.shipper-dimension-row .form-input { width: 92px; flex: 0 0 auto; padding-inline: 10px; -moz-appearance: textfield; appearance: textfield; }
+/* 숫자 증감 화살표가 좁은 칸의 안내 글씨('박스 수')를 가려서 없앤다 — 규격은 직접 입력한다. */
+.shipper-dimension-row .form-input::-webkit-outer-spin-button,
+.shipper-dimension-row .form-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 /* 화물 크기 칸은 위에 칸 이름이 없어 안내 글씨(가로·세로·높이·박스 수)가 이름 역할을 한다 — 흐리게 두면 안 보인다. */
 .shipper-dimension-row .form-input::placeholder { color: #64748b; }
 .shipper-dimension-times { color: var(--text-secondary); font-size: 0.85rem; }
