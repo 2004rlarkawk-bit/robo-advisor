@@ -78,14 +78,6 @@
   margin-bottom: 38px;
   transform: translateY(-28px);
 }
-.portai-hero .ah-brand svg {
-  width: 38px;
-  height: 38px;
-  filter: drop-shadow(0 3px 14px rgba(79, 155, 255, .55));
-}
-.portai-hero .ah-wordmark { font-size: 29px; font-weight: 700; letter-spacing: -.005em; }
-.portai-hero .ah-wordmark b { font-weight: 800; color: var(--ah-signal-bright); }
-
 .portai-hero h1 {
   margin: 0;
   font-weight: 700;

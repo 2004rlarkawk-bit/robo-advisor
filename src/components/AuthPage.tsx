@@ -9,6 +9,7 @@ import {
   type AuthSessionUser,
 } from '../services/authService';
 import { getLoginErrorMessage } from '../utils/authErrorMessage';
+import Logo from './Logo';
 
 interface AuthPageProps {
   onAuthenticated: (user: AuthSessionUser) => void;
@@ -142,8 +143,7 @@ export default function AuthPage({ onAuthenticated }: AuthPageProps) {
       <div className="login-bg-decoration login-bg-decor2" />
       <div className="login-card">
         <div className="login-header">
-          <div className="login-logo">🚢</div>
-          <div className="login-brand">PortAI</div>
+          <Logo size="auth" background="light" />
           <div className="login-subtitle">수출입 서류 작성 · 검토 지원 플랫폼</div>
         </div>
 

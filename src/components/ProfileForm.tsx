@@ -8,6 +8,7 @@ import {
 import { normalizeCountryValue } from '../constants/countries';
 import { DISCHARGE_PORT_OPTIONS, LOAD_PORT_OPTIONS, normalizePortValue } from '../constants/ports';
 import CountrySelect from './CountrySelect';
+import RequiredMark from './RequiredMark';
 import {
   CUSTOM_SPECIALTY_MAX_COUNT,
   CUSTOM_SPECIALTY_MAX_LENGTH,
@@ -110,17 +111,17 @@ export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, 
       <section className={'profile-form-section'}>
         <div className={'profile-section-heading'}><h2>기본 정보</h2><p>영문 무역서류에 그대로 사용할 공식 영문 정보를 입력해 주세요. 회사명은 AI 번역명이 아닌 등록된 공식 명칭을 사용해야 합니다.</p></div>
         <div className={'profile-form-grid'}>
-          <label className={'login-input-group'}><span className={'login-label'}>회사명 <b>*</b></span><input className={'login-input'} value={values.company_name ?? ''} onChange={(e) => set('company_name', e.target.value)} placeholder={'ABC Logistics Co., Ltd.'} required /><small className="auth-helper-message">공식 영문 회사명을 입력하세요.</small></label>
+          <label className={'login-input-group'}><span className={'login-label'}>회사명<RequiredMark /></span><input className={'login-input'} value={values.company_name ?? ''} onChange={(e) => set('company_name', e.target.value)} placeholder={'ABC Logistics Co., Ltd.'} required /><small className="auth-helper-message">공식 영문 회사명을 입력하세요.</small></label>
           <label className={'login-input-group'}><span className={'login-label'}>회사 주소</span><input className={'login-input'} value={values.company_address ?? ''} onChange={(e) => set('company_address', e.target.value)} placeholder={'123 Teheran-ro, Gangnam-gu, Seoul, South Korea'} /></label>
-          <label className={'login-input-group'}><span className={'login-label'}>담당자명 {requireExplicitServiceRole && <b>*</b>}</span><input className={'login-input'} value={values.contact_name ?? ''} onChange={(e) => set('contact_name', e.target.value)} placeholder={'Gildong Hong'} required={requireExplicitServiceRole} /></label>
-          <label className={'login-input-group'}><span className={'login-label'}>회사 연락처 {requireExplicitServiceRole && <b>*</b>}</span><input className={'login-input'} type={'tel'} value={values.phone ?? ''} onChange={(e) => set('phone', e.target.value)} placeholder={'+82-2-1234-5678'} required={requireExplicitServiceRole} /></label>
-          <div className={'login-input-group'}><span className={'login-label'}>국가 {requireExplicitServiceRole && <b>*</b>}</span><CountrySelect className="login-input" value={values.country ?? ''} onChange={(value) => set('country', value)} required={requireExplicitServiceRole} /></div>
+          <label className={'login-input-group'}><span className={'login-label'}>담당자명{requireExplicitServiceRole && <RequiredMark />}</span><input className={'login-input'} value={values.contact_name ?? ''} onChange={(e) => set('contact_name', e.target.value)} placeholder={'Gildong Hong'} required={requireExplicitServiceRole} /></label>
+          <label className={'login-input-group'}><span className={'login-label'}>회사 연락처{requireExplicitServiceRole && <RequiredMark />}</span><input className={'login-input'} type={'tel'} value={values.phone ?? ''} onChange={(e) => set('phone', e.target.value)} placeholder={'+82-2-1234-5678'} required={requireExplicitServiceRole} /></label>
+          <div className={'login-input-group'}><span className={'login-label'}>국가{requireExplicitServiceRole && <RequiredMark />}</span><CountrySelect className="login-input" value={values.country ?? ''} onChange={(value) => set('country', value)} required={requireExplicitServiceRole} /></div>
           <label className={'login-input-group profile-grid-wide'}><span className={'login-label'}>사업자등록번호</span><input className={'login-input'} value={values.business_number ?? ''} onChange={(e) => set('business_number', e.target.value)} placeholder={'123-45-67890'} /></label>
           <label className={'login-input-group profile-grid-wide'}><span className={'login-label'}>통관고유부호</span><input className={'login-input'} value={values.customs_clearance_code ?? ''} onChange={(e) => set('customs_clearance_code', e.target.value)} placeholder={'예: ABCDE2020123'} /><small className="auth-helper-message">선택 입력 항목입니다.</small></label>
         </div>
       </section>
       <section className={'profile-form-section'}>
-        <div className={'profile-section-heading'}><h2>서비스 이용 목적 {requireExplicitServiceRole && <b>*</b>}</h2></div>
+        <div className={'profile-section-heading'}><h2>서비스 이용 목적{requireExplicitServiceRole && <RequiredMark />}</h2></div>
         <div className={'ob-pill-group service-role-options'} role={'radiogroup'} aria-label={'서비스 이용 목적'} aria-required={'true'}>
           {SERVICE_ROLE_OPTIONS.map((option) => (
             <button

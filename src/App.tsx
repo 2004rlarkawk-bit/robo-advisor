@@ -47,6 +47,7 @@ import {
 } from './types';
 import './styles/feedbackReport.css';
 import AuthPage from './components/AuthPage';
+import Logo from './components/Logo';
 import OnboardingPage from './components/OnboardingPage';
 import ShipperWorkspaceForm, { SHIPPER_FIELD_SECTION } from './components/ShipperWorkspaceForm';
 import OnboardingTour from './components/OnboardingTour';
@@ -2606,8 +2607,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         <div className="login-bg-decoration login-bg-decor2"></div>
         <div className="login-card">
           <div className="login-header">
-            <div className="login-logo">P</div>
-            <div className="login-brand">PortAI</div>
+            <Logo size="auth" background="light" />
             <div className="login-subtitle">세션을 확인하는 중입니다</div>
           </div>
         </div>
@@ -2626,8 +2626,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         <div className="login-bg-decoration login-bg-decor2"></div>
         <div className="login-card">
           <div className="login-header">
-            <div className="login-logo">🚢</div>
-            <div className="login-brand">PortAI</div>
+            <Logo size="auth" background="light" />
             <div className="login-subtitle">회사 프로필을 불러오는 중입니다</div>
           </div>
         </div>

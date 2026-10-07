@@ -45,7 +45,7 @@ const chips = (el: HTMLElement) => Array.from(el.querySelectorAll<HTMLButtonElem
 describe('수입 AI 추출값 — 서류에 있는 칸만 보이기', () => {
   it('값을 찾은 칸과 꼭 필요한 칸은 보이고, 비어 있는 선택 칸은 숨긴다', () => {
     const el = render();
-    expect(labels(el)).toEqual(expect.arrayContaining(['B/L 번호', '선박명', '적재항', 'Invoice 총금액']));
+    expect(labels(el)).toEqual(expect.arrayContaining(['B/L 번호*', '선박명', '적재항*', 'Invoice 총금액*']));
     expect(labels(el)).not.toContain('항차');
     expect(labels(el)).not.toContain('결제조건');
     expect(chips(el).map((chip) => chip.textContent?.trim())).toEqual(expect.arrayContaining(['항차', '결제조건']));
@@ -62,5 +62,13 @@ describe('수입 AI 추출값 — 서류에 있는 칸만 보이기', () => {
   it('읽기 전용이면 칸 추가 버튼을 보이지 않는다', () => {
     const el = render(true);
     expect(chips(el)).toHaveLength(0);
+  });
+
+  it('기존 필수 판정이 있는 칸에만 스크린리더 라벨이 있는 별표를 표시한다', () => {
+    const el = render();
+    const required = Array.from(el.querySelectorAll('.form-label')).find((label) => label.textContent === 'B/L 번호*');
+    const optional = Array.from(el.querySelectorAll('.form-label')).find((label) => label.textContent === '선박명');
+    expect(required?.querySelector('.required-star')?.getAttribute('aria-label')).toBe('필수');
+    expect(optional?.querySelector('.required-star')).toBeNull();
   });
 });

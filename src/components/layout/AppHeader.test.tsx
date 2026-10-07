@@ -23,9 +23,11 @@ describe('AppHeader role label', () => {
   it('updates the label and header theme when the workspace role changes', () => {
     act(() => root.render(<AppHeader {...props} forwarderMode />));
     expect(container.querySelector('.header--forwarder')).not.toBeNull();
+    expect(container.querySelector('.header-product-name .portai-logo--dark')).not.toBeNull();
     expect(container.querySelector('.header-role-chip')?.textContent).toBe('포워더 업무');
     act(() => root.render(<AppHeader {...props} forwarderMode={false} />));
     expect(container.querySelector('.header--shipper')).not.toBeNull();
+    expect(container.querySelector('.header-product-name .portai-logo--light')).not.toBeNull();
     expect(container.querySelector('.header-role-chip')?.textContent).toBe('화주 업무');
     expect(container.querySelector('.header-product-name')?.textContent).toBe('PortAI');
     expect(container.textContent).not.toContain('포워더 업무');

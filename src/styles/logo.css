@@ -1,0 +1,22 @@
+.portai-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32em;
+  color: #ffffff;
+  font-family: var(--font-logo, 'Outfit', sans-serif);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.portai-logo--light { color: #0b1e38; }
+.portai-logo__mark { display: block; width: 1.3em; height: 1.3em; flex: none; }
+.portai-logo__wordmark { display: inline-flex; align-items: baseline; }
+.portai-logo__port { color: inherit; }
+.portai-logo__ai { color: #4e9bff; font-weight: 800; }
+.portai-logo--hero { gap: 12px; font-size: 29px; }
+.portai-logo--hero .portai-logo__mark { filter: drop-shadow(0 3px 14px rgba(79, 155, 255, .55)); }
+.portai-logo--sidebar { gap: 8px; font-size: 22px; }
+.portai-logo--header { gap: 6px; font-size: 20px; }
+.portai-logo--auth { gap: 10px; font-size: 28px; }
