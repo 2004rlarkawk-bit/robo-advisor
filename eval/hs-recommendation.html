@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PortAI HS Evaluation</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #20262a; background: #f6f8f8; font: 14px system-ui, sans-serif; }
+    main { max-width: 1280px; margin: auto; padding: 24px; }
+    h1 { font-size: 24px; margin: 0 0 20px; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-bottom: 16px; }
+    label { display: grid; gap: 5px; }
+    input, button { padding: 8px 12px; border: 1px solid #b7c4c7; border-radius: 4px; font: inherit; }
+    input { width: min(430px, 78vw); }
+    button { cursor: pointer; background: white; }
+    button:disabled { cursor: default; opacity: .45; }
+    .primary { background: #137766; border-color: #137766; color: white; }
+    #status { min-height: 40px; color: #4b5860; }
+    .scroll { overflow: auto; margin: 12px 0 24px; }
+    table { width: 100%; border-collapse: collapse; background: white; }
+    td, th { text-align: left; padding: 8px 10px; border-bottom: 1px solid #dce2e4; font-variant-numeric: tabular-nums; }
+    th { background: #edf2f3; white-space: nowrap; }
+    .item { min-width: 220px; max-width: 420px; overflow-wrap: anywhere; }
+    .error { color: #a42b34; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; }
+    @media (max-width: 600px) { main { padding: 16px; } h1 { font-size: 21px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>PortAI HS Evaluation</h1>
+    <div class="toolbar">
+      <label>Dataset URL<input id="dataset" value="../__eval/sample_100_full.json"></label>
+      <button id="load">Load Dataset</button>
+      <button id="run3" class="primary" disabled>Run 3 Directions</button>
+      <button id="run5" disabled>Run 5 Directions</button>
+      <button id="stop" disabled>Stop</button>
+      <button id="download" disabled>Download JSON</button>
+    </div>
+    <div id="status" role="status">Checking authentication</div>
+    <div class="scroll"><table>
+      <thead><tr><th>Directions</th><th>N</th><th>Direction coverage</th><th>Expanded 6</th><th>Sent 6</th><th>AI top3 6</th><th>Final top3 4</th><th>Final top3 6</th><th>Needs info</th><th>Errors</th><th>Median sec</th></tr></thead>
+      <tbody id="summary"></tbody>
+    </table></div>
+    <div class="scroll"><table>
+      <thead><tr><th>Directions</th><th>ID</th><th>Item</th><th>Gold 6</th><th>Direction</th><th>Sent</th><th>Final top3</th><th>Sec</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <details><summary>Report JSON</summary><pre id="report"></pre></details>
+  </main>
+  <script type="module" src="./hs-recommendation.ts"></script>
+</body>
+</html>

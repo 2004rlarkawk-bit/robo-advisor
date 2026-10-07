@@ -6,7 +6,8 @@
  * 그런데 관세청 HSK 사전의 말단 품명에는 "책상"이 목제 사무용(9403.30-1000)에만 있어서,
  * 품명 검색과 AI가 "Stone Desk"·"Marble Top Desk"까지 목제 책상으로 끌고 가거나
  * 숫돌(6804) 같은 엉뚱한 호를 고른다.
- * 품명에 가구 종류와 재질이 하나씩 분명하면 이 표로 소호를 먼저 정하고, AI는 그 안에서만 고르게 한다.
+ * 품명에 가구 종류와 재질이 하나씩 분명하면 용도를 함께 보고 소호를 정한다.
+ * 목제 가구는 사무실용·주방용·침실용이 각각 다른 소호이며, 용도가 충돌하면 정하지 않는다.
  *
  * 앉는 가구(의자 등)는 9401 호라 다루지 않는다. 재질이 둘 이상이면(예: 금속 다리 + 유리 상판)
  * 본질적 특성 판단이 필요하므로 정하지 않고 기존 추천 흐름에 맡긴다.
@@ -22,6 +23,8 @@ const FURNITURE = /\b(desks?|tables?|cabinets?|book ?cases?|book ?shelf|book ?sh
 const NOT_FURNITURE = /\b(lamps?|lights?|lighting|chandeliers?|organi[sz]ers?|sundries|boxes|box|trays?|mats?|pads?|clocks?|fans?|calendars?|cloths?|covers?|hooks?|knobs?|handles?|legs?|parts?|accessor(y|ies))\b|스탠드|조명|램프|정리함|수납함|트레이|매트|패드|시계|선풍기|달력|커버|손잡이|부품/i;
 const SEAT = /\b(chairs?|stools?|sofas?|benches|bench|seats?)\b|의자|소파|스툴|벤치/i;
 const OFFICE = /\b(desks?|office|filing)\b|책상|사무/i;
+const KITCHEN = /\b(kitchens?|kitchenettes?)\b|주방|부엌/i;
+const BEDROOM = /\b(bed[\s-]?rooms?)\b|침실/i;
 
 // 대나무·등나무를 먼저 본다 — "bamboo"는 "wood"와 겹치지 않지만 한글 "나무"는 "대나무"·"등나무" 안에 들어 있다.
 const MATERIALS: Array<[Material, RegExp]> = [
@@ -44,7 +47,14 @@ export function furnitureSubheadingForQuery(text: string): string | null {
   const office = OFFICE.test(query);
   switch (found[0]) {
     case 'metal': return office ? '940310' : '940320';
-    case 'wood': return office ? '940330' : '940360';
+    case 'wood': {
+      const kitchen = KITCHEN.test(query);
+      const bedroom = BEDROOM.test(query);
+      if ([office, kitchen, bedroom].filter(Boolean).length > 1) return null;
+      if (kitchen) return '940340';
+      if (bedroom) return '940350';
+      return office ? '940330' : '940360';
+    }
     case 'plastic': return '940370';
     case 'bamboo': return '940382';
     case 'rattan': return '940383';

@@ -325,13 +325,15 @@ export async function suggestHSCodeFromCandidates(
 export async function discoverHSCodePrefixes(
   itemName: string,
   candidateCodes: HSCodeCandidateContext[],
-  itemDetails?: HSCodeItemDetails
+  itemDetails?: HSCodeItemDetails,
+  prefixLimit: 3 | 5 = 3
 ): Promise<HSCodePrefixDiscovery> {
   const data = await invokeOpenAIAssistant({
     action: 'suggest-hs-code',
     itemName: itemName.trim(),
     candidateCodes,
     discoveryMode: true,
+    ...(prefixLimit === 5 ? { discoveryPrefixLimit: 5 } : {}),
     ...(itemDetails ? { itemDetails } : {}),
   });
 
@@ -350,7 +352,7 @@ export async function discoverHSCodePrefixes(
           )
           .map((value) => value.replace(/[\s.-]/g, ''))
           .filter((value) => /^(\d{4}|\d{6})$/.test(value))
-      )).slice(0, 3)
+      )).slice(0, prefixLimit)
     : [];
   const requiredAdditionalInfo = Array.isArray(data.requiredAdditionalInfo)
     ? data.requiredAdditionalInfo

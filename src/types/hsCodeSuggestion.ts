@@ -21,6 +21,17 @@ export interface HSCodeItemDetails {
   documentHSCode?: string;
 }
 
+export interface HSCodeRecommendationTrace {
+  stage: 'direction' | 'expanded' | 'transmitted' | 'decision' | 'final';
+  codes: string[];
+  source?: 'ai' | 'rule';
+}
+
+export interface HSCodeRecommendationOptions {
+  discoveryPrefixLimit?: 3 | 5;
+  onTrace?: (trace: HSCodeRecommendationTrace) => void;
+}
+
 /** 후보가 여러 소호로 갈릴 때 사용자에게 되묻기 위한 선택지 */
 export interface HSCodeDisambiguationOption {
   /** 6자리 소호 (예: "960810") */

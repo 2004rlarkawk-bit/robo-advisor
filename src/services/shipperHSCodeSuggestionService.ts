@@ -16,6 +16,7 @@ import type {
   HSCodeDisambiguation,
   HSCodeDisambiguationOption,
   HSCodeItemDetails,
+  HSCodeRecommendationOptions,
   HSCodeSuggestionResponse,
   VerifiedHSCodeSuggestion,
 } from '../types/hsCodeSuggestion';
@@ -54,7 +55,7 @@ const LOCAL_CANDIDATE_LIMIT = 30;
 const APPAREL_CANDIDATE_LIMIT = 60;
 const DISPLAY_SUGGESTION_LIMIT = 3;
 /** Edge Function이 받는 후보 상한(openai-assistant normalizeCandidateCodes). 넘기면 서버에서 뒤가 잘린다. */
-const SERVER_CANDIDATE_LIMIT = 30;
+const SERVER_CANDIDATE_LIMIT = 60;
 /** 후보 설명에 덧붙이는 호·소호 제목 길이 — 서버가 필드당 300자에서 자르므로 합이 넘지 않게 둔다. */
 const SUBHEADING_TITLE_LIMIT = 150;
 const HEADING_TITLE_LIMIT = 100;
@@ -593,7 +594,8 @@ export async function recommendShipperHSCode(
   itemDetails?: HSCodeItemDetails,
   debugItemId?: string,
   /** 사용자가 선택지에서 고른 6자리 소호. 있으면 그 범위로만 추천한다. */
-  userChosenSubheading?: string | null
+  userChosenSubheading?: string | null,
+  options?: HSCodeRecommendationOptions
 ): Promise<HSCodeSuggestionResponse> {
   const normalizedItemName = itemName.trim();
   if (!isSearchableItemName(normalizedItemName)) {
@@ -617,6 +619,7 @@ export async function recommendShipperHSCode(
       normalizedItemName,
       itemDetails?.material,
       itemDetails?.composition,
+      itemDetails?.intendedUse,
       itemDetails?.specification,
       itemDetails?.koreanDescription,
     ].filter(Boolean).join(' '));
@@ -651,11 +654,18 @@ export async function recommendShipperHSCode(
       additionalInformationRequired: false,
       requiredAdditionalInfo: [] as string[],
     }
-    : await discoverHSCodePrefixes(
-      normalizedItemName,
-      [],
-      itemDetails
-    );
+    : options?.discoveryPrefixLimit === 5
+      ? await discoverHSCodePrefixes(normalizedItemName, [], itemDetails, 5)
+      : await discoverHSCodePrefixes(
+          normalizedItemName,
+          [],
+          itemDetails
+        );
+  options?.onTrace?.({
+    stage: 'direction',
+    codes: discovery.suggestedPrefixes,
+    source: chosenSubheading ? 'rule' : 'ai',
+  });
   const officialNamePrefixes = chosenSubheading
     ? []
     : inferOfficialNamePrefixes(
@@ -668,7 +678,7 @@ export async function recommendShipperHSCode(
     ? []
     : apparelPrefixesForQuery(normalizedItemName);
   // 배낭도 사전 품명이 "방직용 섬유재료로 만든 것"뿐이라 같은 방식으로 소호를 끌어온다.
-  // AI가 4자리(4202)만 주면 확장 상한에서 배낭 코드가 잘리므로 색인 소호를 앞에 둔다.
+  // AI가 4자리(4202)만 줘도 색인 소호를 함께 확장해 배낭 후보를 보존한다.
   const bagPrefixes = chosenSubheading
     ? []
     : bagPrefixesForQuery(normalizedItemName);
@@ -682,11 +692,11 @@ export async function recommendShipperHSCode(
     ? []
     : await searchHSHeadingsByKeyword(normalizedItemName, 2);
   const discoveryPrefixes = Array.from(new Set([
-    ...indexedPrefixes,
     ...discovery.suggestedPrefixes,
+    ...indexedPrefixes,
     ...titlePrefixes,
     ...officialNamePrefixes,
-  ])).slice(0, 6 + indexedPrefixes.length);
+  ]));
   const expandedCandidateCodes = await expandCandidateContext(
     initialCandidateCodes,
     discoveryPrefixes,
@@ -703,6 +713,7 @@ export async function recommendShipperHSCode(
         (candidate) => subheadingOf(candidate.code) === chosenSubheading
       )
     : expandedCandidateCodes;
+  options?.onTrace?.({ stage: 'expanded', codes: candidateCodes.map(({ code }) => code) });
   if (import.meta.env.DEV) {
     console.debug(
       `[HS Suggest][${debugItemId ?? 'unknown'}] request:`,
@@ -728,6 +739,7 @@ export async function recommendShipperHSCode(
           disambiguation.options.map((option) => option.formattedSubheading)
         );
       }
+      options?.onTrace?.({ stage: 'final', codes: [] });
       return {
         suggestions: [],
         additionalInformationRequired: true,
@@ -738,6 +750,7 @@ export async function recommendShipperHSCode(
   }
 
   const promptCandidates = await withHierarchyTitles(candidateCodes);
+  options?.onTrace?.({ stage: 'transmitted', codes: promptCandidates.map(({ code }) => code) });
   const decision = debugItemId
     ? await suggestHSCodeFromCandidates(
         normalizedItemName,
@@ -750,6 +763,8 @@ export async function recommendShipperHSCode(
         promptCandidates,
         itemDetails
       );
+
+  options?.onTrace?.({ stage: 'decision', codes: decision.suggestions.map(({ code }) => normalizeHSKCode(code)) });
 
   // 판정 근거가 부족하다는 신호. 추천을 내더라도 확신 표시는 낮춘다.
   const needsMoreInfo =
@@ -856,10 +871,46 @@ export async function recommendShipperHSCode(
     verified.set(entry.code, entry);
   }
 
+  let mergedDiscovery = false;
+  if (!chosenSubheading) {
+    const aiRankedCodes = decision.suggestions
+      .map((suggestion) => normalizeHSKCode(suggestion.code))
+      .filter((code) => allowedCodes.has(code));
+    for (const [index, prefix] of discovery.suggestedPrefixes.entries()) {
+      if (Array.from(verified.keys()).some((code) => code.startsWith(prefix))) continue;
+      if (verified.size >= DISPLAY_SUGGESTION_LIMIT && index > 0) break;
+      const code = aiRankedCodes.find((candidate) => candidate.startsWith(prefix))
+        ?? promptCandidates.find((candidate) => candidate.code.startsWith(prefix))?.code;
+      if (!code || verified.has(code)) continue;
+      const officialEntry = await lookupHSByCode(code);
+      if (!officialEntry || officialEntry.code !== code) continue;
+      // 실제 대체 후보를 검증한 뒤에만 마지막 추천 자리를 내준다.
+      if (verified.size >= DISPLAY_SUGGESTION_LIMIT) {
+        verified.delete(Array.from(verified.keys())[verified.size - 1]);
+      }
+      const confirmation = '선택한 분류 방향 안에서 세부 10자리 HSK 확인';
+      verified.set(code, {
+        code,
+        formattedCode: formatCode(code),
+        koreanName: officialEntry.ko,
+        englishName: officialEntry.en,
+        classificationName: officialEntry.category,
+        reasoning: `품명으로 본 분류 방향이 HS ${prefix.length > 4 ? formatSubheading(prefix) : prefix} 쪽을 가리켜 함께 보여 드려요. 세부 10자리는 확인이 필요해요.`,
+        confidenceLabel: '보통',
+        distinguishingFactors: [],
+        missingInformation: [confirmation],
+        matchedTerms: [],
+        source: 'openai-verified',
+      });
+      mergedDiscovery = true;
+    }
+  }
+
   // 방향이 불확실해도 추천 자체는 내보낸다.
   // 추천을 통째로 막으면 사용자가 다음 단계로 갈 수 없어 흐름이 끊긴다.
   // 대신 확신 표시를 '보통'으로 낮추고 확인 항목을 함께 노출해 경고한다.
   const suggestions = Array.from(verified.values());
+  options?.onTrace?.({ stage: 'final', codes: suggestions.map(({ code }) => code) });
   if (import.meta.env.DEV) {
     console.debug(
       `[HS Suggest][${debugItemId ?? 'unknown'}] final:`,
@@ -872,10 +923,12 @@ export async function recommendShipperHSCode(
     additionalInformationRequired:
       decision.additionalInformationRequired ||
       discovery.additionalInformationRequired ||
+      mergedDiscovery ||
       suggestions.length === 0,
     requiredAdditionalInfo: Array.from(new Set([
       ...discovery.requiredAdditionalInfo,
       ...decision.requiredAdditionalInfo,
+      ...(mergedDiscovery ? ['선택한 분류 방향 안에서 세부 10자리 HSK 확인'] : []),
     ])).slice(0, 6),
   };
   // 실시간 결과를 품명별로 남긴다 — 시연용 저장 결과(DEMO_HS_RESULTS)로 옮겨 담을 때 꺼내 쓴다.

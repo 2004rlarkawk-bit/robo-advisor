@@ -353,7 +353,7 @@ function cleanHSCode(value: string): string {
   return value.replace(/[\s.-]/g, "");
 }
 
-function normalizeHSPrefixes(value: unknown): string[] {
+function normalizeHSPrefixes(value: unknown, limit: 3 | 5 = 3): string[] {
   if (!Array.isArray(value)) return [];
 
   return Array.from(
@@ -365,7 +365,7 @@ function normalizeHSPrefixes(value: unknown): string[] {
         .map(cleanHSCode)
         .filter((item) => /^(\d{4}|\d{6})$/.test(item)),
     ),
-  ).slice(0, 3);
+  ).slice(0, limit);
 }
 
 function normalizeCandidateCodes(
@@ -376,7 +376,8 @@ function normalizeCandidateCodes(
   const seen = new Set<string>();
   const candidates: HSCodeCandidate[] = [];
 
-  for (const entry of value.slice(0, 30)) {
+  // 프론트의 SERVER_CANDIDATE_LIMIT과 동일한 상한으로 확장 후보를 받는다.
+  for (const entry of value.slice(0, 60)) {
     if (!isRecord(entry)) continue;
 
     const code = cleanHSCode(getString(entry.code, 30));
@@ -779,11 +780,12 @@ async function handleHSCodeSuggestion(
     );
 
     if (body.discoveryMode === true) {
+      const prefixLimit = body.discoveryPrefixLimit === 5 ? 5 : 3;
       const discoveryPrompt = `
 당신은 한국 관세청 HSK 품목분류를 지원하는 전문가입니다.
 법적 확정이 아니라 관련 10자리 HSK 후보를 찾기 위한 HS 6자리 방향 탐색 단계입니다.
 
-사용자 품목명과 상세정보를 기준으로 가장 관련 있는 HS 6자리 subheading prefix를 1~3개 반환하세요. 정확한 6자리를 판단하기 어려우면 관련 HS 4자리 heading을 fallback으로 반환할 수 있습니다.
+사용자 품목명과 상세정보를 기준으로 가장 관련 있는 HS 6자리 subheading prefix를 1~${prefixLimit}개 반환하세요. 정확한 6자리를 판단하기 어려우면 관련 HS 4자리 heading을 fallback으로 반환할 수 있습니다.
 - 제공된 candidateCodes는 문자열 검색 참고자료일 뿐이며 그 목록의 prefix로 제한되지 않습니다.
 - 완제품 입력에는 부품ㆍ원재료ㆍ스크랩 prefix를 선택하지 마세요.
 - 명시된 재질과 충돌하는 재질의 prefix를 선택하지 마세요.
@@ -791,7 +793,8 @@ async function handleHSCodeSuggestion(
 - candidateCodes에서 classificationName이 사용자 제품 종류와 직접 일치하는 후보가 있으면, 재질만 일치하고 제품 종류가 다른 후보보다 그 후보의 6자리 방향을 우선하세요.
 - 성별이 명시되지 않은 의류처럼 실제로 서로 다른 방향이 가능한 경우에는 의미 있게 다른 방향을 함께 반환하세요.
 - 성별, 직물/편물, 재질, 용도, 완제품/부분품, 가공 상태와 품종을 실제 분류 조건으로 적용하세요.
-- 정보가 부족해 의미 있게 다른 방향이 가능하면 최대 3개를 반환하고 확인할 정보를 함께 작성하세요.
+- 정보가 부족해 의미 있게 다른 방향이 가능하면 최대 ${prefixLimit}개를 반환하고 확인할 정보를 함께 작성하세요.
+${prefixLimit === 5 ? '- 가장 유력한 방향을 먼저 쓰고, 기능·재질·가공 방식에 따라 다른 4자리 호로 분류될 수 있는 합리적인 대안도 비교하세요. 같은 호의 비슷한 소호만 나열하거나 개수를 채우기 위해 관련 없는 방향을 만들지 마세요.' : ''}
 - 품목명이 무의미하거나 지나치게 일반적일 때만 prefix를 비우세요.
 - 10자리 코드는 반환하지 마세요. 6자리 subheading을 우선하고 불가능할 때만 4자리 heading을 반환하세요.
 - 반드시 JSON 객체만 출력하세요.
@@ -837,6 +840,7 @@ ${JSON.stringify(candidateCodes)}
 
       const suggestedPrefixes = normalizeHSPrefixes(
         discovery.suggestedPrefixes,
+        prefixLimit,
       );
       const requiredAdditionalInfo = normalizeStringList(
         discovery.requiredAdditionalInfo,

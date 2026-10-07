@@ -10,6 +10,12 @@ describe('가구 재질 보조표 (9403)', () => {
     ['Wooden Desk', '940330'],
     ['Wooden Office Desk', '940330'],
     ['나무 책상', '940330'],
+    ['Wooden Kitchen Cabinet', '940340'],
+    ['Oak Kitchen Table', '940340'],
+    ['목제 주방 캐비닛', '940340'],
+    ['Wooden Bedroom Cabinet', '940350'],
+    ['Wooden Bed-room Wardrobe', '940350'],
+    ['목제 침실 옷장', '940350'],
     ['Oak Bookshelf', '940360'],
     ['Plastic Desk', '940370'],
     ['Bamboo Table', '940382'],
@@ -38,6 +44,12 @@ describe('가구 재질 보조표 (9403)', () => {
     expect(furnitureSubheadingForQuery('Glass Table Cloth Cover')).toBeNull();
     expect(furnitureSubheadingForQuery('Wooden Storage Box')).toBeNull();
     expect(furnitureSubheadingForQuery('나무 책상 스탠드 조명')).toBeNull();
+  });
+
+  it('목제 가구의 용도가 충돌하면 소호를 강제하지 않는다', () => {
+    expect(furnitureSubheadingForQuery('Wooden Kitchen Office Cabinet')).toBeNull();
+    expect(furnitureSubheadingForQuery('Wooden Kitchen Bedroom Table')).toBeNull();
+    expect(furnitureSubheadingForQuery('목제 사무실 침실 캐비닛')).toBeNull();
   });
 
   it('앉는 가구와 가구가 아닌 품목은 다루지 않는다', () => {

@@ -8,6 +8,7 @@ vi.mock('../lib/supabase', () => ({
 
 import {
   autoFillDocumentFields,
+  discoverHSCodePrefixes,
   generateContextualFeedback,
   suggestHSCode,
   suggestHSCodeFromCandidates,
@@ -18,6 +19,25 @@ beforeEach(() => {
 });
 
 describe('openai-assistant Edge Function 서비스', () => {
+  it.each([3, 5] as const)('분류 방향 %i개 실험을 요청하고 응답 상한을 유지한다', async (limit) => {
+    invokeMock.mockResolvedValue({
+      data: {
+        success: true,
+        suggestedPrefixes: ['8205', '8207', '7907', '8308', '7117', '4421'],
+        action: 'suggest-hs-code',
+        source: 'openai',
+        additionalInformationRequired: false,
+        requiredAdditionalInfo: [],
+      },
+      error: null,
+    });
+
+    const result = await discoverHSCodePrefixes('tool parts', [], undefined, limit);
+
+    expect(result.suggestedPrefixes).toHaveLength(limit);
+    const { body } = invokeMock.mock.calls[0][1];
+    expect(body.discoveryPrefixLimit).toBe(limit === 5 ? 5 : undefined);
+  });
   it('HS Code 추천 body를 전달하고 suggestions를 매핑한다', async () => {
     invokeMock.mockResolvedValue({
       data: {

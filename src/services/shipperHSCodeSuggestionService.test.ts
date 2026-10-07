@@ -214,7 +214,7 @@ describe('수출 화주 HS Code 추천 서비스', () => {
     prefixMock.mockImplementation(async (prefix: string) =>
       prefix === '420292' ? [textileRucksack] : []
     );
-    // AI가 4자리만 줘도 색인 소호가 앞에 와야 확장 상한에서 잘리지 않는다.
+    // AI 방향을 먼저 보존하면서 배낭 색인 소호도 함께 확장한다.
     discoverPrefixesMock.mockResolvedValue({
       suggestedPrefixes: ['4202'],
       additionalInformationRequired: false,
@@ -229,7 +229,7 @@ describe('수출 화주 HS Code 추천 서비스', () => {
     await recommendShipperHSCode('backpack');
 
     expect(prefixMock.mock.calls.map(([prefix]) => prefix))
-      .toEqual(['420292', '420291', '420299', '4202']);
+      .toEqual(['4202', '420292', '420291', '420299']);
     const [, candidates] = suggestFromCandidatesMock.mock.calls[0];
     expect(candidates).toEqual([
       expect.objectContaining({
@@ -275,6 +275,56 @@ describe('수출 화주 HS Code 추천 서비스', () => {
       .toContain('4202921090');
   });
 
+  it('AI 방향을 보조표보다 먼저 확장하고 최대 60개 후보를 전달한다', async () => {
+    const entries = Array.from({ length: 61 }, (_, index) => ({
+      ...localTenDigit,
+      code: `610333${String(index).padStart(4, '0')}`,
+    }));
+    searchMock.mockResolvedValue([]);
+    prefixMock.mockImplementation(async (prefix: string) =>
+      prefix === '610333' ? entries : []
+    );
+    discoverPrefixesMock.mockResolvedValue({
+      suggestedPrefixes: ['610333'],
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+    suggestFromCandidatesMock.mockResolvedValue({
+      suggestions: [],
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+
+    await recommendShipperHSCode('knitted jacket', { fabricConstruction: 'knitted' });
+
+    expect(prefixMock.mock.calls[0][0]).toBe('610333');
+    const [, candidates] = suggestFromCandidatesMock.mock.calls[0];
+    expect(candidates).toHaveLength(60);
+    expect(candidates[59].code).toBe('6103330059');
+    expect(candidates.some(({ code }: { code: string }) => code === '6103330060')).toBe(false);
+  });
+
+  it('상세 정보의 용도를 반영해 주방용 목제 가구 후보를 선택한다', async () => {
+    const kitchenCabinet = { ...localTenDigit, code: '9403409000' };
+    searchMock.mockResolvedValue([]);
+    prefixMock.mockImplementation(async (prefix: string) =>
+      prefix === '940340' ? [kitchenCabinet] : []
+    );
+    suggestFromCandidatesMock.mockResolvedValue({
+      suggestions: [],
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+
+    await recommendShipperHSCode('Wooden Cabinet', { intendedUse: 'kitchen' });
+
+    expect(discoverPrefixesMock).not.toHaveBeenCalled();
+    expect(prefixMock.mock.calls.map(([prefix]) => prefix)).toEqual(['940340']);
+    expect(suggestFromCandidatesMock.mock.calls[0][1]).toEqual([
+      expect.objectContaining({ code: '9403409000' }),
+    ]);
+  });
+
   it('AI에 넘기는 후보에만 호·소호 제목을 덧붙인다', async () => {
     searchMock.mockResolvedValue([localTenDigit]);
     hierarchyMock.mockResolvedValue({
@@ -313,6 +363,78 @@ describe('수출 화주 HS Code 추천 서비스', () => {
 
     // 서로 다른 소호(7117.19, 7117.90)가 먼저, 남은 자리는 같은 소호 다음 순위로 채운다.
     expect(result.suggestions.map((s) => s.code)).toEqual(['7117191000', '7117909000', '7117192000']);
+  });
+
+  it('실제 파이프라인 단계와 5개 방향 요청을 기록한다', async () => {
+    searchMock.mockResolvedValue([localTenDigit]);
+    lookupMock.mockResolvedValue(localTenDigit);
+    discoverPrefixesMock.mockResolvedValue({
+      suggestedPrefixes: ['010121'],
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+    suggestFromCandidatesMock.mockResolvedValue({
+      suggestions: [{ code: localTenDigit.code, confidence: '높음', reasoning: '근거' }],
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+    const onTrace = vi.fn();
+
+    await recommendShipperHSCode('farm breeding horses', {}, undefined, null, {
+      discoveryPrefixLimit: 5,
+      onTrace,
+    });
+
+    expect(discoverPrefixesMock).toHaveBeenCalledWith('farm breeding horses', [], {}, 5);
+    expect(onTrace.mock.calls.map(([trace]) => trace.stage))
+      .toEqual(['direction', 'expanded', 'transmitted', 'decision', 'final']);
+    expect(onTrace.mock.calls[0][0].codes).toEqual(['010121']);
+    expect(onTrace.mock.calls[2][0].codes).toEqual([localTenDigit.code]);
+  });
+
+  it('최종 AI가 보류해도 검증된 1차 방향 후보를 확인 필요 상태로 함께 보여준다', async () => {
+    const entry = { ...localTenDigit, code: '7117191000' };
+    searchMock.mockResolvedValue([entry]);
+    lookupMock.mockResolvedValue(entry);
+    discoverPrefixesMock.mockResolvedValue({
+      suggestedPrefixes: ['711719'],
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+    suggestFromCandidatesMock.mockResolvedValue({
+      suggestions: [],
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+
+    const result = await recommendShipperHSCode('brooch pin', {});
+
+    expect(result.suggestions.map(({ code }) => code)).toEqual(['7117191000']);
+    expect(result.suggestions[0].confidenceLabel).toBe('보통');
+    expect(result.suggestions[0].missingInformation).not.toHaveLength(0);
+    expect(result.additionalInformationRequired).toBe(true);
+  });
+
+  it.each([true, false])('첫 방향 대체 후보의 검증 성공=%s일 때만 세 번째 추천을 교체한다', async (valid) => {
+    const codes = ['9403609000', '9403209000', '9403899000', '4421999000'];
+    const entry = (code: string) => ({ ...localTenDigit, code, category: '' });
+    searchMock.mockResolvedValue(codes.map(entry));
+    lookupMock.mockImplementation(async (code: string) => code === codes[3] && !valid ? null : entry(code));
+    discoverPrefixesMock.mockResolvedValue({
+      suggestedPrefixes: ['442199'],
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+    suggestFromCandidatesMock.mockResolvedValue({
+      suggestions: codes.slice(0, 3).map((code) => ({ code, confidence: '높음', reasoning: '근거' })),
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    });
+
+    const result = await recommendShipperHSCode('decorative article', {});
+
+    expect(result.suggestions.map(({ code }) => code))
+      .toEqual(valid ? [codes[0], codes[1], codes[3]] : codes.slice(0, 3));
   });
 
   it('한글은 2글자부터, 영문은 3글자부터 검색 대상으로 본다', () => {

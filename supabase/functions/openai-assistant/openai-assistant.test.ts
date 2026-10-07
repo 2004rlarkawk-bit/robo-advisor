@@ -92,6 +92,28 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
     expect(body.additionalInformationRequired).toBe(false);
   });
 
+  it.each([3, 5] as const)('방향 %i개 조건의 서버 상한과 대안 프롬프트를 적용한다', async (limit) => {
+    const prefixes = ['8205', '8207', '7907', '8308', '7117', '4421'];
+    openAIFetchMock.mockResolvedValue(openAIResponse({
+      suggestedPrefixes: prefixes,
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    }));
+    const response = await handler.fetch(authedRequest({
+      action: 'suggest-hs-code',
+      discoveryMode: true,
+      itemName: 'tool parts',
+      candidateCodes: [],
+      discoveryPrefixLimit: limit,
+    }));
+    const body = await response.json();
+    const requestBody = JSON.parse(openAIFetchMock.mock.calls[0][1].body);
+
+    expect(body.suggestedPrefixes).toEqual(prefixes.slice(0, limit));
+    expect(requestBody.instructions).toContain(`1~${limit}개`);
+    expect(requestBody.instructions.includes('합리적인 대안')).toBe(limit === 5);
+  });
+
   it('candidateCodes가 있으면 후보 밖 코드를 제거하고 판단 보류를 반환한다', async () => {
     openAIFetchMock.mockResolvedValue(openAIResponse({
       suggestions: [{
@@ -153,6 +175,38 @@ describe('openai-assistant suggest-hs-code 하위 호환', () => {
       matchedTerms: [],
     }]);
     expect(body.additionalInformationRequired).toBe(false);
+  });
+
+  it('60번째 후보까지 전달하고 61번째 후보는 제외한다', async () => {
+    const candidateCodes = Array.from({ length: 61 }, (_, index) => ({
+      code: `847130${String(index).padStart(4, '0')}`,
+      koreanName: `후보 ${index + 1}`,
+      englishName: `Candidate ${index + 1}`,
+    }));
+    openAIFetchMock.mockResolvedValue(openAIResponse({
+      suggestions: [30, 59, 60].map((index) => ({
+        code: candidateCodes[index].code,
+        description: `후보 ${index + 1}`,
+        confidence: '보통',
+        reasoning: `후보 ${index + 1}을 비교한 결과`,
+      })),
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [],
+    }));
+
+    const response = await handler.fetch(authedRequest({
+      action: 'suggest-hs-code',
+      itemName: 'Portable computer',
+      candidateCodes,
+    }));
+    const body = await response.json();
+    const requestBody = JSON.parse(openAIFetchMock.mock.calls[0][1].body);
+
+    expect(response.status).toBe(200);
+    expect(requestBody.input).toContain(candidateCodes[59].code);
+    expect(requestBody.input).not.toContain(candidateCodes[60].code);
+    expect(body.suggestions.map(({ code }: { code: string }) => code))
+      .toEqual([candidateCodes[30].code, candidateCodes[59].code]);
   });
 
   it('같은 설명이나 근거를 반복한 후보는 제거하고 확정 필요정보는 유지한다', async () => {
