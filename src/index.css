@@ -3790,6 +3790,8 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: 'ì ‘ê
 .fixlist-item.error .fixlist-dot { border-color: var(--error-color); }
 .fixlist-item.warning .fixlist-dot { border-color: var(--warning-color); }
 .fixlist-item.resolved .fixlist-dot { background: var(--success-color); border-color: var(--success-color); }
+.fixlist-item.resolved { border-left: 3px solid var(--success-color); background: #f5fbf7; cursor: default; }
+.fixlist-item.resolved:hover { border-color: var(--border-color); border-left-color: var(--success-color); background: #f5fbf7; }
 .fixlist-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .fixlist-msg {
   min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text-dark);
@@ -4820,6 +4822,5 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: 'ì ‘ê
 .unipass-submit-result dt { flex: 0 0 76px; color: var(--text-secondary); }
 .unipass-submit-result dd { margin: 0; }
 .unipass-submit-result strong { font-size: 16px; letter-spacing: .02em; }
-
 
 

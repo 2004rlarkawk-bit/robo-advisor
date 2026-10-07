@@ -3,7 +3,7 @@
  *
  * 송장금액이 곧 FOB 금액인 FOB 조건만 숫자를 채운다. CFR·CIF는 운임·보험료 차감 기준을,
  * FCA·FAS 등은 FOB까지의 비용을 공식 기준으로 확인하기 전까지 빈칸으로 둔다.
- * (화면 참고 카드의 calcExportFobValue 결과는 신고서에 연결하지 않는다.)
+ * AI 검증 결과 화면에 별도의 FOB 참고값 카드는 표시하지 않는다.
  * 신고서 docx 서비스(무거운 라이브러리)와 분리해 화면에서도 가볍게 가져다 쓴다.
  */
 export const isFobIncoterms = (incoterms: string | undefined | null) => (incoterms || '').trim().toUpperCase() === 'FOB';

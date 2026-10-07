@@ -52,7 +52,7 @@ export default function ForwarderDocumentThumbnail({ document: doc, userId }: { 
         ]);
         if (!active) return;
         pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-        const task = pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true });
+        const task = pdfjs.getDocument({ data, useSystemFonts: true });
         destroyPdf = () => { void task.destroy().catch(() => undefined); };
         // Password-protected files fall back to the original, without a hidden prompt.
         task.onPassword = () => { if (active) setMessage('암호화된 서류 · 원본 확인'); destroyPdf?.(); };

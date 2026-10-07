@@ -7,6 +7,7 @@ import { HSCodeAgent } from '../agents/HSCodeAgent';
 import { TradeProfile } from '../types';
 import * as customsApiService from '../services/customsApiService';
 import * as unipassService from '../services/unipassService';
+import { buildFeedbackReport } from '../agents/feedbackReport';
 
 vi.setConfig({
   testTimeout: 30_000,
@@ -387,47 +388,21 @@ describe('PortAI Agent Pipeline - 다중 에이전트 연동 테스트', () => {
     invoiceDate: '2026-06-25' // 출발일(2026-07-01) 이전
   };
 
-  it('수출 외화(USD) 인보이스는 과세가격이 아닌 수출신고서용 FOB 환산액(참고) info 카드를 만든다', async () => {
-    const usdProfile: TradeProfile = {
-      ...baseAsyncProfile,
-      currency: 'USD',
-      invoiceAmount: 100000
-    };
-    const issues = await validateTradeDocumentsAsync(usdProfile);
-    expect(issues.find(i => i.id === 'dutiable-value-info')).toBeUndefined();
-    const fob = issues.find(i => i.id === 'export-fob-value-info');
-    expect(fob?.severity).toBe('info');
-    expect(fob?.card?.title).toBe('수출신고 금액 환산(참고)');
-    expect(fob?.card?.valueLabel).toBe('FOB 기준 환산액');
-    expect(fob?.card?.basis).toBeUndefined();
-    expect(fob?.message).not.toContain('과세가격');
-    expect(fob?.card?.meta).toContain('USD');
+  it.each([
+    ['USD FOB', { currency: 'USD', invoiceAmount: 100000, incoterms: 'FOB' }],
+    ['USD CIF', { currency: 'USD', invoiceAmount: 100000, incoterms: 'CIF' }],
+    ['KRW CIF', { currency: 'KRW', invoiceAmount: 13_000_000, incoterms: 'CIF' }],
+  ])('수출 %s 거래에 참고 환산 카드나 검증 건수를 추가하지 않는다', async (_label, values) => {
+    const issues = await validateTradeDocumentsAsync({ ...baseAsyncProfile, ...values } as TradeProfile);
+    const report = buildFeedbackReport(issues);
+    expect(issues.find(i => i.id === 'export-fob-value-info' || i.id === 'dutiable-value-info')).toBeUndefined();
+    expect(report.facts.find(f => f.id === 'export-fob-value')).toBeUndefined();
+    expect(report.summary.reviewed).toBe(issues.length);
   });
 
-  it('수출 CIF인데 운임·보험료가 비어 있으면 입력 안내와 4. 거래 조건 이동 버튼을 보여주고 서류 생성을 막지 않는다', async () => {
-    const cifProfile: TradeProfile = { ...baseAsyncProfile, currency: 'USD', invoiceAmount: 100000, incoterms: 'CIF' };
-    const issues = await validateTradeDocumentsAsync(cifProfile);
-    const fob = issues.find(i => i.id === 'export-fob-value-info');
-    expect(fob?.card?.value).toBeUndefined();
-    expect(fob?.card?.notice).toBe('국제운임과 보험료를 입력하면 FOB 기준 환산액을 확인할 수 있어요.');
-    expect(fob?.card?.action).toMatchObject({ label: '4. 거래 조건에서 입력', field: 'freightKrw' });
-    expect(JSON.stringify(fob)).not.toContain('계산 보류');
-    expect(fob?.severity).toBe('info');
-  });
-
-  it('수출 KRW 송장은 환율 1로 FOB 기준 환산액을 계산하고 CIF 운임·보험료를 뺀다', async () => {
-    const krwCif: TradeProfile = {
-      ...baseAsyncProfile,
-      currency: 'KRW',
-      invoiceAmount: 13_000_000,
-      incoterms: 'CIF',
-      exportDeclaration: { ...(baseAsyncProfile.exportDeclaration ?? {}), freightKrw: 1_000_000, insuranceKrw: 100_000 } as TradeProfile['exportDeclaration'],
-    };
-    const issues = await validateTradeDocumentsAsync(krwCif);
-    const fob = issues.find(i => i.id === 'export-fob-value-info');
-    expect(fob?.card?.value).toBe('약 11,900,000원');
-    expect(fob?.card?.meta).toContain('원화 송장');
-    expect(issues.find(i => i.id === 'dutiable-value-info')).toBeUndefined();
+  it('수입 외화 송장의 과세가격 환산 카드는 유지한다', async () => {
+    const issues = await validateTradeDocumentsAsync({ ...baseAsyncProfile, tradeType: 'import', currency: 'USD', invoiceAmount: 100000 });
+    expect(issues.find(i => i.id === 'dutiable-value-info')?.card?.title).toBe('과세가격 환산');
   });
 
   it('수입 KRW 거래 또는 금액 미입력 시 원화 환산 이슈가 없다', async () => {

@@ -72,7 +72,7 @@ import {
 import { EMPTY_TRADE_PROFILE } from './constants/tradeProfile';
 import CountrySelect from './components/CountrySelect';
 import { calculateReadiness } from './harness/rulesEngine';
-import { validateRequiredInputs } from './harness/validatorEngine';
+import { resolvedFixIssueKeys } from './utils/liveFixResolution';
 import { OrchestratorAgent } from './agents/OrchestratorAgent';
 import { AgentLog } from './agents/types';
 import AgentConsoleOverlay from './components/AgentConsoleOverlay';
@@ -161,7 +161,6 @@ import {
 } from './types/exportForwarderCase';
 import {
   exportIssueDocLabel,
-  isLiveCheckIssueId,
   issueFixHint,
   issueKey,
   issueToFieldKey,
@@ -2506,20 +2505,19 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
 
   // 입력 화면 오른쪽 "고칠 항목" 체크리스트 —
   // 마지막 생성에서 나온 오류·보완을 한 번에 보여주고, 항목 클릭 시 해당 입력칸으로 이동한다.
-  // 순수 입력 검증(validateRequiredInputs)이 내는 이슈는 현재 입력값으로 실시간 재평가해
-  // 사용자가 채우는 즉시 ✓(해결)로 표시한다. 그 외 이슈는 재생성 시 재검증된다.
+  // 입력만으로 재검증할 수 있는 이슈는 고치는 즉시 ✓로 표시한다.
+  // 외부 조회·서류 분석이 필요한 이슈는 재생성 시 재검증한다.
   const fixListIssues = useMemo(
     () => [...issues]
       .filter(i => i.severity !== 'info')
       .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1)),
     [issues]
   );
-  const liveInputIssueIds = useMemo(
-    () => new Set(validateRequiredInputs(profile).map(i => i.id)),
-    [profile]
+  const resolvedFixKeys = useMemo(
+    () => resolvedFixIssueKeys(profile, fixListIssues),
+    [profile, fixListIssues]
   );
-  const isIssueLiveResolved = (issue: ValidationIssue) =>
-    isLiveCheckIssueId(issue.id) && !liveInputIssueIds.has(issue.id);
+  const pendingFixCount = fixListIssues.filter(issue => !resolvedFixKeys.has(issueKey(issue))).length;
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 
@@ -2642,7 +2640,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   // 해소되면(라이브 검증 통과) 자동으로 사라진다. r15 원산지는 전용 카드가 있어 제외.
   const activeFixFieldKey = activeFixIssue ? issueToFieldKey(activeFixIssue) : '';
   const shipperFixNotice = (() => {
-    if (!activeFixIssue || isIssueLiveResolved(activeFixIssue)) return null;
+    if (!activeFixIssue || resolvedFixKeys.has(issueKey(activeFixIssue))) return null;
     if (activeFixFieldKey === 'countryOfOrigin' && originNotKoreaIssue) return null;
     if (!(activeFixFieldKey in SHIPPER_FIELD_SECTION)) return null;
     const rawMsg = (activeFixIssue.message || '').replace(/^AI 참고 — /, '');
@@ -2996,12 +2994,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                   ) : fixListIssues.length > 0 ? (
                     /* 고칠 항목 체크리스트 — 결과↔입력 왕복 없이 이 화면에서 전부 수정 */
                     <div className="fixlist">
-                      <h3 className="info-title">고칠 항목 {fixListIssues.length}건</h3>
+                      <h3 className="info-title">고칠 항목 {pendingFixCount}건{resolvedFixKeys.size > 0 ? ` · 해결 ${resolvedFixKeys.size}건` : ''}</h3>
+                      {resolvedFixKeys.size > 0 && <p className="fixlist-sub">체크된 항목은 입력 기준 해결됐어요. 다시 생성해 최종 검증하세요.</p>}
                       {(() => {
                         // 한 줄 요약 행 — 전체 문구는 title 툴팁 + 클릭 시 상단 배너로.
                         // 요약 아래엔 "어떻게 고치는지"(예시·조건)만 작게 남긴다. 근거 조문은 결과 화면 담당.
                         const renderRow = (issue: ValidationIssue) => {
-                          const resolved = isIssueLiveResolved(issue);
+                          const resolved = resolvedFixKeys.has(issueKey(issue));
                           const label = shortIssueLabel(issue);
                           let hint = issueFixHint(issue);
                           // 제목에 이미 들어간 문구는 설명에서 반복하지 않는다
@@ -3011,8 +3010,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                               <button
                                 type="button"
                                 className={`fixlist-item ${issue.severity}${resolved ? ' resolved' : ''}`}
-                                title={issue.message}
+                                title={resolved ? '입력 기준 해결됨 — 다시 생성해 최종 검증하세요.' : issue.message}
                                 onClick={() => goToFieldFix(issue)}
+                                disabled={resolved}
                               >
                                 <span className="fixlist-dot" aria-hidden="true">{resolved ? '✓' : ''}</span>
                                 <span className="fixlist-body">
@@ -3029,13 +3029,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           <>
                             {errorIssues.length > 0 && (
                               <div className="fixlist-group">
-                                <div className="fixlist-group-head err">반드시 수정 {errorIssues.length}</div>
+                                <div className="fixlist-group-head err">반드시 수정 {errorIssues.filter(issue => !resolvedFixKeys.has(issueKey(issue))).length}</div>
                                 <ul className="fixlist-items">{errorIssues.map(renderRow)}</ul>
                               </div>
                             )}
                             {warningIssues.length > 0 && (
                               <details className="fixlist-group" open={errorIssues.length === 0}>
-                                <summary className="fixlist-group-head warn">확인 권장 {warningIssues.length}</summary>
+                                <summary className="fixlist-group-head warn">확인 권장 {warningIssues.filter(issue => !resolvedFixKeys.has(issueKey(issue))).length}</summary>
                                 <ul className="fixlist-items">{warningIssues.map(renderRow)}</ul>
                               </details>
                             )}
@@ -3474,8 +3474,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                               </div>
                               {f.value && f.valueLabel && <div className="fact-card-value-label">{f.valueLabel}</div>}
                               {f.value && <div className="fact-card-value">{f.value}</div>}
-                              {/* 수출신고 금액 카드는 시연 화면을 단순하게 두려고 계산식·환율 설명을 감춘다. */}
-                              {f.formula && f.id !== 'export-fob-value' && <div className="fact-card-formula">{f.formula}</div>}
+                              {f.formula && <div className="fact-card-formula">{f.formula}</div>}
                               {f.notice && <p className="fact-card-notice">{f.notice}</p>}
                               {f.action && !isDocumentManagerReadOnlyView && (
                                 <button
@@ -3486,7 +3485,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                                   {f.action.label} →
                                 </button>
                               )}
-                              {f.meta && f.id !== 'export-fob-value' && <div className="fact-card-meta">{f.meta}</div>}
+                              {f.meta && <div className="fact-card-meta">{f.meta}</div>}
                             </div>
                           ))}
                         </div>
