@@ -1,4 +1,4 @@
-import{j as i}from"./index-CPys54yU.js";const c=`안녕하세요.
+import{j as i}from"./index-BXku2s8I.js";const c=`안녕하세요.
 수입 서류 검토 중 아래 항목의 보완을 요청드립니다.`,o=`확인 후 수정한 서류와 함께 회신 부탁드립니다.
 감사합니다.`;function h(e,n,t){const s=[n.trim(),"포워더",t.trim()].filter(Boolean).join(" ");return`${c}
 
