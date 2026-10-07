@@ -20,6 +20,8 @@ import {
   Pencil,
   ArrowRight,
   Calculator,
+  Calendar,
+  OctagonAlert,
   PenLine,
   ChevronDown,
   ChevronRight,
@@ -3537,7 +3539,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                         </div>
                       )}
 
-                      <div className="mobile-fix-list export-fix-list">
+                      <div className="mobile-fix-list">
                         {(() => {
                           // 심각도별로 묶어 표시 — 오류(제출 차단) → 확인 권장 순.
                           // 성격이 다른 이슈를 문서 순서로 섞지 않고 그룹 헤더로 구분한다.
@@ -3549,32 +3551,42 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                           const sorted = [...issues].filter((i) => !i.card && i.severity !== 'info' && !(i.severity === 'error' && overrides[issueKey(i)])).sort(
                             (a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9)
                           );
-                          const sevMeta: Record<string, { label: string; cls: string }> = {
-                            error: { label: '반드시 수정', cls: 'sev-error' },
-                            warning: { label: '확인 권장', cls: 'sev-warning' },
+                          const sevMeta: Record<string, { label: string; hint: string; cls: string; icon: JSX.Element }> = {
+                            error: { label: '반드시 수정', hint: '', cls: 'sev-error', icon: <OctagonAlert size={17} strokeWidth={2.4} /> },
+                            warning: { label: '확인 권장', hint: '', cls: 'sev-warning', icon: <AlertTriangle size={17} strokeWidth={2.4} /> },
                           };
                           let lastSev: string | null = null;
-                          let errorSeq = 0;
-                          let warnSeq = 0;
+                          let warnSeq = 0; // 확인 권장 카드에 붙는 순번(1,2,3…)
                           return sorted.map((issue) => {
                             const showHeader = issue.severity !== lastSev;
                             lastSev = issue.severity;
                             const meta = sevMeta[issue.severity] ?? sevMeta.warning;
                             const count = sorted.filter((i) => i.severity === issue.severity).length;
                             const isErr = issue.severity === 'error';
-                            const num = isErr ? ++errorSeq : ++warnSeq;
+                            const num = issue.severity === 'warning' ? ++warnSeq : 0;
+                            const fieldStr = String(issue.field || '');
+                            const errIcon =
+                              (issue.amounts || fieldStr === 'totalAmount' || fieldStr === 'unitPrice' || fieldStr === 'invoiceAmount')
+                                ? <Calculator size={17} />
+                                : (/date/i.test(fieldStr) || issue.id === 'input-date-order')
+                                  ? <Calendar size={17} />
+                                  : <FileText size={17} />;
                             const docLbl = exportIssueDocLabel(issue.docType);
                             return (
                               <Fragment key={issue.id}>
                                 {showHeader && (
                                   <div className={`sev-section-header ${meta.cls}`}>
+                                    <span className="sev-section-icon">{meta.icon}</span>
                                     <span className="sev-section-label">{meta.label}</span>
-                                    <span className="sev-section-count">{count}건</span>
+                                    <span className="sev-section-count">{count}</span>
+                                    {meta.hint && <span className="sev-section-hint">{meta.hint}</span>}
                                   </div>
                                 )}
                           <div className={`mobile-fix-card fix-card sev-${issue.severity}`}>
                             <div className="fix-card__head">
-                              <span className="fix-card__marker fix-card__marker--plain" aria-hidden="true">{num}</span>
+                              <span className={`fix-card__marker fix-card__marker--${isErr ? 'icon' : 'num'}`}>
+                                {isErr ? errIcon : num}
+                              </span>
                               <div className="fix-card__text">
                                 {(() => {
                                   // 메시지에서 근거 접미사와 마지막 (부연설명)을 분리해 렌더한다.
