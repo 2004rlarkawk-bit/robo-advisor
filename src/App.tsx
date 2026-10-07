@@ -83,6 +83,14 @@ import ImportStepIndicator from './components/import/ImportStepIndicator';
 import { saveBlobAs } from './utils/saveBlob';
 import { importDraftCacheKey } from './utils/importDraftCacheKey';
 import { renderDocxPreview } from './utils/docxPreview';
+// 서류 생성·미리보기 코드는 본 번들에 함께 싣는다 — 따로 나뉜 조각 파일은 다시 배포하면 이름이 바뀌어,
+// 배포 전에 연 탭에서 미리보기가 '가끔' 실패했다(시연 중 실패 방지).
+import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
+import { buildAirWaybillDocx } from './services/airWaybillDocxService';
+import { buildBillOfLadingDocx, renderBillOfLadingDocxPreview } from './services/billOfLadingDocxService';
+import { buildPackingListDocx, renderPackingListDocxPreview } from './services/packingListDocxService';
+import { buildExportDeclarationDocx, renderExportDeclarationDocxPreview } from './services/exportDeclarationDocxService';
+import { buildTransportRequestDocx, renderTransportRequestDocxPreview } from './services/transportRequestDocxService';
 import {
   createGeneratedTrade,
   createGeneratedImportTrade,
@@ -609,7 +617,6 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     if (!invoiceData) return null;
     const sig = JSON.stringify(invoiceData);
     if (invoiceDocxCacheRef.current?.sig === sig) return invoiceDocxCacheRef.current.blob;
-    const { buildInvoiceDocx } = await import('./services/invoiceDocxService');
     const blob = await buildInvoiceDocx(invoiceData);
     invoiceDocxCacheRef.current = { sig, blob };
     return blob;
@@ -622,8 +629,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     if (blDocxCacheRef.current?.sig === sig) return blDocxCacheRef.current.blob;
     // 항공 건은 같은 자리에서 항공화물운송장 서식으로 만든다.
     const blob = billOfLadingData.transportMode === 'AIR'
-      ? await (await import('./services/airWaybillDocxService')).buildAirWaybillDocx(billOfLadingData)
-      : await (await import('./services/billOfLadingDocxService')).buildBillOfLadingDocx(billOfLadingData);
+      ? await buildAirWaybillDocx(billOfLadingData)
+      : await buildBillOfLadingDocx(billOfLadingData);
     blDocxCacheRef.current = { sig, blob };
     return blob;
   };
@@ -633,7 +640,6 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     if (!packingListData) return null;
     const sig = JSON.stringify(packingListData);
     if (packingXlsxCacheRef.current?.sig === sig) return packingXlsxCacheRef.current.blob;
-    const { buildPackingListDocx } = await import('./services/packingListDocxService');
     const blob = await buildPackingListDocx(packingListData);
     packingXlsxCacheRef.current = { sig, blob };
     return blob;
@@ -644,7 +650,6 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     if (!customsDeclarationData) return null;
     const sig = JSON.stringify(customsDeclarationData);
     if (customsDocxCacheRef.current?.sig === sig) return customsDocxCacheRef.current.blob;
-    const { buildExportDeclarationDocx } = await import('./services/exportDeclarationDocxService');
     const blob = await buildExportDeclarationDocx(customsDeclarationData);
     customsDocxCacheRef.current = { sig, blob };
     return blob;
@@ -657,7 +662,6 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
     if (!transportRequestData) return null;
     const sig = JSON.stringify(transportRequestData);
     if (transportRequestDocxCacheRef.current?.sig === sig) return transportRequestDocxCacheRef.current.blob;
-    const { buildTransportRequestDocx } = await import('./services/transportRequestDocxService');
     const blob = await buildTransportRequestDocx(transportRequestData);
     transportRequestDocxCacheRef.current = { sig, blob };
     return blob;
@@ -676,7 +680,6 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   useEffect(() => {
     if (previewDocId !== 'invoice' || !invoiceData) return;
     return renderDocxPreview(getInvoiceBlob, docxPreviewRef, async (blob, host) => {
-      const { renderInvoiceDocxPreview } = await import('./services/invoiceDocxService');
       await renderInvoiceDocxPreview(blob, host);
     }, '상업송장');
   }, [previewDocId, invoiceData]);
@@ -685,7 +688,6 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   useEffect(() => {
     if (previewDocId !== 'bl' || !billOfLadingData) return;
     return renderDocxPreview(getBillOfLadingBlob, blDocxPreviewRef, async (blob, host) => {
-      const { renderBillOfLadingDocxPreview } = await import('./services/billOfLadingDocxService');
       await renderBillOfLadingDocxPreview(blob, host);
     }, '선하증권');
   }, [previewDocId, billOfLadingData]);
@@ -694,7 +696,6 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   useEffect(() => {
     if (previewDocId !== 'transport_request' || !transportRequestData) return;
     return renderDocxPreview(getTransportRequestBlob, trDocxPreviewRef, async (blob, host) => {
-      const { renderTransportRequestDocxPreview } = await import('./services/transportRequestDocxService');
       await renderTransportRequestDocxPreview(blob, host);
     }, '수출 운송의뢰서');
   }, [previewDocId, transportRequestData]);
@@ -703,7 +704,6 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   useEffect(() => {
     if (previewDocId !== 'packing_list' || !packingListData) return;
     return renderDocxPreview(getPackingListBlob, packingDocxPreviewRef, async (blob, host) => {
-      const { renderPackingListDocxPreview } = await import('./services/packingListDocxService');
       await renderPackingListDocxPreview(blob, host);
     }, '패킹리스트');
   }, [previewDocId, packingListData]);
@@ -712,7 +712,6 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   useEffect(() => {
     if (previewDocId !== 'customs_dec' || !customsDeclarationData) return;
     return renderDocxPreview(getCustomsDeclBlob, customsDocxPreviewRef, async (blob, host) => {
-      const { renderExportDeclarationDocxPreview } = await import('./services/exportDeclarationDocxService');
       await renderExportDeclarationDocxPreview(blob, host);
     }, '수출신고서');
   }, [previewDocId, customsDeclarationData]);
@@ -2149,7 +2148,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     const host = idoc.getElementById('pdf-host') as HTMLElement | null;
     if (!host) { document.body.removeChild(iframe); return; }
     // 같은 docx Blob을 인쇄 iframe 문서에 렌더(스타일도 그 문서에 주입됨).
-    const { renderInvoiceDocxPreview } = await import('./services/invoiceDocxService');
     await renderInvoiceDocxPreview(blob, host);
 
     const win = iframe.contentWindow!;
@@ -2522,10 +2520,20 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       .sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1)),
     [issues]
   );
-  const resolvedFixKeys = useMemo(
+  const liveResolvedFixKeys = useMemo(
     () => resolvedFixIssueKeys(profile, fixListIssues),
     [profile, fixListIssues]
   );
+  // 지금 안내 카드를 띄워 고치는 중인 항목은 [확인]을 눌러 카드를 닫아야 ✓로 바뀐다 —
+  // 숫자를 입력하는 도중에 카드가 사라지고 체크가 먼저 붙지 않게.
+  const resolvedFixKeys = useMemo(() => {
+    if (!activeFixIssue) return liveResolvedFixKeys;
+    const editingKey = issueKey(activeFixIssue);
+    if (!liveResolvedFixKeys.has(editingKey)) return liveResolvedFixKeys;
+    const next = new Set(liveResolvedFixKeys);
+    next.delete(editingKey);
+    return next;
+  }, [liveResolvedFixKeys, activeFixIssue]);
   const pendingFixCount = fixListIssues.filter(issue => !resolvedFixKeys.has(issueKey(issue))).length;
   // 검증 통과 카드에 "몇 건을 고쳤는지"를 보여 주려고, 고칠 항목이 남아 있던 동안의 최대 건수를 기억해 둔다.
   // 결과 화면에서 0건이 되면 그 수를 고친 건수로 확정하고, 입력을 비우는 초기화(결과 화면 밖)에서는 버린다.
@@ -2544,14 +2552,14 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     }
     fixPeakRef.current = 0;
   }, [openFixCount, hasGenerated]);
-  // 강조 중이던 항목이 해결되면 입력칸 강조와 안내를 함께 지운다.
-  // - 다시 생성해 검증 결과에서 사라진 경우: 결과 화면에서 '뒤로 가기'로 돌아와도 또 뜨지 않게.
-  // - 입력만 고쳐 오른쪽 목록에 ✓가 붙은 경우: 폼 안 카드만 숨기면 위쪽 공용 배너가 대신 떠서 같이 지운다.
+  // 다시 생성해 강조 중이던 항목이 검증 결과에서 사라지면 입력칸 강조와 안내를 함께 지운다 —
+  // 결과 화면에서 '뒤로 가기'로 돌아와도 이미 고친 항목이 또 뜨지 않게.
+  // (입력만 고친 경우에는 카드를 그대로 두고, [확인]을 눌러 닫을 때 ✓로 바뀐다.)
   useEffect(() => {
     if (!activeFixIssue || activeFixIssue.severity === 'info') return;
     const key = issueKey(activeFixIssue);
-    if (resolvedFixKeys.has(key) || !fixListIssues.some((issue) => issueKey(issue) === key)) clearFieldHighlight();
-  }, [fixListIssues, resolvedFixKeys]);
+    if (!fixListIssues.some((issue) => issueKey(issue) === key)) clearFieldHighlight();
+  }, [fixListIssues]);
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 
