@@ -656,15 +656,40 @@ body {
 .shipper-checkbox-row { display: flex; flex-wrap: wrap; gap: 12px 24px; padding: 0 18px 16px; color: var(--text-dark); font-size: 13px; }
 .shipper-checkbox-row label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
 .shipper-checkbox-row input { accent-color: var(--primary-color); }
-.frequent-partners { margin: 0 18px 16px; padding: 12px; border: 1px solid #93c5fd; border-radius: 10px; background: #eff6ff; }
-.frequent-partners-title { display: block; margin-bottom: 9px; color: #1e3a8a; font-size: 13px; }
-/* 3열 고정이면 거래처가 한 곳뿐이어도 1/3 폭으로 줄어 버튼이 이름을 덮는다 — 카드 최소 폭을 지킨다. */
-.frequent-partner-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
-.frequent-partner-card { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 10px; padding: 10px; border: 1px solid #93c5fd; box-shadow: 0 1px 2px rgba(30, 58, 138, 0.08); border-radius: 8px; background: #fff; }
+.frequent-partners { margin: 0 18px 16px; }
+.frequent-partners-title { display: block; margin-bottom: 9px; color: var(--text-light); font-size: 13px; }
+.frequent-partner-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.frequent-partner-card { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 10px; padding: 12px 14px; border: 1px solid #dbeafe; border-radius: 9px; background: #f4f8ff; }
 .frequent-partner-copy { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
-.frequent-partner-copy strong { overflow: hidden; color: var(--text-dark); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.frequent-partner-copy span { overflow: hidden; color: var(--text-light); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.frequent-partner-card .btn { flex: 0 0 auto; }
+.frequent-partner-copy strong { overflow: hidden; color: var(--text-dark); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.frequent-partner-copy span { overflow: hidden; color: var(--text-light); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.frequent-partner-card .btn { flex: 0 0 auto; background: #fff; color: #1d4ed8; }
+
+/* 화주 입력 A안: 바깥 카드 안에서는 섹션 테두리를 반복하지 않고 구분선과 여백으로 묶는다. */
+.shipper-workspace-form .trade-section-header { border-bottom: 0; margin-bottom: 8px; padding-bottom: 8px; }
+.shipper-title-icon { display: inline-grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; background: #eef5ff; color: #1762d1; }
+.shipper-workspace-form > .draft-save-status { display: flex; margin: 0 0 14px auto; }
+.shipper-workspace-form > .form-section,
+.shipper-workspace-form > .form-section[open] { margin-bottom: 0; border: 0; border-top: 1px solid #e2e9f2; border-radius: 0; background: #fff; overflow: visible; }
+.shipper-workspace-form > .form-section > .form-section-summary { padding: 18px; font-size: 16px; }
+.shipper-workspace-form > .form-section > .form-section-summary:hover { background: #f8fbff; }
+.shipper-section-number { display: inline-grid; min-width: 26px; height: 26px; place-items: center; border-radius: 7px; background: #eef5ff; color: #1762d1; font-size: 13px; font-weight: 700; }
+.shipper-workspace-form .section-reset-btn { padding: 4px 2px; border: 0; border-radius: 0; background: transparent; font-size: 13px; }
+.shipper-workspace-form .section-reset-btn:hover { color: var(--primary-color); }
+.shipper-basic-section > .form-grid,
+.shipper-partner-section > .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
+.shipper-basic-section > .form-grid { padding-bottom: 0; }
+.shipper-basic-section .req-badge { margin-left: 2px; padding: 0; background: none; font-size: 0; }
+.shipper-basic-section .req-badge::after { content: '*'; color: #dc2626; font-size: 15px; }
+.shipper-basic-optional { margin: 16px 18px 20px; padding-top: 14px; border-top: 1px dashed #dbe3ed; }
+.shipper-basic-optional > summary { display: flex; align-items: center; gap: 8px; width: fit-content; color: var(--text-light); font-size: 13px; font-weight: 600; cursor: pointer; }
+.shipper-basic-optional > summary span { color: #1762d1; font-size: 12px; }
+.shipper-basic-optional > .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; margin: 16px 0 0; }
+@media (max-width: 720px) {
+  .shipper-basic-section > .form-grid,
+  .shipper-partner-section > .form-grid,
+  .shipper-basic-optional > .form-grid { grid-template-columns: 1fr; }
+}
 .shipper-item-list { display: flex; flex-direction: column; gap: 12px; padding: 4px 18px 14px; }
 .shipper-item-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; background: var(--card-bg); }
 .shipper-item-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; color: var(--text-dark); font-size: 14px; }
