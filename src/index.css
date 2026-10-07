@@ -3391,6 +3391,8 @@ body {
 .shipper-cbm-input {
   font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em;
   padding-right: 46px; font-variant-numeric: tabular-nums;
+  /* 값이 비어 있을 때부터 결과값 칸임을 보이게 — 적용된 HS Code 칸과 같은 하늘색 */
+  border: 2px solid #2f6edb; background: #f5f9ff; color: #0b3d91;
 }
 .shipper-cbm-unit {
   position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
