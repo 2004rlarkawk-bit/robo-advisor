@@ -186,12 +186,6 @@ export default function ShipperWorkspaceForm({
     if (el) el.open = true;
   }, [fixSection, showOriginCard]);
 
-  useEffect(() => {
-    if (fixNotice?.fieldKey !== 'businessRegistrationNo') return;
-    const el = document.querySelector<HTMLDetailsElement>('.shipper-basic-optional');
-    if (el) el.open = true;
-  }, [fixNotice?.fieldKey, fixRevealKey]);
-
   const renderFixNoticeCard = (spanGrid = false) => {
     if (!fixNotice) return null;
     const qm = fixNotice.qtyMismatch;
@@ -522,12 +516,6 @@ export default function ShipperWorkspaceForm({
 
   // 수출신고서(초안) 전용 입력은 profile.exportDeclaration 한 곳에 모아 저장한다.
   const declaration: ExportDeclarationInfo = profile.exportDeclaration ?? {};
-  const optionalCompanyInfoCount = [
-    profile.businessRegistrationNo,
-    declaration.ownerCeoName,
-    declaration.customsCode,
-    declaration.postalCode,
-  ].filter((value) => Boolean(value?.trim())).length;
   const patchDeclaration = (patch: Partial<ExportDeclarationInfo>) => {
     onProfilePatch({ exportDeclaration: { ...declaration, ...patch } });
   };
@@ -753,16 +741,12 @@ export default function ShipperWorkspaceForm({
           <div className="form-group" data-field="companyAddress"><label className="form-label">회사 주소<Req /></label><input className="form-input" value={profile.companyAddress ?? ''} onChange={(event) => onProfilePatch({ companyAddress: event.target.value })} placeholder="123 Teheran-ro, Gangnam-gu, Seoul, South Korea" /></div>
           <div className="form-group" data-field="contact"><label className="form-label">회사 연락처<Req /></label><input className="form-input" type="tel" value={profile.contact} onChange={(event) => onProfilePatch({ contact: event.target.value })} placeholder="+82-2-1234-5678" /></div>
           <div className="form-group"><label className="form-label">국가</label><CountrySelect className="form-input" value={profile.companyCountry ?? ''} onChange={(value) => onProfilePatch({ companyCountry: value })} /></div>
+          {/* 선택 입력도 접지 않고 같은 줄에 바로 보인다. */}
+            <div className="form-group" data-field="businessRegistrationNo"><label className="form-label">사업자등록번호 <span className="optional-label">(선택)</span></label><input className="form-input" value={profile.businessRegistrationNo ?? ''} onChange={(event) => onProfilePatch({ businessRegistrationNo: event.target.value, taxNo: event.target.value })} placeholder="123-45-67890" /></div>
+            <div className="form-group"><label className="form-label">대표자 성명 <span className="optional-label">(선택)</span></label><input className="form-input" value={declaration.ownerCeoName ?? ''} onChange={(e) => patchDeclaration({ ownerCeoName: e.target.value })} placeholder="홍길동" /></div>
+            <div className="form-group"><label className="form-label">통관고유부호 <span className="optional-label">(선택)</span></label><input className="form-input" value={declaration.customsCode ?? ''} onChange={(e) => patchDeclaration({ customsCode: e.target.value })} placeholder="관세청에서 부여받은 부호" /></div>
+            <div className="form-group"><label className="form-label">사업장 우편번호 <span className="optional-label">(선택)</span></label><input className="form-input" inputMode="numeric" maxLength={5} value={declaration.postalCode ?? ''} onChange={(e) => patchDeclaration({ postalCode: e.target.value.replace(/\D/g, '') })} placeholder="5자리" /></div>
         </div>
-        <details className="shipper-basic-optional">
-          <summary>선택 정보 4개 보기{optionalCompanyInfoCount > 0 && <span>{optionalCompanyInfoCount}개 입력됨</span>}</summary>
-          <div className="form-grid">
-            <div className="form-group" data-field="businessRegistrationNo"><label className="form-label">사업자등록번호</label><input className="form-input" value={profile.businessRegistrationNo ?? ''} onChange={(event) => onProfilePatch({ businessRegistrationNo: event.target.value, taxNo: event.target.value })} placeholder="123-45-67890" /></div>
-            <div className="form-group"><label className="form-label">대표자 성명</label><input className="form-input" value={declaration.ownerCeoName ?? ''} onChange={(e) => patchDeclaration({ ownerCeoName: e.target.value })} placeholder="홍길동" /></div>
-            <div className="form-group"><label className="form-label">통관고유부호</label><input className="form-input" value={declaration.customsCode ?? ''} onChange={(e) => patchDeclaration({ customsCode: e.target.value })} placeholder="관세청에서 부여받은 부호" /></div>
-            <div className="form-group"><label className="form-label">사업장 우편번호</label><input className="form-input" inputMode="numeric" maxLength={5} value={declaration.postalCode ?? ''} onChange={(e) => patchDeclaration({ postalCode: e.target.value.replace(/\D/g, '') })} placeholder="5자리" /></div>
-          </div>
-        </details>
       </details>
 
       <details className="form-section shipper-card-surface shipper-partner-section" data-form-section={2}>

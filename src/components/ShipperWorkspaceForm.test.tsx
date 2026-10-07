@@ -129,22 +129,13 @@ describe('화주용 통관 입력 폼', () => {
     expect(rendered.container.querySelector('.req-badge')).toBeNull();
   });
 
-  it('기본정보는 필수 입력을 먼저 보이고 선택 정보는 접어 두되 값은 유지한다', () => {
+  it('기본정보의 선택 입력도 접지 않고 바로 보이며 값은 유지한다', () => {
     const rendered = renderForm([firstItem], false, { businessRegistrationNo: '123-45-67890' });
-    const optional = rendered.container.querySelector<HTMLDetailsElement>('.shipper-basic-optional');
-    expect(optional?.open).toBe(false);
-    expect(optional?.querySelector('summary')?.textContent).toContain('1개 입력됨');
-    expect(rendered.container.querySelector('.shipper-basic-section > .form-grid')?.children).toHaveLength(4);
-    act(() => optional?.querySelector('summary')?.click());
-    expect(optional?.open).toBe(true);
-    expect(optional?.querySelector<HTMLInputElement>('[data-field="businessRegistrationNo"] input')?.value).toBe('123-45-67890');
-  });
-
-  it('사업자등록번호 수정 안내로 진입하면 접힌 선택 정보를 펼친다', () => {
-    const rendered = renderForm([firstItem], false, {}, {}, '', undefined, {
-      fieldKey: 'businessRegistrationNo', message: '사업자등록번호를 확인해 주세요.',
-    });
-    expect(rendered.container.querySelector<HTMLDetailsElement>('.shipper-basic-optional')?.open).toBe(true);
+    expect(rendered.container.querySelector('.shipper-basic-optional')).toBeNull();
+    expect(rendered.container.textContent).not.toContain('선택 정보');
+    const grid = rendered.container.querySelector('.shipper-basic-section > .form-grid');
+    expect(grid?.children).toHaveLength(8);
+    expect(grid?.querySelector<HTMLInputElement>('[data-field="businessRegistrationNo"] input')?.value).toBe('123-45-67890');
   });
 
   it('HS Code 입력칸만 색으로 강조하고 기존 값은 유지한다', () => {
