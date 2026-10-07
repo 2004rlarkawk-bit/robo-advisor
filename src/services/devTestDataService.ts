@@ -151,8 +151,8 @@ export function createPerfectTestProfile(currentProfile: TradeProfile, now = new
   ) as unknown as TradeProfile;
 }
 
-// 시연 품목 수량 — 포장(8박스 × 20개 = 160개)보다 10개 적게 넣어 수량 불일치(R10)가 걸리게 한다.
-const DEMO_ITEM_QUANTITY = 150;
+// 시연 품목 수량 — 포장(8박스 × 20개 = 160개)과 맞춰 수량 불일치(R10)는 걸리지 않게 한다(시연 시간 단축).
+const DEMO_ITEM_QUANTITY = 160;
 const DEMO_ITEM_UNIT_PRICE = 120;
 
 /**
@@ -160,10 +160,9 @@ const DEMO_ITEM_UNIT_PRICE = 120;
  * 품목은 수량·단가·통화·상표명·성분을, 포장은 박스 수·박스당 수량·포장 종류·중량을 채운다.
  *
  * 생성하면 일부러 아래 항목이 걸리게 맞춰 두었다.
- * - 반드시 수정: 패킹리스트·상업송장 수량 불일치(R10 — 상업송장 150개, 포장 160개),
- *   신용장 개설일이 출항일보다 늦음(R14)
+ * - 반드시 수정: 신용장 개설일이 출항일보다 늦음(R14)
  * - 확인 권장: 도착 예정일 연도 오타(R21 — 운송 기간 반년 초과)
- * 중량은 총중량 ≥ 순중량으로 맞춰 오류가 나지 않게 한다.
+ * 상업송장 수량(160)은 포장(8박스 × 20개)과 같고, 중량은 총중량 ≥ 순중량으로 맞춰 오류가 나지 않게 한다.
  */
 export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = new Date()): TradeProfile {
   const departureDate = futureDate(7, now);
