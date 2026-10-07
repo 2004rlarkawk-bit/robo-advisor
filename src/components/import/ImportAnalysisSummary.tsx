@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, Plus, Trash2 } from 'lucide-react';
+import RequiredMark from '../RequiredMark';
 import { syncLegacyImportFields } from '../../services/importDocumentAnalysisService';
 import type {
   ImportAnalysisResult,
@@ -47,12 +48,14 @@ const EMPTY_ITEM = (): ImportItem => ({
 
 function TextField({
   label,
+  required,
   value,
   onChange,
   type = 'text',
   placeholder,
 }: {
   label: string;
+  required?: boolean;
   value: string;
   onChange: (value: string) => void;
   type?: string;
@@ -60,7 +63,7 @@ function TextField({
 }) {
   return (
     <label className="form-group">
-      <span className="form-label">{label}</span>
+      <span className="form-label">{label}{required && <RequiredMark />}</span>
       <input className="form-input user-editable" type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
@@ -98,7 +101,7 @@ function AdaptiveFieldGrid({
     <>
       <div className="import-field-grid">
         {specs.filter(isShown).map((spec) => (
-          <TextField key={spec.key} label={spec.label} value={spec.value} type={spec.type} placeholder={spec.placeholder} onChange={spec.onChange} />
+          <TextField key={spec.key} label={spec.label} required={spec.required} value={spec.value} type={spec.type} placeholder={spec.placeholder} onChange={spec.onChange} />
         ))}
       </div>
       {!readOnly && hidden.length > 0 && (

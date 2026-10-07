@@ -55,6 +55,17 @@ function renderForm(requireExplicitServiceRole = false) {
 }
 
 describe('ProfileForm 서비스 이용 목적 선택', () => {
+  it('필수 항목에는 접근 가능한 빨간 별표를 사용하고 선택 항목은 그대로 둔다', () => {
+    const rendered = renderForm(true);
+    const marks = rendered.container.querySelectorAll('.required-star');
+    expect(marks).toHaveLength(5);
+    marks.forEach((mark) => {
+      expect(mark.textContent).toBe('*');
+      expect(mark.getAttribute('aria-label')).toBe('필수');
+    });
+    expect(rendered.container.querySelector('.login-label')?.textContent).toBe('회사명*');
+  });
+
   it('프로필 기본정보와 선택 통관고유부호를 수정하고 저장 payload로 전달한다', async () => {
     const rendered = renderForm();
     const labels = Array.from(rendered.container.querySelectorAll('label'));

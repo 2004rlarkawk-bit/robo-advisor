@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { AppMenu } from '../../services/workspaceSessionService';
 import type { WorkspaceRole } from '../../utils/workspaceRole';
+import Logo from '../Logo';
 
 interface NavigationItem {
   menu: AppMenu;
@@ -79,9 +80,8 @@ export default function AppSidebar({ activeMenu, collapsed, role, onNavigate, on
           }
         }}
       >
-        <div className="logo-icon">🚢</div>
-        <div>
-          <div className="logo-text">PortAI</div>
+        <div className="logo-lockup">
+          <Logo size="sidebar" background="dark" />
           <div className="logo-sub">수출입 서류 작성 · 검토 지원 플랫폼</div>
         </div>
       </div>

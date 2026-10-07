@@ -99,17 +99,7 @@ body {
   outline-offset: 2px;
 }
 
-.logo-icon {
-  font-size: 28px;
-}
-
-.logo-text {
-  font-family: var(--font-logo);
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  color: #ffffff;
-}
+.logo-lockup { min-width: 0; }
 
 .logo-sub {
   font-size: 10px;
@@ -579,9 +569,7 @@ body {
 }
 
 /* 2026-07-23 편의성 업그레이드: 화주용 통관 입력 폼 확장 */
-.shipper-workspace-form .form-section > .form-message,
 .forwarder-workspace-form .form-section > .form-message { margin: 0 18px 16px; }
-.forwarder-workspace-form .form-label b { color: var(--error-color); }
 .forwarder-attachment-uploader { display: grid; gap: 12px; padding: 0 18px 18px; }
 .forwarder-attachment-picker { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
 .forwarder-attachment-picker .form-group { flex: 1 1 280px; margin: 0; }
@@ -665,23 +653,26 @@ body {
 .frequent-partner-copy span { overflow: hidden; color: var(--text-light); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .frequent-partner-card .btn { flex: 0 0 auto; background: #fff; color: #1d4ed8; }
 
-/* 화주 입력 A안: 바깥 카드 안에서는 섹션 테두리를 반복하지 않고 구분선과 여백으로 묶는다. */
+/* 품목 카드와 같은 표면을 모든 화주 입력 섹션에 재사용한다. */
 .shipper-workspace-form .trade-section-header { border-bottom: 0; margin-bottom: 8px; padding-bottom: 8px; }
 .shipper-title-icon { display: inline-grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; background: #eef5ff; color: #1762d1; }
 .shipper-workspace-form > .draft-save-status { display: flex; margin: 0 0 14px auto; }
-.shipper-workspace-form > .form-section,
-.shipper-workspace-form > .form-section[open] { margin-bottom: 0; border: 0; border-top: 1px solid #e2e9f2; border-radius: 0; background: #fff; overflow: visible; }
-.shipper-workspace-form > .form-section > .form-section-summary { padding: 18px; font-size: 16px; }
-.shipper-workspace-form > .form-section > .form-section-summary:hover { background: #f8fbff; }
+.shipper-card-surface { border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; background: var(--card-bg); }
+.shipper-workspace-form > .form-section { margin-bottom: 14px; overflow: visible; }
+.shipper-workspace-form > .form-section[open] { background: var(--card-bg); }
+.shipper-workspace-form > .form-section > .form-section-summary { padding: 0; font-size: 16px; }
+.shipper-workspace-form > .form-section[open] > .form-section-summary { margin-bottom: 16px; }
+.shipper-workspace-form > .form-section > .form-section-summary:hover { background: transparent; }
+.shipper-workspace-form > .form-section > .form-grid { padding: 0; }
+.shipper-workspace-form > .form-section > .form-message { margin: 0 0 16px; }
+.shipper-workspace-form > .form-section > .form-section-note { margin: 0 0 14px; }
 .shipper-section-number { display: inline-grid; min-width: 26px; height: 26px; place-items: center; border-radius: 7px; background: #eef5ff; color: #1762d1; font-size: 13px; font-weight: 700; }
 .shipper-workspace-form .section-reset-btn { padding: 4px 2px; border: 0; border-radius: 0; background: transparent; font-size: 13px; }
 .shipper-workspace-form .section-reset-btn:hover { color: var(--primary-color); }
 .shipper-basic-section > .form-grid,
 .shipper-partner-section > .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
 .shipper-basic-section > .form-grid { padding-bottom: 0; }
-.shipper-basic-section .req-badge { margin-left: 2px; padding: 0; background: none; font-size: 0; }
-.shipper-basic-section .req-badge::after { content: '*'; color: #dc2626; font-size: 15px; }
-.shipper-basic-optional { margin: 16px 18px 20px; padding-top: 14px; border-top: 1px dashed #dbe3ed; }
+.shipper-basic-optional { margin: 16px 0 0; padding-top: 14px; border-top: 1px dashed #dbe3ed; }
 .shipper-basic-optional > summary { display: flex; align-items: center; gap: 8px; width: fit-content; color: var(--text-light); font-size: 13px; font-weight: 600; cursor: pointer; }
 .shipper-basic-optional > summary span { color: #1762d1; font-size: 12px; }
 .shipper-basic-optional > .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; margin: 16px 0 0; }
@@ -690,8 +681,9 @@ body {
   .shipper-partner-section > .form-grid,
   .shipper-basic-optional > .form-grid { grid-template-columns: 1fr; }
 }
-.shipper-item-list { display: flex; flex-direction: column; gap: 12px; padding: 4px 18px 14px; }
-.shipper-item-card { border: 1px solid var(--border-color); border-radius: 10px; padding: 16px; background: var(--card-bg); }
+.shipper-workspace-form .frequent-partners { margin: 0 0 16px; }
+.shipper-workspace-form .shipper-checkbox-row { padding: 0 0 16px; }
+.shipper-item-list { display: flex; flex-direction: column; gap: 12px; padding: 0; }
 .shipper-item-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; color: var(--text-dark); font-size: 14px; }
 .shipper-item-card .form-grid { margin-bottom: 0; }
 .shipper-hs-suggestion-panel { grid-column: 1 / -1; border: 1px solid var(--border-color); border-radius: 9px; padding: 12px; background: var(--background-color); }
@@ -755,7 +747,7 @@ body {
 .shipper-hs-more > summary:hover { color: var(--primary-color); }
 .shipper-hs-more[open] > .shipper-hs-suggestion-list { margin-top: 6px; }
 .shipper-hs-applied { margin-top: 8px; color: #047857; font-size: 12px; font-weight: 700; }
-.shipper-item-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 18px 18px; color: var(--text-dark); font-size: 14px; }
+.shipper-item-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 14px; padding: 0; color: var(--text-dark); font-size: 14px; }
 .shipper-item-actions .form-message { margin: 0; }
 .shipper-inline-select { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; white-space: nowrap; }
 .shipper-inline-select .form-input { width: auto; min-width: 150px; }
@@ -2334,7 +2326,6 @@ body {
 .account-modal-actions button { min-height: 42px; padding: 0 18px; }
 .account-modal-cancel { border: 1px solid var(--border-color); background: #fff; color: var(--text-dark); }
 .account-modal-confirm { border: 1px solid #b42318; background: #b42318; color: #fff; }
-.profile-form .login-label b { color: var(--error-color); }
 
 .form-message { border-radius: 8px; padding: 11px 13px; font-size: 13px; line-height: 1.5; }
 .form-message.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
@@ -2596,11 +2587,8 @@ body {
 .risk-item p { margin: 5px 0; font-size: 13px; line-height: 1.55; color: #475569; }
 .risk-item small { display: block; margin-top: 3px; color: var(--text-light); }
 
-/* 필수 입력 배지 — 미입력 시 문서 생성이 차단되는 항목의 라벨 옆에 표시 */
-.form-label .req-badge {
-  margin-left: 5px; padding: 1px 7px; border-radius: 999px; vertical-align: 1px;
-  background: #fef2f2; color: #dc2626; font-size: 10.5px; font-weight: 700;
-}
+/* 필수 표시는 모든 입력 화면에서 라벨 바로 뒤의 별표 하나로 통일한다. */
+.required-star { margin-left: 2px; color: #dc2626; font-size: 1em; font-weight: 700; }
 
 /* 수입 종합 리스크 — 수출 확인 항목(fix-card)과 같은 문법의 부속 요소 */
 .risk-resolved { opacity: 0.55; }

@@ -114,6 +114,21 @@ function renderForm(
 }
 
 describe('화주용 통관 입력 폼', () => {
+  it('모든 입력 섹션과 품목에 같은 카드 표면을 쓰고 필수 라벨에는 별표 하나만 보인다', () => {
+    const rendered = renderForm();
+    const sections = rendered.container.querySelectorAll('.shipper-workspace-form > .form-section');
+    expect(sections).toHaveLength(7);
+    sections.forEach((section) => expect(section.classList.contains('shipper-card-surface')).toBe(true));
+    expect(rendered.container.querySelector('.shipper-item-card')?.classList.contains('shipper-card-surface')).toBe(true);
+    const marks = rendered.container.querySelectorAll('.form-label .required-star');
+    expect(marks).toHaveLength(14);
+    marks.forEach((mark) => {
+      expect(mark.textContent).toBe('*');
+      expect(mark.getAttribute('aria-label')).toBe('필수');
+    });
+    expect(rendered.container.querySelector('.req-badge')).toBeNull();
+  });
+
   it('기본정보는 필수 입력을 먼저 보이고 선택 정보는 접어 두되 값은 유지한다', () => {
     const rendered = renderForm([firstItem], false, { businessRegistrationNo: '123-45-67890' });
     const optional = rendered.container.querySelector<HTMLDetailsElement>('.shipper-basic-optional');

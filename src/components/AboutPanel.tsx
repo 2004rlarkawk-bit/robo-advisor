@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Sparkles
 } from 'lucide-react';
+import Logo from './Logo';
 import '../styles/aboutHero.css';
 
 interface Props {
@@ -482,13 +483,7 @@ export default function AboutPanel({
         <canvas ref={canvasRef} className="portai-hero-canvas" />
         <div className="portai-hero-inner">
           <div className="ah-brand ah-rise ah-d1">
-            <svg viewBox="0 0 48 48" aria-hidden="true" fill="none">
-              <path d="M24 6l7 8H17l7-8z" fill="#4E9BFF" />
-              <rect x="22.4" y="12" width="3.2" height="13" rx="1" fill="#8FC0FF" />
-              <path d="M9 27h30l-3.4 9.5a5 5 0 0 1-4.7 3.3H17.1a5 5 0 0 1-4.7-3.3L9 27z" fill="#2F80F0" />
-              <path d="M9 27h30" stroke="#BFE0FF" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
-            <span className="ah-wordmark">Port<b>AI</b></span>
+            <Logo size="hero" background="dark" />
           </div>
           <h1 className="ah-rise ah-d2">복잡한 통관 문서,<br /><span className="ah-ai">AI</span>로 빠르고 간편하게.</h1>
           <p className="ah-sub ah-rise ah-d3">수출입 서류 작성 · 검토 지원 플랫폼</p>

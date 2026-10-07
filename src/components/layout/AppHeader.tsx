@@ -12,6 +12,7 @@ import type { AppMenu } from '../../services/workspaceSessionService';
 import type { WorkspaceRole } from '../../utils/workspaceRole';
 import type { NotificationRecord } from '../../types/forwarderRequest';
 import NotificationBell from '../NotificationBell';
+import Logo from '../Logo';
 import '../../styles/forwarderPolish.css';
 
 interface AppHeaderProps {
@@ -63,10 +64,10 @@ export default function AppHeader({
         </button>
         {onProductNameClick ? (
           <button type="button" className="header-product-name header-product-name--button" onClick={onProductNameClick} title="처음 화면으로">
-            PortAI
+            <Logo size="header" background={forwarderMode ? 'dark' : 'light'} />
           </button>
         ) : (
-          <span className="header-product-name">PortAI</span>
+          <span className="header-product-name"><Logo size="header" background={forwarderMode ? 'dark' : 'light'} /></span>
         )}
         {canSwitchRole && onRoleChange ? (
           // 겸용 계정: 칩 하나를 누르면 반대 역할로 전환한다.
