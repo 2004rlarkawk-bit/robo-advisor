@@ -4690,6 +4690,55 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 .inline-fix-card .ifc-btn { border-radius: 3px; }
 .mobile-fix-list .mobile-btn,
 .mobile-fix-list .mobile-input { border-radius: 3px; }
+/* 수출 검증 결과: 카드와 입력 UI는 유지하고 중복된 강조 장식만 덜어낸다. */
+.export-fix-list .sev-section-header {
+  gap: 5px;
+  margin-top: 18px;
+  padding: 8px 2px;
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 0;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 650;
+}
+.export-fix-list .sev-section-header.sev-error { color: #b42318; background: #fff; }
+.export-fix-list .sev-section-header.sev-warning { color: #a9620b; background: #fff; }
+.export-fix-list .sev-section-count {
+  display: inline;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent !important;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+.export-fix-list .mobile-fix-card,
+.export-fix-list .sev-section-header + .mobile-fix-card {
+  margin-top: 8px;
+  padding: 15px 17px;
+  border-radius: 8px;
+}
+.export-fix-list .fix-card__marker--plain {
+  width: 18px;
+  height: 22px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+.export-fix-list .fix-card__title { font-size: 14px; font-weight: 600; line-height: 1.45; }
+.export-fix-list .fix-card__desc { color: #64748b; font-size: 13px; }
+.export-fix-list .fix-card__action { font-weight: 600; }
+.export-fix-list .sev-warning .fix-card__action {
+  border-color: #cbd5e1;
+  color: #475569;
+}
+.export-fix-list .sev-warning .fix-card__action:hover { background: #f8fafc; }
 /* 수출 결과 화면 하단 — 전체 문서 전송·뒤로 가기(입력 수정) */
 .result-submit-actions .btn { border-radius: 3px; }
 
