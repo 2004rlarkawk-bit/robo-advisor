@@ -150,11 +150,11 @@
 }
 
 .shipper-request-table-head {
-  min-height: 44px;
+  min-height: 48px;
   padding: 0 24px;
   background: #fafbfd;
-  color: #7b8aa0;
-  font-size: 11px;
+  color: #64748b;
+  font-size: 13.5px;
   font-weight: 800;
 }
 
@@ -622,10 +622,24 @@
 }
 
 .notif-item:hover { background: #f8fafc; }
-.notif-item.unread {
-  background: #fff8f8;
-  box-shadow: inset 3px 0 #ef4444;
+/* 읽지 않은 알림 — 왼쪽 줄 없이 종류별 연한 바탕만. 수락(성공)은 하늘색. */
+.notif-item.unread { background: #f5f9ff; }
+.notif-item.unread.tone-success { background: #e8f3ff; }
+.notif-item.unread.tone-warning { background: #fffaf0; }
+.notif-item.unread.tone-danger { background: #fff6f6; }
+
+/* 왼쪽으로 밀어 삭제 — 행 뒤에 빨간 삭제 층을 깔고, 행이 밀리면 드러난다. */
+.notif-swipe { position: relative; overflow: hidden; }
+.notif-swipe-bg {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-end; gap: 5px;
+  padding-right: 20px; background: #fca5a5; color: #7f1d1d; font-size: 12px; font-weight: 700;
+  transition: background .15s;
 }
+.notif-swipe-bg.is-armed { background: #dc2626; color: #fff; }
+.notif-swipe > .notif-item { position: relative; touch-action: pan-y; transition: transform .2s ease; }
+.notif-swipe > .notif-item:not(.unread) { background: #fff; }
+.notif-swipe > .notif-item:not(.unread):hover { background: #f8fafc; }
+.notif-swipe > .notif-item.is-swiping { transition: none; user-select: none; cursor: grabbing; }
 
 .notif-type-icon {
   width: 31px;

@@ -77,7 +77,7 @@ describe('App에서 분리한 모달', () => {
       customsDocxPreviewRef: createRef<HTMLDivElement>(),
     });
 
-    it('상업송장은 docx 렌더 영역을 붙이고 DOCX + PDF 저장으로 안내한다', () => {
+    it('상업송장은 docx 렌더 영역을 붙이고 다른 서류처럼 DOCX 다운로드로 안내한다', () => {
       const onDownload = vi.fn();
       const onClose = vi.fn();
       const r = refs();
@@ -88,7 +88,7 @@ describe('App에서 분리한 모달', () => {
       expect(r.docxPreviewRef.current).not.toBeNull();
       expect(r.packingDocxPreviewRef.current).toBeNull();
 
-      act(() => button('DOCX + PDF 저장').click());
+      act(() => button('DOCX 다운로드').click());
       expect(onDownload).toHaveBeenCalledWith('invoice');
       act(() => button('닫기').click());
       expect(onClose).toHaveBeenCalledOnce();

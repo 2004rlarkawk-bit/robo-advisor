@@ -85,6 +85,7 @@ import ImportStepIndicator from './components/import/ImportStepIndicator';
 import { saveBlobAs } from './utils/saveBlob';
 import { importDraftCacheKey } from './utils/importDraftCacheKey';
 import { renderDocxPreview } from './utils/docxPreview';
+import { isDemoRehearsalMode, setDemoRehearsalMode } from './services/demoRehearsalMode';
 // 서류 생성·미리보기 코드는 본 번들에 함께 싣는다 — 따로 나뉜 조각 파일은 다시 배포하면 이름이 바뀌어,
 // 배포 전에 연 탭에서 미리보기가 '가끔' 실패했다(시연 중 실패 방지).
 import { buildInvoiceDocx, renderInvoiceDocxPreview } from './services/invoiceDocxService';
@@ -159,6 +160,7 @@ import {
 } from './services/forwarderAirWaybillService';
 import {
   applyExportRequestToForwarderForm,
+  listForwarderExportRequests,
   type ForwarderExportRequest,
 } from './services/forwarderExportRequestService';
 import { saveExportForwarderCaseState } from './services/exportForwarderCaseService';
@@ -840,7 +842,25 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
 
   // 화주가 보낸 운송의뢰(S/R)를 포워더 입력 폼에 반영한다.
   // 부킹 이후 정보(선사·선박·항차·컨테이너)는 비워 두고 포워더가 직접 채운다.
+  // 수출 포워더 STEP 1 맨 위에 보여 줄 원본 화주 거래(그 거래의 생성 서류).
+  // 의뢰를 불러올 때 받아 두고, 저장된 포워더 거래를 다시 열면 원본 의뢰 목록에서 찾아온다.
+  const [exportSourceTrade, setExportSourceTrade] = useState<SavedTrade | null>(null);
+  useEffect(() => {
+    if (workspaceRole !== 'forwarder' || !appliedExportRequestId) return;
+    if (exportSourceTrade?.id === appliedExportRequestId) return;
+    let cancelled = false;
+    void listForwarderExportRequests()
+      .then((requests) => {
+        if (cancelled) return;
+        const source = requests.find((request) => request.tradeId === appliedExportRequestId);
+        if (source) setExportSourceTrade(source.trade);
+      })
+      .catch((error) => console.warn('[수출 포워더] 화주 제출 서류 조회 실패:', error));
+    return () => { cancelled = true; };
+  }, [workspaceRole, appliedExportRequestId, exportSourceTrade?.id]);
+
   const handleApplyExportRequest = (request: ForwarderExportRequest) => {
+    setExportSourceTrade(request.trade);
     setForwarderForm((current) => applyExportRequestToForwarderForm(request, current));
     setAppliedExportRequestId(request.tradeId);
     const contact = request.trade.profile.contact?.trim() ?? '';
@@ -1286,6 +1306,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const handleSupportPhoneClick = () => {
     if (isProcessing || workspaceRole !== 'shipper') return;
     setProfile((current) => createDemoRehearsalProfile(current));
+    // 시연 모드 — 이후 생성·HS 추천은 미리 정한 결과로 일정한 시간에 끝난다(화면 표시 없음).
+    setDemoRehearsalMode(true);
     setDevTestMode(null);
     setDevTestMessage('');
   };
@@ -1294,6 +1316,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   const handleSupportTitleClick = () => {
     if (isProcessing || workspaceRole !== 'shipper') return;
     handleReset();
+    // 처음부터 다시 — Q&A 즉석 입력은 실시간 AI로 돈다.
+    setDemoRehearsalMode(false);
   };
 
   const handleReset = () => {
@@ -1465,7 +1489,8 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       const generationProfile = createNormalDocumentIdentifiers(profileOverride ?? profile);
       setProfile(generationProfile);
       const orchestrator = new OrchestratorAgent();
-      const result = await orchestrator.run({ profile: generationProfile, useLLM: getSettings().useLLM });
+      // 시연 모드(전화번호로 채운 리허설)에서는 실시간 AI 피드백을 건너뛰어 콘솔 시간을 고정한다.
+      const result = await orchestrator.run({ profile: generationProfile, useLLM: getSettings().useLLM && !isDemoRehearsalMode() });
 
       // Simulate terminal printing for all logs chronologically
       // 로그가 많아도 출력 연출은 약 3초 안에 끝낸다(줄당 최대 120ms).
@@ -1862,7 +1887,14 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
 
   // 보완 요청 거래가 포워더 의뢰 목록에 없으면(이미 수정하려고 다시 연 건) 수정 화면으로 바로 연다.
   // 그 화면 2단계 상단에도 같은 요청 카드가 뜬다.
+  // 포워더 의뢰 화면으로 보낸 알림 종류 — 목록에 거래가 없을 때 무엇을 대신할지 정한다.
+  const requestsFocusKindRef = useRef<'return' | 'message'>('return');
   const handleRequestsFocusMissing = (tradeId: string) => {
+    if (requestsFocusKindRef.current === 'message') {
+      // 대화는 의뢰 목록에 있는 거래에만 있다 — 목록에 없으면 문서 수정으로 끌고 가지 않고 알린다.
+      setNotificationTargetError('이 메시지의 거래를 포워더 의뢰 목록에서 찾을 수 없습니다.');
+      return;
+    }
     void fetchSavedTradeById(tradeId)
       .then(async (trade) => {
         if (!trade) {
@@ -1883,7 +1915,9 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
       // 화주가 보완 요청 알림을 누르면 바로 수정 화면으로 보내지 않는다 — 어떤 서류를 왜 고쳐야
       // 하는지 모른 채 2단계에 떨어지기 때문이다. 포워더 의뢰 화면에서 그 거래의 요청 카드와
       // 대화를 먼저 열고, 거기서 [문서 수정하러 가기]로 넘어간다.
-      if (notification.type === 'trade_return_requested' && notification.tradeId) {
+      // 메시지 알림도 같은 방식으로 그 거래의 대화 창을 바로 연다 — 목록에서 거래를 다시 찾지 않게.
+      if ((notification.type === 'trade_return_requested' || notification.type === 'trade_message_received') && notification.tradeId) {
+        requestsFocusKindRef.current = notification.type === 'trade_message_received' ? 'message' : 'return';
         setRequestsFocusTradeId(notification.tradeId);
       }
       return;
@@ -2013,7 +2047,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     setIsRevalidating(true);
     try {
       const orchestrator = new OrchestratorAgent();
-      const result = await orchestrator.run({ profile: updatedProfile, useLLM: getSettings().useLLM });
+      const result = await orchestrator.run({ profile: updatedProfile, useLLM: getSettings().useLLM && !isDemoRehearsalMode() });
 
       if (seq !== rerunSeqRef.current) return; // 더 최신 재검증이 시작됨 — 이 결과는 폐기
 
@@ -2121,45 +2155,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   // 파일 이름 규칙 PortAI_문서명_월.일 — 호출부가 .pdf를 .docx로 바꿔 쓰므로 .pdf를 붙여 돌려준다.
   const getDocFileName = (docId: string) =>
     portaiFileName(docId === 'customs_dec' && tradeDirection === 'import' ? 'import_declaration' : docId, 'pdf');
-
-  // 상업송장 docx Blob을 브라우저 인쇄로 PDF 저장 — 미리보기와 같은 docx-preview 렌더를 인쇄 iframe에 그려
-  // 벡터(텍스트 선택·추출 가능) PDF로 뽑는다. (정적 호스팅이라 서버 soffice 변환은 불가 → 클라이언트 인쇄 사용.)
-  const printInvoiceAsPdf = async (blob: Blob) => {
-    const title = getDocFileName('invoice').replace(/\.pdf$/i, '').replace(/[<>"'&]/g, '');
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('aria-hidden', 'true');
-    iframe.style.cssText = 'position:fixed; right:0; bottom:0; width:0; height:0; border:0;';
-    document.body.appendChild(iframe);
-
-    const idoc = iframe.contentWindow?.document;
-    if (!idoc) {
-      document.body.removeChild(iframe);
-      alert('PDF 인쇄 창 생성에 실패했습니다. 다시 시도해 주세요.');
-      return;
-    }
-    // docx는 자체 여백을 가지므로 @page 여백은 0으로 두고 docx-preview 렌더의 여백을 그대로 살린다.
-    idoc.open();
-    idoc.write(
-      '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>' + title + '</title>' +
-      '<style>@page { size: A4; margin: 0; } html, body { margin: 0; padding: 0; background: #fff; }' +
-      '* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }</style></head>' +
-      '<body><div id="pdf-host"></div></body></html>'
-    );
-    idoc.close();
-
-    const host = idoc.getElementById('pdf-host') as HTMLElement | null;
-    if (!host) { document.body.removeChild(iframe); return; }
-    // 같은 docx Blob을 인쇄 iframe 문서에 렌더(스타일도 그 문서에 주입됨).
-    await renderInvoiceDocxPreview(blob, host);
-
-    const win = iframe.contentWindow!;
-    let cleaned = false;
-    const cleanup = () => { if (cleaned) return; cleaned = true; if (iframe.parentNode) document.body.removeChild(iframe); };
-    win.onafterprint = cleanup;
-    win.focus();
-    win.print();
-    setTimeout(cleanup, 60000); // onafterprint 미발화 브라우저 대비
-  };
 
   /**
    * 업로드한 보유 서류를 읽어 폼 입력값과 대조한다.
@@ -2302,28 +2297,15 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   };
 
   const handleDownloadDoc = async (docId: string) => {
-    // 상업송장: 고정 docx 템플릿에서 생성한 Blob을 docx로 저장 + 같은 Blob을 인쇄해 PDF로도 저장.
-    if (docId === 'invoice') {
-      const blob = await getInvoiceBlob();
-      if (!blob) {
-        alert('상업송장 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.');
-        return;
-      }
-      // 1) DOCX 저장
-      saveBlobAs(blob, getDocFileName('invoice').replace(/\.pdf$/i, '.docx'));
-
-      // 2) PDF 저장(브라우저 인쇄) — 같은 docx를 렌더해서 벡터 PDF로.
-      alert(
-        '상업송장 DOCX가 저장되었습니다. 이어서 PDF 저장 창이 열립니다.\n\n' +
-        '· 대상(프린터): "PDF로 저장" 선택\n' +
-        '· URL/날짜가 찍히지 않게 하려면 → "옵션 더보기 → 머리글 및 바닥글" 체크 해제'
-      );
-      await printInvoiceAsPdf(blob);
-      return;
-    }
-
-    // 패킹리스트·선하증권·수출신고서(초안)·운송의뢰서: 미리보기에 쓴 docx Blob을 그대로 내려받는다.
+    // 상업송장·패킹리스트·선하증권·수출신고서(초안)·운송의뢰서: 미리보기에 쓴 docx Blob을 그대로 내려받는다.
+    // (상업송장도 예전처럼 인쇄 창을 열어 PDF로 뽑지 않고 다른 서류와 같게 DOCX만 받는다.)
     const docxDownloads: Record<string, { getBlob: () => Promise<Blob | null>; failed: string; missing: string; fileId: string }> = {
+      invoice: {
+        getBlob: getInvoiceBlob,
+        failed: '상업송장 생성에 실패했습니다.',
+        missing: '상업송장 데이터가 없습니다. 먼저 필요 서류를 생성해 주세요.',
+        fileId: 'invoice',
+      },
       packing_list: {
         getBlob: getPackingListBlob,
         failed: '패킹리스트 생성에 실패했습니다.',
@@ -2927,6 +2909,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                 userId={user.id}
                 attachmentScopeId={currentTradeId ?? `draft-export-forwarder`}
                 attachments={forwarderAttachments}
+                shipperDocs={exportSourceTrade && exportSourceTrade.id === appliedExportRequestId ? exportSourceTrade.generatedDocs : null}
                 onAttachmentsChange={setForwarderAttachments}
                 profileDefaults={tradeProfileToForwarderFormState(tradeDraftDefaultProfile)}
                 readOnly={isDocumentManagerReadOnlyView}
@@ -3468,7 +3451,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                               </button>
                               <button
                                 className="rv-ib"
-                                title={doc.id === 'invoice' ? 'DOCX + PDF 저장' : (doc.id === 'packing_list' || doc.id === 'customs_dec' || doc.id === 'transport_request') ? 'DOCX 다운로드' : 'PDF 저장'}
+                                title={(doc.id === 'invoice' || doc.id === 'packing_list' || doc.id === 'customs_dec' || doc.id === 'transport_request') ? 'DOCX 다운로드' : 'PDF 저장'}
                                 onClick={() => handleDownloadDoc(doc.id)}
                               >
                                 <Download size={17} />

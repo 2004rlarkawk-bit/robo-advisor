@@ -164,7 +164,7 @@ export default function DocumentPreviewModal({
             onClick={() => onDownload(previewDocId)}
           >
             <Download size={16} />
-            {previewDocId === 'invoice' ? 'DOCX + PDF 저장' : (previewDocId === 'packing_list' || previewDocId === 'customs_dec' || previewDocId === 'transport_request' || previewDocId === 'bl') ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
+            {(previewDocId === 'invoice' || previewDocId === 'packing_list' || previewDocId === 'customs_dec' || previewDocId === 'transport_request' || previewDocId === 'bl') ? 'DOCX 다운로드' : 'PDF 저장 (텍스트)'}
           </button>
         </div>
       </div>

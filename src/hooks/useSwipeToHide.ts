@@ -20,7 +20,19 @@ function readHidden(storageKey: string): Set<string> {
  * 숨긴 id는 storageKey로 남아 새로고침해도 유지되고, restoreAll로 한 번에 되돌린다.
  * 버튼·입력칸 위에서 시작한 드래그와 세로 스크롤은 밀기로 보지 않는다.
  */
-export function useSwipeToHide(storageKey: string) {
+interface SwipeOptions {
+  /** 여기서 시작한 드래그는 밀기로 보지 않는다. 행 전체가 버튼인 목록은 'button'을 빼고 넘긴다. */
+  ignoreSelector?: string;
+  /** 행을 밀어 숨긴 직후 부른다(예: 읽지 않은 알림을 읽음 처리). */
+  onHide?: (id: string) => void;
+}
+
+const DEFAULT_IGNORE = 'button, a, input, label, select';
+
+export function useSwipeToHide(storageKey: string, options: SwipeOptions = {}) {
+  const ignoreSelector = options.ignoreSelector ?? DEFAULT_IGNORE;
+  const onHideRef = useRef(options.onHide);
+  onHideRef.current = options.onHide;
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => readHidden(storageKey));
   const [swipe, setSwipe] = useState<{ id: string; dx: number } | null>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number; dx: number; active: boolean } | null>(null);
@@ -43,7 +55,7 @@ export function useSwipeToHide(storageKey: string) {
   }, [hiddenIds, save]);
 
   const onPointerDown = (event: ReactPointerEvent<HTMLElement>, id: string) => {
-    if (event.button !== 0 || (event.target as HTMLElement).closest('button, a, input, label, select')) return;
+    if (event.button !== 0 || (ignoreSelector && (event.target as HTMLElement).closest(ignoreSelector))) return;
     dragRef.current = { id, startX: event.clientX, startY: event.clientY, dx: 0, active: false };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
@@ -68,7 +80,10 @@ export function useSwipeToHide(storageKey: string) {
     setSwipe(null);
     if (!drag?.active) return;
     swipedRef.current = true;
-    if (drag.dx <= -SWIPE_HIDE_PX) save(new Set(hiddenIds).add(drag.id));
+    if (drag.dx <= -SWIPE_HIDE_PX) {
+      save(new Set(hiddenIds).add(drag.id));
+      onHideRef.current?.(drag.id);
+    }
   };
 
   const onPointerCancel = () => {

@@ -31,16 +31,15 @@ export default function TrashBin({ items, onRestore, onRestoreAll }: Props) {
         onClick={() => setOpen(true)}
       >
         <Trash2 size={16} aria-hidden="true" /> 휴지통
-        {items.length > 0 && <span className="trash-count">{items.length}</span>}
       </button>
 
       {open && (
         <div className="fwd-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
           <div className="fwd-modal trash-modal" role="dialog" aria-modal="true" aria-labelledby="trash-title">
-            <div className="fwd-modal-head">
-              <div>
+            <div className="fwd-modal-head trash-head">
+              <div className="trash-title">
+                <span className="trash-title-icon" aria-hidden="true"><Trash2 size={26} /></span>
                 <h2 id="trash-title">휴지통</h2>
-                <p>목록에서 지운 의뢰예요. 복원하면 목록에 다시 나타나요.</p>
               </div>
               <button type="button" className="fwd-modal-close" aria-label="닫기" onClick={() => setOpen(false)}><X size={22} /></button>
             </div>

@@ -3,6 +3,8 @@ import { useState } from 'react';
 import type { TradeAttachment } from '../../../types/tradeFormData';
 import { openOrDownloadTradeAttachment } from '../../../utils/tradeAttachmentView';
 import type { ForwarderFormState } from '../../../utils/forwarderForm';
+import type { GeneratedDocuments } from '../../../types';
+import ShipperSubmittedDocs from './ShipperSubmittedDocs';
 
 interface Props {
   state: ForwarderFormState;
@@ -13,6 +15,8 @@ interface Props {
   onNext: () => void;
   attachments?: TradeAttachment[];
   userId?: string;
+  /** 화주가 PortAI로 만들어 의뢰와 함께 보낸 서류(상업송장·패킹리스트·운송의뢰서·수출신고서). */
+  shipperDocs?: GeneratedDocuments | null;
 }
 
 /** STEP 1 — 화주 의뢰 확인. 이미 접수된(받은 의뢰 또는 직접 등록) 화주 의뢰 내용을 포워더가 확인·보정한다. */
@@ -25,6 +29,7 @@ export default function ExportForwarderRequestStep({
   onNext,
   attachments = [],
   userId,
+  shipperDocs,
 }: Props) {
   const [documentError, setDocumentError] = useState('');
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -45,15 +50,20 @@ export default function ExportForwarderRequestStep({
         </div>
       </div>
 
-      <section className="fwd-export-source-docs fwd-export-content-card" aria-label="접수된 첨부 서류">
-        <h3>접수된 첨부 서류 <span>{attachments.length}개</span></h3>
-        {attachments.length ? <div className="fwd-export-source-list">{attachments.map(document =>
-          <button key={document.id} type="button" className="btn btn-secondary" disabled={!userId || openingId !== null}
-            onClick={() => void openDocument(document)}>
-            <FileSignature size={16} />{document.fileName}{openingId === document.id ? ' · 여는 중…' : ' · 원본 보기'}
-          </button>)}</div> : <p>첨부된 서류가 없습니다.</p>}
-        {documentError && <p role="alert" className="form-message error">{documentError}</p>}
-      </section>
+      {/* 수입 포워더 화면처럼 화주가 낸 서류를 가장 먼저 보여 준다. */}
+      <ShipperSubmittedDocs docs={shipperDocs} />
+      {/* 화주가 직접 올린 원본 파일은 있을 때만 — 없다는 안내로 첫 화면을 채우지 않는다. */}
+      {attachments.length > 0 && (
+        <section className="fwd-export-source-docs fwd-export-content-card" aria-label="접수된 첨부 서류">
+          <h3>화주 첨부 원본 <span>{attachments.length}개</span></h3>
+          <div className="fwd-export-source-list">{attachments.map(document =>
+            <button key={document.id} type="button" className="btn btn-secondary" disabled={!userId || openingId !== null}
+              onClick={() => void openDocument(document)}>
+              <FileSignature size={16} />{document.fileName}{openingId === document.id ? ' · 여는 중…' : ' · 원본 보기'}
+            </button>)}</div>
+          {documentError && <p role="alert" className="form-message error">{documentError}</p>}
+        </section>
+      )}
       <dl className="fwd-export-summary-grid fwd-export-intake-summary" aria-label="접수 정보 요약">
         <div><dt>화주</dt><dd>{state.companyName || '미입력'}</dd></div>
         <div><dt>수하인</dt><dd>{state.partnerName || '미입력'}</dd></div>

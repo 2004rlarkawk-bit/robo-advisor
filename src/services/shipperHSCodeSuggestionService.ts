@@ -1,3 +1,4 @@
+import { demoHSResultFor, rememberLiveHSResult } from './demoRehearsalMode';
 import {
   discoverHSCodePrefixes,
   suggestHSCodeFromCandidates,
@@ -604,6 +605,11 @@ export async function recommendShipperHSCode(
     };
   }
 
+  // 시연 모드에서 시연 품명이면, 미리 받아 둔 실제 AI 추천 결과를 바로 쓴다(시연 시간 고정).
+  // 사용자가 선택지에서 종류를 직접 고른 경우는 그 선택을 따른다.
+  const demoResult = userChosenSubheading ? null : demoHSResultFor(normalizedItemName);
+  if (demoResult) return demoResult;
+
   // 가구(9403)는 재질이 소호를 가른다. 품명·상세에 가구 종류와 재질이 하나씩 분명하면
   // 사용자가 소호를 고른 것과 같이 그 범위에서만 추천한다(돌 책상이 목제 책상·숫돌로 가는 것 방지).
   const chosenSubheading = userChosenSubheading
@@ -860,7 +866,7 @@ export async function recommendShipperHSCode(
       suggestions.length
     );
   }
-  return {
+  const response: HSCodeSuggestionResponse = {
     suggestions,
     disambiguation: null,
     additionalInformationRequired:
@@ -872,4 +878,7 @@ export async function recommendShipperHSCode(
       ...decision.requiredAdditionalInfo,
     ])).slice(0, 6),
   };
+  // 실시간 결과를 품명별로 남긴다 — 시연용 저장 결과(DEMO_HS_RESULTS)로 옮겨 담을 때 꺼내 쓴다.
+  rememberLiveHSResult(normalizedItemName, response);
+  return response;
 }

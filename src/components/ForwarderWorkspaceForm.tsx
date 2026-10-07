@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { GeneratedDocuments } from '../types';
 import type { BillOfLadingData, PersistedTradeStatus, SavedTrade } from '../types';
 import { isBookingRegistered, type ForwarderFormState } from '../utils/forwarderForm';
 import type { TradeAttachment } from '../types/tradeFormData';
@@ -44,6 +45,8 @@ interface Props {
   userId: string;
   attachmentScopeId: string;
   attachments: TradeAttachment[];
+  /** 의뢰한 화주 거래에서 만든 서류 — STEP 1 맨 위에 보여 준다. */
+  shipperDocs?: GeneratedDocuments | null;
   onAttachmentsChange: (attachments: TradeAttachment[]) => void;
   /** 사용자 프로필 기본값 — AI 분석값이 "직접 입력값"이 아닌 프로필 기본값과 충돌할 때는 조용히 덮어쓴다. */
   profileDefaults?: Partial<ForwarderFormState>;
@@ -114,6 +117,7 @@ export default function ForwarderWorkspaceForm({
   userId,
   attachmentScopeId,
   attachments,
+  shipperDocs,
   onAttachmentsChange,
   profileDefaults = {},
   readOnly = false,
@@ -290,6 +294,7 @@ export default function ForwarderWorkspaceForm({
       {!showMessages && currentStep === 1 && (
         <ExportForwarderRequestStep
           attachments={attachments}
+          shipperDocs={shipperDocs}
           userId={userId}
           state={state}
           patch={patch}

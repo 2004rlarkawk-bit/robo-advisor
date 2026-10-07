@@ -50,6 +50,24 @@
 .fwd-export-source-docs h3 { margin: 0 0 14px; font-size: 16px; }
 .fwd-export-source-docs h3 span { color: #667a94; font-size: 12px; margin-left: 8px; }
 .fwd-export-source-docs p { margin: 0; font-size: 12px; color: #667a94; line-height: 1.6; }
+/* 화주 제출 서류 — STEP 1 맨 위. 화주 결과 화면의 '자동 생성된 서류' 줄과 같은 모양(약어 칩 + 이름 + 보기·다운로드). */
+.fwd-export-shipper-docs { padding: 20px 22px; border: 1px solid #dce4ef; border-radius: 14px; background: #fff; }
+.fwd-export-shipper-docs h3 { margin: 0 0 12px; font-size: 16px; }
+.fwd-export-shipper-docs h3 span { color: #667a94; font-size: 12px; margin-left: 8px; }
+.fwd-shipper-doc-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.fwd-shipper-doc-list li { display: flex; align-items: center; gap: 14px; padding: 12px 2px; border-top: 1px solid #edf1f6; }
+.fwd-shipper-doc-list li:first-child { border-top: 0; }
+.fwd-shipper-doc-abbr {
+  display: inline-grid; place-items: center; min-width: 48px; height: 34px; padding: 0 8px; border-radius: 8px;
+  background: #eef4ff; color: #1d4ed8; font-size: 13px; font-weight: 800;
+}
+.fwd-shipper-doc-list strong { flex: 1; min-width: 0; color: #1e293b; font-size: 15px; }
+.fwd-shipper-doc-actions { display: flex; gap: 8px; }
+.fwd-shipper-doc-actions .btn { display: inline-flex; align-items: center; gap: 5px; }
+.fwd-shipper-doc-modal { width: min(920px, 96vw); max-height: 92vh; }
+.fwd-shipper-doc-preview { max-height: 68vh; overflow: auto; padding: 12px; border-radius: 10px; background: #f1f5f9; color: #64748b; font-size: 13px; }
+.fwd-shipper-doc-foot { display: flex; justify-content: flex-end; margin-top: 14px; }
+.fwd-shipper-doc-foot .btn { display: inline-flex; align-items: center; gap: 6px; }
 .fwd-export-source-list { display: flex; flex-wrap: wrap; gap: 10px; }
 .fwd-export-source-list .btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; }
 .fwd-export-refresh .fwd-export-intake-summary { margin: 16px 0 0; padding: 20px 22px; border: 1px solid #dce4ef; border-radius: 14px; background: #fff; }
