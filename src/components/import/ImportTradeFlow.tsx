@@ -111,6 +111,8 @@ interface Props {
  * 콘솔이 1~3초 만에 지나가 각 에이전트가 무엇을 했는지 읽을 틈이 없어, 이 시간에 걸쳐 나눠 보여 준다.
  */
 const CONSOLE_PACE_MS = 7_500;
+// 세액·신고자료 산출 콘솔은 시연 흐름을 끊지 않도록 짧게 — 실제 계산·저장이 더 걸리면 그만큼 기다린다.
+const OUTPUT_CONSOLE_PACE_MS = 1_500;
 
 export default function ImportTradeFlow({
   role,
@@ -601,14 +603,14 @@ export default function ImportTradeFlow({
         '신고자료 완성도 점검 중 (필수 항목 채움 확인)...',
         '결과 저장 · 정리 중...',
       ];
-      // 단계 문구를 CONSOLE_PACE_MS에 걸쳐 나눠 띄운다. 계산이 먼저 끝나도 아래에서 이 시간을 채운 뒤
+      // 단계 문구를 OUTPUT_CONSOLE_PACE_MS에 걸쳐 나눠 띄운다. 계산이 먼저 끝나도 아래에서 이 시간을 채운 뒤
       // 남은 단계를 마저 띄우고 완료를 알린다 — 4단계 중 1~2단계만 보이고 끝나지 않게.
       consoleStages = stages;
       consoleStageIndex = 0;
       if (analysisTickerRef.current) clearInterval(analysisTickerRef.current);
       analysisTickerRef.current = setInterval(() => {
         if (consoleStageIndex < stages.length) pushAnalysisLog('Compliance Agent', stages[consoleStageIndex++]);
-      }, Math.floor(CONSOLE_PACE_MS / (stages.length + 1)));
+      }, Math.floor(OUTPUT_CONSOLE_PACE_MS / (stages.length + 1)));
     }
     try {
       duty = role === 'shipper'
@@ -699,7 +701,7 @@ export default function ImportTradeFlow({
         tradeId,
       });
       setMessage(dutyError ? `${dutyError} 사유를 표시한 상태로 다음 단계로 이동했습니다.` : '');
-      const remainingMs = CONSOLE_PACE_MS - (Date.now() - consoleStartedAt);
+      const remainingMs = OUTPUT_CONSOLE_PACE_MS - (Date.now() - consoleStartedAt);
       if (remainingMs > 0) await new Promise((resolve) => setTimeout(resolve, remainingMs));
       if (analysisTickerRef.current) { clearInterval(analysisTickerRef.current); analysisTickerRef.current = null; }
       while (consoleStageIndex < consoleStages.length) pushAnalysisLog('Compliance Agent', consoleStages[consoleStageIndex++]);

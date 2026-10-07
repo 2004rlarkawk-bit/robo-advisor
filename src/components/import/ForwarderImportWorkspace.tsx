@@ -178,6 +178,16 @@ export default function ForwarderImportWorkspace({
     return mine.find((item) => item.status === 'accepted') ?? mine[0] ?? null;
   }, [requests, selected]);
 
+  // 업무 메시지를 열었는데 의뢰를 못 찾으면(목록을 불러온 뒤 수락됐거나 조회가 한 번 실패한 경우) 의뢰만 다시 불러온다.
+  useEffect(() => {
+    if (detailTab !== 'messages' || !selected || selectedRequest) return;
+    let cancelled = false;
+    listIncomingTradeRequests()
+      .then((next) => { if (!cancelled) setRequests(next); })
+      .catch((err) => console.warn('받은 의뢰 재조회 실패:', err));
+    return () => { cancelled = true; };
+  }, [detailTab, selected, selectedRequest]);
+
   // 저장된 운영 상태를 목록에 반영 — 전체 재조회 없이 해당 건만 다시 계산한다.
   const applyState = useCallback((tradeId: string, state: ForwarderCaseState) => {
     setCases((current) => {
