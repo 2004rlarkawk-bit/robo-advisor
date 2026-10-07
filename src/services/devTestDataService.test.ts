@@ -122,7 +122,7 @@ describe('개발 테스트 데이터', () => {
 });
 
 describe('createDemoRehearsalProfile', () => {
-  it('품명·HS는 그대로 두고, 시연용 반드시 수정 세 건(수량 불일치·신용장 날짜·도착 예정일 연도)이 걸리게 채운다', async () => {
+  it('품명·HS는 그대로 두고, 시연용 반드시 수정(수량 불일치·신용장 날짜)과 확인 권장(도착 예정일 연도)이 걸리게 채운다', async () => {
     const { createDemoRehearsalProfile } = await import('./devTestDataService');
     const { runComplianceRules } = await import('../agents/complianceRules');
     const current = { tradeType: 'export', itemName: 'desk', hsCode: '9403301000', quantity: 10, unitPrice: 100, totalAmount: 1000, currency: 'USD', unit: 'EA', weight: 120, measurement: '0.300' } as never;
@@ -135,13 +135,16 @@ describe('createDemoRehearsalProfile', () => {
     // 상업송장 150개 ≠ 포장 8박스 × 20개 = 160개 — 서류 생성 후 수량 불일치(R10)로 잡힌다.
     expect(Number(profile.packageCount) * Number(profile.eaPerBox)).toBe(160);
     expect(profile).toMatchObject({ packageType: 'CARTON', eaPerBox: 20, packageCount: 8, grossWeight: 1040, netWeight: 960 });
-    expect(profile.packageDimensions?.[0]?.boxes).toBe(8);
+    // 화물 크기는 발표 때 직접 입력하도록 빈 줄 하나만 남긴다.
+    expect(profile.packageDimensions).toEqual([{ id: 'package-dimension-1', width: '', length: '', height: '', boxes: '' }]);
     expect(profile.exportDeclaration?.goodsCondition).toBe('N');
     // 거래처는 발표 때 '자주 거래한 거래처'로 불러오므로 비워 둔다.
     expect(profile.partnerName).toBeUndefined();
     expect(profile.buyerName).toBeUndefined();
     expect(profile.exportDeclaration?.buyerCustomsCode).toBeUndefined();
-    expect(profile.measurement).toBe('0.300');
+    expect(profile.measurement).toBe('');
+    expect(profile.shippingMarks).toBe('TIC\nLOS ANGELES\nC/NO. 1-8\nMADE IN KOREA');
+    expect(profile.shipperSupplemental?.hasNoShippingMarks).toBe(false);
     expect(profile.departureDate).toBe('2026-10-10');
     expect(profile.lcDate).toBe('2026-10-31');
 

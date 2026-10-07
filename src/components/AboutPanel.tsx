@@ -2,7 +2,7 @@
  * 서비스 소개(About) — 다크 바다 히어로 + 스크롤 스토리텔링 랜딩.
  * 1) 히어로: 캔버스(화물선·항로 아크·수면·지도 점·입자) 애니메이션 — aboutHero.css(.portai-hero 스코프).
  *    작업실 진입 CTA는 히어로에 두지 않는다(페이지 하단 CTA로 단일화).
- * 2) 이하 섹션: 숫자 카운터·작동 방식·화주/포워더 협업·6종 서류·CTA — IntersectionObserver로 진입 시 fade-in.
+ * 2) 이하 섹션: 숫자 카운터·작동 방식·화주/포워더 협업·8종 서류·CTA — IntersectionObserver로 진입 시 fade-in.
  * 외부 이미지/라이브러리 없이 canvas 2D·CSS·lucide 아이콘만 사용.
  * prefers-reduced-motion 시 캔버스는 정지 프레임 1장만 렌더한다.
  */
@@ -175,43 +175,16 @@ const COLLABORATION_STEPS = [
   }
 ];
 
+// PortAI가 초안을 만드는 서류 8종 — 화주 수출 4 · 화주 수입 2 · 포워더 2.
 const DOCS = [
-  {
-    icon: 'INV',
-    name: '상업송장',
-    desc:
-      'Commercial Invoice — 거래 금액·조건의 기준 서류'
-  },
-  {
-    icon: 'PKL',
-    name: '패킹리스트',
-    desc:
-      'Packing List — 수량·중량·포장 명세'
-  },
-  {
-    icon: 'B/L',
-    name: '선하증권(B/L)',
-    desc:
-      '수출 B/L 초안 작성·수입 B/L 검토 — 정식 발행본과 구분'
-  },
-  {
-    icon: 'DEC',
-    name: '수출신고서(초안)',
-    desc:
-      '입력 정보 기반 초안 — 관세청 공식 신고·제출을 대신하지 않음'
-  },
-  {
-    icon: 'C/O',
-    name: '원산지증명서',
-    desc:
-      '원산지 증빙 서류 — 별도 발급·작성 절차가 필요한 관리 대상'
-  },
-  {
-    icon: 'INS',
-    name: '적하보험증권',
-    desc:
-      '운송 중 화물 위험을 담보하는 보험 서류 — 보험사 발행본 관리'
-  }
+  { icon: 'C/I', name: '상업송장', desc: '화주 수출 · 거래 금액·조건의 기준 서류' },
+  { icon: 'P/L', name: '포장명세서', desc: '화주 수출 · 수량·중량·포장 명세' },
+  { icon: 'E/D', name: '수출신고서(초안)', desc: '화주 수출 · 입력 정보 기반 초안, 실제 신고는 관세사가 진행' },
+  { icon: 'S/I', name: '수출 운송의뢰서', desc: '화주 수출 · 포워더에게 선적을 맡기는 의뢰서' },
+  { icon: 'I/D', name: '수입신고서(초안)', desc: '화주 수입 · 올린 서류에서 읽은 값으로 채운 초안' },
+  { icon: '의뢰서', name: '수입신고 의뢰서', desc: '화주 수입 · 관세사·포워더에게 통관을 맡기는 의뢰서' },
+  { icon: 'B/L', name: 'House B/L', desc: '포워더 · 수출 화물의 선하증권 초안' },
+  { icon: 'A/N', name: '도착통지서', desc: '포워더 · 수입 화물 도착을 화주에게 알리는 통지서' },
 ];
 
 export default function AboutPanel({
@@ -516,12 +489,12 @@ export default function AboutPanel({
 
         <div className="about-counter">
           <div className="about-counter-value">
-            <CountUpValue end={6} />
+            <CountUpValue end={8} />
             종
           </div>
 
           <div className="about-counter-label">
-            대표 무역 서류 안내
+            PortAI가 초안을 만드는 서류
           </div>
         </div>
 
@@ -587,7 +560,7 @@ export default function AboutPanel({
       {/* 5. 작성·검토·관리 대상 서류 소개 */}
       <section className="about-section">
         <h2 className="about-section-title about-reveal">
-          주요 무역 서류, 작성부터 관리까지
+          PortAI가 만드는 서류 8종
         </h2>
 
         <div className="about-docs">

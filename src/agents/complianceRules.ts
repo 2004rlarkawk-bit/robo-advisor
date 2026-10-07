@@ -50,7 +50,7 @@ export const RULE_POLICY = {
   'r20-port-typo':            { severity: 'warning', overridable: false },
   'r21-arrival-before-departure': { severity: 'error', overridable: true },
   'r21-transit-too-long':     { severity: 'warning', overridable: false },
-  'r21-transit-implausible':  { severity: 'error',   overridable: true },
+  'r21-transit-implausible':  { severity: 'warning', overridable: false },
   'r21-invoice-date-future':  { severity: 'warning', overridable: false },
   'r21-invoice-after-departure': { severity: 'warning', overridable: false },
   'r21-date-out-of-range':    { severity: 'warning', overridable: false },
@@ -214,7 +214,8 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
     issues.push(mk('r21-arrival-before-departure', 'transport_request', 'arrivalDate',
       `도착예정일(${fmt(arr)})이 출항일(${fmt(dep)})보다 빠릅니다. 두 날짜를 확인하세요. 환적·일자 변경선 등 특수 사유이면 사유 입력 후 진행하세요.`));
   } else if (dep && arr && (arr.getTime() - dep.getTime()) / DAY_MS > 180) {
-    // 해상 운송이 반년을 넘는 경우는 없다 — 도착예정일 연도를 한 해 뒤로 적은 입력 실수로 보고 막는다.
+    // 해상 운송이 반년을 넘는 경우는 없다 — 도착예정일 연도를 한 해 뒤로 적은 입력 실수로 보고 확인을 권한다.
+    // (도착 예정일은 선택 입력이라 제출을 막지는 않는다.)
     issues.push(mk('r21-transit-implausible', 'transport_request', 'arrivalDate',
       `출항일(${fmt(dep)})부터 도착예정일(${fmt(arr)})까지 ${Math.round((arr.getTime() - dep.getTime()) / DAY_MS)}일입니다. 해상 운송이 반년을 넘는 경우는 없어 도착예정일 연도 입력 오류로 보입니다.`));
   } else if (dep && arr && (arr.getTime() - dep.getTime()) / DAY_MS > 120) {

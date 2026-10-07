@@ -1126,9 +1126,9 @@ body {
   color: var(--text-dark);
 }
 
-/* 3번 검토 섹션 — 열 그리드 밖 전체 폭 배치 */
-.result-review-full {
-  min-height: auto;
+/* 3번 검토 섹션 — 열 그리드 밖 전체 폭 배치. 내용만큼만 높이를 잡아 아래 빈 여백을 없앤다. */
+.result-column.result-review-full {
+  min-height: 0;
 }
 
 .result-review-full .mobile-fix-list {
@@ -2909,11 +2909,14 @@ body {
   color: #94a3b8;
 }
 
+/* 서류 8종 — 넓은 화면 4열×2줄, 좁아지면 2열·1열로 줄어 마지막 줄이 비지 않게 한다. */
 .about-docs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 18px;
 }
+@media (max-width: 1100px) { .about-docs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .about-docs { grid-template-columns: 1fr; } }
 
 .about-doc-card {
   background-color: rgba(255, 255, 255, 0.04);

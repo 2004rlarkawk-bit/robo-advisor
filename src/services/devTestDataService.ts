@@ -161,7 +161,8 @@ const DEMO_ITEM_UNIT_PRICE = 120;
  *
  * 생성하면 일부러 아래 항목이 걸리게 맞춰 두었다.
  * - 반드시 수정: 패킹리스트·상업송장 수량 불일치(R10 — 상업송장 150개, 포장 160개),
- *   신용장 개설일이 출항일보다 늦음(R14), 도착 예정일 연도 오타(R21 — 운송 기간 반년 초과)
+ *   신용장 개설일이 출항일보다 늦음(R14)
+ * - 확인 권장: 도착 예정일 연도 오타(R21 — 운송 기간 반년 초과)
  * 중량은 총중량 ≥ 순중량으로 맞춰 오류가 나지 않게 한다.
  */
 export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = new Date()): TradeProfile {
@@ -197,9 +198,12 @@ export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = n
     grossWeight: 1040,
     netWeight: 960,
     weight: 1040,
-    packageDimensions: currentProfile.packageDimensions?.length
-      ? currentProfile.packageDimensions.map((row, index) => (index === 0 ? { ...row, boxes: 8 } : row))
-      : [{ ...createPackageDimension('package-dimension-1'), boxes: 8 }],
+    // 화물 크기(가로·세로·높이·박스 수)는 발표 때 직접 입력해 CBM 계산을 보여 주므로 빈 줄 하나로 비운다.
+    // 비워 두면 포장 수량은 위 packageCount(8)로 보이고, 박스 수를 입력하면 그 합계로 다시 계산된다.
+    packageDimensions: [createPackageDimension('package-dimension-1')],
+    measurement: '',
+    // 화인 — 바이어 약호(Test Import Company)·도착지·카톤 번호(8박스)·원산지.
+    shippingMarks: 'TIC\nLOS ANGELES\nC/NO. 1-8\nMADE IN KOREA',
     // 1. 화주 기본정보
     companyName: 'PortAI Trading Co., Ltd.',
     companyAddress: '123 Teheran-ro, Gangnam-gu, Seoul, Korea',
@@ -218,7 +222,7 @@ export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = n
     loadPort: 'Busan Port',
     dischargePort: 'Los Angeles Port',
     departureDate,
-    // 도착 예정일 연도 오타(1년 뒤) — 운송 기간이 반년을 넘어 반드시 수정(R21)이 걸린다.
+    // 도착 예정일 연도 오타(1년 뒤) — 운송 기간이 반년을 넘어 확인 권장(R21)이 걸린다.
     arrivalDate: futureDate(19 + 365, now),
     // 소량 화물이라 LCL — 컨테이너 정보 확인 권장이 끼어들지 않게 한다.
     loadingMode: 'LCL',
@@ -245,6 +249,7 @@ export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = n
       buyerMatchesConsignee: true,
       consigneeMatchesNotifyParty: true,
       incotermsPlace: 'Busan Port',
+      hasNoShippingMarks: false,
     } as TradeProfile['shipperSupplemental'],
   };
 }

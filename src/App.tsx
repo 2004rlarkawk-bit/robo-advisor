@@ -3437,11 +3437,13 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
 
                 {/* Section 4: 해결 워크스페이스 — 문제 문구는 크게, 액션은 컴팩트하게 */}
                 <div className="result-column result-review-full">
-                  {issues.length === 0 ? (
+                  {/* 아래 목록과 같은 기준(사실 카드·참고·경고 무시 제외)으로 고칠 항목이 없으면 통과로 보인다. */}
+                  {!issues.some((i) => !i.card && i.severity !== 'info' && !(i.severity === 'error' && overrides[issueKey(i)]))
+                    && !(feedbackReport?.facts.length) ? (
                     <div className="rv-done">
                       <span className="rv-done-ic"><CheckCircle2 size={26} /></span>
                       <div>
-                        <div className="rv-done-title">제출 준비 완료</div>
+                        <div className="rv-done-title">재검증 결과 통과</div>
                         <p className="rv-done-sub">필요한 모든 서류가 검증을 통과했어요. 아래에서 바로 전송할 수 있습니다.</p>
                       </div>
                     </div>
