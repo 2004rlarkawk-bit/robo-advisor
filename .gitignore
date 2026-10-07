@@ -57,3 +57,6 @@ packing_sample_*.xlsx
 .codex/
 *.hwpx
 /*.png
+
+# tsc 증분 빌드 캐시
+tsconfig.tsbuildinfo

@@ -511,13 +511,13 @@ describe('R21 날짜 이상치', () => {
     expect(ids({ departureDate: '2026-09-20', arrivalDate: '2026-10-20' })).not.toContain('r21-transit-too-long');
   });
 
-  it('R21: 운송 기간이 반년을 넘으면 연도 입력 오류로 보고 반드시 수정으로 막는다', () => {
+  it('R21: 운송 기간이 반년을 넘으면 연도 입력 오류로 보고 확인을 권한다', () => {
     // 2026-10-11 → 2027-10-23 = 377일 (도착예정일 연도를 한 해 뒤로 적은 경우)
     expect(ids({ departureDate: '2026-10-11', arrivalDate: '2027-10-23' })).toContain('r21-transit-implausible');
     expect(ids({ departureDate: '2026-10-11', arrivalDate: '2027-10-23' })).not.toContain('r21-transit-too-long');
     // 162일은 드물지만 있을 수 있어 확인 권장으로 남는다.
     expect(ids({ departureDate: '2026-09-20', arrivalDate: '2027-03-01' })).not.toContain('r21-transit-implausible');
-    expect(RULE_POLICY['r21-transit-implausible'].severity).toBe('error');
+    expect(RULE_POLICY['r21-transit-implausible'].severity).toBe('warning');
   });
 
   it('송장 작성일이 오늘보다 뒤 → warning', () => {

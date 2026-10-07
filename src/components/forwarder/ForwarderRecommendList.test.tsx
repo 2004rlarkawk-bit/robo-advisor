@@ -133,17 +133,53 @@ describe('ForwarderRecommendList', () => {
     expect(rows()[1].getAttribute('aria-checked')).toBe('true');
   });
 
-  it('조건을 바꾸면 그 조건으로 추천을 다시 불러온다', async () => {
+  it('조건을 바꾼 뒤 [포워더 재추천하기]를 눌러야 그 조건으로 다시 추천한다', async () => {
     await render();
+    const callCount = () => requestService.matchForwarderForTrade.mock.calls.length;
+    const lastSpecialties = () => requestService.matchForwarderForTrade.mock.calls[callCount() - 1][1];
+    const rerun = () => button('포워더 재추천하기') as HTMLButtonElement;
+    // 조건이 그대로면 재추천 버튼은 꺼져 있다.
+    expect(rerun().disabled).toBe(true);
+
     await act(async () => { button('조건 추가').click(); });
     expect(button('러시아·CIS 항로')).toBeUndefined();
+    const before = callCount();
     await act(async () => { button('소량 혼적(LCL)').click(); });
-    let calls = requestService.matchForwarderForTrade.mock.calls;
-    expect(calls[calls.length - 1][1]).toEqual(['route_cn', 'cargo_cold', 'goods_food', 'cargo_lcl']);
-
     await act(async () => { button('콜드체인').click(); });
-    calls = requestService.matchForwarderForTrade.mock.calls;
-    expect(calls[calls.length - 1][1]).toEqual(['route_cn', 'goods_food', 'cargo_lcl']);
+    // 조건만 바꿔서는 다시 부르지 않는다.
+    expect(callCount()).toBe(before);
+    expect(rerun().disabled).toBe(false);
+
+    await act(async () => { rerun().click(); });
+    expect(callCount()).toBe(before + 1);
+    expect(lastSpecialties()).toEqual(['route_cn', 'goods_food', 'cargo_lcl']);
+    expect(rerun().disabled).toBe(true);
+  });
+
+  it('기타 조건을 적고 재추천하면 그 분야를 직접 등록한 포워더를 앞으로 올린다', async () => {
+    requestService.matchForwarderForTrade.mockResolvedValue([
+      partner,
+      { ...plain, customSpecialties: ['전시화물 운송'] },
+    ]);
+    await render();
+    expect(rows()[0].textContent).toContain('ABC Logistics');
+
+    await act(async () => { button('조건 추가').click(); });
+    const input = container.querySelector('.fwd-cond-custom input') as HTMLInputElement;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(input, '전시화물');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      (container.querySelector('.fwd-cond-custom') as HTMLFormElement).requestSubmit();
+    });
+    // 적기만 해서는 순서가 바뀌지 않는다.
+    expect(rows()[0].textContent).toContain('ABC Logistics');
+
+    await act(async () => { button('포워더 재추천하기').click(); });
+    expect(rows()[0].textContent).toContain('Korea Shipping');
+    expect(rows()[0].textContent).toContain('추천');
   });
 
   it('제휴사명이 따로 등록돼 있으면 담당자 프로필 업체명 대신 제휴사명을 보여준다', async () => {

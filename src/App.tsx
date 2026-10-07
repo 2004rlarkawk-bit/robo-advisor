@@ -27,7 +27,8 @@ import {
   ChevronRight,
   Paperclip,
   Mail,
-  FileCheck2
+  FileCheck2,
+  Check
 } from 'lucide-react';
 import {
   TradeProfile,
@@ -2430,7 +2431,10 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     setTimeout(doPrint, 350);
   };
 
-  const handleSubmitAll = async () => {
+  // 화주가 [포워더에게 의뢰]를 누르면 먼저 묻는다 — 예: 확정 후 포워더 의뢰로, 아니요: 확정만 하고 문서 관리에 둔다.
+  const [handoffAskOpen, setHandoffAskOpen] = useState(false);
+
+  const handleSubmitAll = async (destination: 'requests' | 'docs' = 'docs') => {
     if (isDocumentManagerReadOnlyView) return;
     if (isSubmittingTradeRef.current) return;
 
@@ -2449,6 +2453,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     const hasBlockingErrors = unresolvedBlockers(issues, overrides).length > 0;
     const canBypassValidation = IS_DEV_TEST_ENABLED && devTestMode !== null;
     if (hasBlockingErrors && !canBypassValidation) return;
+
+    const handsOffToForwarder = workspaceRole === 'shipper' && destination === 'requests';
 
     isSubmittingTradeRef.current = true;
 
@@ -2472,17 +2478,22 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
         console.warn('[Trade Draft] 화주 제출 후 DB 초안 정리 실패:', error);
       }
       clearExportAuthoringStateAfterSubmission();
-      setActiveMenu('docs');
-      setSubmittedDocsFocus((count) => count + 1);
+      if (handsOffToForwarder) {
+        // 확정한 거래는 포워더 의뢰 목록 맨 위에 나온다 — 거기서 포워더를 고른다.
+        setActiveMenu('requests');
+      } else {
+        setActiveMenu('docs');
+        setSubmittedDocsFocus((count) => count + 1);
+      }
       if (devTestMode === 'needs_revision' && hasBlockingErrors) {
         alert('검증 오류를 포함한 테스트 문서가 제출되었습니다.');
       } else if (devTestMode) {
         alert('테스트 문서가 정상적으로 제출되었습니다.');
       } else {
-        setSubmitCompleteNotice([
-          '모든 통관 문서 정보 보완이 완료되었습니다.',
-          '관세청 통관 시스템으로 제출합니다.',
-        ]);
+        // 관세청(UNI-PASS) 전송은 하지 않는다 — 실제로 일어나는 일만 안내한다.
+        setSubmitCompleteNotice(handsOffToForwarder
+          ? ['서류를 확정했어요.', '목록에서 포워더를 골라 의뢰하세요.']
+          : ['서류를 문서 관리에 저장했어요.', '포워더 의뢰는 나중에 [포워더 의뢰] 메뉴에서 할 수 있어요.']);
       }
       setDevTestMode(null);
       setDevTestMessage('');
@@ -2495,7 +2506,6 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       };
 
   // Calculate statistics — info 수준 이슈는 안내일 뿐 제출을 막지 않음
-  const completedDocsCount = documents.filter(d => d.status === 'completed').length;
   // 차단(제출/생성 게이트) = 미해결 error만.
   const blockingIssuesCount = unresolvedBlockers(issues, overrides).length;
   // 결과 배너 표시용 = 반드시 수정(error) + 확인 권장(warning) 합산.
@@ -2519,6 +2529,30 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
     [profile, fixListIssues]
   );
   const pendingFixCount = fixListIssues.filter(issue => !resolvedFixKeys.has(issueKey(issue))).length;
+  // 검증 통과 카드에 "몇 건을 고쳤는지"를 보여 주려고, 고칠 항목이 남아 있던 동안의 최대 건수를 기억해 둔다.
+  // 결과 화면에서 0건이 되면 그 수를 고친 건수로 확정하고, 입력을 비우는 초기화(결과 화면 밖)에서는 버린다.
+  const openFixCount = issues.filter((i) => !i.card && i.severity !== 'info' && !(i.severity === 'error' && overrides[issueKey(i)])).length;
+  const fixPeakRef = useRef(0);
+  const [fixedIssueCount, setFixedIssueCount] = useState(0);
+  useEffect(() => {
+    if (openFixCount > 0) {
+      fixPeakRef.current = Math.max(fixPeakRef.current, openFixCount);
+      return;
+    }
+    if (hasGenerated) {
+      if (fixPeakRef.current > 0) setFixedIssueCount(fixPeakRef.current);
+    } else {
+      setFixedIssueCount(0);
+    }
+    fixPeakRef.current = 0;
+  }, [openFixCount, hasGenerated]);
+  // 다시 생성해 강조 중이던 항목이 검증 결과에서 사라지면 입력칸 강조와 안내를 함께 지운다 —
+  // 결과 화면에서 '뒤로 가기'로 입력을 다시 볼 때 이미 고친 항목이 또 뜨지 않게.
+  useEffect(() => {
+    if (!activeFixIssue || activeFixIssue.severity === 'info') return;
+    if (!fixListIssues.some((issue) => issueKey(issue) === issueKey(activeFixIssue))) clearFieldHighlight();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixListIssues]);
   // 실제 제출 전 준비도(%) — 서류가 몇 % 완료됐는지와 다음에 채워야 할 항목을 안내
   const readiness = calculateReadiness(documents);
 
@@ -2528,7 +2562,9 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   // "정말 만들어졌는지"는 hasDoc(실제 파일 유무)로 판단한다.
   const ownDocs = documents.filter(d => d.status !== 'external_pending' && d.status !== 'not_needed');
   const ownReadyCount = ownDocs.filter(d => hasDoc(d.id)).length;
-  const externalPendingCount = documents.filter(d => d.status === 'external_pending').length;
+  // 원산지증명서·적하보험증권은 외부 기관 발급 서류라 시연 화면의 서류 목록에서 뺀다(필요 여부 판단은 내부에 그대로 둔다).
+  const listedDocuments = documents.filter(d => d.id !== 'co' && d.id !== 'insurance');
+  const externalPendingCount = listedDocuments.filter(d => d.status === 'external_pending').length;
   const totalMatchMismatches = exportDocMatches.reduce((sum, match) => sum + match.mismatchCount, 0);
   // 분석에 실패한 서류는 대조된 적이 없다 — '모두 일치'로 표시하면 안 된다.
   const failedMatchCount = exportDocMatches.filter((match) => match.error).length;
@@ -2640,6 +2676,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
   const activeFixFieldKey = activeFixIssue ? issueToFieldKey(activeFixIssue) : '';
   const shipperFixNotice = (() => {
     if (!activeFixIssue || resolvedFixKeys.has(issueKey(activeFixIssue))) return null;
+    // 다시 생성해 이 항목이 검증 결과에서 사라졌으면(이미 고침) 결과 화면에서 입력으로 돌아와도 다시 띄우지 않는다.
+    if (activeFixIssue.severity !== 'info' && !fixListIssues.some((issue) => issueKey(issue) === issueKey(activeFixIssue))) return null;
     if (activeFixFieldKey === 'countryOfOrigin' && originNotKoreaIssue) return null;
     if (!(activeFixFieldKey in SHIPPER_FIELD_SECTION)) return null;
     const rawMsg = (activeFixIssue.message || '').replace(/^AI 참고 — /, '');
@@ -3054,21 +3092,21 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     <div className="info-result">
                       <h3 className="info-title">최근 생성 결과</h3>
                       <div className={`info-result-line ${bannerIssueCount > 0 ? 'warn' : 'ok'}`}>
-                        {bannerIssueCount > 0 ? `⚠ 보완 필요 ${bannerIssueCount}건` : '✓ 검증 통과'} · 생성 완료 {completedDocsCount}건
+                        {bannerIssueCount > 0 ? `⚠ 보완 필요 ${bannerIssueCount}건` : '✓ 검증 통과'} · 초안 {ownReadyCount}건
                       </div>
                       <ul className="info-doc-list">
-                        {/* 수출·수입신고 서류는 관세사·신고인 처리 대상이라 "생성 결과" 요약에서는 제외 —
-                            상세 상태는 결과 화면의 서류 현황에서 확인한다. */}
-                        {documents.filter(d => d.status !== 'not_started' && d.id !== 'customs_dec').map(d => {
+                        {/* 결과 화면 서류 현황과 같게 — 화주가 만든 서류는 파일이 있으면 '초안'(연두)으로 통일한다. */}
+                        {listedDocuments.filter(d => d.status !== 'not_started').map(d => {
+                          const isOwnDraft = ['invoice', 'packing_list', 'transport_request', 'customs_dec'].includes(d.id) && hasDoc(d.id);
                           let badgeClass = 'status-not-started';
-                          if (d.status === 'completed') badgeClass = 'status-completed';
+                          if (isOwnDraft || d.status === 'completed') badgeClass = 'status-completed';
                           else if (d.status === 'review_required') badgeClass = 'status-review-required';
                           else if (d.status === 'not_needed') badgeClass = 'status-not-needed';
                           else if (d.status === 'external_pending') badgeClass = 'status-external-pending';
                           return (
                             <li key={d.id}>
                               <span className="info-doc-name">{d.name}</span>
-                              <span className={`status-badge ${badgeClass}`}>{d.statusText}</span>
+                              <span className={`status-badge ${badgeClass}`}>{isOwnDraft ? '초안' : d.statusText}</span>
                             </li>
                           );
                         })}
@@ -3120,7 +3158,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                     </div>
                     {externalPendingCount > 0 && (
                       <p className="rv-hero-ext">
-                        통관·원산지·보험 관련 서류 등 <b>{externalPendingCount}건</b>은 관세사·상공회의소·보험사가 발행해요.
+                        선하증권(B/L) 등 <b>{externalPendingCount}건</b>은 포워더·선사가 발행해요.
                       </p>
                     )}
                   </div>
@@ -3333,8 +3371,8 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
 
                 {/* 3. 서류 현황 — 한 줄 = 한 서류 (상태 + 완료 시 보기·다운로드) */}
                 <div className="rv-panel">
-                  <div className="rv-panel-head">서류 현황 · {documents.length}건</div>
-                  {documents.map((doc) => {
+                  <div className="rv-panel-head">자동 생성된 서류 · {listedDocuments.length}건</div>
+                  {listedDocuments.map((doc) => {
                     // 정식 무역 서류 약어(C/I·P/L·B/L·E/D·C/O)로 표기 — 감사·심사위원에게 익숙한 표준 코드.
                     // 수입 거래는 신고를 I/D로 노출한다.
                     const abbr = doc.id === 'invoice' ? 'C/I'
@@ -3436,12 +3474,14 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
 
                 {/* Section 4: 해결 워크스페이스 — 문제 문구는 크게, 액션은 컴팩트하게 */}
                 <div className="result-column result-review-full">
-                  {issues.length === 0 ? (
+                  {/* 아래 목록과 같은 기준(사실 카드·참고·경고 무시 제외)으로 고칠 항목이 없으면 통과로 보인다. */}
+                  {!issues.some((i) => !i.card && i.severity !== 'info' && !(i.severity === 'error' && overrides[issueKey(i)]))
+                    && !(feedbackReport?.facts.length) ? (
                     <div className="rv-done">
-                      <span className="rv-done-ic"><CheckCircle2 size={26} /></span>
+                      <span className="rv-done-ic" aria-hidden="true"><Check size={20} strokeWidth={3} /></span>
                       <div>
-                        <div className="rv-done-title">제출 준비 완료</div>
-                        <p className="rv-done-sub">필요한 모든 서류가 검증을 통과했어요. 아래에서 바로 전송할 수 있습니다.</p>
+                        <div className="rv-done-title">{fixedIssueCount > 0 ? '재검증 결과 통과' : '검증 결과 통과'}</div>
+                        <p className="rv-done-sub">{fixedIssueCount > 0 ? `지적된 ${fixedIssueCount}건을 모두 수정했어요.` : '고칠 항목 없이 모든 서류가 검증을 통과했어요.'}</p>
                       </div>
                     </div>
                   ) : (
@@ -3914,11 +3954,11 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
                         <>
                           <button
                             className="btn btn-primary"
-                            onClick={handleSubmitAll}
+                            onClick={() => (workspaceRole === 'shipper' ? setHandoffAskOpen(true) : void handleSubmitAll())}
                             disabled={blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null)}
                             style={{ flex: 1, opacity: blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null) ? 0.6 : 1, cursor: blockingIssuesCount > 0 && !(IS_DEV_TEST_ENABLED && devTestMode !== null) ? 'not-allowed' : 'pointer' }}
                           >
-                            전체 문서 전송
+                            {workspaceRole === 'shipper' ? '포워더에게 의뢰' : '전체 문서 전송'}
                           </button>
                           <button className="btn btn-secondary" onClick={() => { setHasGenerated(false); setWorkspaceCurrentStep(1); }} style={{ flex: 1 }}>
                             뒤로 가기 (입력 수정)
@@ -4007,6 +4047,22 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
           onConfirm={confirmOverride}
         />
       )}
+      {handoffAskOpen && (
+        <div className="confirmation-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setHandoffAskOpen(false); }}>
+          <section className="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="handoff-ask-title">
+            <h3 id="handoff-ask-title">서류를 확정하고 포워더 의뢰로 넘어갈까요?</h3>
+            <p>아니요를 누르면 서류만 확정해 문서 관리에 저장해요.</p>
+            <div className="confirmation-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => { setHandoffAskOpen(false); void handleSubmitAll('docs'); }}>
+                아니요
+              </button>
+              <button type="button" className="btn btn-primary" autoFocus onClick={() => { setHandoffAskOpen(false); void handleSubmitAll('requests'); }}>
+                예, 포워더에게 의뢰
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {submitCompleteNotice && (
         <div className="confirmation-backdrop" role="presentation">
           <section
@@ -4015,7 +4071,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
             aria-modal="true"
             aria-labelledby="submit-complete-title"
           >
-            <h3 id="submit-complete-title">최종 제출 완료</h3>
+            <h3 id="submit-complete-title">서류 확정 완료</h3>
             {submitCompleteNotice.map((line) => <p key={line}>{line}</p>)}
             <div className="confirmation-actions">
               <button
