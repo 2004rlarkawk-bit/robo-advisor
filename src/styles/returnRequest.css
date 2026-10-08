@@ -55,3 +55,12 @@
   .rr-composer .rr-doc-list li { grid-template-columns: 1fr; gap: 8px; }
   .rr-card-date { margin-left: 0; width: 100%; }
 }
+
+/* 화주가 받은 화물 도착통지서(A/N) — 보완 요청 카드와 같은 틀, 파란 계열 */
+.an-card { border-color: #cfe0f7; background: #f6f9ff; }
+.an-card .rr-card-head svg { color: #1d4ed8; }
+.an-card + .rr-card { margin-top: 10px; }
+.an-card-summary { margin: 6px 0 10px; color: #334155; font-size: 13px; line-height: 1.6; }
+.an-card-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.an-card-actions .btn { display: inline-flex; align-items: center; gap: 5px; }
+.an-card-preview { margin-top: 10px; max-height: 50vh; overflow: auto; }

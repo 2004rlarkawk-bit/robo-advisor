@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSwipeToHide } from '../hooks/useSwipeToHide';
 import { createPortal } from 'react-dom';
-import { Bell, CheckCheck, CheckCircle2, ClipboardList, FileWarning, MessageSquare, MessageSquareReply, X, XCircle, Trash2 } from 'lucide-react';
+import { Bell, CheckCheck, CheckCircle2, ClipboardList, FileWarning, MessageSquare, MessageSquareReply, RotateCcw, X, XCircle, Trash2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { NotificationRecord, NotificationType } from '../types/forwarderRequest';
 import {
@@ -131,6 +131,19 @@ function notificationDetail(notification: NotificationRecord): string {
   return summary || presentation.fallbackDetail;
 }
 
+/** 알림의 거래 방향 — 트리거가 payload.direction에 담아 보낸다. 옛 알림처럼 없으면 표시하지 않는다. */
+function notificationDirection(notification: NotificationRecord): { label: string; tone: 'export' | 'import' } | null {
+  const direction = notification.payload.direction;
+  if (direction === 'export') return { label: '수출', tone: 'export' };
+  if (direction === 'import') return { label: '수입', tone: 'import' };
+  return null;
+}
+
+function DirectionChip({ notification }: { notification: NotificationRecord }) {
+  const direction = notificationDirection(notification);
+  return direction ? <span className={`notif-direction is-${direction.tone}`}>{direction.label}</span> : null;
+}
+
 function notificationTarget(notification: NotificationRecord, role: WorkspaceRole): AppMenu {
   switch (notification.type) {
     case 'trade_request_received': return 'dashboard';
@@ -165,13 +178,16 @@ export default function NotificationBell({
   const [allLoading, setAllLoading] = useState(false);
   const [allError, setAllError] = useState('');
   const [allNotifications, setAllNotifications] = useState<NotificationRecord[]>([]);
-  const [unreadOnly, setUnreadOnly] = useState(false);
+  // 전체 알림 창의 보기 — 전체 / 안 읽음 / 휴지통
+  const [allView, setAllView] = useState<'all' | 'unread' | 'trash'>('all');
+  // 휴지통 비우기는 한 번 더 눌러야 실행한다(되돌릴 수 없으므로).
+  const [confirmPurge, setConfirmPurge] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const knownIdsRef = useRef<Set<string>>(new Set());
   // 왼쪽으로 밀어 지운 알림 — DB에는 남기고 이 사용자 화면에서만 숨긴다(삭제 권한 없이도 정리 가능).
   // 읽지 않은 알림을 지우면 읽음으로도 처리해 빨간 숫자가 남지 않게 한다.
   const unreadIdsRef = useRef<Set<string>>(new Set());
-  const { hiddenIds, swipe, isArmed, rowProps, consumeSwipeClick } = useSwipeToHide(
+  const { hiddenIds, purgedIds, swipe, isArmed, rowProps, consumeSwipeClick, hideMany, restore, restoreAll, purge } = useSwipeToHide(
     `portai:hidden-notifications:${userId ?? 'anon'}`,
     {
       ignoreSelector: 'a, input, label, select',
@@ -312,8 +328,25 @@ export default function NotificationBell({
     void markAllNotificationsRead(role).catch(() => void refresh(false));
   };
 
-  const openAllNotifications = async () => {
+  /** 보이는 알림을 한 번에 휴지통으로 — 읽지 않은 알림은 읽음으로도 처리해 빨간 숫자가 남지 않게 한다. */
+  const deleteNotifications = (items: NotificationRecord[]) => {
+    if (items.length === 0) return;
+    const unreadIds = items.filter((item) => !item.readAt).map((item) => item.id);
+    hideMany(items.map((item) => item.id));
+    if (unreadIds.length === 0) return;
+    const readAt = new Date().toISOString();
+    const unread = new Set(unreadIds);
+    const markSome = (current: NotificationRecord[]) => current.map((item) => (unread.has(item.id) ? { ...item, readAt } : item));
+    setNotifications(markSome);
+    setAllNotifications(markSome);
+    setUnreadCount((count) => Math.max(0, count - unreadIds.length));
+    unreadIds.forEach((id) => void markNotificationRead(id).catch(() => undefined));
+  };
+
+  const openAllNotifications = async (view: 'all' | 'trash' = 'all') => {
     setOpen(false);
+    setAllView(view);
+    setConfirmPurge(false);
     setAllOpen(true);
     setAllLoading(true);
     setAllError('');
@@ -336,8 +369,27 @@ export default function NotificationBell({
   );
   const shownNotifications = notifications.filter((item) => !hiddenIds.has(item.id));
   const shownAll = allNotifications.filter((item) => !hiddenIds.has(item.id));
+  const trashed = allNotifications.filter((item) => hiddenIds.has(item.id) && !purgedIds.has(item.id));
   const allUnreadCount = shownAll.filter((item) => !item.readAt).length;
-  const visibleAll = unreadOnly ? shownAll.filter((item) => !item.readAt) : shownAll;
+  const visibleAll = allView === 'unread' ? shownAll.filter((item) => !item.readAt) : shownAll;
+
+  const renderTrashItem = (notification: NotificationRecord) => {
+    const presentation = getPresentation(notification.type);
+    const Icon = presentation.icon;
+    return (
+      <div key={notification.id} className={`notif-item notif-trash-item tone-${presentation.tone}`}>
+        <span className={`notif-type-icon is-${presentation.tone}`}><Icon size={16} /></span>
+        <span className="notif-item-copy">
+          <span className="notif-item-title"><DirectionChip notification={notification} />{presentation.title}</span>
+          <span className="notif-item-detail">{notificationDetail(notification)}</span>
+          <span className="notif-item-time">{formatTime(notification.createdAt)}</span>
+        </span>
+        <button type="button" className="notif-restore" onClick={() => restore(notification.id)}>
+          <RotateCcw size={13} /> 복원
+        </button>
+      </div>
+    );
+  };
 
   const renderItem = (notification: NotificationRecord) => {
     const presentation = getPresentation(notification.type);
@@ -360,6 +412,7 @@ export default function NotificationBell({
         <span className="notif-item-copy">
           <span className="notif-item-title">
             {!notification.readAt && <span className="notif-unread-dot" aria-label="읽지 않음" />}
+            <DirectionChip notification={notification} />
             {presentation.title}
           </span>
           <span className="notif-item-detail">{notificationDetail(notification)}</span>
@@ -388,7 +441,7 @@ export default function NotificationBell({
           <button type="button" className="notif-toast-main" onClick={() => handleItemClick(toast)}>
             <span className={`notif-type-icon is-${toastPresentation.tone}`}><ToastIcon size={17} /></span>
             <span className="notif-toast-copy">
-              <strong>{toastPresentation.title}</strong>
+              <strong><DirectionChip notification={toast} />{toastPresentation.title}</strong>
               <span>{notificationDetail(toast)}</span>
             </span>
           </button>
@@ -408,11 +461,18 @@ export default function NotificationBell({
               <strong>알림</strong>
               {unreadCount > 0 && <span className="notif-unread-summary">읽지 않음 {unreadCount}</span>}
             </div>
-            {unreadCount > 0 && (
-              <button type="button" className="notif-read-all" onClick={handleMarkAllRead}>
-                <CheckCheck size={14} /> 모두 읽음
-              </button>
-            )}
+            <div className="notif-head-actions">
+              {unreadCount > 0 && (
+                <button type="button" className="notif-read-all" onClick={handleMarkAllRead}>
+                  <CheckCheck size={14} /> 모두 읽음
+                </button>
+              )}
+              {shownNotifications.length > 0 && (
+                <button type="button" className="notif-read-all notif-delete-all" onClick={() => deleteNotifications(shownNotifications)}>
+                  <Trash2 size={14} /> 전체 삭제
+                </button>
+              )}
+            </div>
           </div>
           <div className="notif-list">
             {loading && notifications.length === 0 ? (
@@ -427,9 +487,14 @@ export default function NotificationBell({
               shownNotifications.map(renderItem)
             )}
           </div>
-          <button type="button" className="notif-dropdown-foot" onClick={() => void openAllNotifications()}>
-            전체 알림 보기
-          </button>
+          <div className="notif-dropdown-foot-row">
+            <button type="button" className="notif-dropdown-foot" onClick={() => void openAllNotifications()}>
+              전체 알림 보기
+            </button>
+            <button type="button" className="notif-dropdown-foot notif-trash-open" onClick={() => void openAllNotifications('trash')}>
+              <Trash2 size={13} /> 휴지통
+            </button>
+          </div>
         </section>
       )}
 
@@ -441,32 +506,70 @@ export default function NotificationBell({
         >
           <section className="notif-all-modal" role="dialog" aria-modal="true" aria-label="전체 알림">
             <div className="notif-dropdown-head">
-              <div><strong>전체 알림</strong></div>
+              <div><strong>{allView === 'trash' ? '알림 휴지통' : '전체 알림'}</strong></div>
               <button type="button" className="notif-toast-close notif-all-close" aria-label="닫기" onClick={() => setAllOpen(false)}>
                 <X size={16} />
               </button>
             </div>
             <div className="notif-all-toolbar">
               <div className="notif-all-tabs" role="group" aria-label="알림 분류">
-                <button type="button" className={`notif-all-tab${unreadOnly ? '' : ' active'}`} aria-pressed={!unreadOnly} onClick={() => setUnreadOnly(false)}>
+                <button type="button" className={`notif-all-tab${allView === 'all' ? ' active' : ''}`} aria-pressed={allView === 'all'} onClick={() => setAllView('all')}>
                   전체 {shownAll.length}
                 </button>
-                <button type="button" className={`notif-all-tab${unreadOnly ? ' active' : ''}`} aria-pressed={unreadOnly} onClick={() => setUnreadOnly(true)}>
+                <button type="button" className={`notif-all-tab${allView === 'unread' ? ' active' : ''}`} aria-pressed={allView === 'unread'} onClick={() => setAllView('unread')}>
                   안 읽음 {allUnreadCount}
                 </button>
+                <button type="button" className={`notif-all-tab${allView === 'trash' ? ' active' : ''}`} aria-pressed={allView === 'trash'} onClick={() => { setAllView('trash'); setConfirmPurge(false); }}>
+                  휴지통 {trashed.length}
+                </button>
               </div>
-              <button type="button" className="notif-read-all" disabled={allUnreadCount === 0 && unreadCount === 0} onClick={handleMarkAllRead}>
-                <CheckCheck size={14} /> 모두 읽음
-              </button>
+              {allView === 'trash' ? (
+                <div className="notif-head-actions">
+                  <button type="button" className="notif-read-all" disabled={trashed.length === 0} onClick={() => restoreAll()}>
+                    <RotateCcw size={14} /> 모두 복원
+                  </button>
+                  <button
+                    type="button"
+                    className={`notif-read-all notif-delete-all${confirmPurge ? ' is-confirm' : ''}`}
+                    disabled={trashed.length === 0}
+                    onClick={() => {
+                      if (!confirmPurge) { setConfirmPurge(true); return; }
+                      purge(trashed.map((item) => item.id));
+                      setConfirmPurge(false);
+                    }}
+                  >
+                    <Trash2 size={14} /> {confirmPurge ? '한 번 더 누르면 비워요' : '비우기'}
+                  </button>
+                </div>
+              ) : (
+                <div className="notif-head-actions">
+                  <button type="button" className="notif-read-all" disabled={allUnreadCount === 0 && unreadCount === 0} onClick={handleMarkAllRead}>
+                    <CheckCheck size={14} /> 모두 읽음
+                  </button>
+                  <button type="button" className="notif-read-all notif-delete-all" disabled={visibleAll.length === 0} onClick={() => deleteNotifications(visibleAll)}>
+                    <Trash2 size={14} /> 전체 삭제
+                  </button>
+                </div>
+              )}
             </div>
             {allError && <div className="form-message error" role="alert">{allError}</div>}
             <div className="notif-list notif-all-list">
               {allLoading ? (
                 <div className="notif-empty">알림을 불러오는 중…</div>
+              ) : allView === 'trash' ? (
+                trashed.length === 0 ? (
+                  <div className="notif-empty">
+                    <Trash2 size={22} />
+                    <strong>휴지통이 비어 있습니다</strong>
+                    <span>지운 알림은 여기서 다시 복원할 수 있어요.</span>
+                  </div>
+                ) : (
+                  trashed.map(renderTrashItem)
+                )
               ) : visibleAll.length === 0 ? (
                 <div className="notif-empty">
                   <Bell size={22} />
-                  <strong>{unreadOnly ? '읽지 않은 알림이 없습니다' : '도착한 알림이 없습니다'}</strong>
+                  <strong>{allView === 'unread' ? '읽지 않은 알림이 없습니다' : '도착한 알림이 없습니다'}</strong>
                 </div>
               ) : (
                 visibleAll.map(renderItem)

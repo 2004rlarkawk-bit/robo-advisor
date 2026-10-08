@@ -26,6 +26,9 @@ export default function ForwarderImportOperations({ item, saving, locked, arriva
     brokerName: '', declarationNo: '', declarationStatus: 'preparing',
     doStatus: 'waiting', doNumber: '', doIssuer: '', doDocument: null,
   });
+  // 마지막으로 저장한 값 — 바뀐 게 없으면 다시 저장하지 않고, 상태가 바뀔 때만 업무 기록을 남긴다.
+  const savedRef = useRef<Pick<ForwarderImportOperationsState, 'brokerName' | 'declarationNo' | 'declarationStatus'>>(
+    stored ?? { brokerName: '', declarationNo: '', declarationStatus: 'preparing' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -58,17 +61,27 @@ export default function ForwarderImportOperations({ item, saving, locked, arriva
     } catch { setError(format === 'pdf' ? 'PDF 저장 창을 열지 못했습니다. 다시 시도해 주세요.' : '신고자료를 생성하지 못했습니다. 다시 시도해 주세요.'); }
     finally { setBusy(false); }
   };
-  const save = async () => {
+  /**
+   * 신고 진행 기록은 바꾸는 즉시 저장한다(별도 저장 버튼 없음) — 상태는 고르는 순간, 글자 칸은 칸을 벗어날 때.
+   * 상태가 바뀔 때만 업무 기록에 한 줄 남기고, 글자 수정은 기록 없이 값만 저장한다.
+   */
+  const persistDraft = async (next: ForwarderImportOperationsState) => {
     if (readonly) return;
+    const before = savedRef.current;
+    if (next.brokerName === before.brokerName && next.declarationNo === before.declarationNo
+      && next.declarationStatus === before.declarationStatus) return;
     setNotice(''); setError('');
-    if (draft.declarationStatus === 'handed_over' && !draft.brokerName.trim()) {
-      setError('전달한 관세사 또는 관세법인을 입력해 주세요.'); return;
+    // 빠진 값은 저장은 하되 바로 알려 준다.
+    if (next.declarationStatus === 'handed_over' && !next.brokerName.trim()) {
+      setError('전달한 관세사 또는 관세법인을 입력해 주세요.');
+    } else if (['filed', 'cleared'].includes(next.declarationStatus) && !next.declarationNo.trim()) {
+      setError('신고 접수·수리 상태에는 수입신고번호를 입력해 주세요.');
     }
-    if (['filed', 'cleared'].includes(draft.declarationStatus) && !draft.declarationNo.trim()) {
-      setError('신고 접수·수리 상태에는 수입신고번호를 입력해 주세요.'); return;
-    }
-    if (await onSave(draft, `수입 신고 진행 기록 — ${DECLARATION_LABELS[draft.declarationStatus]}`)) {
-      setNotice('업무 기록을 저장했습니다.');
+    const activity = next.declarationStatus !== before.declarationStatus
+      ? `수입 신고 진행 기록 — ${DECLARATION_LABELS[next.declarationStatus]}` : '';
+    if (await onSave(next, activity)) {
+      savedRef.current = next;
+      setNotice('자동 저장했습니다.');
     }
   };
 
@@ -87,9 +100,12 @@ export default function ForwarderImportOperations({ item, saving, locked, arriva
       <div className="import-card-heading"><div><span className="fwd-section-kicker">02 · 통관 관리</span><h2>신고 진행 기록</h2><p>관세사에게 확인한 진행 상황을 기록하세요.</p></div><span className="fwd-soft-badge">{DECLARATION_LABELS[stored?.declarationStatus ?? 'preparing']}</span></div>
       <fieldset className="fwd-operation-fields" disabled={readonly}>
         <div className="fwd-operation-grid">
-          <label className="form-group"><span className="form-label">담당 관세사 / 관세법인</span><input className="form-input" value={draft.brokerName} onChange={e => patch({ brokerName: e.target.value })} placeholder="예: 한빛 관세법인" /></label>
-          <label className="form-group"><span className="form-label">신고 진행 상태</span><select className="form-input" value={draft.declarationStatus} onChange={e => patch({ declarationStatus: e.target.value as ForwarderImportOperationsState['declarationStatus'] })}>{Object.entries(DECLARATION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label className="form-group"><span className="form-label">수입신고번호</span><input className="form-input" value={draft.declarationNo} onChange={e => patch({ declarationNo: e.target.value })} placeholder="신고 접수 후 입력" /></label>
+          <label className="form-group"><span className="form-label">담당 관세사 / 관세법인</span><input className="form-input" value={draft.brokerName} onChange={e => patch({ brokerName: e.target.value })} onBlur={() => void persistDraft(draft)} placeholder="예: 한빛 관세법인" /></label>
+          <label className="form-group"><span className="form-label">신고 진행 상태</span><select className="form-input" value={draft.declarationStatus} onChange={e => {
+            const next = { ...draft, declarationStatus: e.target.value as ForwarderImportOperationsState['declarationStatus'] };
+            setDraft(next); void persistDraft(next);
+          }}>{Object.entries(DECLARATION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="form-group"><span className="form-label">수입신고번호</span><input className="form-input" value={draft.declarationNo} onChange={e => patch({ declarationNo: e.target.value })} onBlur={() => void persistDraft(draft)} placeholder="신고 접수 후 입력" /></label>
         </div>
       </fieldset>
       <details className="fwd-cargo-disclosure"><summary>B/L로 화물 진행 조회</summary><ForwarderCargoPanel initialBlNo={item.blNo} /></details>
@@ -100,6 +116,5 @@ export default function ForwarderImportOperations({ item, saving, locked, arriva
     </div>
     {error && <p role="alert" className="form-message error">{error}</p>}
     {notice && <p role="status" className="fwd-save-notice"><CheckCircle2 size={16} />{notice}</p>}
-    <div className="fwd-operation-save"><span>변경한 신고 진행 상태를 업무 기록에 저장합니다.</span><button type="button" className="btn btn-primary" disabled={readonly} onClick={() => void save()}>{saving ? '저장 중…' : '업무 기록 저장'}</button></div>
   </div>;
 }

@@ -28,6 +28,7 @@ import { filterDocumentManagerTrades } from '../../services/tradeListPolicy';
 import ForwarderRequestModal from './ForwarderRequestModal';
 import TradeMessageThread from './TradeMessageThread';
 import ShipperReturnRequestCard from './ShipperReturnRequestCard';
+import ShipperArrivalNoticeCard from './ShipperArrivalNoticeCard';
 import TrashBin from '../common/TrashBin';
 import { formatKstDate } from '../../utils/formatDate';
 import '../../styles/forwarderRequest.css';
@@ -472,15 +473,19 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
       {threadTrade && (() => {
         const internal = latestForTrade(internalRequests, threadTrade.id);
         const returnRequest = (threadTrade.forwarderCase as ForwarderCaseState | null)?.returnRequest ?? null;
-        if (!internal && !returnRequest) return null;
+        const arrivalNoticeSent = (threadTrade.forwarderCase as ForwarderCaseState | null)?.arrivalNoticeSent ?? null;
+        if (!internal && !returnRequest && !arrivalNoticeSent) return null;
         const closed = internal ? internal.status !== 'pending' && internal.status !== 'accepted' : true;
         const reference = threadTrade.profile.blNo || threadTrade.profile.invoiceNo || threadTrade.profile.documentNo || '';
-        const requestCard = returnRequest ? (
+        const returnCard = returnRequest ? (
           <ShipperReturnRequestCard
             request={returnRequest}
             onRevise={onRevise ? () => { setThreadTrade(null); onRevise(threadTrade); } : undefined}
           />
         ) : null;
+        // 포워더가 보낸 도착통지서는 대화 위에 함께 고정한다.
+        const arrivalCard = arrivalNoticeSent ? <ShipperArrivalNoticeCard trade={threadTrade} sent={arrivalNoticeSent} /> : null;
+        const requestCard = returnCard || arrivalCard ? <>{arrivalCard}{returnCard}</> : null;
         return (
           <div className="fwd-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setThreadTrade(null); }}>
             <div className="fwd-modal tm-modal" role="dialog" aria-modal="true" aria-labelledby="thread-modal-title">

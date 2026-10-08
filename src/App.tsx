@@ -2841,7 +2841,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
               )}
             <Suspense fallback={<div className="workspace-loading">화면을 불러오는 중입니다.</div>}>
             {activeMenu === 'about' ? <AboutPanel onStart={() => setActiveMenu('dashboard')} />
-            : activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
+            : activeMenu === 'profile' ? <ProfileSettingsPage profile={userProfile} workspaceRole={workspaceRole} isSaving={isProfileSaving} onSave={async (values) => { await saveUserProfile(values); }} onDeleteAccount={handleDeleteAccount} />
             : activeMenu === 'guide' ? <GuidePanel onNavigate={(menu) => setActiveMenu(menu as AppMenu)} />
             : activeMenu === 'customs_history' ? <CustomsHistoryPanel
   onLoad={handleLoadSavedTrade}

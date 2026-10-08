@@ -177,6 +177,12 @@ export function useShipperHSCodeSuggestions(
       if (observedNamesRef.current.get(item.id) === itemName) {
         continue;
       }
+      // 화면에 처음 올라온 품목에 HS Code가 이미 있으면(오류 수정하러 돌아온 경우 등) 다시 추천하지 않는다 —
+      // 고칠 칸에서 시선을 뺏지 않게. 품명을 바꾸거나 [HS 재추천]을 누르면 그때 추천한다.
+      if (!observedNamesRef.current.has(item.id) && /^\d{6,10}$/.test(item.hsCode.replace(/[\s.-]/g, ''))) {
+        observedNamesRef.current.set(item.id, itemName);
+        continue;
+      }
 
       observedNamesRef.current.set(item.id, itemName);
       const previousTimer = timersRef.current.get(item.id);

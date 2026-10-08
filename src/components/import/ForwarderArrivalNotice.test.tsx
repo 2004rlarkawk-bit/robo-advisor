@@ -35,6 +35,32 @@ describe('수입 포워더 도착안내서', () => {
   });
   afterEach(() => { act(() => root.unmount()); host.remove(); vi.clearAllMocks(); });
 
+  it('[화주에게 전달]을 누르면 전달하고, 전달한 뒤에는 다시 전달할 수 있다', async () => {
+    const onSend = vi.fn().mockResolvedValue(true);
+    await act(async () => root.render(<ForwarderArrivalNotice
+      item={item} userId="test-user" issuerName="테스트 포워더" contactName="김담당"
+      locked={false} saving={false} lockReason="" onChange={onChange} onSend={onSend}
+    />));
+    await act(async () => button('화주에게 전달').click());
+    expect(onSend).toHaveBeenCalledTimes(1);
+    expect(host.textContent).toContain('화주에게 도착통지서를 전달했습니다');
+
+    await act(async () => root.render(<ForwarderArrivalNotice
+      item={item} userId="test-user" issuerName="테스트 포워더" contactName="김담당"
+      locked={false} saving={false} lockReason="" onChange={onChange} onSend={onSend} sentAt="2026-10-09T03:00:00.000Z"
+    />));
+    expect(button('화주에게 다시 전달')).toBeDefined();
+  });
+
+  it('서류 검토 전(잠김)에는 화주에게 전달할 수 없다', async () => {
+    const onSend = vi.fn().mockResolvedValue(true);
+    await act(async () => root.render(<ForwarderArrivalNotice
+      item={item} userId="test-user" issuerName="테스트 포워더" contactName="김담당"
+      locked saving={false} lockReason="서류 검토 후 사용 가능" onChange={onChange} onSend={onSend}
+    />));
+    expect(button('화주에게 전달').disabled).toBe(true);
+  });
+
   it('shows the generated notice inline and offers matching DOCX/PDF actions', async () => {
     await render();
     await act(async () => button('보기').click());

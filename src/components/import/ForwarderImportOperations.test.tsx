@@ -26,6 +26,7 @@ describe('수입 포워더 업무 진행', () => {
     Object.getOwnPropertyDescriptor(node instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value')!.set!.call(node, value);
     node.dispatchEvent(new Event(node instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }));
   });
+  const blur = async (label: string) => act(async () => { control(label).dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
   const render = (locked = false) => act(async () => root.render(<ForwarderImportOperations item={item} saving={false} locked={locked} arrivalNotice={<div>A/N</div>} onSave={onSave} />));
   beforeEach(() => {
     host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host);
@@ -41,24 +42,27 @@ describe('수입 포워더 업무 진행', () => {
     await render(true);
     expect(button('DOCX 다운로드').disabled).toBe(true);
     expect(button('PDF 저장').disabled).toBe(true);
-    expect(button('업무 기록 저장').disabled).toBe(true);
+    expect(button('업무 기록 저장')).toBeUndefined();
     expect(control('신고 진행 상태').closest('fieldset')?.disabled).toBe(true);
     await act(async () => button('DOCX 다운로드').click());
     expect(downloadImportDeclarationDocx).not.toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it('requires a declaration number for filed status and saves the explicit user record', async () => {
+  it('saves the record as soon as it changes — status on select, text on leaving the field', async () => {
     await render();
     await change('신고 진행 상태', 'filed');
-    await act(async () => button('업무 기록 저장').click());
+    // 상태는 고르는 즉시 저장하고 업무 기록에 남긴다. 빠진 신고번호는 바로 알려 준다.
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ declarationStatus: 'filed' }), expect.stringContaining('수입 신고 진행 기록'));
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('수입신고번호');
-    expect(onSave).not.toHaveBeenCalled();
     await change('수입신고번호', 'TEST-DECL-001');
+    await blur('수입신고번호');
     await change('담당 관세사 / 관세법인', '테스트 관세법인');
-    await act(async () => button('업무 기록 저장').click());
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ declarationStatus: 'filed', declarationNo: 'TEST-DECL-001', brokerName: '테스트 관세법인' }), expect.any(String));
-    expect(host.textContent).toContain('업무 기록을 저장했습니다.');
+    await blur('담당 관세사 / 관세법인');
+    // 글자 수정은 기록 없이 값만 저장한다.
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ declarationStatus: 'filed', declarationNo: 'TEST-DECL-001', brokerName: '테스트 관세법인' }), '');
+    expect(host.textContent).toContain('자동 저장했습니다.');
+    expect(host.textContent).not.toContain('업무 기록 저장');
     expect(host.textContent).not.toContain('납부 확인');
   });
 
@@ -82,8 +86,8 @@ describe('수입 포워더 업무 진행', () => {
     await render();
     await change('담당 관세사 / 관세법인', '테스트 관세사');
     onSave.mockResolvedValueOnce(false);
-    await act(async () => button('업무 기록 저장').click());
+    await blur('담당 관세사 / 관세법인');
     expect(control('담당 관세사 / 관세법인').value).toBe('테스트 관세사');
-    expect(host.textContent).not.toContain('업무 기록을 저장했습니다.');
+    expect(host.textContent).not.toContain('자동 저장했습니다.');
   });
 });

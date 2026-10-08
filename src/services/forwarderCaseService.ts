@@ -265,6 +265,7 @@ export async function saveForwarderCaseState(
     issueResolutions: { ...(previous?.issueResolutions ?? {}), ...(patch.issueResolutions ?? {}) },
     issueNotes: { ...(previous?.issueNotes ?? {}), ...(patch.issueNotes ?? {}) },
     arrivalNotice: patch.arrivalNotice !== undefined ? patch.arrivalNotice : previous?.arrivalNotice ?? null,
+    arrivalNoticeSent: patch.arrivalNoticeSent !== undefined ? patch.arrivalNoticeSent : previous?.arrivalNoticeSent ?? null,
     returnRequest: patch.returnRequest !== undefined ? patch.returnRequest : previous?.returnRequest ?? null,
     importOperations: patch.importOperations ?? previous?.importOperations,
     activity: [

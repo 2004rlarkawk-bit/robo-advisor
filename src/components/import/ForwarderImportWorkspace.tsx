@@ -6,7 +6,7 @@
  *  - 상세: 서류 확인 / 업무 진행 / 업무 메시지 (상태 변경 규칙은 유지)
  * 운영 상태는 forwarderCaseService를 통해 workflow_data.forwarderCase에 저장한다.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle2, ExternalLink, Mail } from 'lucide-react';
 import {
   FORWARDER_STAGE_ORDER,
@@ -23,7 +23,6 @@ import {
   saveForwarderCaseState,
 } from '../../services/forwarderCaseService';
 import ForwarderImportOperations from './ForwarderImportOperations';
-import ForwarderExtractedSummary from './ForwarderExtractedSummary';
 import { IMPORT_DOCUMENT_TYPE_LABELS } from '../../services/importDocumentAnalysisService';
 import { loadTradeAttachmentFile } from '../../services/tradeAttachmentStorageService';
 import ForwarderArrivalNotice from './ForwarderArrivalNotice';
@@ -35,6 +34,7 @@ import ForwarderRequestMessages from './ForwarderRequestMessages';
 import ReturnRequestComposer from './ReturnRequestComposer';
 import TradeMessageThread from '../forwarder/TradeMessageThread';
 import { listIncomingTradeRequests } from '../../services/forwarderRequestService';
+import { sendTradeMessage } from '../../services/tradeMessageService';
 import type { TradeRequest } from '../../types/forwarderRequest';
 import { getInboxImporterName } from '../../utils/forwarderInbox';
 import '../../styles/forwarderPolish.css';
@@ -120,6 +120,17 @@ export default function ForwarderImportWorkspace({
   const [returnFormOpen, setReturnFormOpen] = useState(false);
   const [returnSentOpen, setReturnSentOpen] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>('review');
+  const tabsRef = useRef<HTMLElement>(null);
+  const shownTabRef = useRef(detailTab);
+  // 탭을 바꾸면 새 탭의 맨 위(탭 바로 아래)부터 보이게 한다 — 앞 탭에서 내려간 스크롤 위치에 남아
+  // '업무 진행'이 중간(신고 진행 기록)부터 보이는 일이 없게. 탭이 이미 화면 안에 있으면 그대로 둔다.
+  useEffect(() => {
+    if (shownTabRef.current === detailTab) return;
+    shownTabRef.current = detailTab;
+    const tabs = tabsRef.current;
+    if (!tabs || tabs.getBoundingClientRect().top >= 88) return; // 88px = 고정 상단바 높이(scroll-margin-top과 같게)
+    tabs.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [detailTab]);
   const [docBusyId, setDocBusyId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -258,6 +269,37 @@ export default function ForwarderImportWorkspace({
     scrollPageToTop();
   };
 
+  /**
+   * 도착통지서를 화주에게 전달한다 — 발행 정보를 거래에 남기고(화주가 같은 문서를 연다),
+   * 업무 메시지를 보내 화주에게 알림이 가게 한다.
+   */
+  const sendArrivalNotice = async (caseItem: ForwarderImportCase): Promise<boolean> => {
+    const sentAt = new Date().toISOString();
+    const saved = await persist(
+      caseItem,
+      { arrivalNoticeSent: { sentAt, issuerName, contactName: senderContactName } },
+      ['도착통지서(A/N) 화주에게 전달'],
+    );
+    if (!saved) return false;
+    try {
+      const mine = (await listIncomingTradeRequests()).filter((item) => item.tradeId === caseItem.tradeId);
+      const request = mine.find((item) => item.status === 'accepted') ?? null;
+      if (request) {
+        const eta = caseItem.eta ? ` 도착 예정일은 ${caseItem.eta}입니다.` : '';
+        await sendTradeMessage(
+          request.id,
+          `화물 도착통지서(A/N)를 보내드립니다.${eta} 이 창 위의 '화물 도착통지서'에서 보기·다운로드할 수 있습니다.`,
+          'message',
+          'forwarder',
+        );
+      }
+    } catch (err) {
+      // 전달 기록은 저장됐다 — 알림 메시지만 실패한 경우라 전달 자체는 성공으로 본다.
+      console.warn('도착통지서 전달 메시지 전송 실패:', err);
+    }
+    return true;
+  };
+
   const finishClearance = (caseItem: ForwarderImportCase) => {
     const operations = (caseItem.trade.forwarderCase as ForwarderCaseState | null)?.importOperations;
     const declarationStatus = operations?.declarationStatus;
@@ -330,7 +372,7 @@ export default function ForwarderImportWorkspace({
 
         {error && <div className="form-message error">{error}</div>}
 
-        <nav className="fwd-tabs" aria-label="수입 업무 상세 탭">
+        <nav className="fwd-tabs" aria-label="수입 업무 상세 탭" ref={tabsRef}>
           <button type="button" aria-current={detailTab === 'review' ? 'page' : undefined} className={detailTab === 'review' ? 'is-active' : ''} onClick={() => setDetailTab('review')}>서류 확인</button>
           <button type="button" aria-current={detailTab === 'clearance' ? 'page' : undefined} className={detailTab === 'clearance' ? 'is-active' : ''} onClick={() => setDetailTab('clearance')}>업무 진행</button>
           <button type="button" aria-current={detailTab === 'messages' ? 'page' : undefined} className={detailTab === 'messages' ? 'is-active' : ''} onClick={() => setDetailTab('messages')}>업무 메시지{selected.returnRequest?.resolvedAt && <span className="fwd-tab-notice">회신 도착</span>}</button>
@@ -408,7 +450,6 @@ export default function ForwarderImportWorkspace({
           </section>
         )}
 
-        {detailTab === 'review' && <ForwarderExtractedSummary item={selected} />}
 
         {detailTab === 'review' && (
           <ImportHandoffReadyCard
@@ -475,7 +516,7 @@ export default function ForwarderImportWorkspace({
 
         <div hidden={detailTab !== 'clearance'}>
           <ForwarderImportOperations key={selected.tradeId} item={selected} saving={saving} locked={documentsLocked}
-            onSave={(importOperations, activity) => persist(selected, { importOperations }, [activity])}
+            onSave={(importOperations, activity) => persist(selected, { importOperations }, activity ? [activity] : [])}
             arrivalNotice={
             <ForwarderArrivalNotice
               item={selected}
@@ -486,6 +527,8 @@ export default function ForwarderImportWorkspace({
               locked={documentsLocked}
               saving={saving}
               lockReason={documentLockReason}
+              sentAt={(selected.trade.forwarderCase as ForwarderCaseState | null)?.arrivalNoticeSent?.sentAt ?? null}
+              onSend={() => sendArrivalNotice(selected)}
             />
             }
           />
@@ -529,6 +572,6 @@ export default function ForwarderImportWorkspace({
     );
   }
 
-  return <ForwarderImportInbox cases={cases} error={error} refreshing={refreshing}
+  return <ForwarderImportInbox cases={cases} error={error} refreshing={refreshing} userId={userId}
     onRefresh={() => void load()} onDirectUpload={onDirectUpload} onOpen={openCase} />;
 }

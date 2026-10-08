@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { ArrowRight, Inbox, Plus, RefreshCw } from 'lucide-react';
+import { useState, type CSSProperties } from 'react';
+import { ArrowRight, Inbox, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import type { ForwarderImportCase } from '../../types/forwarderCase';
 import { IMPORT_DOCUMENT_TYPE_LABELS } from '../../services/importDocumentAnalysisService';
 import { formatInboxEta, getInboxImporterName, getInboxItemName, getInboxState, type InboxFilter } from '../../utils/forwarderInbox';
+import { useSwipeToHide } from '../../hooks/useSwipeToHide';
+import TrashBin from '../common/TrashBin';
 import '../../styles/forwarderImportInbox.css';
 
 interface Props {
@@ -12,6 +14,8 @@ interface Props {
   onRefresh: () => void;
   onDirectUpload: () => void;
   onOpen: (tradeId: string) => void;
+  /** 목록에서 숨긴 의뢰를 사용자별로 기억하는 데 쓴다. */
+  userId?: string;
 }
 
 /** 직접 등록(구 단건 위저드) 진입 버튼 노출 여부 — 시연 기간 숨김. */
@@ -22,10 +26,14 @@ const FILTERS: { value: InboxFilter; label: string }[] = [
   { value: 'progress', label: '진행 중' }, { value: 'reply', label: '보완 회신' }, { value: 'done', label: '완료' },
 ];
 
-export default function ForwarderImportInbox({ cases, error, refreshing, onRefresh, onDirectUpload, onOpen }: Props) {
+export default function ForwarderImportInbox({ cases, error, refreshing, onRefresh, onDirectUpload, onOpen, userId }: Props) {
   const [filter, setFilter] = useState<InboxFilter>('all');
   const [pickedId, setPickedId] = useState<string | null>(null);
-  const rows = (cases ?? []).map((item) => ({ item, state: getInboxState(item) }));
+  // 행을 꾹 누른 채 왼쪽으로 밀면 목록에서 지운다(수출 의뢰함과 같은 동작) — 화주의 거래는 그대로 두고 이 사용자 목록에서만 숨긴다.
+  const { hiddenIds, swipe, isArmed, rowProps, restore, restoreAll, consumeSwipeClick } =
+    useSwipeToHide(`portai:hidden-forwarder-import-cases:${userId ?? 'anonymous'}`);
+  const trashed = (cases ?? []).filter((item) => hiddenIds.has(item.tradeId));
+  const rows = (cases ?? []).filter((item) => !hiddenIds.has(item.tradeId)).map((item) => ({ item, state: getInboxState(item) }));
   const visible = rows.filter(({ state }) => filter === 'all' || state.category === filter);
   // Never open a stale or hidden selection after filtering, refresh, or a status change.
   const picked = visible.find(({ item }) => item.tradeId === pickedId)?.item ?? visible[0]?.item ?? null;
@@ -35,13 +43,22 @@ export default function ForwarderImportInbox({ cases, error, refreshing, onRefre
   return <section className="fwd-inbox" aria-labelledby="fwd-inbox-title">
     <div className="fwd-inbox-panel" aria-busy={refreshing}>
       <div className="fwd-inbox-panel-heading">
-        <h2 id="fwd-inbox-title">받은 의뢰 <span>{cases === null ? '—' : `${cases.length}건`}</span></h2>
+        <h2 id="fwd-inbox-title">받은 의뢰 <span>{cases === null ? '—' : `${rows.length}건`}</span></h2>
         <div className="fwd-inbox-heading-actions">
           {/* 직접 등록은 개편 전 단건 위저드로 이동한다 — 새 워크스페이스와 화면이 달라
               시연 중 혼선을 줄 수 있어 잠시 숨긴다. 복원: DIRECT_UPLOAD_ENABLED를 true로. */}
           {DIRECT_UPLOAD_ENABLED && (
             <button type="button" className="btn btn-secondary" onClick={onDirectUpload}><Plus size={17} aria-hidden="true" /> 직접 등록</button>
           )}
+          <TrashBin
+            items={trashed.map((item) => ({
+              id: item.tradeId,
+              title: `${getInboxImporterName(item)} · ${getInboxItemName(item)}`,
+              detail: `B/L ${item.blNo}`,
+            }))}
+            onRestore={restore}
+            onRestoreAll={restoreAll}
+          />
           <button type="button" className="btn btn-secondary fwd-inbox-refresh" aria-label="의뢰 새로고침" title="새로고침" disabled={refreshing} onClick={onRefresh}><RefreshCw size={19} className={refreshing ? 'animate-spin' : ''} aria-hidden="true" /></button>
         </div>
       </div>
@@ -52,19 +69,34 @@ export default function ForwarderImportInbox({ cases, error, refreshing, onRefre
       </div>
       {error && <p className="form-message error" role="alert">{error}</p>}
       {cases === null && !error ? <p className="fwd-inbox-empty" role="status">의뢰를 불러오는 중…</p>
-        : !error && rows.length === 0 ? <div className="fwd-inbox-empty"><Inbox size={28} aria-hidden="true" /><p>아직 받은 의뢰가 없습니다.</p><span>별도로 받은 서류는 직접 등록할 수 있습니다.</span></div>
+        : !error && rows.length === 0 ? <div className="fwd-inbox-empty"><Inbox size={28} aria-hidden="true" /><p>{trashed.length > 0 ? '목록에 남은 의뢰가 없습니다.' : '아직 받은 의뢰가 없습니다.'}</p><span>별도로 받은 서류는 직접 등록할 수 있습니다.</span></div>
         : !error && visible.length === 0 ? <p className="fwd-inbox-empty">이 상태의 의뢰가 없습니다.</p>
         : visible.length > 0 && <div className="fwd-inbox-table-scroll">
-          <table className="fwd-inbox-table">
+          <table className="fwd-inbox-table fwd-import-inbox-table">
             <caption className="fwd-inbox-sr">받은 의뢰 목록. 의뢰를 선택한 후 하단의 열기 버튼을 누르세요.</caption>
             <thead><tr><th scope="col"><span className="fwd-inbox-sr">선택</span></th><th scope="col">화주 / 품목</th><th scope="col">도착 예정일</th><th scope="col">상태</th><th scope="col">다음 할 일</th></tr></thead>
-            <tbody>{visible.map(({ item, state }) => <tr key={item.tradeId} className={picked?.tradeId === item.tradeId ? 'is-selected' : ''} onClick={() => setPickedId(item.tradeId)}>
+            <tbody>{visible.map(({ item, state }) => {
+              const swiping = swipe?.id === item.tradeId;
+              const armed = isArmed(item.tradeId);
+              const rowClass = [picked?.tradeId === item.tradeId ? 'is-selected' : '', swiping ? 'is-swiping' : '', armed ? 'is-armed' : ''].filter(Boolean).join(' ') || undefined;
+              return <tr key={item.tradeId} className={rowClass}
+                style={swiping ? { '--swipe-dx': `${swipe.dx}px` } as CSSProperties : undefined}
+                {...rowProps(item.tradeId)}
+                onClick={() => { if (!consumeSwipeClick()) setPickedId(item.tradeId); }}>
               <td><input type="radio" name="forwarder-import-case" aria-label={`${getInboxImporterName(item)} · B/L ${item.blNo} 선택`} checked={picked?.tradeId === item.tradeId} onChange={() => setPickedId(item.tradeId)} /></td>
               <td className="fwd-inbox-party"><strong>{getInboxImporterName(item)}</strong><span>{getInboxItemName(item)} · B/L {item.blNo}</span>{item.origin === 'direct_upload' && <small>직접 등록</small>}</td>
               <td className="fwd-inbox-eta">{formatInboxEta(item.eta)}</td>
               <td><span className={`fwd-inbox-badge is-${state.tone}`}>{state.label}</span></td>
-              <td>{state.next}</td>
-            </tr>)}</tbody>
+              <td>
+                {state.next}
+                {swiping && (
+                  <span className="fwd-swipe-label" style={{ width: `${-swipe.dx}px` }} aria-hidden="true">
+                    <Trash2 size={16} /> {armed ? '놓으면 삭제' : '삭제'}
+                  </span>
+                )}
+              </td>
+            </tr>;
+            })}</tbody>
           </table>
         </div>}
       {picked && <div className="fwd-inbox-selection" aria-live="polite">

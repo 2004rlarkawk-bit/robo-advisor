@@ -35,7 +35,7 @@ afterEach(() => {
   container = null;
 });
 
-function renderForm(requireExplicitServiceRole = false) {
+function renderForm(requireExplicitServiceRole = false, extra: { profile?: typeof profile; workspaceRole?: 'shipper' | 'forwarder' } = {}) {
   const onSubmit = vi.fn(async () => undefined);
   container = document.createElement('div');
   document.body.append(container);
@@ -43,7 +43,8 @@ function renderForm(requireExplicitServiceRole = false) {
   act(() => {
     root?.render(
       <ProfileForm
-        profile={profile}
+        profile={extra.profile ?? profile}
+        workspaceRole={extra.workspaceRole}
         submitLabel={'저장'}
         isSaving={false}
         onSubmit={onSubmit}
@@ -201,6 +202,19 @@ describe('ProfileForm 담당 특화 분야', () => {
 
     await submit(rendered.container);
     expect(rendered.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ forwarder_specialties: ['route_cn', 'cargo_cold'] }));
+  });
+
+  it('관리자 계정은 화주 업무 중에는 칸을 숨기되, 저장해도 특화 분야를 지우지 않는다', async () => {
+    const integrated = { ...profile, service_role: 'integrated' as const, forwarder_specialties: ['route_cn' as const] };
+    const asShipper = renderForm(false, { profile: integrated, workspaceRole: 'shipper' });
+    expect(asShipper.container.textContent).not.toContain('담당 특화 분야');
+    await submit(asShipper.container);
+    expect(asShipper.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ forwarder_specialties: ['route_cn'] }));
+    act(() => root?.unmount());
+    asShipper.container.remove();
+
+    const asForwarder = renderForm(false, { profile: integrated, workspaceRole: 'forwarder' });
+    expect(asForwarder.container.textContent).toContain('담당 특화 분야');
   });
 
   it('화주 전용으로 바꾸면 칸을 숨기고 저장 시 특화 분야를 비운다', async () => {

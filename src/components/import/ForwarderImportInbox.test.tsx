@@ -88,4 +88,29 @@ describe('ForwarderImportInbox', () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toBe('목록 조회 실패');
     expect(button('선택한 의뢰 열기').disabled).toBe(true);
   });
+
+  it('행을 왼쪽으로 밀면 목록에서 숨기고 휴지통에서 되돌릴 수 있다', async () => {
+    window.localStorage.clear();
+    await render({ userId: 'forwarder-1' });
+    const rowOf = (name: string) => [...container.querySelectorAll<HTMLTableRowElement>('tbody tr')].find((row) => row.textContent?.includes(name))!;
+    const row = rowOf('신규업체');
+    const opts = (x: number) => ({ bubbles: true, button: 0, pointerId: 1, clientX: x, clientY: 100 });
+    row.setPointerCapture = () => {};
+    act(() => {
+      row.dispatchEvent(new PointerEvent('pointerdown', opts(400)));
+      row.dispatchEvent(new PointerEvent('pointermove', opts(300)));
+      row.dispatchEvent(new PointerEvent('pointermove', opts(200)));
+    });
+    await act(async () => { row.dispatchEvent(new PointerEvent('pointerup', opts(200))); });
+
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(4);
+    expect(container.querySelector('#fwd-inbox-title')?.textContent).toContain('4건');
+    expect(container.querySelector('.trash-open')?.getAttribute('aria-label')).toBe('휴지통 1건');
+
+    await act(async () => container.querySelector<HTMLButtonElement>('.trash-open')!.click());
+    const restoreOne = [...container.querySelectorAll<HTMLButtonElement>('button')].find((element) => element.textContent?.trim() === '복원')!;
+    await act(async () => restoreOne.click());
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(5);
+    window.localStorage.clear();
+  });
 });

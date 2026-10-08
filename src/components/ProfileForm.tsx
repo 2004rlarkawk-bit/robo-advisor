@@ -19,8 +19,13 @@ import {
   type ForwarderSpecialtyKey,
 } from '../utils/forwarderSpecialty';
 import '../styles/forwarderRequest.css';
+import type { WorkspaceRole } from '../utils/workspaceRole';
 
-interface Props { profile: UserProfile; submitLabel: string; isSaving: boolean; onSubmit: (values: UserProfileUpdate) => Promise<void>; requireExplicitServiceRole?: boolean; secondaryAction?: ReactNode; }
+interface Props {
+  profile: UserProfile; submitLabel: string; isSaving: boolean; onSubmit: (values: UserProfileUpdate) => Promise<void>; requireExplicitServiceRole?: boolean; secondaryAction?: ReactNode;
+  /** 지금 보고 있는 업무 화면 — 관리자 계정이 화주 업무 중이면 포워더 전용 항목을 숨긴다. 없으면(가입 설정) 숨기지 않는다. */
+  workspaceRole?: WorkspaceRole;
+}
 
 // 2026-07-23 편의성 업그레이드: 온보딩 및 프로필 서비스 이용 목적 선택
 const SERVICE_ROLE_OPTIONS: { value: ServiceRole; label: string; description: string }[] = [
@@ -52,7 +57,7 @@ const formValues = (p: UserProfile, requireExplicitServiceRole: boolean): UserPr
 
 const SPECIALTY_GROUPS: ForwarderSpecialtyGroup[] = ['route', 'cargo', 'goods'];
 
-export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, requireExplicitServiceRole = false, secondaryAction }: Props) {
+export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, requireExplicitServiceRole = false, secondaryAction, workspaceRole }: Props) {
   const [values, setValues] = useState<UserProfileUpdate>(() => formValues(profile, requireExplicitServiceRole));
   const [message, setMessage] = useState('');
   // 직접 입력 칸은 "추가"를 눌러야 칩이 된다 — 타자 중인 글자가 저장되지 않게.
@@ -84,6 +89,10 @@ export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, 
 
   // 포워더 업무를 하는 계정에만 특화 분야를 묻는다. 화주 전용으로 바꾸면 저장 시 비운다.
   const handlesForwarding = values.service_role === 'forwarder' || values.service_role === 'integrated';
+  // 관리자(겸용) 계정은 화주 업무 화면에서는 특화 분야를 보이지 않는다 — 포워더 업무로 바꿨을 때만 편집한다.
+  // 저장 값은 그대로 지킨다(handlesForwarding 기준) — 화주 화면에서 저장해도 특화 분야가 지워지지 않는다.
+  const showSpecialties = values.service_role === 'forwarder'
+    || (values.service_role === 'integrated' && workspaceRole !== 'shipper');
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); setMessage('');
     if (!values.service_role) {
@@ -138,9 +147,9 @@ export default function ProfileForm({ profile, submitLabel, isSaving, onSubmit, 
           ))}
         </div>
       </section>
-      {handlesForwarding && (
-        <section className={'profile-form-section'}>
-          <div className={'profile-section-heading'}><h2>담당 특화 분야</h2><p>화주가 의뢰할 때 거래 조건과 맞는 담당자에게 자동으로 배정됩니다. 실제로 자주 맡는 분야만 골라 주세요.</p></div>
+      {showSpecialties && (
+        <section className={'profile-form-section profile-specialty-section'}>
+          <div className={'profile-section-heading'}><h2>담당 특화 분야</h2></div>
           {SPECIALTY_GROUPS.map((group) => (
             <div key={group} className={'profile-specialty-group'} role={'group'} aria-label={`${FORWARDER_SPECIALTY_GROUP_LABEL[group]} 특화 분야`}>
               <span className={'profile-specialty-group-label'}>{FORWARDER_SPECIALTY_GROUP_LABEL[group]}</span>

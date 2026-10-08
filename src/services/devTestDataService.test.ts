@@ -122,7 +122,7 @@ describe('개발 테스트 데이터', () => {
 });
 
 describe('createDemoRehearsalProfile', () => {
-  it('품명·HS는 그대로 두고, 시연용 반드시 수정(수량 불일치)과 확인 권장(도착 예정일 연도)이 걸리게 채운다', async () => {
+  it('품명·HS는 그대로 두고, 시연용 반드시 수정 두 개(수량 불일치·신용장 개설일)만 걸리게 채운다', async () => {
     const { createDemoRehearsalProfile } = await import('./devTestDataService');
     const { runComplianceRules } = await import('../agents/complianceRules');
     const current = { tradeType: 'export', itemName: 'desk', hsCode: '9403301000', quantity: 10, unitPrice: 100, totalAmount: 1000, currency: 'USD', unit: 'EA', weight: 120, measurement: '0.300' } as never;
@@ -146,11 +146,12 @@ describe('createDemoRehearsalProfile', () => {
     expect(profile.shippingMarks).toBe('TIC\nLOS ANGELES\nC/NO. 1-8\nMADE IN KOREA');
     expect(profile.shipperSupplemental?.hasNoShippingMarks).toBe(false);
     expect(profile.departureDate).toBe('2026-10-10');
-    expect(profile.lcDate).toBe('2026-10-03');
+    expect(profile.lcDate).toBe('2026-10-31');
+    expect(profile.arrivalDate).toBe('2026-10-22');
 
     const ids = runComplianceRules(profile).map((issue) => issue.id);
-    expect(ids).toContain('r21-transit-implausible');
-    expect(ids).not.toContain('r14-lc-after-shipment');
+    expect(ids).toContain('r14-lc-after-shipment');
+    expect(ids).not.toContain('r21-transit-implausible');
     expect(ids).not.toContain('r21-transit-too-long');
     expect(ids).not.toContain('r23-small-cargo-lcl');
     expect(ids).not.toContain('r21-date-out-of-range');

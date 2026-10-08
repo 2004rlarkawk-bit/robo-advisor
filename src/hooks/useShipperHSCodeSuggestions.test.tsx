@@ -113,6 +113,21 @@ describe('품목별 HS Code 추천 상태', () => {
     );
   });
 
+  it('HS Code가 이미 있는 품목은 화면에 다시 올라와도 추천하지 않고, 품명을 바꾸면 추천한다', async () => {
+    recommendMock.mockResolvedValue({ suggestions: [], additionalInformationRequired: false, requiredAdditionalInfo: [] });
+    const filled = { ...item('primary-item', 'Wooden Office Desk'), hsCode: '9403.30-1000' };
+    act(() => { root?.render(<Harness items={[filled]} />); });
+    act(() => vi.advanceTimersByTime(1000));
+    expect(recommendMock).not.toHaveBeenCalled();
+
+    act(() => { root?.render(<Harness items={[{ ...filled, itemName: 'Metal Office Desk' }]} />); });
+    await act(async () => {
+      vi.advanceTimersByTime(700);
+      await Promise.resolve();
+    });
+    expect(recommendMock).toHaveBeenCalledTimes(1);
+  });
+
   it('품목명이 바뀐 뒤 도착한 이전 응답을 무시한다', async () => {
     const resolvers: Array<(value: {
       suggestions: ReturnType<typeof suggestion>[];

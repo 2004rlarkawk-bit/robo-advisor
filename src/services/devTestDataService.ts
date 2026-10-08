@@ -161,8 +161,8 @@ const DEMO_ITEM_UNIT_PRICE = 120;
  *
  * 생성하면 일부러 아래 항목이 걸리게 맞춰 두었다.
  * - 반드시 수정: 상업송장 수량(150)과 패킹리스트 수량(8박스 × 20개 = 160)이 다름(R10)
- * - 확인 권장: 도착 예정일 연도 오타(R21 — 운송 기간 반년 초과)
- * 신용장 개설일은 출항일 전으로, 중량은 총중량 ≥ 순중량으로 맞춰 다른 오류는 나지 않게 한다.
+ * - 반드시 수정: 신용장 개설일이 출항일보다 늦음(R14)
+ * 도착 예정일은 정상 운송 기간으로, 중량은 총중량 ≥ 순중량으로 맞춰 다른 오류·확인 권장은 나지 않게 한다.
  */
 export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = new Date()): TradeProfile {
   const departureDate = futureDate(7, now);
@@ -211,18 +211,18 @@ export function createDemoRehearsalProfile(currentProfile: TradeProfile, now = n
     businessRegistrationNo: '124-81-00998',
     taxNo: '124-81-00998',
     // 2. 거래처 정보는 채우지 않는다 — 발표 때 '자주 거래한 거래처'를 눌러 불러오는 걸 보여 준다.
-    // 4. 거래 조건 — 신용장은 오늘 개설(출항 전)이라 R14는 걸리지 않는다.
+    // 4. 거래 조건 — 신용장 개설일을 출항일(7일 뒤) 뒤로 둬 R14가 걸리게 한다.
     incoterms: 'FOB',
     paymentTerms: 'L/C',
     lcNo: 'M0461261NU00012',
-    lcDate: toDateInputValue(now),
+    lcDate: futureDate(28, now),
     otherReferences: 'PO No. PO-2026-1003',
     // 6. 항만 및 일정
     loadPort: 'Busan Port',
     dischargePort: 'Los Angeles Port',
     departureDate,
-    // 도착 예정일 연도 오타(1년 뒤) — 운송 기간이 반년을 넘어 확인 권장(R21)이 걸린다.
-    arrivalDate: futureDate(19 + 365, now),
+    // 도착 예정일 — 부산→LA 12일, 정상 운송 기간이라 확인 권장이 뜨지 않는다.
+    arrivalDate: futureDate(19, now),
     // 소량 화물이라 LCL — 컨테이너 정보 확인 권장이 끼어들지 않게 한다.
     loadingMode: 'LCL',
     placeOfReceipt: 'Busan, Korea',

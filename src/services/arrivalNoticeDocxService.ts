@@ -7,6 +7,7 @@ import { renderAsync } from 'docx-preview';
 import type { ForwarderImportCase } from '../types/forwarderCase';
 import type { ImportParty } from '../types/importTrade';
 import { portaiFileName } from '../utils/documentFileName';
+import { saveBlobAs } from '../utils/saveBlob';
 
 const text = (value: unknown): string => {
   const result = value == null ? '' : String(value).trim();
@@ -138,12 +139,8 @@ export async function buildArrivalNoticeDocx(caseItem: ForwarderImportCase, issu
 
 export async function downloadArrivalNoticeDocx(caseItem: ForwarderImportCase, issuerName = '', contactName = ''): Promise<void> {
   const blob = await buildArrivalNoticeDocx(caseItem, issuerName, contactName);
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = portaiFileName('arrival_notice', 'docx');
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  // 다른 서류와 같은 방식 — 링크를 문서에 붙여 눌러야 브라우저가 내려받기를 막지 않는다.
+  saveBlobAs(blob, portaiFileName('arrival_notice', 'docx'));
 }
 
 /** 내려받는 DOCX와 같은 파일을 화면 안에서 확인한다. */

@@ -34,13 +34,19 @@ export function useSwipeToHide(storageKey: string, options: SwipeOptions = {}) {
   const onHideRef = useRef(options.onHide);
   onHideRef.current = options.onHide;
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => readHidden(storageKey));
+  // 휴지통에서 비운 id — 목록에도 휴지통에도 다시 나오지 않는다(DB는 그대로).
+  const purgedKey = `${storageKey}:purged`;
+  const [purgedIds, setPurgedIds] = useState<Set<string>>(() => readHidden(purgedKey));
   const [swipe, setSwipe] = useState<{ id: string; dx: number } | null>(null);
   const dragRef = useRef<{ id: string; startX: number; startY: number; dx: number; active: boolean } | null>(null);
   // 밀기를 끝낸 직후의 click은 행 선택으로 처리하지 않는다.
   const swipedRef = useRef(false);
 
   // 계정을 바꾸면(같은 브라우저에서 화주·포워더 전환) 그 사용자의 숨김 목록을 다시 읽는다.
-  useEffect(() => { setHiddenIds(readHidden(storageKey)); }, [storageKey]);
+  useEffect(() => {
+    setHiddenIds(readHidden(storageKey));
+    setPurgedIds(readHidden(`${storageKey}:purged`));
+  }, [storageKey]);
 
   const save = useCallback((next: Set<string>) => {
     setHiddenIds(next);
@@ -48,6 +54,21 @@ export function useSwipeToHide(storageKey: string, options: SwipeOptions = {}) {
   }, [storageKey]);
 
   const restoreAll = useCallback(() => save(new Set()), [save]);
+  /** 여러 행을 한 번에 숨긴다(전체 삭제). */
+  const hideMany = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    const next = new Set(hiddenIds);
+    ids.forEach((id) => next.add(id));
+    save(next);
+  }, [hiddenIds, save]);
+  /** 숨긴 행을 휴지통에서도 지운다 — 숨김 목록에 그대로 두어 다시 나타나지 않는다. */
+  const purge = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    const next = new Set(purgedIds);
+    ids.forEach((id) => next.add(id));
+    setPurgedIds(next);
+    try { window.localStorage.setItem(purgedKey, JSON.stringify([...next])); } catch { /* 저장 실패는 무시 */ }
+  }, [purgedIds, purgedKey]);
   const restore = useCallback((id: string) => {
     const next = new Set(hiddenIds);
     next.delete(id);
@@ -107,11 +128,14 @@ export function useSwipeToHide(storageKey: string, options: SwipeOptions = {}) {
 
   return {
     hiddenIds,
+    purgedIds,
     swipe,
     isArmed: (id: string) => swipe?.id === id && swipe.dx <= -SWIPE_HIDE_PX,
     rowProps,
     restore,
     restoreAll,
+    hideMany,
+    purge,
     consumeSwipeClick,
   };
 }

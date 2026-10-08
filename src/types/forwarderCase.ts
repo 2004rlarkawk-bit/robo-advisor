@@ -61,6 +61,14 @@ export interface ForwarderCaseActivity {
   text: string;
 }
 
+/** 포워더가 화주에게 도착통지서(A/N)를 전달한 기록 — 화주는 같은 거래 데이터로 같은 문서를 연다. */
+export interface ForwarderArrivalNoticeSent {
+  sentAt: string;
+  /** 문서에 찍히는 발행 포워더(회사)와 담당자 */
+  issuerName: string;
+  contactName: string;
+}
+
 /** trades.workflow_data.forwarderCase 로 저장되는 포워더 운영 상태 */
 export interface ForwarderCaseState {
   stage: ForwarderCaseStage;
@@ -69,6 +77,8 @@ export interface ForwarderCaseState {
   /** 이슈 id → 종결 시 남긴 확인 내용(판단 근거) */
   issueNotes?: Record<string, string>;
   arrivalNotice?: ArrivalNoticeMeta | null;
+  /** 화주에게 A/N을 전달한 기록. 없으면 아직 전달 전. */
+  arrivalNoticeSent?: ForwarderArrivalNoticeSent | null;
   returnRequest?: ForwarderReturnRequest | null;
   activity?: ForwarderCaseActivity[];
   /** 신고·인도 진행 기록. 실제 세관 신고나 선사 발급과 구분한다. */

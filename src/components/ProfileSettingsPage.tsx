@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import ProfileForm from './ProfileForm';
 import type { UserProfile, UserProfileUpdate } from '../services/profileService';
+import type { WorkspaceRole } from '../utils/workspaceRole';
 
 interface Props {
   profile: UserProfile;
   isSaving: boolean;
   onSave: (values: UserProfileUpdate) => Promise<void>;
   onDeleteAccount: () => Promise<void>;
+  workspaceRole?: WorkspaceRole;
 }
 
-export default function ProfileSettingsPage({ profile, isSaving, onSave, onDeleteAccount }: Props) {
+export default function ProfileSettingsPage({ profile, isSaving, onSave, onDeleteAccount, workspaceRole }: Props) {
   const [saved, setSaved] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -49,6 +51,7 @@ export default function ProfileSettingsPage({ profile, isSaving, onSave, onDelet
           submitLabel="프로필 저장"
           isSaving={isSaving}
           onSubmit={save}
+          workspaceRole={workspaceRole}
           secondaryAction={(
             <button type="button" className="profile-delete-button" disabled={isDeleting} onClick={() => setShowDeleteModal(true)}>
               {isDeleting ? '처리 중...' : '회원탈퇴'}
