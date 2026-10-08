@@ -101,7 +101,7 @@ describe('deriveForwarderCase', () => {
     expect(resolved?.nextAction).toBe('서류 확인 후 신고자료 준비');
   });
 
-  it('신고·통관 단계의 다음 조치는 저장된 신고·A/N·D/O 상태를 따른다', () => {
+  it('신고·통관 단계의 다음 조치는 저장된 신고·A/N 상태를 따른다', () => {
     const state: ForwarderCaseState = {
       stage: 'clearance', updatedAt: '2026-09-03T00:00:00.000Z',
       importOperations: {
@@ -112,6 +112,7 @@ describe('deriveForwarderCase', () => {
     expect(deriveForwarderCase(makeTrade({ forwarderCase: state }))?.nextAction).toBe('신고 진행 확인');
     const cleared = { ...state, importOperations: { ...state.importOperations!, declarationStatus: 'cleared' as const } };
     expect(deriveForwarderCase(makeTrade({ forwarderCase: cleared }))?.nextAction).toBe('도착 안내(A/N) 확인');
+    expect(deriveForwarderCase(makeTrade({ forwarderCase: { ...cleared, arrivalNotice: { storagePath: 'arrival-notice.docx' } as ForwarderCaseState['arrivalNotice'] } }))?.nextAction).toBe('완료 전 기록 확인');
   });
 });
 

@@ -115,7 +115,7 @@ function deriveNextAction(
     case 'clearance':
       if (state?.importOperations?.declarationStatus === 'cleared') {
         if (!hasArrivalNotice) return '도착 안내(A/N) 확인';
-        return state.importOperations.doStatus === 'received' ? '완료 전 기록 확인' : 'D/O 수령 확인';
+        return '완료 전 기록 확인';
       }
       if (state?.importOperations?.declarationStatus === 'filed') return '신고 수리 여부 확인';
       if (state?.importOperations?.declarationStatus === 'handed_over') return '신고 진행 확인';
