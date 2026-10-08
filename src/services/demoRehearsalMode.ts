@@ -6,8 +6,8 @@ import type { HSCodeSuggestionResponse } from '../types/hsCodeSuggestion';
  *
  * 켜져 있는 동안에는 시연 시간이 늘 같도록 실시간 AI 호출을 건너뛴다.
  * - [AI 분석 실행]: AI 피드백 문장 생성을 건너뛴다(오류·서류는 고정 규칙이라 그대로 나온다).
- * - 품명 HS 추천: 시연 품목(책상·desk)은 AI를 부르지 않는다 — 종류 선택지는 관세청 사전과 보조표로 바로 띄우고,
- *   '목재 · 사무실용'을 고르면(또는 'wooden office desk'처럼 처음부터 분명하면) 아래 고정 결과를 바로 보여 준다.
+ * - 품명 HS 추천: 시연 품목(책상·desk)의 종류 선택지는 분류 방향 AI 호출 없이 관세청 사전과 보조표로 띄운다.
+ *   종류를 고른 뒤의 HS Code 추천은 그대로 AI가 실시간으로 한다.
  * 꺼져 있을 때(Q&A에서 즉석 입력)는 모두 실시간으로 돈다.
  *
  * 새로고침(배포 뒤 자동 새로고침 포함)해도 유지되도록 sessionStorage에 둔다 — 탭을 닫으면 꺼진다.
@@ -59,53 +59,10 @@ export function isDemoHSItem(itemName: string): boolean {
 }
 
 /**
- * 시연 품목의 소호(6자리)별 고정 추천 결과 — 시연 시간이 늘 같도록 AI 호출 없이 보여 준다.
- * 코드·품명은 관세청 HSK 사전(public/data/hsCodes.json) 그대로다.
+ * 시연 품목의 종류 선택지를 띄우기까지 기다리는 시간(ms).
+ * AI 호출 없이 바로 띄우면 너무 빨라 오히려 어색해서, 실시간(AI 분류 방향 탐색)의 절반쯤으로 맞춘다.
  */
-export const DEMO_HS_RESULTS: Record<string, HSCodeSuggestionResponse | null> = {
-  '940330': {
-    suggestions: [
-      {
-        code: '9403301000',
-        formattedCode: '9403.30-1000',
-        koreanName: '책상',
-        englishName: 'Desks',
-        classificationName: '(가구)',
-        reasoning: '목재로 만든 사무실용 가구는 9403.30에 분류되고, 그중 책상은 9403.30-1000으로 따로 나뉩니다. 입력하신 품목이 사무실에서 쓰는 목재 책상이라 이 코드가 맞습니다.',
-        confidenceLabel: '높음',
-        distinguishingFactors: ['소재: 목재', '용도: 사무실용', '품목: 책상'],
-        missingInformation: [],
-        matchedTerms: [
-          { input: 'desk', condition: '책상(9403.30-1000)' },
-          { input: '목재 · 사무실용', condition: '사무실용 목제가구(9403.30)' },
-        ],
-        source: 'openai-verified',
-      },
-      {
-        code: '9403309000',
-        formattedCode: '9403.30-9000',
-        koreanName: '기타',
-        englishName: 'Other',
-        classificationName: '(가구)',
-        reasoning: '책상이 아닌 사무실용 목재 가구(서랍장·캐비닛·회의용 테이블 등)일 때 이 코드를 씁니다.',
-        confidenceLabel: '보통',
-        distinguishingFactors: ['소재: 목재', '용도: 사무실용', '품목: 책상 외 가구'],
-        missingInformation: [],
-        matchedTerms: [],
-        source: 'openai-verified',
-      },
-    ],
-    additionalInformationRequired: false,
-    requiredAdditionalInfo: [],
-    disambiguation: null,
-  },
-};
-
-/** 시연 모드의 시연 품목이고 그 소호의 고정 결과가 있으면 그 결과, 아니면 null(실시간 추천). */
-export function demoHSResultFor(itemName: string, subheading: string | null | undefined): HSCodeSuggestionResponse | null {
-  if (!subheading || !isDemoHSItem(itemName)) return null;
-  return DEMO_HS_RESULTS[subheading] ?? null;
-}
+export const DEMO_DISAMBIGUATION_DELAY_MS = 4000;
 
 /** 실시간 추천 결과를 품명별로 남긴다 — 시연용 결과로 옮겨 담을 때 쓴다. */
 export function rememberLiveHSResult(itemName: string, result: HSCodeSuggestionResponse): void {

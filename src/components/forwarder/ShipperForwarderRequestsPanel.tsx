@@ -379,7 +379,7 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
           <div className="shipper-requests-empty">
             <FolderOpen size={35} />
             <strong>의뢰할 완료 문서가 없습니다.</strong>
-            <span>AI 통관 작업실에서 문서를 완성하고 최종 제출해 주세요.</span>
+            <span>AI 통관 작업실에서 문서를 완성하고 최종 저장해 주세요.</span>
           </div>
         ) : filteredRows.length === 0 ? (
           <div className="shipper-requests-empty">이 상태의 의뢰가 없습니다.</div>
@@ -450,7 +450,7 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
         <div className="fwd-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPickerOpen(false); }}>
           <div className="fwd-modal shipper-request-picker" role="dialog" aria-modal="true" aria-labelledby="request-picker-title">
             <div className="fwd-modal-head">
-              <div><h2 id="request-picker-title">의뢰할 문서 선택</h2><p>최종 제출이 끝난 거래만 표시됩니다.</p></div>
+              <div><h2 id="request-picker-title">의뢰할 문서 선택</h2><p>최종 저장된 거래만 표시됩니다.</p></div>
               <button type="button" className="fwd-modal-close" aria-label="닫기" onClick={() => setPickerOpen(false)}><X size={22} /></button>
             </div>
             <div className="shipper-request-picker-list">

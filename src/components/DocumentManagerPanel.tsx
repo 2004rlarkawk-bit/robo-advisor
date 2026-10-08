@@ -247,7 +247,7 @@ export default function DocumentManagerPanel({
         <span className="doc-panel-icon"><FileText size={22} /></span>
         <div className="doc-panel-head-main">
           <span className="doc-panel-title">
-            최종 제출된 거래
+            최종 저장된 거래
             <span className="doc-panel-count">
               {visibleTrades.length}건
             </span>
@@ -302,7 +302,7 @@ export default function DocumentManagerPanel({
               <FolderOpen size={34} />
               <span>
                 {trades.length > 0 && typeFilter !== 'all'
-                  ? `${typeFilter === 'export' ? '수출' : '수입'} 거래 중 최종 제출된 문서가 없습니다.`
+                  ? `${typeFilter === 'export' ? '수출' : '수입'} 거래 중 최종 저장된 문서가 없습니다.`
                   : '아직 제출된 문서가 없습니다.'}
               </span>
             </div>

@@ -447,7 +447,7 @@ const [user, setUser] = useState<AuthSessionUser | null>(null);
   // 문서 관리 수출/수입 필터 — 임시보관함·최종 제출 거래에 함께 적용한다(통관 내역과 같은 칩).
   const [docsTypeFilter, setDocsTypeFilter] = useState<TradeTypeFilter>('all');
   /**
-   * 제출을 마치고 문서 관리로 넘어올 때마다 올린다 — '최종 제출된 거래'를 펼쳐
+   * 제출을 마치고 문서 관리로 넘어올 때마다 올린다 — '최종 저장된 거래'를 펼쳐
    * 방금 제출한 건이 어디 들어갔는지 보여준다. 연속 제출에도 매번 동작하도록 수로 둔다.
    */
   const [submittedDocsFocus, setSubmittedDocsFocus] = useState(0);

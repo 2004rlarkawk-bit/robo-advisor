@@ -450,25 +450,33 @@ describe('수출 화주 HS Code 추천 서비스', () => {
   });
 });
 
-describe('시연 모드 — 책상(desk)은 AI 호출 없이 바로 보여 준다', () => {
-  it('종류 선택지는 보조표로 바로 띄우고, 목재·사무실용을 고르면 고정 결과를 쓴다', async () => {
+describe('시연 모드 — 책상(desk) 종류 선택지는 분류 방향 AI 없이 띄운다', () => {
+  it('종류 선택지는 보조표로 조금 기다렸다 띄우고, 종류를 고른 뒤 추천은 AI가 한다', async () => {
     const { setDemoRehearsalMode } = await import('./demoRehearsalMode');
     setDemoRehearsalMode(true);
+    vi.useFakeTimers();
     try {
       searchMock.mockResolvedValue([]);
       prefixMock.mockImplementation(async (prefix: string) => [
         { ...localTenDigit, code: `${prefix}1000`, ko: '책상', en: 'Desks', category: '(가구)' },
       ]);
 
-      const first = await recommendShipperHSCode('desk');
+      const pending = recommendShipperHSCode('desk');
+      let settled = false;
+      void pending.then(() => { settled = true; });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(4000);
+      const first = await pending;
       expect(discoverPrefixesMock).not.toHaveBeenCalled();
       expect(suggestFromCandidatesMock).not.toHaveBeenCalled();
       expect(first.disambiguation?.options.map((option) => option.subheading)).toContain('940330');
 
-      const chosen = await recommendShipperHSCode('desk', undefined, undefined, '940330');
-      expect(suggestFromCandidatesMock).not.toHaveBeenCalled();
-      expect(chosen.suggestions[0].code).toBe('9403301000');
+      suggestFromCandidatesMock.mockResolvedValue({ suggestions: [], additionalInformationRequired: false, requiredAdditionalInfo: [] });
+      await recommendShipperHSCode('desk', undefined, undefined, '940330');
+      expect(suggestFromCandidatesMock).toHaveBeenCalled();
     } finally {
+      vi.useRealTimers();
       setDemoRehearsalMode(false);
     }
   });

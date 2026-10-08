@@ -1,4 +1,4 @@
-import { demoHSResultFor, isDemoHSItem, rememberLiveHSResult } from './demoRehearsalMode';
+import { DEMO_DISAMBIGUATION_DELAY_MS, isDemoHSItem, rememberLiveHSResult } from './demoRehearsalMode';
 import {
   discoverHSCodePrefixes,
   suggestHSCodeFromCandidates,
@@ -619,11 +619,9 @@ export async function recommendShipperHSCode(
       itemDetails?.koreanDescription,
     ].filter(Boolean).join(' '));
 
-  // 시연 모드의 시연 품목(책상)은 고른 종류의 고정 결과를 바로 보여 준다(시연 시간 고정).
-  const demoResult = demoHSResultFor(normalizedItemName, chosenSubheading);
-  if (demoResult) return demoResult;
-  // 종류를 아직 안 골랐으면 분류 방향 AI 호출 없이 보조표 소호로 바로 선택지를 띄운다.
-  const demoItem = isDemoHSItem(normalizedItemName);
+  // 시연 모드의 시연 품목(책상)은 종류를 아직 안 골랐으면 분류 방향 AI 호출 없이 보조표 소호로 선택지를 띄운다.
+  const demoItem = !chosenSubheading && isDemoHSItem(normalizedItemName);
+  const startedAt = Date.now();
 
   const allCandidateCodes =
     await buildCandidateContext(
@@ -747,6 +745,11 @@ export async function recommendShipperHSCode(
         );
       }
       options?.onTrace?.({ stage: 'final', codes: [] });
+      // 시연 품목은 바로 띄우면 너무 빨라 어색하다 — 실시간의 절반쯤 기다렸다 보여 준다.
+      if (demoItem) {
+        const remaining = DEMO_DISAMBIGUATION_DELAY_MS - (Date.now() - startedAt);
+        if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
       return {
         suggestions: [],
         additionalInformationRequired: true,

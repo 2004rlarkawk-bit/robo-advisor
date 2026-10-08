@@ -2,9 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { HSCodeSuggestionResponse } from '../types/hsCodeSuggestion';
 import {
-  DEMO_HS_RESULTS,
   LAST_HS_RESULT_KEY_PREFIX,
-  demoHSResultFor,
   isDemoHSItem,
   isDemoRehearsalMode,
   rememberLiveHSResult,
@@ -42,17 +40,6 @@ describe('시연 모드', () => {
     expect(isDemoHSItem('Wooden Office Desk')).toBe(true);
     expect(isDemoHSItem('desk lamp')).toBe(false);
     expect(isDemoHSItem('Steel Bolt')).toBe(false);
-  });
-
-  it('고른 종류(소호)의 고정 결과를 쓰고, 꺼져 있으면(Q&A) 실시간으로 추천한다', () => {
-    expect(demoHSResultFor('desk', '940330')).toBeNull();
-    setDemoRehearsalMode(true);
-    expect(demoHSResultFor('desk', '940330')).toBe(DEMO_HS_RESULTS['940330']);
-    expect(demoHSResultFor('desk', '940330')?.suggestions[0].code).toBe('9403301000');
-    // 종류를 아직 안 골랐거나 고정 결과가 없는 종류는 실시간
-    expect(demoHSResultFor('desk', null)).toBeNull();
-    expect(demoHSResultFor('desk', '940310')).toBeNull();
-    expect(demoHSResultFor('Steel Bolt', '940330')).toBeNull();
   });
 
   it('실시간 결과를 품명별로 남긴다', () => {
