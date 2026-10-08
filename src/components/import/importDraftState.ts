@@ -22,7 +22,6 @@ import type {
 } from '../../types/importTrade';
 import type { PersistedTradeStatus, TradeProfile } from '../../types';
 import type { TradeFormDataV3 } from '../../types/tradeFormData';
-import type { ForwarderReturnRequest } from '../../types/forwarderCase';
 
 export interface ImportFileResolutionFailure {
   documentId: string;
@@ -58,7 +57,7 @@ export interface CachedState {
   tradeId?: string;
   existingStatus?: PersistedTradeStatus;
   /** 포워더 보완 요청으로 다시 연 거래 — 2단계 상단에 수정 안내 카드를 띄운다 */
-  reviseNotice?: ForwarderReturnRequest | null;
+  reviseNotice?: { reason: string; documentTypes?: string[]; issueTitles?: string[] } | null;
 }
 export const EMPTY: CachedState = {
   step: 1,

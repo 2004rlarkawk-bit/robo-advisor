@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ForwarderReturnRequestContent from './ForwarderReturnRequestContent';
-import ImportReturnRequestMatches from './ImportReturnRequestMatches';
 import { returnRequestChips } from '../../utils/returnRequestDocuments';
 import '../../styles/returnRequest.css';
 import { Download, Eye, RefreshCw, Search, Terminal } from 'lucide-react';
@@ -182,7 +181,6 @@ export default function ImportTradeFlow({
   const [reviseReply, setReviseReply] = useState('');
   const [reviseReplyBusy, setReviseReplyBusy] = useState(false);
   const [reviseReplySaved, setReviseReplySaved] = useState(false);
-  const [returnFocusTarget, setReturnFocusTarget] = useState<{ key: string; nonce: number } | null>(null);
   const canBrowseReadOnlyResultSteps = readOnly;
   const moveToReadOnlyResultStep = (step: number) => {
     // 화주는 2~4단계(HSK 검토 · FTA/세액 · 신고자료)를 조회 상태로 오갈 수 있다.
@@ -1101,19 +1099,13 @@ export default function ImportTradeFlow({
               </div>
               {returnRequestChips(state.reviseNotice).length > 0 && (
                 <div className="rr-card-docs revise-notice-docs">
-                  <span>{state.reviseNotice.documentTypes?.length ? '보완 서류' : '요청 항목'}</span>
+                  <span>보완 서류</span>
                   <ul>{returnRequestChips(state.reviseNotice).map((chip) => <li key={chip}>{chip}</li>)}</ul>
                 </div>
               )}
               <div className="rr-content revise-notice-body">
                 <ForwarderReturnRequestContent reason={state.reviseNotice.reason} />
               </div>
-              <ImportReturnRequestMatches
-                request={state.reviseNotice}
-                analysis={state.analysis}
-                onFocusField={readOnly ? undefined : (key) => setReturnFocusTarget({ key, nonce: Date.now() })}
-                onUpload={readOnly ? undefined : () => setState((current) => ({ ...current, step: 1 }))}
-              />
               {!readOnly && state.tradeId && (
                 <div className="revise-reply">
                   <input
@@ -1146,7 +1138,6 @@ export default function ImportTradeFlow({
           </div>
           <ImportAnalysisSummary
             analysis={state.analysis}
-            focusTarget={returnFocusTarget}
             hasCertificateOfOriginDocument={state.documents.some((document) => document.type === 'certificate_of_origin')}
             readOnly={readOnly}
             onChange={(extracted) => setState((current) => ({

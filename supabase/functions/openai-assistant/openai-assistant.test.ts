@@ -47,34 +47,6 @@ function openAIResponse(output: unknown): Response {
   }), { status: 200 });
 }
 
-describe('수입 포워더 서술식 보완 요청 해석', () => {
-  const request = {
-    action: 'interpret-import-return-request',
-    note: 'P/L과 C/I의 수량이 다릅니다. 맞는 값을 확인해 주세요.',
-    comparisonCandidates: [{ field: 'quantity', values: [{ source: 'C/I', value: '150' }, { source: 'P/L', value: '160' }] }],
-    availableDocumentTypes: ['commercial_invoice', 'packing_list'],
-  };
-
-  it('실제 대사 후보와 허용된 서류만 반환한다', async () => {
-    openAIFetchMock.mockResolvedValue(openAIResponse({
-      comparisonFields: ['quantity', 'inventedAmount', 'quantity'],
-      documentTypes: ['packing_list', 'unknown_file'],
-    }));
-    const response = await handler.fetch(authedRequest(request));
-    expect(await response.json()).toMatchObject({
-      success: true,
-      comparisonFields: ['quantity'],
-      documentTypes: ['packing_list'],
-    });
-  });
-
-  it('모델 응답이 모호하거나 JSON이 아니면 원문 전달용 빈 매핑으로 둔다', async () => {
-    openAIFetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'completed', output_text: '판단 불가' }), { status: 200 }));
-    const response = await handler.fetch(authedRequest(request));
-    expect(await response.json()).toMatchObject({ comparisonFields: [], documentTypes: [] });
-  });
-});
-
 describe('openai-assistant suggest-hs-code 하위 호환', () => {
   it('candidateCodes가 없으면 기존 배열형 OpenAI 응답을 유지한다', async () => {
     openAIFetchMock.mockResolvedValue(openAIResponse([{
