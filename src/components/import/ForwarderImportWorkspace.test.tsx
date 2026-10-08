@@ -6,9 +6,11 @@ import type { ForwarderImportCase } from '../../types/forwarderCase';
 import { deriveForwarderCase, listForwarderCases, saveForwarderCaseState } from '../../services/forwarderCaseService';
 import Workspace from './ForwarderImportWorkspace';
 import { getIssueComparisons } from '../../utils/forwarderIssueComparisons';
+import { interpretImportReturnRequest } from '../../services/importReturnRequestInterpretationService';
 
 vi.mock('../../services/forwarderCaseService', async (importOriginal) => ({ ...await importOriginal<object>(), listForwarderCases: vi.fn(), saveForwarderCaseState: vi.fn(), deriveForwarderCase: vi.fn() }));
 vi.mock('./ForwarderDocumentThumbnail', () => ({ default: () => <span>서류 미리보기</span> }));
+vi.mock('../../services/importReturnRequestInterpretationService', () => ({ interpretImportReturnRequest: vi.fn() }));
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const weight = { id: 'weight', title: '총중량 불일치', detail: '중량이 30kg 다릅니다.', severity: 'blocker' as const, resolved: false, documents: ['P/L', 'B/L'] };
 const comparison = { field: '총중량', invoice: '1,250 kg', packingList: '1,250 kg', billOfLading: '1,280 kg', matches: false, detail: '30kg 차이' };
@@ -55,7 +57,7 @@ describe('forwarder task tabs', () => {
     await act(async () => root.render(<Workspace userId="test" issuerName="테스트회사" senderContactName="담당자" onDirectUpload={() => {}} />));
     await click('선택한 의뢰 열기');
   };
-  beforeEach(() => { container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); vi.mocked(saveForwarderCaseState).mockRejectedValue(new Error('test save failure')); HTMLElement.prototype.scrollIntoView = vi.fn(); });
+  beforeEach(() => { container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); vi.mocked(saveForwarderCaseState).mockRejectedValue(new Error('test save failure')); vi.mocked(interpretImportReturnRequest).mockResolvedValue({ comparisonFields: [], documentTypes: [] }); HTMLElement.prototype.scrollIntoView = vi.fn(); });
   afterEach(() => { act(() => root.unmount()); container.remove(); vi.clearAllMocks(); });
 
   it('has three distinct task tabs and keeps comparison evidence with the issue', async () => {
@@ -66,7 +68,7 @@ describe('forwarder task tabs', () => {
     expect(container.textContent).not.toContain('서류 검토 사항');
     expect(container.textContent).not.toContain('검토하기');
     expect(container.textContent).not.toContain('확인 필요');
-    // 보완 요청은 값 비교 이슈가 아니라 포워더가 서류를 골라 직접 보낸다.
+    // 보완 요청은 포워더가 자유롭게 작성하고, 명확히 연결되는 대사값만 제안한다.
     expect(button('서류 보완 요청')).toBeTruthy();
     await click('업무 진행');
     // 잠금 안내 배너는 걷어냈다. 잠겨 있다는 사실은 아래 입력·버튼의 비활성 상태로만 드러난다.
@@ -88,46 +90,39 @@ describe('forwarder task tabs', () => {
   });
 
 
-  it('서류를 골라 보완 요청을 보낸다 — 없는 필수 서류는 미리 골라 둔다', async () => {
+  it('서술식 요청을 실제 대사값과 연결하고 포워더 확인 후 보낸다', async () => {
     vi.mocked(saveForwarderCaseState).mockImplementation(async (_id, patch) => ({ stage: 'review', ...patch, updatedAt: 'now' }) as never);
+    vi.mocked(interpretImportReturnRequest).mockResolvedValue({ comparisonFields: ['총중량'], documentTypes: ['packing_list'] });
     await open();
     await click('서류 보완 요청');
-    const row = (label: string) => [...container.querySelectorAll('.rr-doc-list li')].find(li => li.textContent?.includes(label))!;
-    const checkbox = (label: string) => row(label).querySelector<HTMLInputElement>('input[type="checkbox"]')!;
-    // 제출 서류가 하나도 없으니 C/I·P/L·B/L이 '서류 누락'으로 미리 골라져 있다. C/O는 필수가 아니다.
-    expect(['상업송장(C/I)', '포장명세서(P/L)', '선하증권(B/L)'].map(label => checkbox(label).checked)).toEqual([true, true, true]);
-    expect(checkbox('원산지증명서(C/O)').checked).toBe(false);
-    expect(container.textContent).toContain('상업송장(C/I) · 서류 누락');
-
-    await act(async () => checkbox('선하증권(B/L)').click());
-    const select = row('포장명세서(P/L)').querySelector<HTMLSelectElement>('select')!;
+    const textarea = container.querySelector<HTMLTextAreaElement>('.rr-memo textarea')!;
     await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, 'unreadable');
-      select.dispatchEvent(new Event('change', { bubbles: true }));
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, 'P/L과 B/L 총중량이 다릅니다. 수정본을 보내 주세요.');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    await click('보완 요청 보내기 (2건)');
+    await click('연결 항목 확인');
+    expect(interpretImportReturnRequest).toHaveBeenCalledWith(expect.stringContaining('총중량'), [comparison]);
+    expect(container.querySelector('.rr-match-values')?.textContent).toContain('1,280 kg');
+    await click('보완 요청 보내기');
 
     expect(saveForwarderCaseState).toHaveBeenCalledWith('case-1', expect.objectContaining({
       stage: 'review',
       returnRequest: expect.objectContaining({
-        documentTypes: ['commercial_invoice', 'packing_list'],
-        issueTitles: ['상업송장(C/I) · 서류 누락', '포장명세서(P/L) · 판독 어려움'],
+        documentTypes: ['packing_list'],
+        comparisonFields: ['총중량'],
+        issueTitles: ['총중량', '포장명세서(P/L)'],
       }),
-    }), ['화주에게 서류 보완 요청 (상업송장(C/I) · 서류 누락, 포장명세서(P/L) · 판독 어려움)']);
+    }), ['화주에게 서류 보완 요청 (총중량, 포장명세서(P/L))']);
     const sent = vi.mocked(saveForwarderCaseState).mock.calls[0][1].returnRequest!;
-    expect(sent.reason).toContain('[반드시 수정]');
+    expect(sent.reason).toContain('P/L과 B/L 총중량이 다릅니다.');
     expect(sent.reason).toContain('테스트회사 포워더 담당자 드림');
-    expect(sent.reason).not.toContain('선하증권');
     expect(container.textContent).toContain('보완 요청을 보냈어요');
   });
 
-  it('보낼 서류를 하나도 고르지 않으면 보낼 수 없다', async () => {
+  it('요청 문장이 비어 있으면 해석하거나 보낼 수 없다', async () => {
     await open();
     await click('서류 보완 요청');
-    for (const input of container.querySelectorAll<HTMLInputElement>('.rr-doc-list input[type="checkbox"]')) {
-      if (input.checked) await act(async () => input.click());
-    }
-    expect(button('보완 요청 보내기 (0건)').disabled).toBe(true);
+    expect(button('연결 항목 확인').disabled).toBe(true);
     await click('취소');
     expect(container.querySelector('.rr-composer')).toBeNull();
     expect(button('확인 완료 · 업무 진행')).toBeTruthy();

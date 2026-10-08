@@ -478,6 +478,7 @@ export default function ShipperForwarderRequestsPanel({ currentUserId, onOpenTra
         const requestCard = returnRequest ? (
           <ShipperReturnRequestCard
             request={returnRequest}
+            analysis={threadTrade.generatedDocs?.importTrade?.analysis ?? null}
             onRevise={onRevise ? () => { setThreadTrade(null); onRevise(threadTrade); } : undefined}
           />
         ) : null;
