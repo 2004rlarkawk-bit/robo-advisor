@@ -48,8 +48,6 @@ export interface ForwarderReturnRequest {
   issueTitles: string[];
   /** 보완이 필요한 서류 종류 — 서류 단위로 보낸 요청에만 있다. 예전 요청은 비어 있다. */
   documentTypes?: string[];
-  /** 포워더의 서술식 요청과 실제 서류 대사 결과를 연결한 필드. 값은 화주의 분석 원본에서만 읽는다. */
-  comparisonFields?: string[];
   requestedAt: string;
   resolvedAt?: string;
   /** 화주가 재제출하며 남긴 회신 메모 — 요청·회신이 같은 의뢰에 모이게 한다 */

@@ -51,26 +51,6 @@
 .rr-composer .rr-memo { margin: 0 0 4px; }
 .rr-composer .rr-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 
-/* 서술식 요청을 실제 서류 대사와 연결한 카드. 값은 원본 분석 결과에서만 가져온다. */
-.rr-matches { display: grid; gap: 10px; margin: 12px 16px 16px; }
-.rr-matches-intro { margin: 0; color: #52647b; font-size: 13px; font-weight: 700; }
-.rr-match { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid #dbe4ef; border-radius: 9px; background: #fff; }
-.rr-match > strong { color: #1d2b42; font-size: 14px; }
-.rr-match-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.rr-match-head strong { color: #1d2b42; font-size: 14px; }
-.rr-match-head button { padding: 2px 0; border: 0; background: transparent; color: #64748b; font-size: 12px; cursor: pointer; }
-.rr-match-values { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
-.rr-match-values > span { display: grid; gap: 3px; min-width: 140px; padding: 9px 12px; border: 1px solid #e1e8f1; border-radius: 7px; background: #f7f9fc; }
-.rr-match-values small { color: #63758b; font-size: 12px; }
-.rr-match-values b { color: #1d2b42; font-size: 15px; overflow-wrap: anywhere; }
-.rr-match .btn { justify-self: start; }
-.rr-match-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.rr-match-document p, .rr-matches-note { margin: 0; color: #64748b; font-size: 12px; line-height: 1.6; }
-.rr-interpretation { margin-top: 16px; padding: 10px 0; border: 1px solid #dbe4ef; border-radius: 9px; background: #f9fbfe; }
-.rr-interpretation > p { margin: 8px 16px; color: #52647b; font-size: 13px; }
-.rr-composer .rr-memo textarea { min-height: 108px; resize: vertical; }
-.revise-notice .rr-matches { margin: 14px 0; }
-
 @media (max-width: 640px) {
   .rr-composer .rr-doc-list li { grid-template-columns: 1fr; gap: 8px; }
   .rr-card-date { margin-left: 0; width: 100%; }

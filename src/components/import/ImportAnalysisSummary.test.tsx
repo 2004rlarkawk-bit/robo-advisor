@@ -71,24 +71,4 @@ describe('수입 AI 추출값 — 서류에 있는 칸만 보이기', () => {
     expect(required?.querySelector('.required-star')?.getAttribute('aria-label')).toBe('필수');
     expect(optional?.querySelector('.required-star')).toBeNull();
   });
-
-  it('보완 카드의 수정 버튼이 숨겨진 추출 칸을 열고 초점을 이동한다', () => {
-    vi.useFakeTimers();
-    HTMLElement.prototype.scrollIntoView = vi.fn();
-    const extracted = normalizeImportExtractedFields({ invoiceNo: 'INV-001' });
-    container = document.createElement('div');
-    document.body.append(container);
-    root = createRoot(container);
-    act(() => root?.render(<ImportAnalysisSummary
-      analysis={{ extracted, validations: [], comparison: [] }}
-      onChange={vi.fn()}
-      focusTarget={{ key: 'voyageNo', nonce: 1 }}
-    />));
-    act(() => vi.advanceTimersByTime(60));
-    const target = container.querySelector<HTMLInputElement>('[data-import-field-key="voyageNo"]');
-    expect(target).not.toBeNull();
-    expect(document.activeElement).toBe(target);
-    expect(target?.closest('details')?.open).toBe(true);
-    vi.useRealTimers();
-  });
 });

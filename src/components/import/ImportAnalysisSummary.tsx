@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import RequiredMark from '../RequiredMark';
 import { syncLegacyImportFields } from '../../services/importDocumentAnalysisService';
@@ -14,7 +14,6 @@ interface Props {
   onChange: (fields: ImportExtractedFields) => void;
   hasCertificateOfOriginDocument?: boolean;
   readOnly?: boolean;
-  focusTarget?: { key: string; nonce: number } | null;
   /** 문서 id → 파일명 매핑 — 검증 메시지의 근거 값 표기에 사용 */
 }
 
@@ -48,7 +47,6 @@ const EMPTY_ITEM = (): ImportItem => ({
 });
 
 function TextField({
-  fieldKey,
   label,
   required,
   value,
@@ -56,7 +54,6 @@ function TextField({
   type = 'text',
   placeholder,
 }: {
-  fieldKey: string;
   label: string;
   required?: boolean;
   value: string;
@@ -67,7 +64,7 @@ function TextField({
   return (
     <label className="form-group">
       <span className="form-label">{label}{required && <RequiredMark />}</span>
-      <input data-import-field-key={fieldKey} className="form-input user-editable" type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+      <input className="form-input user-editable" type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
@@ -104,7 +101,7 @@ function AdaptiveFieldGrid({
     <>
       <div className="import-field-grid">
         {specs.filter(isShown).map((spec) => (
-          <TextField key={spec.key} fieldKey={spec.key} label={spec.label} required={spec.required} value={spec.value} type={spec.type} placeholder={spec.placeholder} onChange={spec.onChange} />
+          <TextField key={spec.key} label={spec.label} required={spec.required} value={spec.value} type={spec.type} placeholder={spec.placeholder} onChange={spec.onChange} />
         ))}
       </div>
       {!readOnly && hidden.length > 0 && (
@@ -126,27 +123,11 @@ export default function ImportAnalysisSummary({
   onChange,
   hasCertificateOfOriginDocument = false,
   readOnly = false,
-  focusTarget = null,
 }: Props) {
   const [open, setOpen] = useState(true);
-  const sectionRef = useRef<HTMLElement | null>(null);
   // 사용자가 [+ 칸 이름]으로 꺼낸 빈 칸 — 값을 지워도 바로 사라지지 않게 기억한다.
   const [revealed, setRevealed] = useState<Set<string>>(() => new Set());
   const reveal = (key: string) => setRevealed((current) => new Set(current).add(key));
-  useEffect(() => {
-    if (!focusTarget || readOnly) return;
-    setOpen(true);
-    setRevealed((current) => new Set(current).add(focusTarget.key));
-    const timer = window.setTimeout(() => {
-      const input = Array.from(sectionRef.current?.querySelectorAll<HTMLInputElement>('[data-import-field-key]') ?? [])
-        .find((element) => element.dataset.importFieldKey === focusTarget.key);
-      const section = input?.closest('details');
-      if (section) section.open = true;
-      input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      input?.focus({ preventScroll: true });
-    }, 50);
-    return () => window.clearTimeout(timer);
-  }, [focusTarget, readOnly]);
   const grid = (specs: FieldSpec[]) => (
     <AdaptiveFieldGrid specs={specs} revealed={revealed} onReveal={reveal} readOnly={readOnly} />
   );
@@ -164,7 +145,7 @@ export default function ImportAnalysisSummary({
   });
 
   return (
-    <section ref={sectionRef} className="form-card import-card">
+    <section className="form-card import-card">
       {/* 제목을 누르면 분석 결과 전체를 접고 펼친다 */}
       <button
         type="button"

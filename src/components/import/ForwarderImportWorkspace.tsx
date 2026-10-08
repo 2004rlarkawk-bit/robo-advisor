@@ -453,8 +453,7 @@ export default function ForwarderImportWorkspace({
         {detailTab === 'review' && !selected.returnRequest && (selected.stage === 'received' || selected.stage === 'review') && (
           returnFormOpen ? (
             <ReturnRequestComposer
-              comparisonRows={selected.snapshot.analysis.comparison}
-              analysis={selected.snapshot.analysis}
+              presentTypes={selected.snapshot.documents.map((document) => document.type)}
               issuerName={issuerName}
               senderContactName={senderContactName}
               saving={saving}
