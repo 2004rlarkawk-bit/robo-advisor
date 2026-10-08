@@ -72,11 +72,12 @@ describe('forwarder task tabs', () => {
     // 잠금 안내 배너는 걷어냈다. 잠겨 있다는 사실은 아래 입력·버튼의 비활성 상태로만 드러난다.
     expect(container.textContent).not.toContain('서류 확인을 완료하면');
     expect(container.textContent).toContain('도착 안내 · A/N');
-    expect(container.textContent).toContain('화물인도지시서 · D/O');
+    expect(container.textContent).not.toContain('화물인도지시서 · D/O');
     expect(button('A/N 생성·다운로드').disabled).toBe(true);
     expect(container.querySelector<HTMLInputElement>('.arrival-notice-picker input')?.disabled).toBe(true);
     expect(container.querySelector<HTMLFieldSetElement>('.fwd-operation-fields')?.disabled).toBe(true);
-    expect(button('자료 다운로드').disabled).toBe(true);
+    expect(button('DOCX 다운로드').disabled).toBe(true);
+    expect(button('PDF 저장').disabled).toBe(true);
     await click('A/N 생성·다운로드');
     expect(saveForwarderCaseState).not.toHaveBeenCalled();
     expect(container.querySelector('.fwd-review-panel')).toBeNull();
@@ -161,13 +162,13 @@ describe('forwarder task tabs', () => {
     expect(container.querySelector('.fwd-sent-history')?.hasAttribute('open')).toBe(false);
   });
 
-  it('orders cargo lookup, arrival notice and delivery preparation, with document-only completion', async () => {
+  it('orders cargo lookup and arrival notice without a D/O card, with document-only completion', async () => {
     await open(fixture({ stage: 'clearance', blockerCount: 0, issues: [] }));
     await click('업무 진행');
     const text = container.textContent!;
     expect(text.indexOf('입항 확인')).toBeLessThan(text.indexOf('도착 안내 · A/N'));
-    expect(text.indexOf('도착 안내 · A/N')).toBeLessThan(text.indexOf('화물인도지시서 · D/O'));
-    expect(text).toContain('수입신고 자료');
+    expect(text).not.toContain('화물인도지시서 · D/O');
+    expect(text).toContain('수입신고 의뢰서');
     expect(text).not.toContain('납부 확인');
     expect(button('진행 조회')).toBeTruthy();
     expect(button('A/N 생성·다운로드').disabled).toBe(false);
@@ -178,19 +179,19 @@ describe('forwarder task tabs', () => {
     expect(container.textContent).not.toContain('배차 의뢰');
   });
 
-  it('완료 전 미기록 신고·D/O와 미첨부 A/N을 경고한다', async () => {
+  it('완료 전 미기록 신고와 미첨부 A/N을 경고한다', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     await open(fixture({ stage: 'clearance', blockerCount: 0, issues: [] }));
     await click('업무 진행');
     await click('포워더 업무 완료');
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('도착통지서(A/N): 미첨부'));
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('신고 상태: 미기록'));
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('D/O 상태: 미기록'));
+    expect(confirm.mock.calls[0][0]).not.toContain('D/O 상태');
     expect(saveForwarderCaseState).not.toHaveBeenCalled();
     confirm.mockRestore();
   });
 
-  it('저장된 관세사 전달·D/O 발급 요청 상태를 알리고 확인 후에만 완료한다', async () => {
+  it('저장된 관세사 전달 상태를 알리고 확인 후에만 완료한다', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const item = fixture({ stage: 'clearance', blockerCount: 0, issues: [] });
     item.arrivalNotice = { storagePath: 'arrival-notice.docx' } as ForwarderImportCase['arrivalNotice'];
@@ -205,7 +206,7 @@ describe('forwarder task tabs', () => {
     await click('업무 진행');
     await click('포워더 업무 완료');
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('신고 상태: 관세사 전달'));
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('D/O 상태: 발급 요청 (미수령)'));
+    expect(confirm.mock.calls[0][0]).not.toContain('D/O 상태');
     expect(confirm.mock.calls[0][0]).not.toContain('도착통지서(A/N): 미첨부');
     expect(saveForwarderCaseState).not.toHaveBeenCalled();
     confirm.mockReturnValue(true);
@@ -214,7 +215,7 @@ describe('forwarder task tabs', () => {
     confirm.mockRestore();
   });
 
-  it('A/N·신고 수리·D/O 수령을 모두 기록했으면 미완료 경고를 띄우지 않는다', async () => {
+  it('A/N·신고 수리를 기록했으면 미완료 경고를 띄우지 않는다', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const item = fixture({ stage: 'clearance', blockerCount: 0, issues: [] });
     item.arrivalNotice = { storagePath: 'arrival-notice.docx' } as ForwarderImportCase['arrivalNotice'];
@@ -222,7 +223,7 @@ describe('forwarder task tabs', () => {
       stage: 'clearance', updatedAt: '2026-09-24T00:00:00.000Z',
       importOperations: {
         brokerName: '테스트 관세법인', declarationNo: 'TEST-001', declarationStatus: 'cleared',
-        doStatus: 'received', doNumber: 'DO-001', doIssuer: '테스트 선사',
+        doStatus: 'waiting', doNumber: '', doIssuer: '',
       },
     };
     await open(item);

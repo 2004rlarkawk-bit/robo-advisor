@@ -12,7 +12,6 @@ import {
   FORWARDER_STAGE_ORDER,
   FORWARDER_STAGE_LABEL,
   IMPORT_DECLARATION_STATUS_LABEL,
-  IMPORT_DO_STATUS_LABEL,
   type ForwarderCaseStage,
   type ForwarderCaseState,
   type ForwarderImportCase,
@@ -288,14 +287,10 @@ export default function ForwarderImportWorkspace({
   const finishClearance = (caseItem: ForwarderImportCase) => {
     const operations = (caseItem.trade.forwarderCase as ForwarderCaseState | null)?.importOperations;
     const declarationStatus = operations?.declarationStatus;
-    const doStatus = operations?.doStatus;
     const warnings = [
       ...(!caseItem.arrivalNotice?.storagePath ? ['도착통지서(A/N): 미첨부'] : []),
       ...(declarationStatus !== 'cleared'
         ? [`신고 상태: ${declarationStatus ? IMPORT_DECLARATION_STATUS_LABEL[declarationStatus] : '미기록'}`]
-        : []),
-      ...(doStatus !== 'received'
-        ? [`D/O 상태: ${doStatus ? `${IMPORT_DO_STATUS_LABEL[doStatus]} (미수령)` : '미기록'}`]
         : []),
     ];
     const warningNote = warnings.length ? `\n\n완료 전 확인할 항목:\n${warnings.map((warning) => `• ${warning}`).join('\n')}` : '';
@@ -355,7 +350,7 @@ export default function ForwarderImportWorkspace({
             ))}
           </div>
           {selected.stage !== 'done' && (
-            <p className="fwd-next-banner">다음 조치: <strong>{selected.returnRequest ? selected.returnRequest.resolvedAt ? '화주가 보낸 회신과 수정 서류를 확인하세요.' : '화주의 보완 회신을 기다리고 있습니다.' : selected.stage === 'clearance' ? '신고자료를 준비하고 통관·D/O 진행을 기록하세요.' : '제출 서류와 추출 정보를 확인한 뒤 신고자료를 준비하세요.'}</strong></p>
+            <p className="fwd-next-banner">다음 조치: <strong>{selected.returnRequest ? selected.returnRequest.resolvedAt ? '화주가 보낸 회신과 수정 서류를 확인하세요.' : '화주의 보완 회신을 기다리고 있습니다.' : selected.stage === 'clearance' ? '신고자료를 준비하고 통관 진행을 기록하세요.' : '제출 서류와 추출 정보를 확인한 뒤 신고자료를 준비하세요.'}</strong></p>
           )}
         </section>
 
@@ -505,7 +500,7 @@ export default function ForwarderImportWorkspace({
         )}
 
         <div hidden={detailTab !== 'clearance'}>
-          <ForwarderImportOperations key={selected.tradeId} item={selected} userId={userId} saving={saving} locked={documentsLocked}
+          <ForwarderImportOperations key={selected.tradeId} item={selected} saving={saving} locked={documentsLocked}
             onSave={(importOperations, activity) => persist(selected, { importOperations }, [activity])}
             arrivalNotice={
             <ArrivalNoticeUploader
@@ -552,7 +547,7 @@ export default function ForwarderImportWorkspace({
               <button type="button" className="btn btn-primary" disabled={saving} onClick={() => finishClearance(selected)}>
                 <CheckCircle2 size={15} /> 포워더 업무 완료
               </button>
-              <p className="fwd-action-hint">신고 진행과 A/N·D/O를 확인한 뒤 완료하세요. 실제 세관·반출 상태는 변경되지 않습니다.</p>
+              <p className="fwd-action-hint">신고 진행과 A/N을 확인한 뒤 완료하세요. 실제 세관·반출 상태는 변경되지 않습니다.</p>
             </>
           )}
           {detailTab === 'clearance' && !returnPending && selected.stage === 'done' && (
