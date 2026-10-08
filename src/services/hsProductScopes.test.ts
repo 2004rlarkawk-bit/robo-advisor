@@ -5,6 +5,7 @@ import {
   annotateProductNames,
   productDisambiguationForQuery,
   productPrefixesForQuery,
+  productScopeForCode,
 } from './hsProductScopes';
 import { detectDisambiguation } from './shipperHSCodeSuggestionService';
 
@@ -108,26 +109,21 @@ describe('흔한 품목 HS 보조표', () => {
     }
   });
 
+  it('추천 코드로 해당 종류·구분 기준·다른 선택지를 돌려준다', () => {
+    const desk = productScopeForCode('9403301000');
+    expect(desk?.label).toBe('목재 · 사무실용');
+    expect(desk?.ko).toBe('목재로 만든 사무실용 가구');
+    expect(desk?.basis).toContain('소재와 사무실용 여부');
+    expect(desk?.siblings).toContainEqual({ formattedSubheading: '9403.10', label: '금속 · 사무실용' });
+    expect(desk?.siblings.some((sibling) => sibling.formattedSubheading === '9403.30')).toBe(false);
+    // 노트북 컴퓨터는 세 품목군에 걸치는데, 구분 기준이 있는 군을 고른다.
+    expect(productScopeForCode('8471300000')?.basis).not.toBe('');
+    expect(productScopeForCode('6203310000')).toBeNull();
+  });
+
   it('후보 품명에 분류 기준을 덧붙이고, 대상이 아니면 그대로 둔다', () => {
     expect(annotateProductNames('9102290000', '기타', 'Other').koreanName).toContain('손목시계');
     expect(annotateProductNames('9401399000', '기타', 'Other').englishName).toContain('swivel seats');
     expect(annotateProductNames('6203310000', '양모', 'Of wool')).toEqual({ koreanName: '양모', englishName: 'Of wool' });
-  });
-});
-
-describe('productScopeExplanation — 추천 근거용 종류·달라지는 조건', () => {
-  it('책상 9403.30은 목재·사무실용 선택지와, 금속·가정용 등 다른 소호를 함께 돌려준다', async () => {
-    const { productScopeExplanation } = await import('./hsProductScopes');
-    const scope = productScopeExplanation('Wooden Office Desk', '9403301000');
-    expect(scope?.label).toBe('목재 · 사무실용');
-    expect(scope?.ko).toBe('목재로 만든 사무실용 가구');
-    expect(scope?.basis).toContain('소재와 사무실용 여부');
-    expect(scope?.alternatives).toContainEqual({ label: '금속 · 사무실용', formattedSubheading: '9403.10' });
-    expect(scope?.alternatives.map((alt) => alt.formattedSubheading)).not.toContain('9403.30');
-  });
-
-  it('보조표 밖 품목이면 null', async () => {
-    const { productScopeExplanation } = await import('./hsProductScopes');
-    expect(productScopeExplanation('Frozen fish', '0303890000')).toBeNull();
   });
 });

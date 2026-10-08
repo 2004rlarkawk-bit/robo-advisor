@@ -300,6 +300,43 @@ export async function loadHSHeadings(): Promise<Record<string, string>> {
   return headingLoadPromise;
 }
 
+/**
+ * 호(4자리) 한글 제목 사전 — 관세법 별표 관세율표(국가법령정보센터)에서 추출한
+ * `public/data/hsHeadingsKo.json`. 영문 WCO 제목(hsHeadings.json)과 달리 화주에게 그대로 보여 줄 수 있다.
+ * 로드 실패 시 빈 사전으로 두어 호출측이 영문 제목으로 대신한다.
+ */
+let headingKoCache: Record<string, string> | null = null;
+let headingKoLoadPromise: Promise<Record<string, string>> | null = null;
+
+export async function loadHSHeadingsKo(): Promise<Record<string, string>> {
+  if (headingKoCache) return headingKoCache;
+  if (headingKoLoadPromise) return headingKoLoadPromise;
+
+  headingKoLoadPromise = (async () => {
+    try {
+      if (typeof fetch !== 'function') return {};
+      const res = await fetch(dataUrl().replace(/hsCodes\.json$/, 'hsHeadingsKo.json'));
+      if (!res.ok) throw new Error(`HS 호 한글 제목 로드 실패 (${res.status})`);
+      headingKoCache = (await res.json()) as Record<string, string>;
+      return headingKoCache;
+    } catch (err) {
+      console.warn('HS 호 한글 제목 로드 실패, 영문 제목으로 진행:', err);
+      headingKoCache = {};
+      return headingKoCache;
+    } finally {
+      headingKoLoadPromise = null;
+    }
+  })();
+
+  return headingKoLoadPromise;
+}
+
+/** 코드의 호(4자리) 한글 제목. 사전에 없으면 빈 문자열. */
+export async function lookupHSHeadingKo(code: string): Promise<string> {
+  const headings = await loadHSHeadingsKo();
+  return headings[code.replace(/\D/g, '').slice(0, 4)] ?? '';
+}
+
 /** 10자리 코드의 호(4자리)·소호(6자리) 제목. 사전에 없으면 빈 문자열. */
 export async function lookupHSHierarchy(
   code: string,

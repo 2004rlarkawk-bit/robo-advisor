@@ -448,6 +448,43 @@ export function annotateProductNames(
   };
 }
 
+export interface ProductScopeInfo {
+  /** 선택지 라벨 ("목재 · 사무실용") */
+  label: string;
+  /** 소호 분류 기준 전체 문구 ("목재로 만든 사무실용 가구") */
+  ko: string;
+  /** 이 품목군에서 코드가 갈리는 이유 */
+  basis: string;
+  /** 같은 품목군의 다른 선택지 — 조건이 다르면 어디로 가는지 */
+  siblings: { formattedSubheading: string; label: string }[];
+}
+
+/**
+ * 추천된 코드가 보조표 품목이면 그 소호의 분류 기준과 같은 품목군의 다른 선택지를 돌려준다.
+ * 추천 근거 화면에서 "해당 종류 → 분류 경로 → 코드가 달라지는 조건"을 AI 문장 없이 조립하는 데 쓴다.
+ */
+export function productScopeForCode(code: string): ProductScopeInfo | null {
+  const subheading = subheadingOf(code);
+  const groups = PRODUCT_GROUPS.filter((group) =>
+    group.options.some((option) => option.subheading === subheading),
+  );
+  // 노트북처럼 여러 품목군에 들어가는 소호는 구분 기준(basis)이 있는 군을 우선한다.
+  const group = groups.find((candidate) => candidate.basis) ?? groups[0];
+  if (!group) return null;
+  const option = group.options.find((candidate) => candidate.subheading === subheading)!;
+  return {
+    label: option.label,
+    ko: option.ko,
+    basis: group.basis,
+    siblings: group.options
+      .filter((candidate) => candidate.subheading !== subheading)
+      .map((candidate) => ({
+        formattedSubheading: `${candidate.subheading.slice(0, 4)}.${candidate.subheading.slice(4, 6)}`,
+        label: candidate.label,
+      })),
+  };
+}
+
 /**
  * 검색어가 보조표 품목이고 고를 선택지가 둘 이상이면 되묻기를 만든다.
  * 관세청 사전에 실제로 있는 소호(후보에 들어온 것)만 선택지로 올린다.
@@ -477,38 +514,5 @@ export function productDisambiguationForQuery(
       englishLabel: option.goodsName,
       candidateCount: counts.get(option.subheading) ?? 0,
     })),
-  };
-}
-
-export interface ProductScopeExplanation {
-  /** 이 코드가 속한 선택지 — 라벨과 소호 기준 */
-  label: string;
-  ko: string;
-  /** 품목군의 구분 기준 문장 */
-  basis: string;
-  /** 같은 품목군의 다른 선택지 — "이런 경우엔 이 소호" */
-  alternatives: { label: string; formattedSubheading: string }[];
-}
-
-/**
- * 추천 근거용 — 이 코드가 보조표의 어느 선택지에 해당하고, 무엇이 달라지면 다른 소호로 가는지.
- * 품명으로 품목군을 먼저 찾고, 없으면 소호가 들어 있는 품목군을 쓴다. 보조표 밖 품목이면 null.
- */
-export function productScopeExplanation(itemName: string, code: string): ProductScopeExplanation | null {
-  const subheading = subheadingOf(code);
-  const byQuery = groupForQuery(itemName);
-  const group = byQuery?.options.some((option) => option.subheading === subheading)
-    ? byQuery
-    : PRODUCT_GROUPS.find((candidate) => candidate.options.some((option) => option.subheading === subheading));
-  const option = group?.options.find((candidate) => candidate.subheading === subheading);
-  if (!group || !option) return null;
-  const format = (value: string) => `${value.slice(0, 4)}.${value.slice(4, 6)}`;
-  return {
-    label: option.label,
-    ko: option.ko,
-    basis: group.basis,
-    alternatives: group.options
-      .filter((candidate) => candidate.subheading !== subheading)
-      .map((candidate) => ({ label: candidate.label, formattedSubheading: format(candidate.subheading) })),
   };
 }
