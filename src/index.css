@@ -721,6 +721,14 @@ body {
 .shipper-hs-reason-block { display: flex; flex-direction: column; gap: 6px; }
 .shipper-hs-reason-label { color: #435a78; font-size: 12.5px; font-weight: 700; }
 .shipper-hs-suggestion__body .shipper-hs-reason-block p { color: var(--text-dark); }
+/* 분류 경로 — 호 → 소호 → 10자리를 한 단씩 들여 써서 내려오는 구조가 보이게 */
+.shipper-hs-path { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--text-dark); }
+.shipper-hs-path li { position: relative; padding-left: 14px; }
+.shipper-hs-path li + li { margin-left: 14px; }
+.shipper-hs-path li::before { content: '└'; position: absolute; left: 0; color: #94a3b8; }
+.shipper-hs-path li:first-child::before { content: ''; }
+.shipper-hs-path li:first-child { padding-left: 0; }
+.shipper-hs-path b { font-variant-numeric: tabular-nums; color: var(--primary-color); margin-right: 2px; }
 .shipper-hs-term i { margin: 0 3px; color: #94a3b8; font-style: normal; }
 /* 영문 품명은 파란 톤으로 강조해 한글명과 구분 */
 .shipper-hs-confidence { border-radius: 999px; padding: 3px 8px; background: #ecfdf5; color: #047857; font-size: 12px; font-weight: 700; }

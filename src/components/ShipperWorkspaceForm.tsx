@@ -24,6 +24,7 @@ import type { TradeAttachment } from '../types/tradeFormData';
 import CountrySelect from './CountrySelect';
 import TradeAttachmentUploader from './TradeAttachmentUploader';
 import RequiredMark from './RequiredMark';
+import HSSuggestionGrounds from './HSSuggestionGrounds';
 import { useShipperHSCodeSuggestions } from '../hooks/useShipperHSCodeSuggestions';
 import { buildHSItemDetails, normalizeGoodsDescription } from '../services/goodsDescriptionService';
 import {
@@ -991,6 +992,7 @@ export default function ShipperWorkspaceForm({
                                       </div>
                                     </div>
                                   )}
+                                  <HSSuggestionGrounds suggestion={suggestion} primary={primary} />
                                   {suggestion.reasoning && (
                                     <div className="shipper-hs-reason-block">
                                       <span className="shipper-hs-reason-label">{primary ? '이 코드인 이유' : '이 코드가 맞는 경우'}</span>
