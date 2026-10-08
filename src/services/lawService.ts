@@ -118,7 +118,7 @@ export function getRelatedLawForIssue(issueId: string): RelatedLaw | null {
     'co-required': { topic: '원산지증명', lawName: '대외무역법', article: '제33조', summary: '원산지표시대상 수출물품은 원산지를 정확하게 표시해야 합니다. 따라서 거래 조건상 원산지 증명이 필요한지 추가로 확인합니다.' },
     'r15-origin-not-korea': { topic: '원산지 판정', lawName: '대외무역법', article: '제33조·제34조', summary: '수출입 물품의 원산지 판정·표시 — 원산지를 사실과 다르게 신고하면 제재 대상' },
     'r16-generic-item-name': { topic: '품명 기재', lawName: '관세법', article: '제241조', summary: '수출·수입 신고 시 품명 등을 정확히 기재 — 포괄적 품명은 신고 수리 거부 사유' },
-    'r14-lc-after-shipment': { topic: '신용장 거래', lawName: '관세법', article: '제226조', summary: '통관 서류의 정합성 — 신용장 개설 전 선적은 은행 매입 거절(하자) 사유' },
+    'r14-lc-after-shipment': { topic: '신용장 거래', lawName: '신용장통일규칙', article: '(UCP 600)', summary: '신용장은 수입자의 거래은행이 대금 지급을 약속하는 서류입니다. 신용장이 개설되기 전에 선적하면, 선적하는 시점에는 대금을 받을 보장이 없습니다. 그래서 보통 신용장을 먼저 받고, 그 조건(선적 기한 등)에 맞춰 선적합니다. 사전 계약으로 신용장이 나중에 개설되는 거래라면 사유를 남기고 진행할 수 있습니다.' },
     'r17-hs-chapter-mismatch': { topic: 'HS 품목분류', lawName: '관세법', article: '제84조·제85조', summary: '품목분류 적용 기준 — 품명과 상이한 분류 신고는 수리 거부·정정 대상' },
   };
   return map[issueId] ?? null;

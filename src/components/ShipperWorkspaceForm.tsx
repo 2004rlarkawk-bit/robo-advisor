@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import HSReasonPath from './HSReasonPath';
 import { FileSignature, FileText, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import PortLocodeHint from './trade/PortLocodeHint';
 import {
@@ -118,6 +119,8 @@ export interface ShipperFixNotice {
   fieldKey: string;
   message: string;
   basis?: string;
+  /** 근거 법령·규칙의 쉬운 설명 — 있으면 [근거]를 눌러 펼친다. */
+  basisSummary?: string;
   // 패킹↔송장 수량 불일치(R10) 구조화 값 — 있으면 인라인 카드를 숫자 강조 + 해결책 레이아웃으로 렌더.
   qtyMismatch?: {
     plTotal: number;
@@ -219,7 +222,16 @@ export default function ShipperWorkspaceForm({
             </p>
           )}
           <div className="ifc-foot">
-            {fixNotice.basis && <span className="ifc-basis">근거: {fixNotice.basis}</span>}
+            {fixNotice.basis && (fixNotice.basisSummary ? (
+              <details className="ifc-basis-details">
+                <summary className="ifc-basis">근거: {fixNotice.basis} <span aria-hidden="true">▸</span></summary>
+                <div className="ifc-basis-body">
+                  {fixNotice.basisSummary.split(/(?<=[다요]\.)\s+/).filter(Boolean).map((sentence) => (
+                    <p key={sentence}>{sentence}</p>
+                  ))}
+                </div>
+              </details>
+            ) : <span className="ifc-basis">근거: {fixNotice.basis}</span>)}
             {onDismissFixNotice && (
               <div className="ifc-actions">
                 <button type="button" className="ifc-btn primary" onClick={onDismissFixNotice}>확인</button>
@@ -991,9 +1003,13 @@ export default function ShipperWorkspaceForm({
                                       </div>
                                     </div>
                                   )}
+                                  {/* 1순위는 관세청 사전·분류 보조표로 조립한 종류·분류 경로·달라지는 조건을 먼저 보인다. */}
+                                  {primary && (
+                                    <HSReasonPath itemName={item.itemName} suggestion={suggestion} chosenSubheading={state.chosenSubheading} />
+                                  )}
                                   {suggestion.reasoning && (
                                     <div className="shipper-hs-reason-block">
-                                      <span className="shipper-hs-reason-label">{primary ? '이 코드인 이유' : '이 코드가 맞는 경우'}</span>
+                                      <span className="shipper-hs-reason-label">{primary ? 'AI 판단' : '이 코드가 맞는 경우'}</span>
                                       <p>{suggestion.reasoning}</p>
                                     </div>
                                   )}

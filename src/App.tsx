@@ -1,3 +1,4 @@
+import { getRelatedLawForIssue } from './services/lawService';
 import { scrollElementToTop, scrollPageToTop } from './utils/scrollPageToTop';
 import {
   Fragment,
@@ -2767,6 +2768,7 @@ const handleOpenSavedTradeDocument = (trade: SavedTrade, docId: string) => {
       fieldKey: activeFixFieldKey,
       message: basisMatch ? rawMsg.slice(0, basisMatch.index).trimEnd() : rawMsg,
       basis: activeFixIssue.basis?.law || (basisMatch ? basisMatch[1].trim() : undefined),
+      basisSummary: activeFixIssue.basis?.summary || getRelatedLawForIssue(activeFixIssue.id)?.summary,
       qtyMismatch: activeFixIssue.qtyMismatch,
     };
   })();

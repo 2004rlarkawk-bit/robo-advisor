@@ -479,3 +479,36 @@ export function productDisambiguationForQuery(
     })),
   };
 }
+
+export interface ProductScopeExplanation {
+  /** 이 코드가 속한 선택지 — 라벨과 소호 기준 */
+  label: string;
+  ko: string;
+  /** 품목군의 구분 기준 문장 */
+  basis: string;
+  /** 같은 품목군의 다른 선택지 — "이런 경우엔 이 소호" */
+  alternatives: { label: string; formattedSubheading: string }[];
+}
+
+/**
+ * 추천 근거용 — 이 코드가 보조표의 어느 선택지에 해당하고, 무엇이 달라지면 다른 소호로 가는지.
+ * 품명으로 품목군을 먼저 찾고, 없으면 소호가 들어 있는 품목군을 쓴다. 보조표 밖 품목이면 null.
+ */
+export function productScopeExplanation(itemName: string, code: string): ProductScopeExplanation | null {
+  const subheading = subheadingOf(code);
+  const byQuery = groupForQuery(itemName);
+  const group = byQuery?.options.some((option) => option.subheading === subheading)
+    ? byQuery
+    : PRODUCT_GROUPS.find((candidate) => candidate.options.some((option) => option.subheading === subheading));
+  const option = group?.options.find((candidate) => candidate.subheading === subheading);
+  if (!group || !option) return null;
+  const format = (value: string) => `${value.slice(0, 4)}.${value.slice(4, 6)}`;
+  return {
+    label: option.label,
+    ko: option.ko,
+    basis: group.basis,
+    alternatives: group.options
+      .filter((candidate) => candidate.subheading !== subheading)
+      .map((candidate) => ({ label: candidate.label, formattedSubheading: format(candidate.subheading) })),
+  };
+}

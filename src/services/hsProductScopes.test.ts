@@ -114,3 +114,20 @@ describe('흔한 품목 HS 보조표', () => {
     expect(annotateProductNames('6203310000', '양모', 'Of wool')).toEqual({ koreanName: '양모', englishName: 'Of wool' });
   });
 });
+
+describe('productScopeExplanation — 추천 근거용 종류·달라지는 조건', () => {
+  it('책상 9403.30은 목재·사무실용 선택지와, 금속·가정용 등 다른 소호를 함께 돌려준다', async () => {
+    const { productScopeExplanation } = await import('./hsProductScopes');
+    const scope = productScopeExplanation('Wooden Office Desk', '9403301000');
+    expect(scope?.label).toBe('목재 · 사무실용');
+    expect(scope?.ko).toBe('목재로 만든 사무실용 가구');
+    expect(scope?.basis).toContain('소재와 사무실용 여부');
+    expect(scope?.alternatives).toContainEqual({ label: '금속 · 사무실용', formattedSubheading: '9403.10' });
+    expect(scope?.alternatives.map((alt) => alt.formattedSubheading)).not.toContain('9403.30');
+  });
+
+  it('보조표 밖 품목이면 null', async () => {
+    const { productScopeExplanation } = await import('./hsProductScopes');
+    expect(productScopeExplanation('Frozen fish', '0303890000')).toBeNull();
+  });
+});

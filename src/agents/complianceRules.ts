@@ -412,13 +412,13 @@ export function runComplianceRules(profile: TradeProfile, logs?: AgentLog[]): Va
   }
 
   // ── R14. 신용장 개설일 > 선적일 (error, override 가능) ─────
-  // 신용장(L/C) 개설 전에 선적하면 은행 매입·대금 회수에서 하자 사유가 된다.
+  // 신용장(L/C) 개설 전에 선적하면 선적 시점에 대금 지급 보장이 없다(UCP 600 — 은행의 지급 확약은 개설 후에 생긴다).
   // 사전 계약된 사후 개설 등 예외가 있으므로 사유 입력 시 우회 허용.
   const depDate = (profile.departureDate || '').trim();
   const lcDateVal = (profile.lcDate || '').trim();
   if (isLcPayment(profile.paymentTerms) && depDate && lcDateVal && lcDateVal > depDate) {
     issues.push(mk('r14-lc-after-shipment', 'invoice', 'lcDate',
-      `신용장 개설일(${lcDateVal})이 선적일(${depDate})보다 늦습니다. 신용장 없이 선적한 셈이 되어 은행 매입 거절·대금 회수 위험이 있습니다. 날짜를 확인하세요.`));
+      `신용장 개설일(${lcDateVal})이 선적일(${depDate})보다 늦습니다. 신용장 없이 선적한 셈이 되어 대금을 받을 보장이 없습니다. 날짜를 확인하세요.`));
   }
 
   // ── R15. 수출인데 원산지가 한국 아님 (error, override 가능) ─

@@ -719,6 +719,12 @@ body {
 .shipper-hs-suggestion__body p { margin: 0; color: var(--text-light); font-size: 14px; line-height: 1.5; }
 /* 추천 근거 — 소제목(입력에서 찾은 조건 / 이 코드인 이유 / 이 코드가 맞는 경우) 아래 내용 한 덩어리씩 */
 .shipper-hs-reason-block { display: flex; flex-direction: column; gap: 6px; }
+/* 분류 경로 — 호 → 소호 → 10자리를 한 줄씩, 화살표로 이어 내려간다 */
+.shipper-hs-path { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.shipper-hs-path li { position: relative; padding-left: 18px; color: #334155; font-size: 13px; line-height: 1.55; }
+.shipper-hs-path li::before { content: '↳'; position: absolute; left: 2px; color: #94a3b8; }
+.shipper-hs-path li:first-child::before { content: '•'; }
+.shipper-hs-path li:last-child { color: #0f3a8a; font-weight: 700; }
 .shipper-hs-reason-label { color: #435a78; font-size: 12.5px; font-weight: 700; }
 .shipper-hs-suggestion__body .shipper-hs-reason-block p { color: var(--text-dark); }
 .shipper-hs-term i { margin: 0 3px; color: #94a3b8; font-style: normal; }
@@ -4071,6 +4077,14 @@ details.fixlist-group[open] > summary.fixlist-group-head::after { content: '접�
 }
 .inline-fix-card--structured .ifc-btn.primary { padding: 9px 26px; font-size: 14px; }
 .inline-fix-card .ifc-basis { font-size: 12px; color: #94a3b8; }
+/* 근거를 누르면 쉬운 설명을 문장마다 줄을 바꿔 펼친다 */
+.inline-fix-card .ifc-basis-details { flex: 1 1 200px; min-width: 0; }
+.inline-fix-card .ifc-basis-details > summary { cursor: pointer; list-style: none; text-decoration: underline dotted; text-underline-offset: 3px; }
+.inline-fix-card .ifc-basis-details > summary::-webkit-details-marker { display: none; }
+.inline-fix-card .ifc-basis-details[open] > summary span { display: inline-block; transform: rotate(90deg); }
+.inline-fix-card .ifc-basis-body { margin-top: 8px; padding: 10px 12px; border-radius: 8px; background: rgba(255, 255, 255, 0.06); }
+.inline-fix-card .ifc-basis-body p { margin: 0; font-size: 12.5px; line-height: 1.65; color: #cbd5e1; }
+.inline-fix-card .ifc-basis-body p + p { margin-top: 4px; }
 .inline-fix-card .ifc-actions { display: flex; gap: 8px; margin-left: auto; }
 .inline-fix-card .ifc-btn {
   border: none; border-radius: 8px; padding: 8px 18px;

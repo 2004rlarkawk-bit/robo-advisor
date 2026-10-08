@@ -663,7 +663,9 @@ describe('화주용 통관 입력 폼', () => {
       Array.from(rendered.container.querySelectorAll('.shipper-hs-term')).map((chip) => chip.textContent)
     ).toEqual(['cotton → 면 소재', 'knitted → 편물제']);
     expect(rendered.container.textContent).toContain('입력에서 찾은 조건');
-    expect(rendered.container.textContent).toContain('이 코드인 이유');
+    expect(rendered.container.textContent).toContain('AI 판단');
+    // 1순위는 관세청 분류 체계로 조립한 분류 경로(호 → 소호 → 10자리)도 함께 보인다.
+    expect(rendered.container.querySelector('.shipper-hs-path')?.textContent).toContain('6109.10-1000');
     // 1순위 후보는 강조 카드로 보인다.
     expect(rendered.container.querySelector('.shipper-hs-suggestion.is-primary')?.textContent).toContain('6109.10-1000');
     expect(rendered.container.textContent).toContain(
