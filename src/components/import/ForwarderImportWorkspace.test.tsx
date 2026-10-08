@@ -49,6 +49,7 @@ describe('forwarder task tabs', () => {
   let container: HTMLDivElement;
   let root: Root;
   const button = (text: string) => [...container.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === text)!;
+  const arrivalButton = (text: string) => [...container.querySelectorAll<HTMLButtonElement>('.arrival-notice-card button')].find(b => b.textContent?.trim() === text)!;
   const click = async (text: string) => act(async () => button(text).click());
   const open = async (item = fixture()) => {
     vi.mocked(listForwarderCases).mockResolvedValue([item]);
@@ -73,12 +74,14 @@ describe('forwarder task tabs', () => {
     expect(container.textContent).not.toContain('서류 확인을 완료하면');
     expect(container.textContent).toContain('도착 안내 · A/N');
     expect(container.textContent).not.toContain('화물인도지시서 · D/O');
-    expect(button('A/N 생성·다운로드').disabled).toBe(true);
+    expect(arrivalButton('보기').disabled).toBe(false);
+    expect(arrivalButton('DOCX 다운로드').disabled).toBe(true);
+    expect(arrivalButton('PDF 저장').disabled).toBe(true);
     expect(container.querySelector<HTMLInputElement>('.arrival-notice-picker input')?.disabled).toBe(true);
     expect(container.querySelector<HTMLFieldSetElement>('.fwd-operation-fields')?.disabled).toBe(true);
     expect(button('DOCX 다운로드').disabled).toBe(true);
     expect(button('PDF 저장').disabled).toBe(true);
-    await click('A/N 생성·다운로드');
+    await act(async () => arrivalButton('DOCX 다운로드').click());
     expect(saveForwarderCaseState).not.toHaveBeenCalled();
     expect(container.querySelector('.fwd-review-panel')).toBeNull();
     expect(container.textContent).not.toContain('포워더 업무 완료');
@@ -171,7 +174,8 @@ describe('forwarder task tabs', () => {
     expect(text).toContain('수입신고 의뢰서');
     expect(text).not.toContain('납부 확인');
     expect(button('진행 조회')).toBeTruthy();
-    expect(button('A/N 생성·다운로드').disabled).toBe(false);
+    expect(arrivalButton('DOCX 다운로드').disabled).toBe(false);
+    expect(arrivalButton('PDF 저장').disabled).toBe(false);
     expect(container.querySelector<HTMLInputElement>('.arrival-notice-picker input')?.disabled).toBe(false);
     expect(container.querySelector<HTMLFieldSetElement>('.fwd-operation-fields')?.disabled).toBe(false);
     expect(button('포워더 업무 완료')).toBeTruthy();

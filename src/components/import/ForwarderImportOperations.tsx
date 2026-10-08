@@ -95,7 +95,6 @@ export default function ForwarderImportOperations({ item, saving, locked, arriva
       <details className="fwd-cargo-disclosure"><summary>B/L로 화물 진행 조회</summary><ForwarderCargoPanel initialBlNo={item.blNo} /></details>
     </section>
 
-    <div className="fwd-section-heading"><span className="fwd-section-kicker">03 · 도착 서류</span><h2>도착 안내</h2></div>
     <div className="fwd-release-grid">
       {arrivalNotice}
     </div>

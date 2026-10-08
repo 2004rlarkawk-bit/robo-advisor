@@ -16,10 +16,7 @@ import {
   type ForwarderCaseState,
   type ForwarderImportCase,
 } from '../../types/forwarderCase';
-import type {
-  ArrivalNoticeMeta,
-  ImportDocumentMeta,
-} from '../../types/importTrade';
+import type { ImportDocumentMeta } from '../../types/importTrade';
 import {
   deriveForwarderCase,
   listForwarderCases,
@@ -29,8 +26,7 @@ import ForwarderImportOperations from './ForwarderImportOperations';
 import ForwarderExtractedSummary from './ForwarderExtractedSummary';
 import { IMPORT_DOCUMENT_TYPE_LABELS } from '../../services/importDocumentAnalysisService';
 import { loadTradeAttachmentFile } from '../../services/tradeAttachmentStorageService';
-import { downloadArrivalNoticeDocx } from '../../services/arrivalNoticeDocxService';
-import ArrivalNoticeUploader from './ArrivalNoticeUploader';
+import ForwarderArrivalNotice from './ForwarderArrivalNotice';
 import ForwarderImportInbox from './ForwarderImportInbox';
 import ImportHandoffReadyCard from './ImportHandoffReadyCard';
 import { scrollPageToTop } from '../../utils/scrollPageToTop';
@@ -125,8 +121,6 @@ export default function ForwarderImportWorkspace({
   const [returnSentOpen, setReturnSentOpen] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>('review');
   const [docBusyId, setDocBusyId] = useState<string | null>(null);
-  const [anBusy, setAnBusy] = useState(false);
-  const [anFileBusy, setAnFileBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -256,26 +250,6 @@ export default function ForwarderImportWorkspace({
       setDocBusyId(null);
     }
   }, [userId]);
-
-  const openArrivalFile = async (meta: ArrivalNoticeMeta, download: boolean) => {
-    if (!meta.storageBucket || !meta.storagePath || anFileBusy) return;
-    const previewWindow = download ? null : window.open('', '_blank');
-    if (previewWindow) previewWindow.opener = null;
-    setAnFileBusy(true);
-    setError('');
-    try {
-      const file = await loadTradeAttachmentFile({ storageBucket: meta.storageBucket, storagePath: meta.storagePath, fileName: meta.fileName, mimeType: meta.mimeType, documentType: 'arrival_notice' }, userId);
-      const url = URL.createObjectURL(file);
-      if (download) {
-        const link = document.createElement('a'); link.href = url; link.download = meta.fileName; document.body.appendChild(link); link.click(); link.remove();
-      } else if (previewWindow) previewWindow.location.href = url;
-      else setError('팝업이 차단되었습니다. 팝업을 허용하거나 다운로드를 이용하세요.');
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch {
-      previewWindow?.close();
-      setError('도착통지서를 열지 못했습니다. 다시 시도해 주세요.');
-    } finally { setAnFileBusy(false); }
-  };
 
   const openCase = (tradeId: string) => {
     setSelectedId(tradeId);
@@ -503,36 +477,15 @@ export default function ForwarderImportWorkspace({
           <ForwarderImportOperations key={selected.tradeId} item={selected} saving={saving} locked={documentsLocked}
             onSave={(importOperations, activity) => persist(selected, { importOperations }, [activity])}
             arrivalNotice={
-            <ArrivalNoticeUploader
-              workspaceMode
-              showDisabledReason={false}
-              disabledReason={documentsLocked ? documentLockReason : undefined}
-              fileActions={selected.arrivalNotice?.storagePath ? <div className="fwd-an-file-actions"><button type="button" className="btn btn-secondary" disabled={anFileBusy} onClick={() => void openArrivalFile(selected.arrivalNotice!, false)}>원본 열기</button><button type="button" className="btn btn-secondary" disabled={anFileBusy} onClick={() => void openArrivalFile(selected.arrivalNotice!, true)}>다운로드</button></div> : undefined}
-              value={selected.arrivalNotice}
+            <ForwarderArrivalNotice
+              item={selected}
+              issuerName={issuerName}
+              contactName={senderContactName}
               onChange={(arrivalNotice) => void persist(selected, { arrivalNotice })}
               userId={userId}
-              tradeId={selected.tradeId}
-              readOnly={saving || documentsLocked}
-              headerAction={(
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={anBusy || documentsLocked || saving}
-                  title={documentsLocked ? documentLockReason : undefined}
-                  onClick={() => {
-                    if (documentsLocked || saving) return;
-                    setAnBusy(true);
-                    void downloadArrivalNoticeDocx(selected, issuerName, senderContactName)
-                      .catch((err) => {
-                        console.error('A/N 생성 실패:', err);
-                        setError('도착통지서를 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.');
-                      })
-                      .finally(() => setAnBusy(false));
-                  }}
-                >
-                  {anBusy ? '생성 중…' : 'A/N 생성·다운로드'}
-                </button>
-              )}
+              locked={documentsLocked}
+              saving={saving}
+              lockReason={documentLockReason}
             />
             }
           />
