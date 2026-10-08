@@ -3,6 +3,7 @@ import type { ForwarderImportCase } from '../../types/forwarderCase';
 import type { ImportDocumentMeta } from '../../types/importTrade';
 import { getInboxImporterName } from '../../utils/forwarderInbox';
 import ForwarderReturnRequestContent from './ForwarderReturnRequestContent';
+import ImportReturnRequestMatches from './ImportReturnRequestMatches';
 
 interface Props {
   item: ForwarderImportCase;
@@ -38,6 +39,7 @@ export default function ForwarderRequestMessages({ item, documents, documentBusy
       </dl>
     </div>
     <ForwarderReturnRequestContent reason={request.reason} />
+    <ImportReturnRequestMatches request={request} analysis={item.snapshot.analysis} />
   </>;
 
   return <section className={`fwd-return-banner${replied ? ' is-resolved' : ''}`} aria-label={replied ? '화주에게 받은 보완 회신' : '화주에게 보낸 보완 요청'}>
