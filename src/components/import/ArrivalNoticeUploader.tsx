@@ -20,9 +20,10 @@ interface Props {
   fileActions?: ReactNode;
   disabledReason?: string;
   showDisabledReason?: boolean;
+  children?: ReactNode;
 }
 
-export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId, readOnly = false, headerAction, notice, workspaceMode = false, fileActions, disabledReason, showDisabledReason = true }: Props) {
+export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId, readOnly = false, headerAction, notice, workspaceMode = false, fileActions, disabledReason, showDisabledReason = true, children }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -92,11 +93,13 @@ export default function ArrivalNoticeUploader({ value, onChange, userId, tradeId
       <div className="import-card-heading">
         <div>
           {!workspaceMode && <span className="ai-badge">별도 첨부</span>}
-          <h2>{workspaceMode ? <><span className="fwd-section-number">2</span> 도착 안내 · A/N</> : '도착통지서 (Arrival Notice)'}</h2>
+          {workspaceMode && <span className="fwd-section-kicker">03 · 도착 서류</span>}
+          <h2>{workspaceMode ? '도착 안내 · A/N' : '도착통지서 (Arrival Notice)'}</h2>
           {!workspaceMode && <p>도착통지서가 없으면 거래는 진행 중으로 저장됩니다.</p>}
         </div>
         {headerAction}
       </div>
+      {children}
       {notice && <p className="import-notice">{notice}</p>}
       {disabledReason && showDisabledReason && <p className="fwd-document-lock" role="status">{disabledReason}</p>}
       {displayValue ? (

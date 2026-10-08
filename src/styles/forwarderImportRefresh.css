@@ -39,8 +39,6 @@
 .fwd-import-refresh .fwd-batch-toolbar { padding: 18px 22px; }
 .fwd-import-refresh .fwd-all-comparisons { margin-bottom: 20px; }
 .fwd-import-refresh .fwd-section-kicker { display: block; margin-bottom: 7px; color: #5076ac; font-size: 11px; font-weight: 750; letter-spacing: .4px; }
-.fwd-import-refresh .fwd-section-heading { margin: 28px 0 16px; }
-.fwd-import-refresh .fwd-section-heading h2 { font-size: 17px; }
 .fwd-import-refresh .fwd-declaration-card { border-top: 3px solid #0b57d0; }
 .fwd-import-refresh .btn { font-size: 13px; padding: 10px 14px; min-height: 40px; box-shadow: none; white-space: nowrap; }
 .fwd-import-refresh .fwd-operation-fields { border: 0; margin: 0; padding: 0; min-width: 0; }
@@ -55,6 +53,8 @@
 .fwd-import-refresh .fwd-release-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
 .fwd-import-refresh .fwd-release-grid > section { height: 100%; margin: 0; min-width: 0; }
 .fwd-import-refresh .fwd-release-grid .arrival-notice-card { border-top: 3px solid #edc76f; }
+.fwd-import-refresh .arrival-notice-card .document-preview-actions { margin-bottom: 16px; }
+.fwd-import-refresh .fwd-an-preview { margin: 0 0 16px; }
 .fwd-import-refresh .fwd-release-grid .import-card-heading { flex-wrap: wrap; align-items: flex-start; gap: 16px; }
 .fwd-import-refresh .fwd-release-grid .fwd-section-number { display: none; }
 .fwd-import-refresh .fwd-release-grid .arrival-notice-card .import-notice { font-size: 11px; color: var(--fwd-muted); margin: 12px 0; }

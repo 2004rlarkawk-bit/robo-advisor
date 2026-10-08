@@ -3,6 +3,7 @@ import {
   AlignmentType, BorderStyle, Document, Footer, Packer, PageNumber, Paragraph,
   Table, TableCell, TableLayoutType, TableRow, TextRun, VerticalAlign, WidthType,
 } from 'docx';
+import { renderAsync } from 'docx-preview';
 import type { ForwarderImportCase } from '../types/forwarderCase';
 import type { ImportParty } from '../types/importTrade';
 import { portaiFileName } from '../utils/documentFileName';
@@ -143,4 +144,49 @@ export async function downloadArrivalNoticeDocx(caseItem: ForwarderImportCase, i
   link.download = portaiFileName('arrival_notice', 'docx');
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+/** 내려받는 DOCX와 같은 파일을 화면 안에서 확인한다. */
+export async function renderArrivalNoticePreview(blob: Blob, container: HTMLElement): Promise<void> {
+  container.innerHTML = '';
+  await renderAsync(blob, container, undefined, {
+    className: 'docx-preview', inWrapper: true, ignoreWidth: false, ignoreHeight: false,
+  });
+}
+
+/** 같은 A/N을 브라우저 인쇄 창에서 PDF로 저장한다. */
+export async function printArrivalNoticeAsPdf(caseItem: ForwarderImportCase, issuerName = '', contactName = ''): Promise<void> {
+  const blob = await buildArrivalNoticeDocx(caseItem, issuerName, contactName);
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText = 'position:fixed; right:0; bottom:0; width:0; height:0; border:0;';
+  document.body.appendChild(iframe);
+  const printDocument = iframe.contentWindow?.document;
+  if (!printDocument) {
+    iframe.remove();
+    throw new Error('PDF 인쇄 창을 만들지 못했습니다.');
+  }
+  printDocument.open();
+  printDocument.write(
+    '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>' + portaiFileName('arrival_notice') + '</title>' +
+    '<style>@page { size: A4; margin: 0; } html, body { margin: 0; padding: 0; background: #fff; }' +
+    '* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }</style></head>' +
+    '<body><div id="pdf-host"></div></body></html>',
+  );
+  printDocument.close();
+  const host = printDocument.getElementById('pdf-host');
+  if (!host) { iframe.remove(); throw new Error('PDF 미리보기 영역을 만들지 못했습니다.'); }
+  try {
+    await renderArrivalNoticePreview(blob, host);
+    const printWindow = iframe.contentWindow!;
+    let cleaned = false;
+    const cleanup = () => { if (cleaned) return; cleaned = true; iframe.remove(); };
+    printWindow.onafterprint = cleanup;
+    printWindow.focus();
+    printWindow.print();
+    setTimeout(cleanup, 60000);
+  } catch (error) {
+    iframe.remove();
+    throw error;
+  }
 }
