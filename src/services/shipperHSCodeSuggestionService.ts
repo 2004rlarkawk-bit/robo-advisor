@@ -1,4 +1,4 @@
-import { demoHSResultFor, rememberLiveHSResult } from './demoRehearsalMode';
+import { demoHSResultFor, isDemoHSItem, rememberLiveHSResult } from './demoRehearsalMode';
 import {
   discoverHSCodePrefixes,
   suggestHSCodeFromCandidates,
@@ -607,11 +607,6 @@ export async function recommendShipperHSCode(
     };
   }
 
-  // 시연 모드에서 시연 품명이면, 미리 받아 둔 실제 AI 추천 결과를 바로 쓴다(시연 시간 고정).
-  // 사용자가 선택지에서 종류를 직접 고른 경우는 그 선택을 따른다.
-  const demoResult = userChosenSubheading ? null : demoHSResultFor(normalizedItemName);
-  if (demoResult) return demoResult;
-
   // 가구(9403)는 재질이 소호를 가른다. 품명·상세에 가구 종류와 재질이 하나씩 분명하면
   // 사용자가 소호를 고른 것과 같이 그 범위에서만 추천한다(돌 책상이 목제 책상·숫돌로 가는 것 방지).
   const chosenSubheading = userChosenSubheading
@@ -623,6 +618,12 @@ export async function recommendShipperHSCode(
       itemDetails?.specification,
       itemDetails?.koreanDescription,
     ].filter(Boolean).join(' '));
+
+  // 시연 모드의 시연 품목(책상)은 고른 종류의 고정 결과를 바로 보여 준다(시연 시간 고정).
+  const demoResult = demoHSResultFor(normalizedItemName, chosenSubheading);
+  if (demoResult) return demoResult;
+  // 종류를 아직 안 골랐으면 분류 방향 AI 호출 없이 보조표 소호로 바로 선택지를 띄운다.
+  const demoItem = isDemoHSItem(normalizedItemName);
 
   const allCandidateCodes =
     await buildCandidateContext(
@@ -654,6 +655,12 @@ export async function recommendShipperHSCode(
       additionalInformationRequired: false,
       requiredAdditionalInfo: [] as string[],
     }
+    : demoItem
+    ? {
+      suggestedPrefixes: productPrefixesForQuery(normalizedItemName),
+      additionalInformationRequired: false,
+      requiredAdditionalInfo: [] as string[],
+    }
     : options?.discoveryPrefixLimit === 5
       ? await discoverHSCodePrefixes(normalizedItemName, [], itemDetails, 5)
       : await discoverHSCodePrefixes(
@@ -664,7 +671,7 @@ export async function recommendShipperHSCode(
   options?.onTrace?.({
     stage: 'direction',
     codes: discovery.suggestedPrefixes,
-    source: chosenSubheading ? 'rule' : 'ai',
+    source: chosenSubheading || demoItem ? 'rule' : 'ai',
   });
   const officialNamePrefixes = chosenSubheading
     ? []

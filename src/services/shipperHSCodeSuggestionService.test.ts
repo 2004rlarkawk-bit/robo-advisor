@@ -449,3 +449,27 @@ describe('수출 화주 HS Code 추천 서비스', () => {
     expect(normalizeHSKCode('0101.21-1000')).toBe('0101211000');
   });
 });
+
+describe('시연 모드 — 책상(desk)은 AI 호출 없이 바로 보여 준다', () => {
+  it('종류 선택지는 보조표로 바로 띄우고, 목재·사무실용을 고르면 고정 결과를 쓴다', async () => {
+    const { setDemoRehearsalMode } = await import('./demoRehearsalMode');
+    setDemoRehearsalMode(true);
+    try {
+      searchMock.mockResolvedValue([]);
+      prefixMock.mockImplementation(async (prefix: string) => [
+        { ...localTenDigit, code: `${prefix}1000`, ko: '책상', en: 'Desks', category: '(가구)' },
+      ]);
+
+      const first = await recommendShipperHSCode('desk');
+      expect(discoverPrefixesMock).not.toHaveBeenCalled();
+      expect(suggestFromCandidatesMock).not.toHaveBeenCalled();
+      expect(first.disambiguation?.options.map((option) => option.subheading)).toContain('940330');
+
+      const chosen = await recommendShipperHSCode('desk', undefined, undefined, '940330');
+      expect(suggestFromCandidatesMock).not.toHaveBeenCalled();
+      expect(chosen.suggestions[0].code).toBe('9403301000');
+    } finally {
+      setDemoRehearsalMode(false);
+    }
+  });
+});

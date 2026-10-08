@@ -5,6 +5,7 @@ import {
   DEMO_HS_RESULTS,
   LAST_HS_RESULT_KEY_PREFIX,
   demoHSResultFor,
+  isDemoHSItem,
   isDemoRehearsalMode,
   rememberLiveHSResult,
   setDemoRehearsalMode,
@@ -23,7 +24,6 @@ const saved: HSCodeSuggestionResponse = {
 describe('시연 모드', () => {
   afterEach(() => {
     setDemoRehearsalMode(false);
-    DEMO_HS_RESULTS['wooden office desk'] = null;
     window.sessionStorage.clear();
   });
 
@@ -35,22 +35,27 @@ describe('시연 모드', () => {
     expect(isDemoRehearsalMode()).toBe(false);
   });
 
-  it('시연 모드이고 저장된 결과가 있을 때만 그 결과를 쓴다 — 품명 대소문자·공백은 무시', () => {
-    DEMO_HS_RESULTS['wooden office desk'] = saved;
-    // 꺼져 있으면(Q&A) 실시간 추천
-    expect(demoHSResultFor('Wooden Office Desk')).toBeNull();
+  it('시연 모드에서 책상(desk)만 시연 품목으로 본다 — 책상용 소품·다른 품명은 실시간', () => {
+    expect(isDemoHSItem('desk')).toBe(false);
     setDemoRehearsalMode(true);
-    expect(demoHSResultFor('  wooden   OFFICE desk ')).toBe(saved);
-    // 다른 품명은 시연 모드여도 실시간
-    expect(demoHSResultFor('Steel Bolt')).toBeNull();
+    expect(isDemoHSItem('desk')).toBe(true);
+    expect(isDemoHSItem('Wooden Office Desk')).toBe(true);
+    expect(isDemoHSItem('desk lamp')).toBe(false);
+    expect(isDemoHSItem('Steel Bolt')).toBe(false);
   });
 
-  it('저장 결과가 아직 없으면 시연 모드여도 실시간으로 추천한다', () => {
+  it('고른 종류(소호)의 고정 결과를 쓰고, 꺼져 있으면(Q&A) 실시간으로 추천한다', () => {
+    expect(demoHSResultFor('desk', '940330')).toBeNull();
     setDemoRehearsalMode(true);
-    expect(demoHSResultFor('Wooden Office Desk')).toBeNull();
+    expect(demoHSResultFor('desk', '940330')).toBe(DEMO_HS_RESULTS['940330']);
+    expect(demoHSResultFor('desk', '940330')?.suggestions[0].code).toBe('9403301000');
+    // 종류를 아직 안 골랐거나 고정 결과가 없는 종류는 실시간
+    expect(demoHSResultFor('desk', null)).toBeNull();
+    expect(demoHSResultFor('desk', '940310')).toBeNull();
+    expect(demoHSResultFor('Steel Bolt', '940330')).toBeNull();
   });
 
-  it('실시간 결과를 품명별로 남겨 시연용 결과로 옮겨 담을 수 있다', () => {
+  it('실시간 결과를 품명별로 남긴다', () => {
     rememberLiveHSResult('Wooden Office Desk', saved);
     expect(JSON.parse(window.sessionStorage.getItem(`${LAST_HS_RESULT_KEY_PREFIX}wooden office desk`) ?? 'null')).toEqual(saved);
     // 빈 결과는 남기지 않는다.

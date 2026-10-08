@@ -50,20 +50,43 @@
 .fwd-export-source-docs h3 { margin: 0 0 14px; font-size: 16px; }
 .fwd-export-source-docs h3 span { color: #667a94; font-size: 12px; margin-left: 8px; }
 .fwd-export-source-docs p { margin: 0; font-size: 12px; color: #667a94; line-height: 1.6; }
-/* 화주 제출 서류 — STEP 1 맨 위. 화주 결과 화면의 '자동 생성된 서류' 줄과 같은 모양(약어 칩 + 이름 + 보기·다운로드). */
-.fwd-export-shipper-docs { padding: 20px 22px; border: 1px solid #dce4ef; border-radius: 14px; background: #fff; }
-.fwd-export-shipper-docs h3 { margin: 0 0 12px; font-size: 16px; }
-.fwd-export-shipper-docs h3 span { color: #667a94; font-size: 12px; margin-left: 8px; }
-.fwd-shipper-doc-list { display: grid; margin: 0; padding: 0; list-style: none; }
-.fwd-shipper-doc-list li { display: flex; align-items: center; gap: 14px; padding: 12px 2px; border-top: 1px solid #edf1f6; }
-.fwd-shipper-doc-list li:first-child { border-top: 0; }
-.fwd-shipper-doc-abbr {
-  display: inline-grid; place-items: center; min-width: 48px; height: 34px; padding: 0 8px; border-radius: 8px;
-  background: #eef4ff; color: #1d4ed8; font-size: 13px; font-weight: 800;
+/* 화주가 제출한 서류 — STEP 1 맨 위. 수입 포워더의 '화주가 제출한 서류'와 같은 카드(첫 페이지 + 약어 + 파일명). */
+.fwd-export-shipper-docs { padding: 24px 26px; border: 1px solid #dce4ef; border-radius: 14px; background: #fff; }
+.fwd-export-shipper-docs h3 { display: flex; align-items: center; margin: 0 0 18px; font-size: 17px; font-weight: 750; color: #16233b; }
+.fwd-shipper-doc-count { margin-left: 9px; padding: 2px 9px; border-radius: 6px; background: #f1f5f9; color: #64748b; font-size: 13px; font-weight: 700; }
+.fwd-shipper-doc-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0; padding: 0; list-style: none; }
+/* 4장이면 한 줄 4칸 — 좁은 화면에서는 2×2로 나눈다. */
+.fwd-shipper-doc-gallery.is-four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.fwd-shipper-doc-gallery li { min-width: 0; }
+.fwd-shipper-doc-card {
+  display: flex; flex-direction: column; width: 100%; min-width: 0; padding: 10px; border: 1px solid #e2e8f0; border-radius: 10px;
+  background: #fff; cursor: pointer; text-align: left; font: inherit; transition: border-color 0.15s, background 0.15s;
 }
-.fwd-shipper-doc-list strong { flex: 1; min-width: 0; color: #1e293b; font-size: 15px; }
-.fwd-shipper-doc-actions { display: flex; gap: 8px; }
-.fwd-shipper-doc-actions .btn { display: inline-flex; align-items: center; gap: 5px; }
+.fwd-shipper-doc-card:hover { border-color: #94b4de; background: #fafcff; }
+.fwd-shipper-doc-card:focus-visible { outline: 3px solid #8eb4f0; outline-offset: 3px; }
+.fwd-shipper-doc-page { position: relative; display: block; height: 150px; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 4px; background: #f2f5f9; }
+/* 실제 docx 첫 페이지를 그려 카드 폭에 맞게 줄인다 — 위쪽(서류 제목·첫 칸)이 보이게 위에서부터 자른다. */
+.fwd-shipper-doc-page-host {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%) scale(var(--thumb-scale, 0.25)); transform-origin: top center;
+  pointer-events: none; user-select: none;
+}
+/* docx-preview 바깥 틀(회색 배경·여백)은 썸네일에서 뺀다 — 틀 클래스는 서류마다 '<className>-wrapper'다. */
+.fwd-shipper-doc-page-host > [class$="-wrapper"] { padding: 0 !important; background: transparent !important; }
+.fwd-shipper-doc-page-host > [class$="-wrapper"] > section { margin: 0 !important; box-shadow: none !important; }
+.fwd-shipper-doc-placeholder {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  background: #f2f5f9; color: #78899e; font-size: 11px;
+}
+.fwd-shipper-doc-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 12px 2px 4px; color: #64748b; }
+.fwd-shipper-doc-abbr { color: #16233b; font-size: 15px; font-weight: 800; }
+.fwd-shipper-doc-filename { display: block; overflow: hidden; padding: 0 2px; color: #77889e; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) {
+  .fwd-shipper-doc-gallery.is-four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .fwd-shipper-doc-gallery, .fwd-shipper-doc-gallery.is-four { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .fwd-export-shipper-docs { padding: 18px; }
+}
 .fwd-shipper-doc-modal { width: min(920px, 96vw); max-height: 92vh; }
 .fwd-shipper-doc-preview { max-height: 68vh; overflow: auto; padding: 12px; border-radius: 10px; background: #f1f5f9; color: #64748b; font-size: 13px; }
 .fwd-shipper-doc-foot { display: flex; justify-content: flex-end; margin-top: 14px; }

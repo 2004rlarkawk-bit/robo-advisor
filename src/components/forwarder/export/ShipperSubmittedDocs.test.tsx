@@ -26,14 +26,14 @@ describe('ShipperSubmittedDocs — 수출 포워더 STEP 1의 화주 제출 서�
       invoice: {}, packingList: {}, transportRequest: {}, customsDeclaration: {},
     } as unknown as GeneratedDocuments;
     act(() => root.render(<ShipperSubmittedDocs docs={docs} />));
-    const rows = [...container.querySelectorAll('.fwd-shipper-doc-list li')];
+    const rows = [...container.querySelectorAll('.fwd-shipper-doc-gallery li')];
     expect(rows.map((row) => row.querySelector('.fwd-shipper-doc-abbr')?.textContent)).toEqual(['C/I', 'P/L', 'S/I', 'E/D']);
-    expect(container.querySelector('h3')?.textContent).toContain('4건');
+    expect(container.querySelector('h3')?.textContent).toContain('화주가 제출한 서류 4');
   });
 
   it('없는 서류는 빼고, 하나도 없으면 영역 자체를 그리지 않는다', () => {
     act(() => root.render(<ShipperSubmittedDocs docs={{ invoice: {} } as unknown as GeneratedDocuments} />));
-    expect(container.querySelectorAll('.fwd-shipper-doc-list li')).toHaveLength(1);
+    expect(container.querySelectorAll('.fwd-shipper-doc-gallery li')).toHaveLength(1);
     act(() => root.render(<ShipperSubmittedDocs docs={null} />));
     expect(container.querySelector('.fwd-export-shipper-docs')).toBeNull();
   });
