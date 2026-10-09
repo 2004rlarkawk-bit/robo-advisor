@@ -2528,6 +2528,11 @@ body {
 /* 협정세율 기준 행 — 원산지증명서가 붙어 적용 가능할 때만 나온다 */
 .duty-grid .duty-grid-fta { background: #f0fdf4; }
 .duty-grid .duty-grid-fta dd { color: #166534; }
+/* 총 예상세액 — 계산 결과가 한눈에 보이게 파란 테두리 박스 + 형광펜 */
+.duty-grid .duty-grid-total { position: relative; z-index: 1; background: #eff6ff; outline: 2px solid #2563eb; outline-offset: -2px; }
+.duty-grid .duty-grid-total dt { color: #1d4ed8; font-weight: 700; }
+.duty-grid .duty-grid-total dd { font-size: 18px; }
+.duty-grid .duty-grid-total mark { padding: 0 4px; background: linear-gradient(transparent 55%, #fde68a 55%); color: inherit; }
 .import-notice { margin: 14px 0 0; padding: 11px; border-radius: 8px; background: #fffbeb; color: #92400e; font-size: 12px; line-height: 1.5; }
 .import-analysis-disclaimer { margin: -4px 6px 6px; color: var(--text-light); font-size: 12.5px; line-height: 1.5; }
 .import-analysis-disclaimer p { margin: 0; }

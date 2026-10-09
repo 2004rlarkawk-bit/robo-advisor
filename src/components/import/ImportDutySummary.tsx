@@ -69,7 +69,7 @@ export default function ImportDutySummary({ duty, error, busy = false, ftaReview
         <div><dt>{ftaApplied ? '기본세율 기준 예상 관세' : '예상 관세'}</dt><dd>{krw(duty.basicDuty)}</dd></div>
         <div><dt>부가가치세</dt><dd>{krw(duty.vat)}</dd></div>
         <div><dt>기타 세금</dt><dd>{krw(duty.otherTaxes)}</dd></div>
-        <div><dt>{provisional ? `${missing.join('·')} 미반영 참고세액` : ftaApplied ? '기본세율 기준 총 예상세액' : '총 예상세액'}</dt><dd>{krw(duty.totalTax)}</dd></div>
+        <div className="duty-grid-total"><dt>{provisional ? `${missing.join('·')} 미반영 참고세액` : ftaApplied ? '기본세율 기준 총 예상세액' : '총 예상세액'}</dt><dd><mark>{krw(duty.totalTax)}</mark></dd></div>
         <div><dt>예상 절감액</dt><dd>{ftaApplied ? krw(fta?.savings ?? null) : ftaReviewing && fta?.savings != null ? '증빙 확인 후 표시' : '확인 필요'}</dd></div>
         {ftaApplied && fta && (
           <>
